@@ -47,6 +47,7 @@ export type Product = {
   preorder?: boolean
   harvest: string
   /** Các trường dưới chỉ có ở sản phẩm lấy từ API cửa hàng; sản phẩm mẫu bỏ trống. */
+  listingId?: number
   soldOut?: boolean
   farm?: string
   crab?: string

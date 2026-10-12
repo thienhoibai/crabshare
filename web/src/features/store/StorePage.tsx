@@ -1,6 +1,6 @@
 /* Cửa hàng (bản 1, nền sáng): lưới ảnh lớn, xem sản phẩm toàn màn hình, giỏ hàng trượt từ bên phải.
    UC25: dữ liệu lấy từ GET /api/listings (lọc loại cua / hạng / bảo quản, sắp xếp, phân trang) và GET /api/listings/{id}.
-   Giỏ hàng vẫn chạy phía trình duyệt — giữ hàng và đặt đơn thật làm ở task Orders. */
+   Giỏ hàng lưu trên máy (shared/cart); bấm "Thanh toán" sang /thanh-toan để đặt đơn thật (UC26). */
 import { useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { ChevronLeft, ChevronRight, Flag, Plus, X } from 'lucide-react'
@@ -14,6 +14,7 @@ import {
 } from './storeApi'
 import './store.css'
 import { useAuthStore } from '../../shared/auth/authStore'
+import { useCartStore } from '../../shared/cart/cartStore'
 
 function AddressBookLink() {
   const isCustomer = useAuthStore(s => s.user?.roles.includes('Customer'))
@@ -193,15 +194,17 @@ function StoreV1Inner() {
         )}
       </main>
       {openId !== null && <Panel kind="full" onClose={() => navigate('/cua-hang')}><ListingDetail id={openId} /></Panel>}
-      <CartDrawer />
+      <CartDrawer onCheckout={() => navigate('/thanh-toan')} />
     </>
   )
 }
 
 export default function StorePage() {
+  const lines = useCartStore((s) => s.lines)
+  const setLines = useCartStore((s) => s.setLines)
   return (
     <Shell theme="light">
-      <CartProvider><StoreV1Inner /></CartProvider>
+      <CartProvider store={{ lines, setLines }}><StoreV1Inner /></CartProvider>
     </Shell>
   )
 }
