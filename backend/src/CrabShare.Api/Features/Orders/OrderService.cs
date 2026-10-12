@@ -18,7 +18,8 @@ namespace CrabShare.Api.Features.Orders;
 /// Cùng khuôn với giữ chỗ góp vốn (BR-12, TL-17): sửa một chỗ thì xem lại chỗ kia.
 /// </summary>
 public sealed class OrderService(
-    AppDbContext db, ICurrentUser me, PaymentRequestService payments, IOptions<OrderOptions> options, TimeProvider clock)
+    AppDbContext db, ICurrentUser me, PaymentRequestService payments, LowStockMonitor lowStock, IOptions<OrderOptions> options,
+    TimeProvider clock)
 {
     private const int MaxOrderNoAttempts = 3;
     private const int ShippingAddressMaxLength = 300;
@@ -45,7 +46,9 @@ public sealed class OrderService(
         {
             try
             {
-                return await PlaceAsync(customerId, address, lines, listings, ct);
+                var placed = await PlaceAsync(customerId, address, lines, listings, ct);
+                await lowStock.CheckAsync(lines.Select(l => l.ListingId), ct);
+                return placed;
             }
             catch (DbUpdateException ex) when (attempt < MaxOrderNoAttempts && IsDuplicateOrderNo(ex))
             {
@@ -89,7 +92,7 @@ public sealed class OrderService(
             .Where(l => ids.Contains(l.ListingId))
             .Select(l => new
             {
-                l.ListingId, l.Title, l.Status, l.StorageType, l.FrozenAt, l.BatchId,
+                l.ListingId, l.Title, l.Status, Hidden = l.HiddenAt != null, l.StorageType, l.FrozenAt, l.BatchId,
                 l.Batch.BatchCode, BatchStatus = l.Batch.Status, l.Batch.FrozenStockCapMonths,
                 FarmName = l.Batch.Operator.LegalName,
                 AccountId = (long?)l.Batch.BatchAccount!.BatchAccountId,
@@ -104,7 +107,7 @@ public sealed class OrderService(
         {
             var l = rows.FirstOrDefault(r => r.ListingId == id)
                     ?? throw new NotFoundException("listing.not_found", "Không tìm thấy niêm yết.");
-            if (l.Status != "Published")
+            if (l.Status != "Published" || l.Hidden)
                 throw new BusinessRuleException("order.listing_not_on_sale", $"\"{l.Title}\" không còn đăng bán.");
             if (l.BatchStatus != "Harvesting")
                 throw new BusinessRuleException("order.batch_not_harvesting", $"Lô {l.BatchCode} không còn ở giai đoạn bán hàng.");
@@ -128,7 +131,8 @@ public sealed class OrderService(
             foreach (var (listingId, quantityKg) in lines)
             {
                 var affected = await db.ProductListings
-                    .Where(l => l.ListingId == listingId && l.Status == "Published" && l.StockQtyKg - l.ReservedQtyKg >= quantityKg)
+                    .Where(l => l.ListingId == listingId && l.Status == "Published" && l.HiddenAt == null
+                                && l.StockQtyKg - l.ReservedQtyKg >= quantityKg)
                     .ExecuteUpdateAsync(s => s.SetProperty(l => l.ReservedQtyKg, l => l.ReservedQtyKg + quantityKg), ct);
                 if (affected == 0)
                     throw new ConflictException("order.insufficient_stock",

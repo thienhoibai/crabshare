@@ -13,6 +13,7 @@ using CrabShare.Api.Features.Operators;
 // using CrabShare.Api.Features.Harvest;
 
 // Nhân
+using CrabShare.Api.Common.Alerts;
 using CrabShare.Api.Features.Catalog;
 using CrabShare.Api.Features.Orders;
 // using CrabShare.Api.Features.Offtake;
@@ -20,7 +21,7 @@ using CrabShare.Api.Features.Orders;
 // Khôi
 using CrabShare.Api.Features.Accounts;
 // using CrabShare.Api.Features.Evidence;
-// using CrabShare.Api.Features.Alerts;
+using CrabShare.Api.Features.Alerts;
 // using CrabShare.Api.Features.Portfolio;
 // using CrabShare.Api.Features.Admin;
 
@@ -58,6 +59,10 @@ public static class FeatureRegistry
 
         // Nhân
         services.AddScoped<CatalogService>();
+        services.AddScoped<ListingModerationService>(); // UC24 kiểm duyệt
+        services.AddScoped<LowStockMonitor>();
+        services.AddOptions<LowStockOptions>().BindConfiguration(LowStockOptions.Section);
+        services.AddScoped<IAlertRaiser, AlertServiceRaiser>(); // chuyển tiếp sang AlertService (KH-05)
         services.AddScoped<OrderService>();           // Features/Orders
         services.AddOptions<OrderOptions>().BindConfiguration(OrderOptions.Section);
         // services.AddScoped<OfftakeService>();      // Features/Offtake
@@ -67,7 +72,8 @@ public static class FeatureRegistry
         services.AddScoped<PaymentProfileService>();
         services.AddScoped<AdminAccountService>();
         // services.AddScoped<EvidenceService>();     // Features/Evidence
-        // services.AddScoped<AlertService>();        // Features/Alerts
+        services.AddScoped<AlertService>();          // Features/Alerts
+        services.AddScoped<AlertJob>();              // CS-40
         // services.AddScoped<PortfolioService>();    // Features/Portfolio
         // services.AddScoped<AdminService>();        // Features/Admin
 
