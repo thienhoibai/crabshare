@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from 'react'
-import { createBrowserRouter, Outlet } from 'react-router'
+import { createBrowserRouter, Navigate, Outlet } from 'react-router'
 import { RequireRole } from '../shared/auth/RequireRole'
 import type { Role } from '../shared/auth/authStore'
 
@@ -14,6 +14,8 @@ const LoginPage = lazy(() => import('../features/auth/LoginPage'))
 const RegisterPage = lazy(() => import('../features/auth/RegisterPage'))
 const StorePage = lazy(() => import('../features/store/StorePage'))
 const CommercePage = lazy(() => import('../features/orders/CommercePage'))
+const CheckoutPage = lazy(() => import('../features/orders/CheckoutPage'))
+const OrderConfirmationPage = lazy(() => import('../features/orders/OrderConfirmationPage'))
 const TracePage = lazy(() => import('../features/trace/TracePage'))
 const InvestorPortal = lazy(() => import('../features/investor/InvestorPortal'))
 const ContributePage = lazy(() => import('../features/investor/funding/ContributePage'))
@@ -80,9 +82,9 @@ export const router = createBrowserRouter([
       {
         element: guarded(['Customer', 'Investor']),
         children: [
-          { path: '/gio-hang', element: page(CommercePage) },
-          { path: '/thanh-toan', element: page(CommercePage) },
-          { path: '/xac-nhan-don-hang', element: page(CommercePage) },
+          { path: '/gio-hang', element: <Navigate to="/thanh-toan" replace /> },
+          { path: '/thanh-toan', element: page(CheckoutPage) },
+          { path: '/xac-nhan-don-hang', element: page(OrderConfirmationPage) },
           { path: '/theo-doi-don-hang', element: page(CommercePage) },
           { path: '/lich-su-don-hang', element: page(CommercePage) },
           { path: '/huy-tra-hang', element: page(CommercePage) },

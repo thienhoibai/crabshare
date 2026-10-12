@@ -10,6 +10,9 @@
 | `payment_instruction` | lệnh chi: `Disbursement`, `Payout`, `Refund`, `TaxPayment` · `Created` → `Sent` → `Succeeded` / `Failed` / `Disputed` |
 | `disbursement_tranche` | `Planned` → `Requested` → `Released`; `NeedsExplanation`, `Blocked` |
 
+## Đã có
+`PaymentRequestService.CreateForOrderAsync` — **bản tối thiểu làm trong CS-36** để Orders sinh mã VietQR cho đơn hàng: thêm `payment_request` (`OrderPayment`, `Pending`) vào DbContext **không** SaveChanges (module gọi lưu trong transaction của mình), rồi gọi `IPaymentGateway.CreateVietQrAsync`. TH-05 mở rộng cho góp vốn / cọc; giữ nguyên chữ ký hàm hoặc báo Nhân khi đổi.
+
 ## Endpoint dự kiến
 | Method | Path | Ai gọi | Ghi chú |
 |---|---|---|---|

@@ -97,6 +97,7 @@ export function toProduct(l: StoreListing, detail?: StoreListingDetail): Product
   const img = listingImageSrc(l) ?? FALLBACK_IMG[l.crabType] ?? IMG.thit
   return {
     id: `L${l.listingId}`,
+    listingId: l.listingId,
     name: l.title,
     kind,
     unit: 'kg',
