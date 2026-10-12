@@ -8,6 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CrabShare.Api.Tests;
 
+[CollectionDefinition("KycDatabase", DisableParallelization = true)]
+public sealed class KycDatabaseCollection;
+
 /// <summary>Chỉ tạo/xoá CSDL test riêng, không chạm CrabShareDev. Các test Database không chạy trong CI.</summary>
 public sealed class KycDatabaseFixture : IAsyncLifetime
 {
@@ -15,9 +18,14 @@ public sealed class KycDatabaseFixture : IAsyncLifetime
     private const string MasterConnection = "Server=(localdb)\\MSSQLLocalDB;Database=master;Trusted_Connection=True;TrustServerCertificate=True";
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
     public string StorageRoot { get; } = Path.Combine(Path.GetTempPath(), "CrabShareKycTests", Guid.NewGuid().ToString("N"));
+    public string UploadTempRoot { get; } = Path.Combine(Path.GetTempPath(), "CrabShareKycUploads_" + Guid.NewGuid().ToString("N"));
+    private string? _originalTempRoot;
 
     public async Task InitializeAsync()
     {
+        _originalTempRoot = Environment.GetEnvironmentVariable("ASPNETCORE_TEMP");
+        Directory.CreateDirectory(UploadTempRoot);
+        Environment.SetEnvironmentVariable("ASPNETCORE_TEMP", UploadTempRoot);
         await using var master = new SqlConnection(MasterConnection);
         await master.OpenAsync();
         await using (var command = new SqlCommand($"CREATE DATABASE [{_databaseName}]", master))
@@ -64,11 +72,20 @@ public sealed class KycDatabaseFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (Factory is not null) await Factory.DisposeAsync();
-        SqlConnection.ClearAllPools();
-        await using var master = new SqlConnection(MasterConnection);
-        await master.OpenAsync();
-        await using var command = new SqlCommand($"IF DB_ID('{_databaseName}') IS NOT NULL BEGIN ALTER DATABASE [{_databaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{_databaseName}]; END", master);
-        await command.ExecuteNonQueryAsync();
+        try
+        {
+            if (Factory is not null) await Factory.DisposeAsync();
+            SqlConnection.ClearAllPools();
+            await using var master = new SqlConnection(MasterConnection);
+            await master.OpenAsync();
+            await using var command = new SqlCommand($"IF DB_ID('{_databaseName}') IS NOT NULL BEGIN ALTER DATABASE [{_databaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{_databaseName}]; END", master);
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_TEMP", _originalTempRoot);
+            // Chỉ xoá thư mục test rỗng, không xoá đệ quy bất kỳ file upload nào.
+            if (Directory.Exists(UploadTempRoot)) Directory.Delete(UploadTempRoot, recursive: false);
+        }
     }
 }

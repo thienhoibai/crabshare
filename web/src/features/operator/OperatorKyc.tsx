@@ -1,6 +1,7 @@
-import { CheckCircle2, FileText, ShieldCheck, UploadCloud } from 'lucide-react'
+import { FileText, ShieldCheck, UploadCloud } from 'lucide-react'
+import KycVerification from '../accounts/KycVerification'
 import OperatorLayout from './OperatorLayout'
-import { OpBadge, OpBtn, OpFacts, OpHeading, OpNote, OpPanel, OpStat } from './operatorUi'
+import { OpBadge, OpBtn, OpHeading, OpNote, OpPanel } from './operatorUi'
 
 export default function OperatorKyc() {
   return (
@@ -8,12 +9,11 @@ export default function OperatorKyc() {
       <OpHeading
         eyebrow="Định danh"
         title="Hồ sơ pháp lý & eKYC"
-        description="Xác thực CCCD, khuôn mặt và giấy phép kinh doanh của trại."
+        description="Trạng thái xác minh danh tính và hồ sơ pháp lý của trại."
       />
 
       <div className="op-grid">
-        <OpStat className="op-span-5" label="Tiến độ hồ sơ" value="1 / 2" unit="bước" sub="Danh tính đã duyệt. Còn thiếu giấy phép trại để mở gọi vốn." />
-        <OpPanel className="op-span-7" title="Việc còn lại">
+        <OpPanel className="op-span-12" title="Hồ sơ cần bổ sung">
           <div className="op-todo">
             <a href="#giay-phep">
               <span className="op-dot" />
@@ -25,23 +25,7 @@ export default function OperatorKyc() {
             </a>
           </div>
         </OpPanel>
-
-        <OpPanel className="op-span-6" title="1. Danh tính" action={<OpBadge tone="ok"><CheckCircle2 /> Đã duyệt</OpBadge>}>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="op-cover" style={{ aspectRatio: '1.6' }}>
-              <img src="/assets/imgQuestionCardSection.png" alt="" style={{ opacity: 0.5 }} />
-              <span className="op-cover__text"><small>Mặt trước CCCD</small></span>
-            </div>
-            <div className="op-drop" style={{ aspectRatio: '1.6', alignContent: 'center' }}>Mặt sau CCCD</div>
-          </div>
-          <OpFacts
-            items={[
-              { label: 'Họ và tên', value: 'Nguyễn Văn A' },
-              { label: 'Số CCCD', value: <span className="op-mono">079200123456</span> },
-              { label: 'Khớp khuôn mặt', value: '99,8%', tone: 'ok' },
-            ]}
-          />
-        </OpPanel>
+        <OpPanel className="op-span-6" title="1. Danh tính"><KycVerification /></OpPanel>
 
         <div className="op-span-6" id="giay-phep">
           <OpPanel accent title="2. Giấy phép trại" action={<OpBadge tone="warn"><ShieldCheck /> Cần bổ sung</OpBadge>}>

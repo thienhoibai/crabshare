@@ -12,6 +12,8 @@ StrykerOutput/
 # ===== Node / web =====
 node_modules/
 web/dist/
+web/test-results/
+web/playwright-report/
 *.tsbuildinfo
 .env
 .env.local

@@ -9,6 +9,8 @@ import 'package:crabshare_mobile/features/investor/batches/batch_detail_page.dar
 import 'package:crabshare_mobile/features/investor/batches/batch_explore_page.dart';
 import 'package:crabshare_mobile/features/investor/home/investor_home_page.dart';
 import 'package:crabshare_mobile/features/investor/kyc/kyc_page.dart';
+import 'package:crabshare_mobile/features/investor/kyc/kyc_repository.dart';
+import 'package:crabshare_mobile/features/investor/data/investor_models.dart';
 import 'package:crabshare_mobile/features/investor/notifications/notifications_page.dart';
 import 'package:crabshare_mobile/features/onboarding/onboarding_page.dart';
 import 'package:crabshare_mobile/features/operator/alerts/alerts_page.dart';
@@ -63,7 +65,10 @@ void main() {
       addTearDown(tester.view.reset);
 
       await tester.pumpWidget(ProviderScope(
-        overrides: [sessionProvider.overrideWith(() => SessionController(const SessionState(token: 't', user: _user)))],
+        overrides: [
+          sessionProvider.overrideWith(() => SessionController(const SessionState(token: 't', user: _user))),
+          kycRepositoryProvider.overrideWithValue(_SmokeKycRepository()),
+        ],
         child: MaterialApp(theme: buildAppTheme(), home: page),
       ));
       // Dữ liệu mẫu trả về sau ~300 ms; chờ thêm cho animation đồng hồ chạy xong.
@@ -75,4 +80,11 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
   }
+}
+
+class _SmokeKycRepository implements KycRepository {
+  @override
+  Future<KycVerification> status() async => const KycVerification(status: KycStatus.unverified);
+  @override
+  Future<KycVerification> verify({required List<KycImage> images, required bool consent}) => throw UnimplementedError();
 }

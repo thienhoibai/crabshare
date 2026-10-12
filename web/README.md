@@ -17,6 +17,7 @@ npm run dev                    # http://localhost:5173
 | `npm run dev` | chạy dev, tự tải lại khi sửa |
 | `npm run build` | kiểm tra TypeScript + build ra `dist/` (CI chạy lệnh này) |
 | `npm run lint` | chỉ kiểm tra TypeScript |
+| `npm run test:kyc` | test eKYC bằng Chrome; CI dùng Chromium của Playwright |
 
 Khi chạy dev, trang Đăng nhập có nút **đăng nhập nhanh** bằng tài khoản demo (`features/auth/demoAccounts.ts`).
 
@@ -57,6 +58,21 @@ src/
 | PlatformAdmin, EvidenceReviewer | `/admin`, `/admin/users`, `/admin/batches`, `/admin/storefront`, `/admin/finance`, `/admin/alerts`, `/admin/disputes`, `/admin/settings` (+ trang chi tiết) | `admin/*.tsx` |
 
 > `/operator/map` (sơ đồ trại) sẽ được thay bằng trang **Hộp nuôi** (đánh số hộp) — task của Viên.
+
+## Xác minh danh tính (CS-27)
+
+Nhà đầu tư mở **Hồ sơ & eKYC** tại `/nha-dau-tu/ho-so`, chọn/chụp CCCD mặt trước,
+mặt sau và ảnh khuôn mặt, đồng ý điều khoản rồi gửi xác minh. Mỗi ảnh JPEG/PNG/WebP
+tối đa 5 MB. GET `/api/me/kyc` và POST `/api/kyc/ekyc` dùng HTTP client JWT chung;
+cache trạng thái theo userId. Kết quả và banner ở Tổng quan cập nhật từ API.
+Ảnh xem trước dùng URL cục bộ được thu hồi khi thay ảnh/đóng form, không đưa vào
+localStorage. Hộ nuôi không có vai Investor nhận hướng dẫn hồ sơ pháp lý riêng,
+không hiện kết quả eKYC mẫu hoặc gọi API Investor.
+
+Đăng ký Investor mới để thử gửi; các tài khoản demo đã Verified. Backend hiện dùng
+provider giả lập. Các test Playwright trong `tests/kyc.spec.ts` dùng ảnh mẫu và API
+mock để kiểm tra consent, multipart, lỗi 400 và đổi tài khoản. Chạy local cần Chrome;
+CI cài Chromium bằng `npx playwright install --with-deps chromium`.
 
 ## Gọi API — mẫu
 
