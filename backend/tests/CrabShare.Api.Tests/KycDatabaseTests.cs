@@ -170,10 +170,11 @@ public class KycDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<KycDat
     {
         var content = JsonSerializer.Serialize(new
         {
-            audit.EntityType, audit.EntityId, audit.ActionType,
-            audit.OldValue, audit.NewValue, audit.ActorUserId, audit.OccurredAt,
+            entityType = audit.EntityType, entityId = audit.EntityId, actionType = audit.ActionType,
+            oldValue = audit.OldValue, newValue = audit.NewValue, actorUserId = audit.ActorUserId, occurredAt = audit.OccurredAt,
         });
         Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes((audit.PrevHash ?? "") + content))), audit.RowHash);
+        Assert.Matches("^[0-9a-f]{64}$", audit.RowHash);
     }
 
     [Fact]

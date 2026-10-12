@@ -26,8 +26,9 @@ Nhánh `feature/KH-04-kyc-user-management`, tạo từ develop.
 
 ## Kiểm tra
 
-Kết quả local: **116 test backend đạt** (112 API + 4 Settlement); **10 browser test
-đạt**; web production build đạt.
+Kết quả KH-04 ban đầu: **116 test backend đạt** (112 API + 4 Settlement); **10 browser
+test đạt**. Sau tích hợp KH-03 và đồng bộ audit theo CS-25: **151 test backend,
+16 browser test và web production build đạt**. Xem `audit-hash-consistency.md`.
 
 Backend test dùng CSDL LocalDB riêng, không sửa tài khoản demo/dev. Browser test
 dùng API mock và dữ liệu mẫu; ảnh chụp chỉ chứa dữ liệu mẫu của bộ test.

@@ -80,7 +80,7 @@
 - Tất cả endpoint yêu cầu JWT PlatformAdmin và vai admin/Active hiện tại trên DB.
   Không dùng role cũ trong JWT để vượt quyền đã bị thu hồi.
 - Giao dịch Serializable ghi user/KYC/investor + audit atomically, hash audit theo
-  cùng định dạng PascalCase của AccountService eKYC; timestamp millisecond.
+  JSON camelCase của CS-25 qua `Common/Auditing/AuditChain`; timestamp millisecond.
   Giữ failure_reason/checked_at của lần xác minh để không xoá lịch sử nhà cung cấp.
 - Đăng nhập Locked vẫn trả 403 auth.locked. JwtBearer kiểm tra status mỗi lần xác
   thực; token đã cấp của tài khoản Locked hoặc đã xoá trả 401, client đăng xuất.
@@ -146,16 +146,21 @@ Scalar, đăng ký một tài khoản Investor mới rồi dùng JWT của tài 
 ### Audit và giao dịch
 
 Kết quả KYC, trạng thái nhà đầu tư và audit `Investor` / `VerifyIdentity` được ghi
-trong cùng transaction Serializable. Query audit dùng `UPDLOCK, HOLDLOCK` để không
-tách nhánh chuỗi băm khi nhiều nhà đầu tư gửi đồng thời. Timestamp được chuẩn hóa
+trong cùng transaction Serializable. Ngay sau BeginTransaction, đọc đầu chuỗi bằng
+`SELECT TOP (1) ... WITH (TABLOCKX, HOLDLOCK) ORDER BY audit_id DESC`, trước khi đọc/sửa
+entity nghiệp vụ, giống `feature/CS-25-duyet-ho-nuoi`. Timestamp được chuẩn hóa
 đến mili giây để khớp `DATETIMEOFFSET(3)` khi đọc lại từ SQL Server.
 
-Hiện TH-02 chưa có `IAuditLog`: writer của KYC nằm trong `AccountService`. Khi tích
-hợp writer chung, giữ định dạng chuỗi hiện có: `SHA-256(prev_hash hoặc chuỗi rỗng +
-JSON UTF-8)` bằng `JsonSerializer.Serialize` mặc định, với các trường đúng thứ tự
-`EntityType`, `EntityId`, `ActionType`, `OldValue`, `NewValue`, `ActorUserId`,
-`OccurredAt`. `OldValue`/`NewValue` là chuỗi JSON trạng thái, không chứa ảnh/CCCD.
-Không cần đổi migration hoặc entity.
+eKYC, payout và quản trị dùng chung `AuditChain` để khóa đầu chuỗi, chuẩn hóa thời gian,
+serialize snapshot và băm. Công thức: `SHA-256(UTF8((prev_hash ?? "") + JSON))`, đầu ra
+hex **64 ký tự `0–9, a–f`**. JSON băm dùng serializer mặc định và thứ tự trường đúng CS-25:
+`entityType`, `entityId`, `actionType`, `oldValue`, `newValue`, `actorUserId`, `occurredAt`.
+Snapshot old/new cũng dùng camelCase; giá trị nghiệp vụ giữ nguyên. Không chứa ảnh/CCCD.
+
+Không viết lại audit cũ: `AuditChain.VerifyHash` nhận cả định dạng camelCase mới và
+PascalCase của Accounts trước đây. Mở khoá đọc được cả `status` và `Status` trong snapshot
+lịch sử. Không cần migration hoặc đổi entity. Test hỗn hợp xác minh chuỗi eKYC, payout,
+khoá/mở khoá, ngoại lệ KYC và CS-25, cả khi ghi đồng thời.
 
 ### Kiểm thử
 

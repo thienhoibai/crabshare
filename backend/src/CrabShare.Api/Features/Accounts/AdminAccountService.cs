@@ -1,7 +1,6 @@
 using System.Data;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
+using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Errors;
 using CrabShare.Api.Common.Paging;
@@ -58,7 +57,7 @@ public sealed class AdminAccountService(AppDbContext db, ICurrentUser me, TimePr
     }
 
     public Task<AdminUserResponse> SetLockedAsync(long id, bool locked, string reason, CancellationToken ct)
-        => TransactionAsync(async () =>
+        => TransactionAsync(async previousHash =>
         {
             await RequireAdminAsync(ct);
             if (id == me.UserId) throw new ForbiddenException("users.cannot_lock_self", "Không thể khoá hoặc mở khoá chính tài khoản đang quản trị.");
@@ -66,7 +65,7 @@ public sealed class AdminAccountService(AppDbContext db, ICurrentUser me, TimePr
                 .Include(u => u.AppUserRoles).Include(u => u.Investor).SingleOrDefaultAsync(ct) ?? throw MissingUser();
             if (locked == (user.Status == "Locked"))
                 throw new ConflictException("users.status_changed", "Trạng thái tài khoản đã thay đổi. Vui lòng tải lại.");
-            var old = JsonSerializer.Serialize(new { user.Status });
+            var old = AuditChain.Snapshot(new { user.Status });
             var target = "Locked";
             if (!locked)
             {
@@ -76,19 +75,21 @@ public sealed class AdminAccountService(AppDbContext db, ICurrentUser me, TimePr
                 if (previous is not null)
                 {
                     using var snapshot = JsonDocument.Parse(previous);
-                    target = snapshot.RootElement.GetProperty("Status").GetString() == "PendingVerification" ? "PendingVerification" : "Active";
+                    var root = snapshot.RootElement;
+                    var status = root.TryGetProperty("status", out var currentStatus) ? currentStatus : root.GetProperty("Status");
+                    target = status.GetString() == "PendingVerification" ? "PendingVerification" : "Active";
                 }
                 else target = "Active";
             }
             var now = Now();
             user.Status = target; user.UpdatedAt = now;
-            await AppendAuditAsync("AppUser", id, locked ? "LockUser" : "UnlockUser", old, JsonSerializer.Serialize(new { user.Status, Reason = reason.Trim() }), now, ct);
+            AppendAudit("AppUser", id, locked ? "LockUser" : "UnlockUser", old, AuditChain.Snapshot(new { user.Status, Reason = reason.Trim() }), now, previousHash);
             await db.SaveChangesAsync(ct);
             return User(user);
         }, ct);
 
     public Task<AdminKycResponse> ApproveExceptionAsync(long id, string reason, CancellationToken ct)
-        => TransactionAsync(async () =>
+        => TransactionAsync(async previousHash =>
         {
             await RequireAdminAsync(ct);
             var candidate = await db.KycChecks.AsNoTracking().SingleOrDefaultAsync(c => c.KycCheckId == id, ct)
@@ -102,12 +103,12 @@ public sealed class AdminAccountService(AppDbContext db, ICurrentUser me, TimePr
             var check = checks.First();
             if (check.KycCheckId != id || check.Result != "Failed" || check.ConsentAt is null || investor.VerificationStatus == "Verified" || investor.User.Status != "Active")
                 throw InvalidCheck();
-            var old = JsonSerializer.Serialize(new { check.Result, check.ReviewedBy, investor.VerificationStatus, investor.VerifiedAt });
+            var old = AuditChain.Snapshot(new { check.Result, check.ReviewedBy, investor.VerificationStatus, investor.VerifiedAt });
             var now = Now();
             check.Result = "ExceptionApproved"; check.ReviewedBy = me.UserId;
             investor.VerificationStatus = "Verified"; investor.VerifiedAt = now;
-            await AppendAuditAsync("KycCheck", id, "ApproveKycException", old,
-                JsonSerializer.Serialize(new { check.Result, check.ReviewedBy, investor.VerificationStatus, investor.VerifiedAt, Reason = reason.Trim() }), now, ct);
+            AppendAudit("KycCheck", id, "ApproveKycException", old,
+                AuditChain.Snapshot(new { check.Result, check.ReviewedBy, investor.VerificationStatus, investor.VerifiedAt, Reason = reason.Trim() }), now, previousHash);
             await db.SaveChangesAsync(ct);
             return Check(check, check.KycCheckId);
         }, ct);
@@ -118,24 +119,21 @@ public sealed class AdminAccountService(AppDbContext db, ICurrentUser me, TimePr
             && u.AppUserRoles.Any(r => r.RoleCode == Roles.PlatformAdmin), ct))
             throw new ForbiddenException("users.admin_required", "Chỉ quản trị viên đang có quyền được quản lý người dùng và ngoại lệ KYC.");
     }
-    private Task<T> TransactionAsync<T>(Func<Task<T>> action, CancellationToken ct) => db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+    private Task<T> TransactionAsync<T>(Func<string?, Task<T>> action, CancellationToken ct) => db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
     {
         db.ChangeTracker.Clear();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
-        var value = await action(); await tx.CommitAsync(ct); return value;
+        var previousHash = await AuditChain.LockAndReadTailAsync(db, ct);
+        var value = await action(previousHash); await tx.CommitAsync(ct); return value;
     });
-    private async Task AppendAuditAsync(string entityType, long entityId, string action, string old, string next, DateTimeOffset now, CancellationToken ct)
+    private void AppendAudit(string entityType, long entityId, string action, string old, string next, DateTimeOffset now, string? previous)
     {
-        var previous = await db.AuditLogs.FromSqlRaw("SELECT * FROM dbo.audit_log WITH (UPDLOCK, HOLDLOCK)")
-            .OrderByDescending(a => a.AuditId).Select(a => a.RowHash).FirstOrDefaultAsync(ct);
         var audit = new AuditLog { EntityType = entityType, EntityId = entityId, ActionType = action,
             OldValue = old, NewValue = next, ActorUserId = me.UserId, OccurredAt = now, PrevHash = previous };
-        var content = JsonSerializer.Serialize(new { audit.EntityType, audit.EntityId, audit.ActionType, audit.OldValue,
-            audit.NewValue, audit.ActorUserId, audit.OccurredAt });
-        audit.RowHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes((previous ?? "") + content)));
+        audit.RowHash = AuditChain.Hash(audit);
         db.AuditLogs.Add(audit);
     }
-    private DateTimeOffset Now() => DateTimeOffset.FromUnixTimeMilliseconds(clock.GetUtcNow().ToUnixTimeMilliseconds());
+    private DateTimeOffset Now() => AuditChain.Timestamp(clock.GetUtcNow());
     private AdminKycResponse Check(KycCheck c, long? latestId) => new(c.KycCheckId, c.UserId, c.User.FullName, c.User.Email,
         c.CheckType, c.Result, c.ProviderRef, c.ConsentAt, c.CheckedAt, c.FailureReason, c.ReviewedBy,
         c.UserId != me.UserId && c.CheckType == "EkycIdFace" && c.Result == "Failed" && c.ConsentAt != null && c.KycCheckId == latestId

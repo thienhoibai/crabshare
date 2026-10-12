@@ -117,7 +117,7 @@ public class AdminAccountDatabaseTests(KycDatabaseFixture fixture) : IClassFixtu
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.PostAsJsonAsync($"/api/admin/kyc-checks/{id}/approve-exception", new { reason = "Again" })).StatusCode);
         await Run(async db => { var audit = await db.AuditLogs.SingleAsync(a => a.EntityType == "KycCheck" && a.EntityId == id);
             Assert.Equal(admin.UserId, audit.ActorUserId); Assert.Contains("Reviewed metadata", audit.NewValue);
-            var content = JsonSerializer.Serialize(new { audit.EntityType, audit.EntityId, audit.ActionType, audit.OldValue, audit.NewValue, audit.ActorUserId, audit.OccurredAt });
+            var content = JsonSerializer.Serialize(new { entityType = audit.EntityType, entityId = audit.EntityId, actionType = audit.ActionType, oldValue = audit.OldValue, newValue = audit.NewValue, actorUserId = audit.ActorUserId, occurredAt = audit.OccurredAt });
             Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes((audit.PrevHash ?? "") + content))), audit.RowHash); return true; });
     }
 
@@ -160,6 +160,32 @@ public class AdminAccountDatabaseTests(KycDatabaseFixture fixture) : IClassFixtu
             Assert.Equal("Failed", check.Result); Assert.Null(check.ReviewedBy);
             Assert.Equal("Rejected", (await db.Investors.SingleAsync(i => i.UserId == investor.UserId)).VerificationStatus);
             Assert.False(await db.AuditLogs.AnyAsync(a => a.EntityType == "KycCheck" && a.EntityId == id)); return true;
+        });
+    }
+
+    [Fact]
+    public async Task Unlock_reads_legacy_PascalCase_snapshot_and_appends_without_rewriting_old_hash()
+    {
+        var admin = await CreateUser(); var user = await CreateUser(Roles.Customer, "Locked");
+        var original = await Run(async db =>
+        {
+            var previous = await db.AuditLogs.OrderByDescending(a => a.AuditId).Select(a => a.RowHash).FirstOrDefaultAsync();
+            var row = new AuditLog { EntityType = "AppUser", EntityId = user.UserId, ActionType = "LockUser", ActorUserId = admin.UserId,
+                OldValue = "{\"Status\":\"PendingVerification\"}", NewValue = "{\"Status\":\"Locked\"}", PrevHash = previous,
+                OccurredAt = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) };
+            var content = JsonSerializer.Serialize(new { row.EntityType, row.EntityId, row.ActionType, row.OldValue, row.NewValue, row.ActorUserId, row.OccurredAt });
+            row.RowHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes((previous ?? "") + content)));
+            db.AuditLogs.Add(row); await db.SaveChangesAsync(); return (row.AuditId, row.RowHash);
+        });
+        using var client = Client(admin.UserId);
+        var response = await client.PostAsJsonAsync($"/api/admin/users/{user.UserId}/unlock", new { reason = "Legacy test" }); response.EnsureSuccessStatusCode();
+        Assert.Equal("PendingVerification", (await response.Content.ReadFromJsonAsync<AdminUserResponse>())!.Status);
+        await Run(async db => {
+            var old = await db.AuditLogs.SingleAsync(a => a.AuditId == original.AuditId);
+            var current = await db.AuditLogs.SingleAsync(a => a.EntityType == "AppUser" && a.EntityId == user.UserId && a.ActionType == "UnlockUser");
+            Assert.Equal(original.RowHash, old.RowHash); Assert.Equal(old.RowHash, current.PrevHash);
+            Assert.True(CrabShare.Api.Common.Auditing.AuditChain.VerifyHash(old)); Assert.True(CrabShare.Api.Common.Auditing.AuditChain.VerifyHash(current));
+            Assert.Equal("PendingVerification", JsonDocument.Parse(current.NewValue!).RootElement.GetProperty("status").GetString()); return true;
         });
     }
 
