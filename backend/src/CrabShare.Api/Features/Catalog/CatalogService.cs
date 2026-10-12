@@ -413,8 +413,10 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
         return frozenAt;
     }
 
-    private static DateTimeOffset? SellUntil(ProductListing l) =>
-        l.StorageType == nameof(StorageType.Frozen) && l.FrozenAt is { } frozenAt ? frozenAt.AddMonths(l.Batch.FrozenStockCapMonths) : null;
+    private static DateTimeOffset? SellUntil(ProductListing l) => SellUntil(l.StorageType, l.FrozenAt, l.Batch.FrozenStockCapMonths);
+
+    internal static DateTimeOffset? SellUntil(string storageType, DateTimeOffset? frozenAt, byte frozenStockCapMonths) =>
+        storageType == nameof(StorageType.Frozen) && frozenAt is { } at ? at.AddMonths(frozenStockCapMonths) : null;
 
     private static string DefaultTitle(Batch batch, ProductGrade grade, StorageType storage)
     {
