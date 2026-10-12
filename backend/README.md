@@ -32,7 +32,7 @@ dotnet run --project backend/src/CrabShare.Api --launch-profile http
 ```
 
 - API: http://localhost:5233 · Thử API: http://localhost:5233/scalar · OpenAPI: `/openapi/v1.json`
-- Lần chạy đầu ở môi trường Development, `DevDataSeeder` tạo tài khoản demo + hộ nuôi mẫu + 60 hộp. Mật khẩu chung: hằng `DemoPassword` trong `src/CrabShare.Api/Infrastructure/Persistence/DevDataSeeder.cs`.
+- Lần chạy đầu ở môi trường Development, `DevDataSeeder` tạo 9 tài khoản demo, hộ nuôi mẫu với 1.700 hộp và 5 lô đủ vòng đời (danh sách: `database/README.md` mục *Dữ liệu demo*). Mật khẩu chung: hằng `DemoPassword` trong `src/CrabShare.Api/Infrastructure/Persistence/DevDataSeeder.cs`.
 - Muốn làm lại CSDL từ đầu: `dotnet run --project backend/tools/CrabShare.DbMigrator -- --reset`.
 
 ## Test
