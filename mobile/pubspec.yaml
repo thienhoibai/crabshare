@@ -25,11 +25,12 @@ dependencies:
   # Định dạng tiền VND, ngày giờ.
   intl: ^0.20.3
 
-  # Font DM Sans theo mẫu thiết kế.
-  google_fonts: ^9.0.0
-
   # Chụp ảnh bằng chứng / ảnh xác nhận gắn tem.
   image_picker: ^1.2.4
+
+  # Chuẩn bị quét tem và lấy vị trí ảnh bằng chứng cho các task tiếp theo.
+  mobile_scanner: ^7.4.2
+  geolocator: ^14.1.1
 
   cupertino_icons: ^1.0.8
 
@@ -37,8 +38,20 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
+  fonts:
+    - family: DM Sans
+      fonts:
+        - asset: assets/fonts/DMSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/DMSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/DMSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/DMSans-Bold.ttf
+          weight: 700

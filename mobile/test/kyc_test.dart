@@ -187,7 +187,7 @@ void main() {
           kycCameraProvider.overrideWithValue(camera),
         ],
         child: MaterialApp(
-          theme: buildAppTheme(googleFonts: false),
+          theme: buildAppTheme(),
           home: const KycPage(),
         ),
       ),
@@ -265,7 +265,7 @@ void main() {
           kycRepositoryProvider.overrideWithValue(repository),
         ],
         child: MaterialApp(
-          theme: buildAppTheme(googleFonts: false),
+          theme: buildAppTheme(),
           home: const InvestorHomePage(),
         ),
       ),

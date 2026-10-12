@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Crabshare Mobile</string>
+	<string>CrabShare</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -30,6 +30,8 @@
 	<string>CrabShare dùng camera để chụp bằng chứng nuôi, xác minh danh tính và quét mã QR trên tem cua.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>CrabShare cần quyền truy cập ảnh khi hệ điều hành xử lý ảnh chụp trong ứng dụng.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>CrabShare dùng vị trí khi bạn chụp bằng chứng để xác nhận nơi chụp ảnh hộp nuôi.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
