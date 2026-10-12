@@ -14,6 +14,7 @@ const navGroups = [
   {
     label: 'Pháp lý',
     items: [
+      { id: 'register', href: '/operator/register', icon: ClipboardSignature, label: 'Đăng ký hộ nuôi' },
       { id: 'kyc', href: '/operator/kyc', icon: ClipboardSignature, label: 'Hồ sơ & eKYC' },
     ],
   },
@@ -102,6 +103,7 @@ export default function OperatorLayout({ children, activeTab }: { children: Reac
               <button type="button" onClick={() => setMobileMenuOpen(false)} className="rounded-full bg-[#f4efe8] p-1"><X className="w-4 h-4" /></button>
             </div>
             <nav className="op-nav">
+              <a href="/operator/register" className={linkClass('register')}><ClipboardSignature className="w-4 h-4" /> Đăng ký hộ nuôi</a>
               <a href="/operator/kyc" className={linkClass('kyc')}><ClipboardSignature className="w-4 h-4" /> Hồ sơ & eKYC</a>
               <a href="/operator/settlement" className={linkClass('settlement')}><DollarSign className="w-4 h-4" /> Đối soát doanh thu</a>
               {extraLinks}

@@ -8,7 +8,7 @@ const navItems = [
   { label: 'LÔ ĐẦU TƯ', href: '/#lo-goi-von' },
   { label: 'CỬA HÀNG', href: '/cua-hang' },
   { label: 'TRUY XUẤT', href: '/#tra-cuu' },
-  { label: 'NGƯỜI NUÔI', href: '/#nguoi-nuoi' },
+  { label: 'NGƯỜI NUÔI', href: '/operator/register' },
 ]
 
 type SiteHeaderProps = { variant?: 'overlay' | 'solid' }

@@ -21,6 +21,8 @@
 | POST | `/api/admin/operators/{id}/reject` · `/suspend` | PlatformAdmin | Kèm lý do |
 
 ## Quy tắc phải giữ
+- UC04 đã triển khai: `GET/PUT /me` xác minh membership và vai trò `OperatorMember` từ CSDL; Owner/Staff được sửa Draft/Rejected, chỉ Owner được gửi Draft. Rejected chưa có luồng gửi lại.
+- Web: `/operator/register` dành cho mọi tài khoản đã đăng nhập; không cần đăng nhập lại để tiếp tục hồ sơ vừa tạo. Token mới nhận vai trò và `operator_id` khi đăng nhập lại theo cơ chế Auth hiện có.
 - Chỉ hộ nuôi `Approved` mới tạo lô (Batches kiểm tra).
 - Sau khi thêm/gỡ thành viên, người đó phải **đăng nhập lại** để token có/không có claim `operator_id`.
 - Ghi `audit_log` khi duyệt / từ chối / đình chỉ.
@@ -31,6 +33,10 @@
 | `v_operator_reputation` | điểm uy tín hộ nuôi (TL-25) |
 
 Đã có entity tương ứng trong `Infrastructure/Persistence/Entities` (chỉ đọc).
+
+## Kiểm thử UC04
+- `dotnet test backend/CrabShare.sln`: gồm test API, phân quyền, trạng thái, transaction và claim đăng nhập trên SQL Server LocalDB.
+- Test có `Category=Database` tự tạo CSDL riêng `CrabShareVI01Tests_<guid>` bằng migration hiện có và xoá sau khi chạy; không tác động `CrabShareDev`. Cần LocalDB trên máy; CI tiếp tục dùng bộ lọc `Category!=Database`.
 
 ## Màn hình
 - Web: trang đăng ký hộ nuôi trong `operator/` (mới), duyệt hồ sơ trong `admin/AdminUsers*`.
