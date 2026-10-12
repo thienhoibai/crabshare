@@ -30,6 +30,7 @@ const OperatorBatchStatus = lazy(() => import('../features/operator/OperatorBatc
 const OperatorBatchDetail = lazy(() => import('../features/operator/OperatorBatchDetail'))
 const OperatorAlerts = lazy(() => import('../features/operator/OperatorAlerts'))
 const OperatorListings = lazy(() => import('../features/operator/OperatorListings'))
+const OperatorMembers = lazy(() => import('../features/operator/OperatorMembers'))
 
 const AdminDashboard = lazy(() => import('../features/admin/AdminDashboard'))
 const AdminUsers = lazy(() => import('../features/admin/AdminUsers'))
@@ -108,6 +109,7 @@ export const router = createBrowserRouter([
           { path: '/operator/batch/detail', element: page(OperatorBatchDetail) },
           { path: '/operator/alerts', element: page(OperatorAlerts) },
           { path: '/operator/listings', element: page(OperatorListings) },
+          { path: '/operator/members', element: page(OperatorMembers) },
         ],
       },
 

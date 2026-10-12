@@ -18,7 +18,7 @@ using CrabShare.Api.Features.Catalog;
 // using CrabShare.Api.Features.Offtake;
 
 // Khôi
-// using CrabShare.Api.Features.Accounts;
+using CrabShare.Api.Features.Accounts;
 // using CrabShare.Api.Features.Evidence;
 // using CrabShare.Api.Features.Alerts;
 // using CrabShare.Api.Features.Portfolio;
@@ -47,6 +47,7 @@ public static class FeatureRegistry
 
         // Viên
         services.AddScoped<OperatorService>();        // Features/Operators
+        services.AddScoped<OperatorReviewService>();  // UC05
         // services.AddScoped<BoxService>();          // Features/Boxes
         // services.AddScoped<BatchService>();        // Features/Batches
         // services.AddScoped<ProductionService>();   // Features/Production
@@ -58,7 +59,7 @@ public static class FeatureRegistry
         // services.AddScoped<OfftakeService>();      // Features/Offtake
 
         // Khôi
-        // services.AddScoped<AccountService>();      // Features/Accounts
+        services.AddScoped<AccountService>();        // Features/Accounts
         // services.AddScoped<EvidenceService>();     // Features/Evidence
         // services.AddScoped<AlertService>();        // Features/Alerts
         // services.AddScoped<PortfolioService>();    // Features/Portfolio
