@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>CrabShare dùng camera để chụp bằng chứng nuôi, xác minh danh tính và quét mã QR trên tem cua.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>CrabShare cần quyền truy cập ảnh khi hệ điều hành xử lý ảnh chụp trong ứng dụng.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

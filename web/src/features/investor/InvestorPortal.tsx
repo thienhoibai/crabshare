@@ -1,9 +1,12 @@
 /* Cổng nhà đầu tư (bản 2, nền sáng kiểu ứng dụng): menu trái 3 mục, thẻ số liệu gọn, thẻ góp vốn dính bên phải trang lô.
    Dữ liệu đang lấy từ shared/ui/kit/mock-data.ts — các task Funding/Batches/Settlement sẽ thay bằng API. */
-import { useState, type CSSProperties } from 'react'
-import { ArrowLeft, Bell, ChevronRight, Compass, House, Receipt, ShoppingBag } from 'lucide-react'
+import { useEffect, useState, type CSSProperties } from 'react'
+import { useLocation, useNavigate } from 'react-router'
+import { ArrowLeft, Bell, ChevronRight, Compass, House, Receipt, ShoppingBag, UserRound } from 'lucide-react'
+import { useAuthStore } from '../../shared/auth/authStore'
+import KycVerification, { KycStatusCard } from '../accounts/KycVerification'
 import {
-  HOLDINGS, INVESTOR, LOTS, NOTICES, STAGES, activeHoldings, activeTotal, closedPayout2610, lot, maxCapital, minContribution,
+  HOLDINGS, LOTS, NOTICES, STAGES, activeHoldings, activeTotal, closedPayout2610, lot, maxCapital, minContribution,
   pct, small, stage, tr, vnd, type Lot,
 } from '../../shared/ui/kit/mock-data'
 import {
@@ -12,9 +15,14 @@ import {
 import './investor.css'
 
 /* ---------- điều hướng trong một bản ---------- */
-type View = 'home' | 'explore' | 'lot' | 'settle'
+type View = 'home' | 'explore' | 'lot' | 'settle' | 'profile'
 function useNav() {
-  const [view, setView] = useState<View>('home')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [view, setView] = useState<View>(location.pathname.endsWith('/ho-so') ? 'profile' : 'home')
+  useEffect(() => {
+    setView((current) => location.pathname.endsWith('/ho-so') ? 'profile' : current === 'profile' ? 'home' : current)
+  }, [location.pathname])
   const [code, setCode] = useState('L2612-01')
   const [prev, setPrev] = useState<View>('home')
   const top = () => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
@@ -23,7 +31,7 @@ function useNav() {
     code,
     /** Trang đang được coi là mục menu hiện tại (lô mở từ đâu thì giữ mục đó). */
     section: view === 'lot' ? prev : view,
-    go: (v: View) => { setView(v); top() },
+    go: (v: View) => { setView(v); navigate(v === 'profile' ? '/nha-dau-tu/ho-so' : '/nha-dau-tu'); top() },
     open: (c: string) => { setPrev(view === 'lot' ? prev : view); setCode(c); setView('lot'); top() },
     back: () => { setView(prev); top() },
   }
@@ -109,6 +117,9 @@ function InvestCard({ l, onInvest }: { l: Lot; onInvest: (amount: number) => voi
 
 function InvV2Inner() {
   const nav = useNav()
+  const user = useAuthStore((s) => s.user)
+  const fullName = user?.fullName ?? 'Nhà đầu tư'
+  const initials = fullName.trim().split(/\s+/).slice(-2).map((word) => word[0]).join('')
   const [filter, setFilter] = useState<Filter>('Tất cả')
   const [investing, setInvesting] = useState<{ l: Lot; amount: number } | null>(null)
   const l = lot(nav.code)
@@ -118,9 +129,10 @@ function InvV2Inner() {
     { v: 'home', label: 'Tổng quan', icon: House },
     { v: 'explore', label: 'Khám phá lô', icon: Compass },
     { v: 'settle', label: 'Quyết toán', icon: Receipt },
+    { v: 'profile', label: 'Hồ sơ & eKYC', icon: UserRound },
   ]
   const active = nav.section
-  const titles: Record<View, string> = { home: `Chào ${INVESTOR.name}`, explore: 'Khám phá lô', lot: l.code, settle: 'Quyết toán' }
+  const titles: Record<View, string> = { home: `Chào ${fullName}`, explore: 'Khám phá lô', lot: l.code, settle: 'Quyết toán', profile: 'Hồ sơ & eKYC' }
   return (
     <div className="i2">
       <aside className="i2-side">
@@ -131,7 +143,7 @@ function InvV2Inner() {
           ))}
           <a href="/cua-hang"><ShoppingBag size={18} />Cửa hàng</a>
         </nav>
-        <div className="i2-side__me"><span className="rd-avatar">{INVESTOR.initials}</span><span><b>Nguyễn {INVESTOR.name}</b><small>Nhà đầu tư</small></span></div>
+        <div className="i2-side__me"><span className="rd-avatar">{initials}</span><span><b>{fullName}</b><small>Nhà đầu tư</small></span></div>
       </aside>
 
       <main className="i2-main">
@@ -145,6 +157,7 @@ function InvV2Inner() {
 
         {nav.view === 'home' && (
           <div className="i2-grid">
+            <KycStatusCard />
             <section className="i2-balance">
               <small>Vốn đang tham gia</small>
               <b>{vnd(activeTotal)}</b>
@@ -178,6 +191,12 @@ function InvV2Inner() {
             </section>
           </div>
         )}
+
+        {nav.view === 'profile' && <section className="iv-card">
+          <h3 className="rd-h3">Thông tin nhà đầu tư</h3>
+          <p><strong>{fullName}</strong><br />{user?.email}</p>
+          <KycVerification />
+        </section>}
 
         {nav.view === 'explore' && (
           <div className="i2-explore">

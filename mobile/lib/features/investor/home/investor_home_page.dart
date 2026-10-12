@@ -13,6 +13,7 @@ import '../../../shared/widgets/nav_shell.dart';
 import '../../../shared/widgets/segmented_gauge.dart';
 import '../data/investor_models.dart';
 import '../data/investor_repository.dart';
+import '../kyc/kyc_repository.dart';
 
 /// Tab "Tổng quan" của nhà đầu tư — bố cục theo màn dashboard của mẫu:
 /// đồng hồ bán nguyệt (tiến độ chu kỳ nuôi), thanh "+", thẻ từng khoản góp.
@@ -40,7 +41,9 @@ class _InvestorHomePageState extends ConsumerState<InvestorHomePage> {
           data: (items) {
             final selected = items.isEmpty ? null : items[_selected.clamp(0, items.length - 1)];
             return RefreshIndicator(
-              onRefresh: () => ref.refresh(myContributionsProvider.future),
+              onRefresh: () async {
+                await Future.wait([ref.refresh(myContributionsProvider.future), ref.refresh(kycDetailsProvider.future)]);
+              },
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, kNavBarClearance),
                 children: [
@@ -84,8 +87,13 @@ class _KycBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final status = ref.watch(kycStatusProvider).value;
-    if (status == null || status == KycStatus.verified) return const SizedBox.shrink();
+    final verification = ref.watch(kycStatusProvider);
+    if (verification.hasError) {
+      return Padding(padding: const EdgeInsets.only(bottom: 14),
+          child: ErrorView(message: apiErrorMessage(verification.error!), onRetry: () => ref.invalidate(kycDetailsProvider)));
+    }
+    final status = verification.value;
+    if (status == KycStatus.verified) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: AppCard(
@@ -100,11 +108,12 @@ class _KycBanner extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    status == KycStatus.pending ? 'Đang xác minh danh tính' : 'Xác minh danh tính để góp vốn',
+                    status == null ? 'Đang kiểm tra danh tính…'
+                        : status == KycStatus.rejected ? 'Xác minh chưa đạt — hãy thử lại' : 'Xác minh danh tính để góp vốn',
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 2),
-                  const Text('eKYC bằng CCCD gắn chip, khoảng 2 phút', style: TextStyle(color: Color(0xFFBDB7B1), fontSize: 13)),
+                  const Text('Chụp CCCD và ảnh khuôn mặt', style: TextStyle(color: Color(0xFFBDB7B1), fontSize: 13)),
                 ],
               ),
             ),

@@ -17,6 +17,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace CrabShare.Api.Tests;
 
 [Trait("Category", "Database")]
+[Collection("KycDatabase")]
 public class KycDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<KycDatabaseFixture>
 {
     private static HttpClient Client(WebApplicationFactory<Program> factory, long userId)
@@ -47,7 +48,8 @@ public class KycDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<KycDat
     {
         var userId = await fixture.CreateInvestorAsync();
         var otherUserId = await fixture.CreateInvestorAsync();
-        var provider = new RecordingProvider(new(true, "TEST-PASS", "Do not persist this card name", null));
+        var provider = new RecordingProvider(new(true, "TEST-PASS", "Do not persist this card name", null),
+            () => Assert.Empty(Directory.EnumerateFileSystemEntries(fixture.UploadTempRoot)));
         using var factory = WithProvider(provider);
         using var client = Client(factory, userId);
         // Vượt ngưỡng temp-file 64 KB mặc định của ASP.NET; nội dung chỉ gửi tới provider.
@@ -175,6 +177,26 @@ public class KycDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<KycDat
     }
 
     [Fact]
+    public async Task Missing_consent_returns_400_without_calling_provider_or_saving_results()
+    {
+        var userId = await fixture.CreateInvestorAsync();
+        var provider = new RecordingProvider(new(true, "SHOULD-NOT-BE-CALLED", null, null));
+        using var factory = WithProvider(provider);
+        using var client = Client(factory, userId);
+        using var form = KycControllerTests.Images(consent: false);
+        using var response = await client.PostAsync("/api/kyc/ekyc", form);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, provider.Calls);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.False(await db.KycChecks.AnyAsync(c => c.UserId == userId));
+        Assert.False(await db.AuditLogs.AnyAsync(a => a.ActorUserId == userId));
+        Assert.Equal("Unverified", (await db.Investors.FindAsync(userId))!.VerificationStatus);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(fixture.UploadTempRoot));
+        Assert.False(Directory.Exists(fixture.StorageRoot));
+    }
+
+    [Fact]
     public async Task Concurrent_submissions_for_one_investor_record_only_one_success()
     {
         var userId = await fixture.CreateInvestorAsync();
@@ -217,7 +239,7 @@ public class KycDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<KycDat
         }
     }
 
-    private sealed class RecordingProvider(EkycResult result) : IEkycProvider
+    private sealed class RecordingProvider(EkycResult result, Action? onVerify = null) : IEkycProvider
     {
         public int Calls { get; private set; }
         public List<byte[]> Received { get; } = [];
@@ -226,6 +248,7 @@ public class KycDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<KycDat
         public async Task<EkycResult> VerifyAsync(Stream front, Stream back, Stream selfie, CancellationToken ct)
         {
             Calls++;
+            onVerify?.Invoke();
             foreach (var stream in new[] { front, back, selfie })
             {
                 Streams.Add(stream);

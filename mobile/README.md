@@ -50,7 +50,7 @@ lib/
 | Chào, Đăng nhập | `onboarding/`, `auth/` | xong (đăng nhập đã gọi API thật) |
 | NĐT · Tổng quan, Thông báo | `investor/home/`, `investor/notifications/` | Khôi |
 | NĐT · Khám phá lô, Chi tiết lô | `investor/batches/` | Viên (dữ liệu lô), Thiện (nút Góp vốn) |
-| NĐT · eKYC | `investor/kyc/` | Khôi |
+| NĐT · eKYC | `investor/kyc/` | Khôi — đã nối API (CS-27) |
 | Hộ nuôi · Hôm nay, Nhật ký | `operator/today/`, `operator/logs/` | Viên |
 | Hộ nuôi · Chụp bằng chứng | `operator/evidence/` | Khôi |
 | Hộ nuôi · Cảnh báo | `operator/alerts/` | Khôi |
@@ -60,6 +60,18 @@ lib/
 | Tài khoản | `account/` | Khôi |
 
 ## Đổi dữ liệu mẫu sang API (việc chính của từng task)
+
+eKYC đã dùng `ApiKycRepository` riêng: GET `/api/me/kyc`, POST multipart
+`/api/kyc/ekyc`. Màn Tài khoản → Xác minh danh tính yêu cầu đồng ý điều khoản,
+chụp CCCD trước/sau bằng camera sau, selfie bằng camera trước, rồi gửi cả 3 ảnh.
+Ảnh được giữ trong bộ nhớ cho form; bản tạm từ camera được dọn và không lưu vào
+session. Sau phản hồi, form bỏ ảnh và Tổng quan cập nhật trạng thái từ API.
+KYC được tải lại khi đổi tài khoản; kéo làm mới Tổng quan cũng tải lại KYC.
+
+Tài khoản demo được seed Verified. Để thử luồng gửi mới, đăng ký Investor mới
+trên web rồi dùng tài khoản đó trên app. Provider backend hiện là sandbox giả lập.
+Test `test/kyc_test.dart` kiểm tra multipart, consent, camera từ chối quyền,
+đổi tài khoản và kết quả Verified; camera trong widget test được thay bằng ảnh mẫu.
 
 Mỗi tính năng có **interface repository** + **bản Mock**. Ví dụ nhật ký nuôi:
 

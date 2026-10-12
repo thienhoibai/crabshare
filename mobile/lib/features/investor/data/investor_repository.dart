@@ -11,7 +11,6 @@ abstract interface class InvestorRepository {
   Future<List<BatchSummary>> batches();
   Future<BatchSummary> batchByCode(String code);
   Future<List<InvestorNotification>> notifications();
-  Future<KycStatus> kycStatus();
 }
 
 final investorRepositoryProvider = Provider<InvestorRepository>((ref) => MockInvestorRepository());
@@ -20,7 +19,6 @@ final myContributionsProvider = FutureProvider((ref) => ref.watch(investorReposi
 final batchesProvider = FutureProvider((ref) => ref.watch(investorRepositoryProvider).batches());
 final batchDetailProvider = FutureProvider.family<BatchSummary, String>((ref, code) => ref.watch(investorRepositoryProvider).batchByCode(code));
 final investorNotificationsProvider = FutureProvider((ref) => ref.watch(investorRepositoryProvider).notifications());
-final kycStatusProvider = FutureProvider((ref) => ref.watch(investorRepositoryProvider).kycStatus());
 
 /// Dữ liệu mẫu để dựng giao diện. Tên hộ nuôi khớp seed của backend (DevDataSeeder); mã lô chỉ là ví dụ.
 class MockInvestorRepository implements InvestorRepository {
@@ -132,6 +130,4 @@ class MockInvestorRepository implements InvestorRepository {
         ),
       ]);
 
-  @override
-  Future<KycStatus> kycStatus() => _delay(KycStatus.unverified);
 }
