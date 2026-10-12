@@ -59,9 +59,38 @@
 - `AppDbContext.Custom.cs` sửa quan hệ nhiều địa chỉ/khách vì scaffold hiểu nhầm
   unique index có filter `is_default=1` thành quan hệ 1:1.
 
+## KH-04 — API quản trị người dùng và ngoại lệ KYC
+
+- `GET /api/admin/users?role=&status=&q=&page=&pageSize=`: role theo Roles.cs,
+  status Active/Locked/PendingVerification; q tìm tên/email/điện thoại/ID. Phân trang
+  mặc định 20, tối đa 100. Chi tiết: `GET /api/admin/users/{id}` trả user, verifiedAt,
+  kycChecks chỉ chứa metadata, không có ảnh hoặc mật khẩu.
+- `POST /api/admin/users/{id}/lock` và `/unlock` nhận `{ "reason": "..." }`,
+  bắt buộc 1–300 ký tự không chỉ khoảng trắng. Trạng thái trùng trả 409, id không
+  có trả 404. Không tự khoá tài khoản đang quản trị. Unlock khôi phục trạng thái
+  trước khoá qua audit (PendingVerification hoặc Active); dữ liệu Locked cũ không
+  có audit dùng Active.
+- `GET /api/admin/kyc-checks?result=Failed&checkType=EkycIdFace&page=&pageSize=`.
+  Result mặc định Failed; truyền `result=` để xem mọi kết quả. CheckType mặc định
+  không lọc. Response có canApproveException để UI bật đúng thao tác.
+- `POST /api/admin/kyc-checks/{id}/approve-exception` nhận reason như trên.
+  Chỉ EkycIdFace Failed **mới nhất** có consent, Investor chưa Verified và user Active;
+  không tự duyệt. Sai quy tắc trả 422, tự duyệt 403. BankNameMatch không được dùng
+  để duyệt danh tính. Đạt → ExceptionApproved + reviewed_by, Investor Verified + verified_at.
+- Tất cả endpoint yêu cầu JWT PlatformAdmin và vai admin/Active hiện tại trên DB.
+  Không dùng role cũ trong JWT để vượt quyền đã bị thu hồi.
+- Giao dịch Serializable ghi user/KYC/investor + audit atomically, hash audit theo
+  JSON camelCase của CS-25 qua `Common/Auditing/AuditChain`; timestamp millisecond.
+  Giữ failure_reason/checked_at của lần xác minh để không xoá lịch sử nhà cung cấp.
+- Đăng nhập Locked vẫn trả 403 auth.locked. JwtBearer kiểm tra status mỗi lần xác
+  thực; token đã cấp của tài khoản Locked hoặc đã xoá trả 401, client đăng xuất.
+- Kiểm thử và ảnh giao diện: `docs/validation/KH-04-kyc-user-management.md`.
+
 ## Màn hình
+
 - KH-03: Web nhà đầu tư ở Hồ sơ & eKYC; chủ hộ nuôi ở `/operator/payout-account`;
   khách hàng ở `/tai-khoan/dia-chi`. Mobile ở Tài khoản → Tài khoản nhận tiền.
+
 - Web: `admin/AdminUsers.tsx`, `admin/AdminUserDetail.tsx`, `operator/OperatorKyc.tsx`, hồ sơ trong `investor/`.
 - Mobile: `investor/kyc/kyc_page.dart`, `account/account_page.dart` (mục Tài khoản nhận tiền).
 
@@ -117,16 +146,21 @@ Scalar, đăng ký một tài khoản Investor mới rồi dùng JWT của tài 
 ### Audit và giao dịch
 
 Kết quả KYC, trạng thái nhà đầu tư và audit `Investor` / `VerifyIdentity` được ghi
-trong cùng transaction Serializable. Query audit dùng `UPDLOCK, HOLDLOCK` để không
-tách nhánh chuỗi băm khi nhiều nhà đầu tư gửi đồng thời. Timestamp được chuẩn hóa
+trong cùng transaction Serializable. Ngay sau BeginTransaction, đọc đầu chuỗi bằng
+`SELECT TOP (1) ... WITH (TABLOCKX, HOLDLOCK) ORDER BY audit_id DESC`, trước khi đọc/sửa
+entity nghiệp vụ, giống `feature/CS-25-duyet-ho-nuoi`. Timestamp được chuẩn hóa
 đến mili giây để khớp `DATETIMEOFFSET(3)` khi đọc lại từ SQL Server.
 
-Hiện TH-02 chưa có `IAuditLog`: writer của KYC nằm trong `AccountService`. Khi tích
-hợp writer chung, giữ định dạng chuỗi hiện có: `SHA-256(prev_hash hoặc chuỗi rỗng +
-JSON UTF-8)` bằng `JsonSerializer.Serialize` mặc định, với các trường đúng thứ tự
-`EntityType`, `EntityId`, `ActionType`, `OldValue`, `NewValue`, `ActorUserId`,
-`OccurredAt`. `OldValue`/`NewValue` là chuỗi JSON trạng thái, không chứa ảnh/CCCD.
-Không cần đổi migration hoặc entity.
+eKYC, payout và quản trị dùng chung `AuditChain` để khóa đầu chuỗi, chuẩn hóa thời gian,
+serialize snapshot và băm. Công thức: `SHA-256(UTF8((prev_hash ?? "") + JSON))`, đầu ra
+hex **64 ký tự `0–9, a–f`**. JSON băm dùng serializer mặc định và thứ tự trường đúng CS-25:
+`entityType`, `entityId`, `actionType`, `oldValue`, `newValue`, `actorUserId`, `occurredAt`.
+Snapshot old/new cũng dùng camelCase; giá trị nghiệp vụ giữ nguyên. Không chứa ảnh/CCCD.
+
+Không viết lại audit cũ: `AuditChain.VerifyHash` nhận cả định dạng camelCase mới và
+PascalCase của Accounts trước đây. Mở khoá đọc được cả `status` và `Status` trong snapshot
+lịch sử. Không cần migration hoặc đổi entity. Test hỗn hợp xác minh chuỗi eKYC, payout,
+khoá/mở khoá, ngoại lệ KYC và CS-25, cả khi ghi đồng thời.
 
 ### Kiểm thử
 
