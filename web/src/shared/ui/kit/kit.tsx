@@ -1,7 +1,7 @@
 /* Bộ thành phần dùng chung cho 6 bản thiết kế (3 cửa hàng, 3 nhà đầu tư).
    Màu sắc lấy từ biến CSS của từng chủ đề (.rd--dark / .rd--light / .rd--mix) nên cùng một thành phần
    tự hợp với mọi bản. */
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { ArrowLeft, Check, Clock, Landmark, Minus, Plus, QrCode, ShieldCheck, ShoppingBag, Signature, Truck, X } from 'lucide-react'
 import { settle } from '../../../features/landing/settlement'
 import {
@@ -221,8 +221,13 @@ export function cartTotals(lines: CartLine[]) {
   return { subtotal, today, deposit, count, groups: [...map.entries()].map(([lotCode, ls]) => ({ lot: lotCode, lines: ls })) }
 }
 
-export function CartProvider({ children, seed = [] }: { children: ReactNode; seed?: CartLine[] }) {
-  const [lines, setLines] = useState<CartLine[]>(seed)
+/** Nơi lưu dòng giỏ do trang tự cấp (vd. giỏ lưu máy của cửa hàng thật); bỏ trống thì giỏ chỉ sống trong bộ nhớ. */
+export type CartLinesStore = { lines: CartLine[]; setLines: Dispatch<SetStateAction<CartLine[]>> }
+
+export function CartProvider({ children, seed = [], store }: { children: ReactNode; seed?: CartLine[]; store?: CartLinesStore }) {
+  const [ownLines, setOwnLines] = useState<CartLine[]>(seed)
+  const lines = store?.lines ?? ownLines
+  const setLines = store?.setLines ?? setOwnLines
   const [open, setOpen] = useState(false)
   const [holdUntil, setHoldUntil] = useState<number | null>(() => (seed.length ? Date.now() + HOLD_MIN * 60000 : null))
   const [toast, setToast] = useState<string | null>(null)
@@ -271,7 +276,7 @@ export function CartProvider({ children, seed = [] }: { children: ReactNode; see
         setHoldUntil(null)
       },
     }
-  }, [lines, open, holdUntil, toast])
+  }, [lines, setLines, open, holdUntil, toast])
   return <CartCtx.Provider value={value}>{children}</CartCtx.Provider>
 }
 
@@ -299,8 +304,12 @@ export function CartToast() {
 
 type CheckoutStep = 'cart' | 'ship' | 'pay' | 'done'
 
-/** Ngăn kéo giỏ hàng có sẵn quy trình thanh toán 3 bước. */
-export function CartDrawer() {
+/**
+ * Ngăn kéo giỏ hàng có sẵn quy trình thanh toán 3 bước (minh hoạ).
+ * onCheckout: trang có thanh toán thật truyền vào; nút "Thanh toán" gọi hàm này thay cho 3 bước minh hoạ,
+ * và không hiện đồng hồ giữ hàng vì hàng chỉ được giữ khi đặt đơn.
+ */
+export function CartDrawer({ onCheckout }: { onCheckout?: () => void } = {}) {
   const c = useCart()
   const [step, setStep] = useState<CheckoutStep>('cart')
   const [slot, setSlot] = useState('Hôm nay, 17–19h')
@@ -336,7 +345,7 @@ export function CartDrawer() {
             <button type="button" className="rd-iconbtn" onClick={close} aria-label="Đóng"><X size={18} /></button>
           </header>
 
-          {step !== 'done' && c.lines.length > 0 && (
+          {!onCheckout && step !== 'done' && c.lines.length > 0 && (
             <p className="rd-hold"><Clock size={14} /> Đang giữ hàng cho bạn · <b>{cd.text}</b></p>
           )}
 
@@ -415,7 +424,11 @@ export function CartDrawer() {
                 <dt className="rd-sum__total">Trả hôm nay</dt><dd className="rd-sum__total">{vnd(c.today)}</dd>
               </dl>
               {c.groups.length > 1 && step === 'cart' && <p className="rd-note"><Truck size={14} /> Hàng từ {c.groups.length} lô sẽ tạo {c.groups.length} đơn riêng.</p>}
-              {step === 'cart' && <button type="button" className="rd-btn rd-btn--primary rd-btn--block rd-btn--lg" onClick={() => setStep('ship')}>Thanh toán</button>}
+              {step === 'cart' && <button type="button" className="rd-btn rd-btn--primary rd-btn--block rd-btn--lg" onClick={() => {
+                if (!onCheckout) return setStep('ship')
+                c.setOpen(false)
+                onCheckout()
+              }}>Thanh toán</button>}
               {step === 'ship' && <button type="button" className="rd-btn rd-btn--primary rd-btn--block rd-btn--lg" onClick={() => setStep('pay')}>Tiếp tục</button>}
               {step === 'pay' && <button type="button" className="rd-btn rd-btn--primary rd-btn--block rd-btn--lg" onClick={order}>Đặt hàng · {vnd(c.today)}</button>}
             </footer>
@@ -496,7 +509,7 @@ export function ProductView({ p, onAdded }: { p: Product; onAdded?: () => void }
             {isSoldOut(p) ? 'Hết hàng' : max < 1 ? `Còn dưới 1 ${p.unit}, chưa bán lẻ được` : p.preorder ? `Đặt trước · cọc ${vnd(price * qty * DEPOSIT)}` : `Thêm vào giỏ · ${vnd(price * qty)}`}
           </button>
         </div>
-        <p className="rd-pv__hint"><Clock size={14} /> Giữ hàng 15 phút khi bạn thêm vào giỏ.</p>
+        <p className="rd-pv__hint"><Clock size={14} /> Đặt hàng xong, hàng được giữ 15 phút để bạn chuyển khoản.</p>
         <TraceCard p={p} />
         <ul className="rd-assure">
           <li><Truck size={16} /> Mỗi đơn thuộc đúng một lô</li>
