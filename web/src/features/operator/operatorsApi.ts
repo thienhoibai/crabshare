@@ -54,3 +54,24 @@ export function useSubmitOperatorApplication() {
     onSuccess: (data) => qc.setQueryData(['operators', 'me', userId], data),
   })
 }
+
+export type OperatorMember = { userId: number; fullName: string; email: string; memberRole: 'Owner' | 'Staff'; joinedAt: string }
+
+export function useOperatorMembers() {
+  const userId = useAuthStore(s => s.user?.userId)
+  return useQuery({
+    queryKey: ['operators', 'members', userId], enabled: !!userId, retry: false,
+    queryFn: async () => (await http.get<OperatorMember[]>('/api/operators/me/members')).data,
+  })
+}
+
+export function useManageOperatorMember() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (request: { action: 'add'; email: string } | { action: 'remove'; userId: number }) => {
+      if (request.action === 'add') return (await http.post<OperatorMember>('/api/operators/me/members', { email: request.email })).data
+      await http.delete(`/api/operators/me/members/${request.userId}`)
+    },
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['operators', 'members'] }) },
+  })
+}

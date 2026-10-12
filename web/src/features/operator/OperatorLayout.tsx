@@ -1,6 +1,7 @@
 import { useState, useEffect, type ReactNode } from 'react'
-import { Home, LayoutGrid, ClipboardSignature, BellRing, LogOut, Package, DollarSign, Smartphone, Menu, X, Monitor, Map, NotebookPen } from 'lucide-react'
+import { Home, LayoutGrid, ClipboardSignature, BellRing, LogOut, Package, DollarSign, Smartphone, Menu, X, Monitor, Map, NotebookPen, Users } from 'lucide-react'
 import './operator.css'
+import { useOperatorApplication } from './operatorsApi'
 
 const navGroups = [
   {
@@ -9,6 +10,7 @@ const navGroups = [
       { id: 'dashboard', href: '/operator', icon: Home, label: 'Tổng quan' },
       { id: 'batch', href: '/operator/batch', icon: LayoutGrid, label: 'Quản lý lô nuôi' },
       { id: 'map', href: '/operator/map', icon: Map, label: 'Sơ đồ trại (RAS)' },
+      { id: 'members', href: '/operator/members', icon: Users, label: 'Nhân viên' },
     ],
   },
   {
@@ -28,6 +30,7 @@ const navGroups = [
 ]
 
 export default function OperatorLayout({ children, activeTab }: { children: ReactNode; activeTab: string }) {
+  const application = useOperatorApplication()
   const [showSimulator, setShowSimulator] = useState(false)
   const [device, setDevice] = useState('6.5')
   const [scale, setScale] = useState(0.8)
@@ -103,6 +106,7 @@ export default function OperatorLayout({ children, activeTab }: { children: Reac
               <button type="button" onClick={() => setMobileMenuOpen(false)} className="rounded-full bg-[#f4efe8] p-1"><X className="w-4 h-4" /></button>
             </div>
             <nav className="op-nav">
+              <a href="/operator/members" className={linkClass('members')}><Users className="w-4 h-4" /> Nhân viên</a>
               <a href="/operator/register" className={linkClass('register')}><ClipboardSignature className="w-4 h-4" /> Đăng ký hộ nuôi</a>
               <a href="/operator/kyc" className={linkClass('kyc')}><ClipboardSignature className="w-4 h-4" /> Hồ sơ & eKYC</a>
               <a href="/operator/settlement" className={linkClass('settlement')}><DollarSign className="w-4 h-4" /> Đối soát doanh thu</a>
@@ -126,9 +130,9 @@ export default function OperatorLayout({ children, activeTab }: { children: Reac
           </div>
         </a>
         <div className="op-farm-chip">
-          <small>Trại đang vận hành</small>
-          <strong>Trại Cần Giờ 01</strong>
-          <span>Nguyễn Văn A · RAS 155 ô</span>
+          <small>Hồ sơ hộ nuôi</small>
+          <strong>{application.isPending ? 'Đang tải hồ sơ…' : application.isError ? 'Không tải được hồ sơ' : application.data?.legalName ?? 'Chưa có hồ sơ'}</strong>
+          <span>{application.data ? application.data.memberRole === 'Owner' ? 'Chủ hộ nuôi' : 'Nhân viên hộ nuôi' : 'CrabShare Operator'}</span>
         </div>
         <nav className="op-nav">
           {navGroups.map((group) => (

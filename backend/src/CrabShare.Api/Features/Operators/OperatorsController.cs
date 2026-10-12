@@ -26,4 +26,19 @@ public sealed class OperatorsController(OperatorService operators) : ControllerB
     [EndpointSummary("UC04 — Gửi hồ sơ hộ nuôi xét duyệt")]
     public async Task<ActionResult<OperatorResponse>> Submit(CancellationToken ct)
         => Ok(await operators.SubmitAsync(ct));
+
+    [HttpGet("me/members")]
+    public async Task<ActionResult<IReadOnlyList<OperatorMemberResponse>>> Members(CancellationToken ct)
+        => Ok(await operators.ListMembersAsync(ct));
+
+    [HttpPost("me/members")]
+    public async Task<ActionResult<OperatorMemberResponse>> AddMember(AddOperatorMemberRequest req, CancellationToken ct)
+        => CreatedAtAction(nameof(Members), await operators.AddMemberAsync(req, ct));
+
+    [HttpDelete("me/members/{userId:long}")]
+    public async Task<IActionResult> RemoveMember(long userId, CancellationToken ct)
+    {
+        await operators.RemoveMemberAsync(userId, ct);
+        return NoContent();
+    }
 }

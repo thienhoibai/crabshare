@@ -47,6 +47,7 @@ public static class FeatureRegistry
 
         // Viên
         services.AddScoped<OperatorService>();        // Features/Operators
+        services.AddScoped<OperatorReviewService>();  // UC05
         // services.AddScoped<BoxService>();          // Features/Boxes
         // services.AddScoped<BatchService>();        // Features/Batches
         // services.AddScoped<ProductionService>();   // Features/Production

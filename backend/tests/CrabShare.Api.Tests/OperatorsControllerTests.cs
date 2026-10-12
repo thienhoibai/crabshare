@@ -18,6 +18,13 @@ public class OperatorsAuthenticationTests(WebApplicationFactory<Program> factory
     [InlineData("GET", "/api/operators/me")]
     [InlineData("PUT", "/api/operators/me")]
     [InlineData("POST", "/api/operators/me/submit")]
+    [InlineData("GET", "/api/operators/me/members")]
+    [InlineData("POST", "/api/operators/me/members")]
+    [InlineData("DELETE", "/api/operators/me/members/1")]
+    [InlineData("GET", "/api/admin/operators")]
+    [InlineData("POST", "/api/admin/operators/1/approve")]
+    [InlineData("POST", "/api/admin/operators/1/reject")]
+    [InlineData("POST", "/api/admin/operators/1/suspend")]
     public async Task Anonymous_is_rejected(string method, string path)
     {
         using var client = factory.WithWebHostBuilder(b => b.UseSetting("Seed:Enabled", "false")).CreateClient();

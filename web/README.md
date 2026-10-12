@@ -89,3 +89,10 @@ Trong trang: `const { data, isLoading, error } = useFundingBatches()`; báo lỗ
 - Tiền hiển thị bằng `formatVnd()`; **không** hiển thị lợi suất kỳ vọng.
 - Thay dần dữ liệu trong `shared/ui/kit/mock-data.ts` bằng dữ liệu API; trang nào xong thì xoá phần mock tương ứng.
 - Giữ phong cách sẵn có của từng khu vực (CSS trong `store.css`, `investor.css`, `operator.css`).
+
+## VI-02 — Duyệt hộ nuôi và nhân viên
+
+- Admin: `/admin/users?tab=operators`, chỉ PlatformAdmin thấy tab Hộ nuôi; mặc định Chờ duyệt. Lọc Đã duyệt để đình chỉ. Các form xác nhận gọi API thật, nhận sức chứa hoặc lý do và cập nhật danh sách sau thành công. Tab Người dùng & eKYC vẫn là màn hình mẫu trước đây.
+- Operator: `/operator/members`, có trong sidebar và menu mobile. Owner thêm Staff bằng email tài khoản có sẵn và xóa Staff có xác nhận; Staff chỉ xem. Thành viên mới cần đăng nhập lại để cập nhật quyền giao diện.
+- Hook API ở `features/admin/adminOperatorsApi.ts` và `features/operator/operatorsApi.ts`; hộp thoại dùng `shared/ui/ActionDialog.tsx`. Không thêm dependency.
+- Chạy `npm run lint` và `npm run build`; API ở `http://localhost:5233`, web dev nên mở `http://localhost:5173` theo cấu hình CORS mặc định.
