@@ -6,7 +6,7 @@ import { useNavigate, useParams } from 'react-router'
 import { ChevronLeft, ChevronRight, Flag, Plus, X } from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
 import { small, vnd, type Product } from '../../shared/ui/kit/mock-data'
-import { CartButton, CartDrawer, CartProvider, ProductView, Shell, Tabs, TopBar, maxQty, useCart, useModalLock } from '../../shared/ui/kit/kit'
+import { CartButton, CartDrawer, CartProvider, ProductView, Shell, Tabs, TopBar, isSoldOut, maxQty, useCart, useModalLock } from '../../shared/ui/kit/kit'
 import { REASON_LABELS, type StorageType } from '../operator/listingsApi'
 import {
   GRADES, formatDate, formatKg, toProduct, useStoreListing, useStoreListings,
@@ -70,14 +70,15 @@ function Panel({ kind, onClose, children }: { kind: 'full' | 'sheet' | 'side'; o
 function CardV1({ p, onOpen }: { p: Product; onOpen: () => void }) {
   const cart = useCart()
   const max = maxQty(p)
+  const soldOut = isSoldOut(p)
   return (
-    <article className={`s1-card${max < 1 ? ' is-soldout' : ''}`}>
+    <article className={`s1-card${soldOut ? ' is-soldout' : ''}`}>
       <div className="s1-card__frame">
         <button type="button" className="s1-card__media" onClick={onOpen} aria-label={`Xem ${p.name}`}>
           <img src={small(p.img)} alt="" loading="lazy" />
           <span className="s1-card__top">
             <span className="rd-chip rd-chip--solid">Lô {p.lot}</span>
-            {max < 1 ? <span className="rd-tag s1-out">Hết hàng</span> : p.stock < 10 ? <span className="rd-tag s1-low">Còn {formatKg(p.stock)} {p.unit}</span> : null}
+            {soldOut ? <span className="rd-tag s1-out">Hết hàng</span> : p.stock < 10 ? <span className="rd-tag s1-low">Còn {formatKg(p.stock)} {p.unit}</span> : null}
           </span>
         </button>
         {max >= 1 && (

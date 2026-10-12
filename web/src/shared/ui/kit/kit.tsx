@@ -181,8 +181,9 @@ export function QrMock({ size = 150 }: { size?: number }) {
 /** item: sản phẩm lấy từ API (không có trong dữ liệu mẫu) được lưu kèm dòng giỏ. */
 export type CartLine = { id: string; size: number; qty: number; item?: Product }
 export const lineProduct = (l: CartLine) => l.item ?? product(l.id)
-/** Số lượng tối đa mua được (đơn vị nguyên); 0 = hết hàng. */
-export const maxQty = (p: Product) => (p.soldOut ? 0 : Math.floor(p.stock))
+export const isSoldOut = (p: Product) => !!p.soldOut || p.stock <= 0
+/** Số lượng tối đa mua được (đơn vị nguyên); còn hàng nhưng dưới 1 đơn vị thì cũng là 0. */
+export const maxQty = (p: Product) => (isSoldOut(p) ? 0 : Math.floor(p.stock))
 const qtyFmt = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 })
 
 type CartState = {
@@ -244,7 +245,7 @@ export function CartProvider({ children, seed = [] }: { children: ReactNode; see
           timer.current = window.setTimeout(() => setToast(null), 2400)
         }
         if (max < 1) {
-          flash(`${p.name} đã hết hàng`)
+          flash(isSoldOut(p) ? `${p.name} đã hết hàng` : `${p.name} còn chưa đủ 1 ${p.unit}`)
           return
         }
         setLines((ls) => {
@@ -483,7 +484,7 @@ export function ProductView({ p, onAdded }: { p: Product; onAdded?: () => void }
         <div className="rd-pv__tags">
           <span className="rd-tag">{p.kind}</span>
           {p.preorder ? <span className="rd-tag rd-tag--accent">Đặt trước · cọc 15%</span>
-            : max < 1 ? <span className="rd-tag">Hết hàng</span>
+            : isSoldOut(p) ? <span className="rd-tag">Hết hàng</span>
             : <span className="rd-tag">Còn {qtyFmt.format(p.stock)} {p.unit}</span>}
         </div>
         <h2 className="rd-pv__name">{p.name}</h2>
@@ -492,7 +493,7 @@ export function ProductView({ p, onAdded }: { p: Product; onAdded?: () => void }
         <div className="rd-pv__buy">
           <Qty value={qty} max={Math.max(1, max)} onChange={(v) => setQty(Math.max(1, v))} />
           <button type="button" className="rd-btn rd-btn--primary rd-btn--lg rd-pv__cta" disabled={max < 1} onClick={() => { cart.add(p.id, size, qty, p); onAdded?.() }}>
-            {max < 1 ? 'Hết hàng' : p.preorder ? `Đặt trước · cọc ${vnd(price * qty * DEPOSIT)}` : `Thêm vào giỏ · ${vnd(price * qty)}`}
+            {isSoldOut(p) ? 'Hết hàng' : max < 1 ? `Còn dưới 1 ${p.unit}, chưa bán lẻ được` : p.preorder ? `Đặt trước · cọc ${vnd(price * qty * DEPOSIT)}` : `Thêm vào giỏ · ${vnd(price * qty)}`}
           </button>
         </div>
         <p className="rd-pv__hint"><Clock size={14} /> Giữ hàng 15 phút khi bạn thêm vào giỏ.</p>

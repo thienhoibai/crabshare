@@ -118,7 +118,7 @@ function CreateListingForm({ onDone }: { onDone: () => void }) {
             )}
             <div className="op-field">
               <label htmlFor="ls-price">Giá bán (đồng/kg)</label>
-              <input id="ls-price" type="number" min={1} step={1000} required className="op-input" value={price} onChange={(e) => setPrice(e.target.value)} />
+              <input id="ls-price" type="number" min={1000} step={1000} required className="op-input" value={price} onChange={(e) => setPrice(e.target.value)} />
             </div>
           </div>
           <div className="op-field">
@@ -162,7 +162,7 @@ function ChangePriceForm({ listing, onDone }: { listing: Listing; onDone: () => 
     <form onSubmit={submit} className="op-subform">
       <div className="op-field">
         <label htmlFor={`pr-${listing.listingId}`}>Giá mới (đồng/kg)</label>
-        <input id={`pr-${listing.listingId}`} type="number" min={1} step={1000} required className="op-input" value={price} onChange={(e) => setPrice(e.target.value)} />
+        <input id={`pr-${listing.listingId}`} type="number" min={1000} step={1000} required className="op-input" value={price} onChange={(e) => setPrice(e.target.value)} />
       </div>
       <div className="op-field">
         <label htmlFor={`rs-${listing.listingId}`}>Lý do</label>
