@@ -42,7 +42,7 @@
 
 @media (max-width: 640px) {
   .cf-steps { font-size: 11px; gap: 4px; }
-  .cf-foot .rd-btn { flex: 1; }
+  .cf-foot .rd-btn { flex: 1 1 auto; }
   .cf-open__row { grid-template-columns: minmax(0, 1fr) auto; }
   .cf-open__prog { grid-column: 1 / -1; grid-row: 2; }
   .cf-open__nums { grid-row: 3; }

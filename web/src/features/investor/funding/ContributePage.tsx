@@ -53,7 +53,8 @@ function ContributeFlow({ code }: { code: string }) {
   if (batch.isError) return <Frame code={code}><p className="cf-error">{errorMessage(batch.error)}</p></Frame>
 
   const b = batch.data
-  const current = step ?? 0
+  // Lần vẽ đầu (trước khi effect đặt step) cũng đã đúng màn, không chớp qua màn rủi ro
+  const current = step ?? (b.me.riskAcknowledged ? 1 : 0)
   const pill = reservation && countdown.left > 0
     ? <span className="rd-hold rd-hold--pill" title="Thời gian giữ chỗ còn lại"><Clock size={14} /> {countdown.text}</span>
     : null
@@ -85,7 +86,9 @@ function ContributeFlow({ code }: { code: string }) {
         <PaymentStep reservation={reservation} payment={payment} onCreated={setPayment} onExpire={() => void refetch()}
           onBack={() => setStep(2)} onTransferred={() => setStep(4)} onReserveAgain={() => setStep(1)} />
       )}
-      {current === 4 && <DoneStep payment={payment} onShowQr={() => setStep(3)} onReserveAgain={() => setStep(1)} />}
+      {current === 4 && (
+        <DoneStep payment={payment} onPaid={() => void refetch()} onShowQr={() => setStep(3)} onReserveAgain={() => setStep(1)} />
+      )}
     </Frame>
   )
 }
@@ -343,9 +346,24 @@ function PaymentStep({ reservation, payment, onCreated, onExpire, onBack, onTran
 }
 
 /* ---------- Màn 5: chờ tiền về hoặc đã xác nhận ---------- */
-function DoneStep({ payment, onShowQr, onReserveAgain }: { payment: PaymentRef | null; onShowQr: () => void; onReserveAgain: () => void }) {
+function DoneStep({ payment, onPaid, onShowQr, onReserveAgain }: {
+  payment: PaymentRef | null
+  onPaid: () => void
+  onShowQr: () => void
+  onReserveAgain: () => void
+}) {
   const request = usePaymentRequest(payment?.paymentRequestId ?? null)
   const p = request.data
+  const paid = p?.status === 'Paid'
+  const refreshed = useRef(false)
+
+  // Tiền đã về: tải lại số liệu lô để khoản góp thôi hiện là "đang giữ chỗ"
+  useEffect(() => {
+    if (paid && !refreshed.current) {
+      refreshed.current = true
+      onPaid()
+    }
+  }, [paid, onPaid])
 
   if (!p) {
     return request.isError

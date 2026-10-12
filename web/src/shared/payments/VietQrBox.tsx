@@ -22,20 +22,22 @@ export interface VietQrInfo {
 
 /**
  * @param status trạng thái mới nhất của yêu cầu (hỏi lại bằng usePaymentRequest); mặc định Pending.
- * @param onExpire gọi một lần khi đồng hồ về 0, để trang tải lại giữ chỗ.
+ * @param onExpire gọi một lần khi hết hạn — đồng hồ về 0 hoặc máy chủ báo Expired trước (đồng hồ máy lệch) —
+ *   để trang tải lại giữ chỗ.
  */
 export function VietQrBox({ payment, status = 'Pending', onExpire }: { payment: VietQrInfo; status?: PaymentStatus; onExpire?: () => void }) {
   const until = Date.parse(payment.expiresAt)
   const cd = useCountdown(status === 'Pending' ? until : null)
   const timedOut = status === 'Pending' && cd.left <= 0
+  const ended = timedOut || status === 'Expired'
   const notified = useRef(false)
 
   useEffect(() => {
-    if (timedOut && !notified.current) {
+    if (ended && !notified.current) {
       notified.current = true
       onExpire?.()
     }
-  }, [timedOut, onExpire])
+  }, [ended, onExpire])
 
   if (status === 'Paid') {
     return (

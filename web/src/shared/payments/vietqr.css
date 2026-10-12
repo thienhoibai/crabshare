@@ -37,4 +37,8 @@
 @media (max-width: 560px) {
   .vq { grid-template-columns: 1fr; padding: 14px; }
   .vq-code { justify-self: center; }
+  /* Nhãn trên, giá trị dưới: mã đối chiếu, số tài khoản không bị ngắt giữa chừng */
+  .vq-manual__list { grid-template-columns: 1fr; gap: 2px; }
+  .vq-manual__list dd { margin-bottom: 8px; text-align: left; }
+  .vq-copy { justify-content: flex-start; }
 }
