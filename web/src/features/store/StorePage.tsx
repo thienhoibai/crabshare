@@ -1,32 +1,62 @@
 /* Cửa hàng (bản 1, nền sáng): lưới ảnh lớn, xem sản phẩm toàn màn hình, giỏ hàng trượt từ bên phải.
-   Dữ liệu đang lấy từ shared/ui/kit/mock-data.ts — task Catalog/Orders sẽ thay bằng API. */
-import { Fragment, useState, type ReactNode } from 'react'
-import { ArrowUpRight, Plus, X } from 'lucide-react'
-import { IMG, KINDS, filterProducts, product, small, vnd, type KindFilter, type Product } from '../../shared/ui/kit/mock-data'
-import { CartButton, CartDrawer, CartProvider, ProductView, Shell, Tabs, TopBar, useCart, useModalLock } from '../../shared/ui/kit/kit'
+   UC25: dữ liệu lấy từ GET /api/listings (lọc loại cua / hạng / bảo quản, sắp xếp, phân trang) và GET /api/listings/{id}.
+   Giỏ hàng vẫn chạy phía trình duyệt — giữ hàng và đặt đơn thật làm ở task Orders. */
+import { useState, type ReactNode } from 'react'
+import { useNavigate, useParams } from 'react-router'
+import { ChevronLeft, ChevronRight, Flag, Plus, X } from 'lucide-react'
+import { errorMessage } from '../../shared/api/http'
+import { small, vnd, type Product } from '../../shared/ui/kit/mock-data'
+import { CartButton, CartDrawer, CartProvider, ProductView, Shell, Tabs, TopBar, isSoldOut, maxQty, useCart, useModalLock } from '../../shared/ui/kit/kit'
+import { REASON_LABELS, type StorageType } from '../operator/listingsApi'
+import {
+  GRADES, formatDate, formatKg, toProduct, useStoreListing, useStoreListings,
+  type CrabType, type PublicPriceRevision, type StoreSort,
+} from './storeApi'
 import './store.css'
 import { useAuthStore } from '../../shared/auth/authStore'
 
-type Sort = 'new' | 'asc' | 'desc'
 function AddressBookLink() {
   const isCustomer = useAuthStore(s => s.user?.roles.includes('Customer'))
   return isCustomer ? <a className="rd-btn rd-btn--ghost rd-btn--sm" href="/tai-khoan/dia-chi">Sổ địa chỉ</a> : null
 }
-const sortProducts = (list: Product[], s: Sort) =>
-  s === 'new' ? list : [...list].sort((a, b) => (s === 'asc' ? 1 : -1) * (a.sizes[0].price - b.sizes[0].price))
+const PAGE_SIZE = 12
 
-function SortSelect({ value, onChange }: { value: Sort; onChange: (s: Sort) => void }) {
+const KINDS = ['Tất cả', 'Cua thịt', 'Cua gạch', 'Cua lột'] as const
+type Kind = (typeof KINDS)[number]
+const KIND_TO_TYPE: Record<Kind, CrabType | undefined> = {
+  'Tất cả': undefined,
+  'Cua thịt': 'FatteningMudCrab',
+  'Cua gạch': 'RoeCrab',
+  'Cua lột': 'SoftShellCrab',
+}
+
+function Select<T extends string>({ label, value, onChange, options }: {
+  label: string
+  value: T
+  onChange: (v: T) => void
+  options: readonly { value: T; label: string }[]
+}) {
   return (
     <label className="st-sort">
-      <span className="st-sort__label">Sắp xếp</span>
-      <select value={value} onChange={(e) => onChange(e.target.value as Sort)}>
-        <option value="new">Mới thu</option>
-        <option value="asc">Giá thấp trước</option>
-        <option value="desc">Giá cao trước</option>
+      <span className="st-sort__label">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value as T)}>
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </label>
   )
 }
+
+const SORTS: { value: StoreSort; label: string }[] = [
+  { value: 'Newest', label: 'Mới đăng' },
+  { value: 'PriceAsc', label: 'Giá thấp trước' },
+  { value: 'PriceDesc', label: 'Giá cao trước' },
+]
+const GRADE_OPTIONS = [{ value: '', label: 'Mọi hạng' }, ...GRADES.map((g) => ({ value: g.code, label: g.label }))]
+const STORAGE_OPTIONS: { value: '' | StorageType; label: string }[] = [
+  { value: '', label: 'Tươi và cấp đông' },
+  { value: 'Fresh', label: 'Tươi' },
+  { value: 'Frozen', label: 'Cấp đông' },
+]
 
 /** Khung chứa trang sản phẩm: toàn màn hình, tấm trượt từ dưới hoặc từ phải. */
 function Panel({ kind, onClose, children }: { kind: 'full' | 'sheet' | 'side'; onClose: () => void; children: ReactNode }) {
@@ -42,21 +72,23 @@ function Panel({ kind, onClose, children }: { kind: 'full' | 'sheet' | 'side'; o
   )
 }
 
-
-
 function CardV1({ p, onOpen }: { p: Product; onOpen: () => void }) {
   const cart = useCart()
+  const max = maxQty(p)
+  const soldOut = isSoldOut(p)
   return (
-    <article className="s1-card">
+    <article className={`s1-card${soldOut ? ' is-soldout' : ''}`}>
       <div className="s1-card__frame">
-      <button type="button" className="s1-card__media" onClick={onOpen} aria-label={`Xem ${p.name}`}>
-        <img src={small(p.img)} alt="" loading="lazy" />
-        <span className="s1-card__top">
-          <span className="rd-chip rd-chip--solid">Lô {p.lot}</span>
-          {p.preorder ? <span className="rd-tag rd-tag--accent">Đặt trước</span> : p.stock < 10 ? <span className="rd-tag s1-low">Còn {p.stock}</span> : null}
-        </span>
-      </button>
-      <button type="button" className="rd-round s1-card__add" onClick={() => cart.add(p.id, 0)} aria-label={`Thêm ${p.name} vào giỏ`}><Plus size={20} /></button>
+        <button type="button" className="s1-card__media" onClick={onOpen} aria-label={`Xem ${p.name}`}>
+          <img src={small(p.img)} alt="" loading="lazy" />
+          <span className="s1-card__top">
+            <span className="rd-chip rd-chip--solid">Lô {p.lot}</span>
+            {soldOut ? <span className="rd-tag s1-out">Hết hàng</span> : p.stock < 10 ? <span className="rd-tag s1-low">Còn {formatKg(p.stock)} {p.unit}</span> : null}
+          </span>
+        </button>
+        {max >= 1 && (
+          <button type="button" className="rd-round s1-card__add" onClick={() => cart.add(p.id, 0, 1, p)} aria-label={`Thêm ${p.name} vào giỏ`}><Plus size={20} /></button>
+        )}
       </div>
       <div className="s1-card__meta">
         <div><h3>{p.name}</h3><small>{p.sizes[0].label}</small></div>
@@ -66,11 +98,64 @@ function CardV1({ p, onOpen }: { p: Product; onOpen: () => void }) {
   )
 }
 
+function PriceHistory({ items }: { items: PublicPriceRevision[] }) {
+  if (items.length === 0) return null
+  return (
+    <section className="s1-history">
+      <h3>Lịch sử giá</h3>
+      <p className="s1-history__hint">Người nuôi tự đặt giá. Mọi lần đổi giá đều được ghi lại và công khai.</p>
+      <ul>
+        {items.map((h) => (
+          <li key={`${h.effectiveFrom}-${h.pricePerKg}`}>
+            <span>{formatDate(h.effectiveFrom)}</span>
+            <span>{REASON_LABELS[h.reason]}</span>
+            <b>
+              {h.previousPricePerKg !== null && <s>{vnd(h.previousPricePerKg)}</s>} {vnd(h.pricePerKg)}/kg
+              {h.flaggedAbnormal && <span className="s1-history__flag" title="Giá lệch nhiều so với giao dịch tương đồng"><Flag size={12} /> Lệch thị trường</span>}
+            </b>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function ListingDetail({ id }: { id: number }) {
+  const { data, isPending, error } = useStoreListing(id)
+  if (isPending) return <p className="s1-state">Đang tải sản phẩm…</p>
+  if (error) return <p className="s1-state">{errorMessage(error)}</p>
+  const p = toProduct(data.listing, data)
+  return (
+    <div className="s1-detail">
+      <ProductView key={id} p={p} />
+      {data.sellUntil && <p className="s1-state">Hàng cấp đông, bán đến hết ngày {formatDate(data.sellUntil)}.</p>}
+      <PriceHistory items={data.priceHistory} />
+    </div>
+  )
+}
+
 function StoreV1Inner() {
-  const [kind, setKind] = useState<KindFilter>('Tất cả')
-  const [sort, setSort] = useState<Sort>('new')
-  const [open, setOpen] = useState<string | null>(null)
-  const list = sortProducts(filterProducts(kind), sort)
+  const navigate = useNavigate()
+  const { listingId } = useParams()
+  const openId = listingId && /^\d+$/.test(listingId) ? Number(listingId) : null
+
+  const [kind, setKind] = useState<Kind>('Tất cả')
+  const [grade, setGrade] = useState('')
+  const [storage, setStorage] = useState<'' | StorageType>('')
+  const [sort, setSort] = useState<StoreSort>('Newest')
+  const [page, setPage] = useState(1)
+
+  const { data, isPending, isFetching, error } = useStoreListings({
+    crabType: KIND_TO_TYPE[kind],
+    grade: grade || undefined,
+    storage: storage || undefined,
+    sort,
+    page,
+    pageSize: PAGE_SIZE,
+  })
+  const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1
+  const filter = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(1) }
+
   return (
     <>
       <TopBar area="store" right={<><AddressBookLink /><CartButton /></>} />
@@ -79,29 +164,35 @@ function StoreV1Inner() {
           <p className="rd-eyebrow">Cửa hàng · hàng từ các lô đang bán</p>
           <h1 className="rd-display">Cua tươi,<br /><em>biết rõ từ lô nào.</em></h1>
           <div className="s1-bar">
-            <Tabs items={KINDS} value={kind} onChange={setKind} />
-            <SortSelect value={sort} onChange={setSort} />
+            <Tabs items={KINDS} value={kind} onChange={filter(setKind)} />
+            <div className="s1-filters">
+              <Select label="Hạng" value={grade} onChange={filter(setGrade)} options={GRADE_OPTIONS} />
+              <Select label="Bảo quản" value={storage} onChange={filter(setStorage)} options={STORAGE_OPTIONS} />
+              <Select label="Sắp xếp" value={sort} onChange={filter(setSort)} options={SORTS} />
+            </div>
           </div>
         </section>
-        <section className="s1-grid" aria-label="Sản phẩm">
-          {list.map((p, i) => (
-            <Fragment key={p.id}>
-              {i === 4 && kind === 'Tất cả' && (
-                <button type="button" className="s1-band" onClick={() => setOpen('pre')}>
-                  <img src={small(IMG.bound, 1200)} alt="" loading="lazy" />
-                  <span className="s1-band__text">
-                    <span className="rd-eyebrow">Lô L2612-02 · thu hoạch 20/12</span>
-                    <b>Đặt trước, chỉ cọc 15%.</b>
-                  </span>
-                  <span className="rd-round"><ArrowUpRight size={20} /></span>
-                </button>
-              )}
-              <CardV1 p={p} onOpen={() => setOpen(p.id)} />
-            </Fragment>
-          ))}
-        </section>
+
+        {isPending ? <p className="s1-state">Đang tải sản phẩm…</p>
+          : error ? <p className="s1-state">{errorMessage(error)}</p>
+          : data.items.length === 0 ? <p className="s1-state">Chưa có sản phẩm phù hợp. Thử bỏ bớt bộ lọc.</p>
+          : (
+            <section className={`s1-grid${isFetching ? ' is-loading' : ''}`} aria-label="Sản phẩm">
+              {data.items.map((l) => (
+                <CardV1 key={l.listingId} p={toProduct(l)} onOpen={() => navigate(`/cua-hang/${l.listingId}`)} />
+              ))}
+            </section>
+          )}
+
+        {data && pages > 1 && (
+          <nav className="s1-pager" aria-label="Phân trang">
+            <button type="button" className="rd-btn rd-btn--ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={16} /> Trang trước</button>
+            <span>Trang {page} / {pages}</span>
+            <button type="button" className="rd-btn rd-btn--ghost" disabled={page >= pages} onClick={() => setPage(page + 1)}>Trang sau <ChevronRight size={16} /></button>
+          </nav>
+        )}
       </main>
-      {open && <Panel kind="full" onClose={() => setOpen(null)}><ProductView p={product(open)} /></Panel>}
+      {openId !== null && <Panel kind="full" onClose={() => navigate('/cua-hang')}><ListingDetail id={openId} /></Panel>}
       <CartDrawer />
     </>
   )

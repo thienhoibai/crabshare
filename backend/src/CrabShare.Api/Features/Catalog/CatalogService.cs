@@ -1,5 +1,7 @@
+using System.Linq.Expressions;
 using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Errors;
+using CrabShare.Api.Common.Paging;
 using CrabShare.Api.Infrastructure.Persistence;
 using CrabShare.Api.Infrastructure.Persistence.Entities;
 using CrabShare.Api.Infrastructure.Storage;
@@ -244,6 +246,104 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
                   ?? throw new NotFoundException("listing.image_not_found", "Niêm yết chưa có ảnh.");
         var contentType = ImageTypes.FirstOrDefault(t => uri.EndsWith(t.Value, StringComparison.OrdinalIgnoreCase)).Key ?? "application/octet-stream";
         return (await files.OpenReadAsync(uri, ct), contentType);
+    }
+
+    // ---------- cửa hàng (UC25, công khai) ----------
+
+    /// <summary>Danh sách ở cửa hàng: chỉ niêm yết đang bán hoặc hết hàng; còn hàng xếp trước.</summary>
+    public async Task<PagedResult<StoreListingResponse>> BrowseAsync(StoreListingQuery q, CancellationToken ct)
+    {
+        var query = FilterStore(db.ProductListings, q);
+        var total = await query.CountAsync(ct);
+        var rows = await SortStore(query, q.Sort)
+            .Skip((q.Page - 1) * q.PageSize).Take(q.PageSize)
+            .Select(ToStoreRow)
+            .ToListAsync(ct);
+        return new PagedResult<StoreListingResponse>(rows.Select(ToStoreResponse).ToList(), q.Page, q.PageSize, total);
+    }
+
+    /// <summary>Chi tiết ở cửa hàng: lịch sử giá công khai (TL-27) và một mã tem để mở trang truy xuất lô.</summary>
+    public async Task<StoreListingDetailResponse> GetPublicAsync(long listingId, CancellationToken ct)
+    {
+        var listing = await db.ProductListings
+                          .Where(l => l.ListingId == listingId && StoreStatuses.Contains(l.Status))
+                          .Include(l => l.Batch).ThenInclude(b => b.Operator)
+                          .Include(l => l.Batch).ThenInclude(b => b.Harvests)
+                          .Include(l => l.Grade)
+                          .Include(l => l.PriceHistories)
+                          .AsSplitQuery()
+                          .FirstOrDefaultAsync(ct)
+                      ?? throw ListingNotFound();
+
+        var tagCode = await db.CrabItems
+            .Where(c => c.BatchId == listing.BatchId && c.GradeId == listing.GradeId && c.CrabTag != null && c.CrabTag.Status == "Active")
+            .OrderBy(c => c.Status == "InStock" ? 0 : 1).ThenBy(c => c.CrabItemId)
+            .Select(c => c.CrabTag!.TagCode)
+            .FirstOrDefaultAsync(ct);
+
+        var history = listing.PriceHistories
+            .OrderByDescending(h => h.EffectiveFrom).ThenByDescending(h => h.PriceHistoryId)
+            .Select(h => new PublicPriceRevisionResponse((long)h.PricePerKg, (long?)h.PreviousPricePerKg, h.ReasonCode, h.EffectiveFrom, h.FlaggedAbnormal))
+            .ToList();
+
+        return new StoreListingDetailResponse(ToStoreResponse(ToStoreRowCompiled(listing)), listing.Batch.Title, listing.FrozenAt, SellUntil(listing), tagCode, history);
+    }
+
+    private static readonly string[] StoreStatuses = ["Published", "SoldOut"];
+
+    public static IQueryable<ProductListing> FilterStore(IQueryable<ProductListing> source, StoreListingQuery q)
+    {
+        var query = source.Where(l => StoreStatuses.Contains(l.Status));
+        if (!string.IsNullOrWhiteSpace(q.CrabType))
+        {
+            var crabType = q.CrabType.Trim();
+            query = query.Where(l => l.Batch.CrabType == crabType);
+        }
+        if (!string.IsNullOrWhiteSpace(q.Grade))
+        {
+            var grade = q.Grade.Trim().ToUpperInvariant();
+            query = query.Where(l => l.Grade.GradeCode == grade);
+        }
+        if (q.Storage is { } storage)
+        {
+            var storageName = storage.ToString();
+            query = query.Where(l => l.StorageType == storageName);
+        }
+        return query;
+    }
+
+    public static IQueryable<ProductListing> SortStore(IQueryable<ProductListing> query, StoreSort sort)
+    {
+        var inStockFirst = query.OrderBy(l => l.Status == "SoldOut" || l.StockQtyKg - l.ReservedQtyKg <= 0);
+        return sort switch
+        {
+            StoreSort.PriceAsc => inStockFirst.ThenBy(l => l.CurrentPricePerKg).ThenBy(l => l.ListingId),
+            StoreSort.PriceDesc => inStockFirst.ThenByDescending(l => l.CurrentPricePerKg).ThenBy(l => l.ListingId),
+            _ => inStockFirst.ThenByDescending(l => l.PublishedAt).ThenByDescending(l => l.ListingId),
+        };
+    }
+
+    private sealed record StoreRow(
+        long ListingId, string Title, string Status, string CrabType, string GradeCode, string GradeName,
+        short? MinWeightG, short? MaxWeightG, string StorageType, string BatchCode, string FarmName, DateTimeOffset? HarvestedAt,
+        decimal PricePerKg, decimal StockQtyKg, decimal ReservedQtyKg, string? ImageUri, string? ImageSha256, DateTimeOffset? PublishedAt);
+
+    private static readonly Expression<Func<ProductListing, StoreRow>> ToStoreRow = l => new StoreRow(
+        l.ListingId, l.Title, l.Status, l.Batch.CrabType, l.Grade.GradeCode, l.Grade.GradeName,
+        l.Grade.MinWeightG, l.Grade.MaxWeightG, l.StorageType, l.Batch.BatchCode, l.Batch.Operator.LegalName,
+        l.Batch.Harvests.Max(h => (DateTimeOffset?)h.HarvestedAt),
+        l.CurrentPricePerKg, l.StockQtyKg, l.ReservedQtyKg, l.ImageUri, l.ImageSha256, l.PublishedAt);
+
+    private static readonly Func<ProductListing, StoreRow> ToStoreRowCompiled = ToStoreRow.Compile();
+
+    private static StoreListingResponse ToStoreResponse(StoreRow r)
+    {
+        var available = Math.Max(0, r.StockQtyKg - r.ReservedQtyKg);
+        var imageUrl = r.ImageUri is null ? null : $"/api/listings/{r.ListingId}/image?v={r.ImageSha256?[..8]}";
+        return new StoreListingResponse(
+            r.ListingId, r.Title, r.Status, r.CrabType, r.GradeCode, r.GradeName, r.MinWeightG, r.MaxWeightG,
+            r.StorageType, r.BatchCode, r.FarmName, r.HarvestedAt, (long)r.PricePerKg, available,
+            r.Status == "Published" && available > 0, imageUrl, r.PublishedAt);
     }
 
     // ---------- nội bộ ----------
