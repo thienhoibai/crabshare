@@ -1,0 +1,129 @@
+import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from 'react'
+import { createBrowserRouter, Outlet } from 'react-router'
+import { RequireRole } from '../shared/auth/RequireRole'
+import type { Role } from '../shared/auth/authStore'
+
+/*
+ * BẢN ĐỒ TRANG CỦA WEB. Mỗi trang nằm trong src/features/<tính năng>/.
+ * Thêm trang mới: tạo component trong feature của mình rồi thêm một dòng vào nhóm route tương ứng dưới đây.
+ * Trang tải lười (lazy) nên thêm nhiều trang không làm chậm lần mở đầu.
+ */
+
+const Landing = lazy(() => import('../features/landing/Landing'))
+const LoginPage = lazy(() => import('../features/auth/LoginPage'))
+const RegisterPage = lazy(() => import('../features/auth/RegisterPage'))
+const StorePage = lazy(() => import('../features/store/StorePage'))
+const CommercePage = lazy(() => import('../features/orders/CommercePage'))
+const TracePage = lazy(() => import('../features/trace/TracePage'))
+const InvestorPortal = lazy(() => import('../features/investor/InvestorPortal'))
+
+const OperatorDashboard = lazy(() => import('../features/operator/OperatorDashboard'))
+const OperatorKyc = lazy(() => import('../features/operator/OperatorKyc'))
+const OperatorCreateBatch = lazy(() => import('../features/operator/OperatorCreateBatch'))
+const OperatorContract = lazy(() => import('../features/operator/OperatorContract'))
+const OperatorHarvest = lazy(() => import('../features/operator/OperatorHarvest'))
+const OperatorSettlement = lazy(() => import('../features/operator/OperatorSettlement'))
+const OperatorFarmMap = lazy(() => import('../features/operator/OperatorFarmMap'))
+const OperatorDailyLog = lazy(() => import('../features/operator/OperatorDailyLog'))
+const OperatorBatchStatus = lazy(() => import('../features/operator/OperatorBatchStatus'))
+const OperatorBatchDetail = lazy(() => import('../features/operator/OperatorBatchDetail'))
+const OperatorAlerts = lazy(() => import('../features/operator/OperatorAlerts'))
+
+const AdminDashboard = lazy(() => import('../features/admin/AdminDashboard'))
+const AdminUsers = lazy(() => import('../features/admin/AdminUsers'))
+const AdminUserDetail = lazy(() => import('../features/admin/AdminUserDetail'))
+const AdminBatches = lazy(() => import('../features/admin/AdminBatches'))
+const AdminBatchDetail = lazy(() => import('../features/admin/AdminBatchDetail'))
+const AdminStorefront = lazy(() => import('../features/admin/AdminStorefront'))
+const AdminFinance = lazy(() => import('../features/admin/AdminFinance'))
+const AdminSettlementDetail = lazy(() => import('../features/admin/AdminSettlementDetail'))
+const AdminAlerts = lazy(() => import('../features/admin/AdminAlerts'))
+const AdminDisputes = lazy(() => import('../features/admin/AdminDisputes'))
+const AdminSettings = lazy(() => import('../features/admin/AdminSettings'))
+
+const page = (C: LazyExoticComponent<ComponentType>) => <C />
+
+/** Nhóm route cần đăng nhập với một số vai trò. */
+const guarded = (roles: Role[]) => (
+  <RequireRole roles={roles}>
+    <Outlet />
+  </RequireRole>
+)
+
+function Root() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40, fontFamily: 'sans-serif' }}>Đang tải…</div>}>
+      <Outlet />
+    </Suspense>
+  )
+}
+
+export const router = createBrowserRouter([
+  {
+    element: <Root />,
+    children: [
+      // ----- Công khai -----
+      { path: '/', element: page(Landing) },
+      { path: '/dang-nhap', element: page(LoginPage) },
+      { path: '/dang-ky', element: page(RegisterPage) },
+      { path: '/cua-hang', element: page(StorePage) },
+      { path: '/truy-xuat/:tagCode', element: page(TracePage) },
+      { path: '/san-pham', element: page(CommercePage) },
+
+      // ----- Khách hàng: giỏ hàng, thanh toán, đơn hàng -----
+      {
+        element: guarded(['Customer', 'Investor']),
+        children: [
+          { path: '/gio-hang', element: page(CommercePage) },
+          { path: '/thanh-toan', element: page(CommercePage) },
+          { path: '/xac-nhan-don-hang', element: page(CommercePage) },
+          { path: '/theo-doi-don-hang', element: page(CommercePage) },
+          { path: '/lich-su-don-hang', element: page(CommercePage) },
+          { path: '/huy-tra-hang', element: page(CommercePage) },
+          { path: '/danh-gia-don-hang', element: page(CommercePage) },
+        ],
+      },
+
+      // ----- Nhà đầu tư -----
+      { element: guarded(['Investor']), children: [{ path: '/nha-dau-tu/*', element: page(InvestorPortal) }] },
+
+      // ----- Người nuôi -----
+      {
+        element: guarded(['OperatorMember']),
+        children: [
+          { path: '/operator', element: page(OperatorDashboard) },
+          { path: '/operator/kyc', element: page(OperatorKyc) },
+          { path: '/operator/create-batch', element: page(OperatorCreateBatch) },
+          { path: '/operator/contract', element: page(OperatorContract) },
+          { path: '/operator/harvest', element: page(OperatorHarvest) },
+          { path: '/operator/settlement', element: page(OperatorSettlement) },
+          { path: '/operator/map', element: page(OperatorFarmMap) },
+          { path: '/operator/log', element: page(OperatorDailyLog) },
+          { path: '/operator/batch', element: page(OperatorBatchStatus) },
+          { path: '/operator/batch/detail', element: page(OperatorBatchDetail) },
+          { path: '/operator/alerts', element: page(OperatorAlerts) },
+        ],
+      },
+
+      // ----- Quản trị (và Kiểm định viên) -----
+      {
+        element: guarded(['PlatformAdmin', 'EvidenceReviewer']),
+        children: [
+          { path: '/admin', element: page(AdminDashboard) },
+          { path: '/admin/users', element: page(AdminUsers) },
+          { path: '/admin/users/detail', element: page(AdminUserDetail) },
+          { path: '/admin/batches', element: page(AdminBatches) },
+          { path: '/admin/batches/detail', element: page(AdminBatchDetail) },
+          { path: '/admin/storefront', element: page(AdminStorefront) },
+          { path: '/admin/finance', element: page(AdminFinance) },
+          { path: '/admin/finance/settlement', element: page(AdminSettlementDetail) },
+          { path: '/admin/alerts', element: page(AdminAlerts) },
+          { path: '/admin/disputes', element: page(AdminDisputes) },
+          { path: '/admin/settings', element: page(AdminSettings) },
+        ],
+      },
+
+      { path: '*', element: page(Landing) },
+    ],
+  },
+])

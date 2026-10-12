@@ -1,0 +1,16 @@
+# SQL Server cho máy không có LocalDB (macOS / Linux).
+# Dùng: đặt biến MSSQL_SA_PASSWORD (≥ 8 ký tự, có chữ hoa, thường, số) rồi chạy: docker compose up -d sqlserver
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Hãy đặt biến môi trường MSSQL_SA_PASSWORD}
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - crabshare-sql:/var/opt/mssql
+
+volumes:
+  crabshare-sql:
