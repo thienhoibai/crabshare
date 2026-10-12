@@ -9,6 +9,7 @@
 | `price_history` | append-only · mỗi lần đổi giá: `previous_price_per_kg`, `reason_code` (`Initial`, `Market`, `Promotion`, `Clearance`, `Correction`, `Other`), `note`, `flagged_abnormal` (V003) |
 | `price_check` | append-only · 1-1 với `price_history`: tập so sánh, trung vị, MAD, điểm, ngưỡng, `algorithm_version` (V003) |
 | `product_listing.image_uri` | ảnh sản phẩm do hộ nuôi tải lên (V003) |
+| `product_listing.hidden_at`, `hidden_by`, `hidden_reason` | quản trị ẩn niêm yết vi phạm; ba cột cùng null hoặc cùng có giá trị (V005) |
 | `product_grade` | hạng L1–L4, SOFT (seed V002) |
 
 ## Endpoint
@@ -24,12 +25,13 @@
 | POST · GET | `/api/listings/{id}/image` | Owner · **Công khai** | JPEG/PNG/WebP ≤ 5 MB |
 | GET | `/api/listings?crabType=&grade=&storage=&sort=&page=&pageSize=` | **Công khai** | UC25 · chỉ `Published` + `SoldOut`, còn hàng xếp trước · `sort`: `Newest` (mặc định), `PriceAsc`, `PriceDesc` · trả `PagedResult` |
 | GET | `/api/listings/{id}` | **Công khai** | Chi tiết + lịch sử giá + `traceTagCode` (tem `Active` của lô + hạng) để mở `/truy-xuat/{tagCode}` |
-| GET | `/api/admin/listings?flagged=true` | PlatformAdmin | Kiểm duyệt |
-| POST | `/api/admin/listings/{id}/hide` | PlatformAdmin | Ẩn niêm yết vi phạm |
+| GET | `/api/admin/listings?flagged=&hidden=&status=&page=&pageSize=` | PlatformAdmin | Kiểm duyệt · `flagged=true`: lần đổi giá gần nhất bị gắn cờ · kèm kết quả so giá của lần đó |
+| POST | `/api/admin/listings/{id}/hide` | PlatformAdmin | Ẩn niêm yết vi phạm · `{ reason }` bắt buộc · đã ẩn → 409 `listing.already_hidden` |
 
 ## Quy tắc phải giữ
 - Không bán quá tồn: tồn khả dụng = `stock_qty_kg − reserved_qty_kg` (giữ tồn làm ở Orders).
-- Còn ít hàng → gọi `AlertService.RaiseAsync(... LowStock ...)`.
+- Còn ít hàng → `LowStockMonitor` gọi `IAlertRaiser.RaiseAsync(batchId, "LowStock", ...)` sau khi đăng bán, làm mới tồn và checkout. Ngưỡng `Alerts:Thresholds:LowStockKg` (mặc định 5 kg). Một lô một cảnh báo, liệt kê mọi niêm yết thấp của lô. Bản hiện tại `LoggingAlertRaiser` chỉ ghi log; KH-05 xong thì đổi đăng ký sang AlertService.
+- Niêm yết bị ẩn: status giữ nguyên, người nuôi vẫn thấy kèm lý do; cửa hàng (`FilterStore`, `GetPublicAsync`) và checkout bỏ qua.
 - Hàng cấp đông quá `frozen_stock_cap_months` → tự `Closed` (TL-23).
 - So giá (`PriceAnomaly`, `mad-v1`): đơn `Completed` cùng loại cua + hạng + bảo quản trong 30 ngày (thiếu thì 90 ngày); cần ≥ 20 giao dịch và ≥ 3 hộ nuôi, không đủ thì ghi "chưa đủ dữ liệu" và không gắn cờ. Chưa lọc theo tỉnh vì địa chỉ hộ nuôi là chuỗi tự do.
 

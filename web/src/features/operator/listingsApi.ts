@@ -54,6 +54,8 @@ export interface Listing {
   imageUrl: string | null
   publishedAt: string | null
   updatedAt: string
+  hiddenAt: string | null
+  hiddenReason: string | null
   priceHistory: PriceRevision[]
 }
 
