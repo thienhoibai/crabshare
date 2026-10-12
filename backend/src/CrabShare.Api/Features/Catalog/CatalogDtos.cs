@@ -99,3 +99,64 @@ public sealed record ListingOptionResponse(
     int InStockCount,
     decimal InStockKg,
     long? ExistingListingId);
+
+// ---------- Cửa hàng (UC25, công khai) ----------
+
+public enum StoreSort { Newest, PriceAsc, PriceDesc }
+
+/// <summary>?crabType=RoeCrab&amp;grade=L1&amp;storage=Fresh&amp;sort=PriceAsc&amp;page=1&amp;pageSize=20 — bỏ trống = không lọc.</summary>
+public sealed class StoreListingQuery
+{
+    /// <summary>FatteningMudCrab, RoeCrab, SoftShellCrab.</summary>
+    [MaxLength(30)]
+    public string? CrabType { get; set; }
+
+    /// <summary>Mã hạng: L1–L4, SOFT.</summary>
+    [MaxLength(20)]
+    public string? Grade { get; set; }
+
+    public StorageType? Storage { get; set; }
+
+    public StoreSort Sort { get; set; } = StoreSort.Newest;
+
+    [Range(1, int.MaxValue)]
+    public int Page { get; set; } = 1;
+
+    [Range(1, 100)]
+    public int PageSize { get; set; } = 20;
+}
+
+/// <summary>Thẻ sản phẩm ở cửa hàng. Không lộ phần đang giữ cho đơn hay người đổi giá.</summary>
+public sealed record StoreListingResponse(
+    long ListingId,
+    string Title,
+    string Status,
+    string CrabType,
+    string GradeCode,
+    string GradeName,
+    short? MinWeightG,
+    short? MaxWeightG,
+    string StorageType,
+    string BatchCode,
+    string FarmName,
+    DateTimeOffset? HarvestedAt,
+    long PricePerKg,
+    decimal AvailableQtyKg,
+    bool InStock,
+    string? ImageUrl,
+    DateTimeOffset? PublishedAt);
+
+public sealed record PublicPriceRevisionResponse(
+    long PricePerKg,
+    long? PreviousPricePerKg,
+    string Reason,
+    DateTimeOffset EffectiveFrom,
+    bool FlaggedAbnormal);
+
+public sealed record StoreListingDetailResponse(
+    StoreListingResponse Listing,
+    string BatchTitle,
+    DateTimeOffset? FrozenAt,
+    DateTimeOffset? SellUntil,
+    string? TraceTagCode,
+    IReadOnlyList<PublicPriceRevisionResponse> PriceHistory);

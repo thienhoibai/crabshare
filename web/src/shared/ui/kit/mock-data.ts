@@ -38,7 +38,7 @@ export type Size = { label: string; price: number }
 export type Product = {
   id: string
   name: string
-  kind: 'Cua thịt' | 'Cua gạch' | 'Cua cốm' | 'Chế biến'
+  kind: 'Cua thịt' | 'Cua gạch' | 'Cua cốm' | 'Cua lột' | 'Chế biến'
   unit: string
   sizes: Size[]
   lot: string
@@ -46,6 +46,12 @@ export type Product = {
   stock: number
   preorder?: boolean
   harvest: string
+  /** Các trường dưới chỉ có ở sản phẩm lấy từ API cửa hàng; sản phẩm mẫu bỏ trống. */
+  soldOut?: boolean
+  farm?: string
+  crab?: string
+  traceTag?: string | null
+  gallery?: string[]
 }
 
 export const OPERATOR = 'HTX Nuôi cua Cà Mau'

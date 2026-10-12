@@ -22,8 +22,8 @@
 | POST | `/api/listings/{id}/publish` · `/close` | Operator Owner | Đăng thẳng, không chờ duyệt; `close` bị chặn khi còn hàng đang giữ cho đơn |
 | POST | `/api/listings/{id}/refresh-stock` | Operator | Tính lại tồn từ cua `InStock`; tự chuyển `Published` ⇄ `SoldOut` |
 | POST · GET | `/api/listings/{id}/image` | Owner · **Công khai** | JPEG/PNG/WebP ≤ 5 MB |
-| GET | `/api/listings?crabType=&grade=&storage=&sort=&page=` | **Công khai** | UC25 lọc, sắp xếp |
-| GET | `/api/listings/{id}` | **Công khai** | Chi tiết + lịch sử giá + link truy xuất lô |
+| GET | `/api/listings?crabType=&grade=&storage=&sort=&page=&pageSize=` | **Công khai** | UC25 · chỉ `Published` + `SoldOut`, còn hàng xếp trước · `sort`: `Newest` (mặc định), `PriceAsc`, `PriceDesc` · trả `PagedResult` |
+| GET | `/api/listings/{id}` | **Công khai** | Chi tiết + lịch sử giá + `traceTagCode` (tem `Active` của lô + hạng) để mở `/truy-xuat/{tagCode}` |
 | GET | `/api/admin/listings?flagged=true` | PlatformAdmin | Kiểm duyệt |
 | POST | `/api/admin/listings/{id}/hide` | PlatformAdmin | Ẩn niêm yết vi phạm |
 

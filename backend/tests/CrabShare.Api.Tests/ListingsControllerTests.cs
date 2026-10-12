@@ -62,4 +62,17 @@ public class ListingsControllerTests(WebApplicationFactory<Program> factory) : I
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Theory]
+    [InlineData("/api/listings?pageSize=0")]
+    [InlineData("/api/listings?pageSize=101")]
+    [InlineData("/api/listings?page=0")]
+    [InlineData("/api/listings?sort=abc")]
+    [InlineData("/api/listings?storage=abc")]
+    public async Task Cua_hang_tham_so_khong_hop_le_tra_ve_400(string url)
+    {
+        var response = await Client().GetAsync(url);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }
