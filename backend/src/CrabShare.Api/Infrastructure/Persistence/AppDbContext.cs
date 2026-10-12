@@ -1198,7 +1198,7 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("sha256");
             entity.Property(e => e.SlotEventId).HasColumnName("slot_event_id");
             entity.Property(e => e.SlotId)
-                .HasComment("Ô người nuôi chọn trên sơ đồ khi chụp")
+                .HasComment("Hộp người nuôi chọn khi chụp; số hộp phải nhìn thấy trong ảnh")
                 .HasColumnName("slot_id");
             entity.Property(e => e.Source)
                 .HasMaxLength(20)
@@ -1960,13 +1960,13 @@ public partial class AppDbContext : DbContext
         {
             entity.HasKey(e => e.SlotId).HasName("pk_physical_slot");
 
-            entity.ToTable("physical_slot", tb => tb.HasComment("Hộp nuôi vật lý (slot) của người nuôi; vị trí lấy từ sơ đồ cơ sở: dãy, kệ, tầng, cột"));
+            entity.ToTable("physical_slot", tb => tb.HasComment("Hộp nuôi (slot) của người nuôi, nhận diện bằng số hộp in trên nhãn dán lên hộp; dãy, kệ, tầng, cột là tuỳ chọn"));
 
             entity.HasIndex(e => new { e.OperatorId, e.SlotCode }, "ux_slot_code").IsUnique();
 
             entity.Property(e => e.SlotId).HasColumnName("slot_id");
             entity.Property(e => e.ColumnNo)
-                .HasComment("Cột trên tầng")
+                .HasComment("Cột trên tầng (tuỳ chọn)")
                 .HasColumnName("column_no");
             entity.Property(e => e.CreatedAt)
                 .HasPrecision(3)
@@ -1974,17 +1974,17 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("created_at");
             entity.Property(e => e.OperatorId).HasColumnName("operator_id");
             entity.Property(e => e.RackNo)
-                .HasComment("Số kệ trên sơ đồ cơ sở")
+                .HasComment("Số kệ (tuỳ chọn)")
                 .HasColumnName("rack_no");
             entity.Property(e => e.RowCode)
                 .HasMaxLength(10)
                 .IsUnicode(false)
-                .HasComment("Dãy trên sơ đồ cơ sở")
+                .HasComment("Dãy (tuỳ chọn)")
                 .HasColumnName("row_code");
             entity.Property(e => e.SlotCode)
                 .HasMaxLength(30)
                 .IsUnicode(false)
-                .HasComment("Mã vị trí ô sinh từ sơ đồ cơ sở, ví dụ A-03-12; duy nhất trong một trại")
+                .HasComment("Số hộp do người nuôi đánh và in nhãn, ví dụ 0001; duy nhất trong một trại")
                 .HasColumnName("slot_code");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
@@ -1993,7 +1993,7 @@ public partial class AppDbContext : DbContext
                 .HasDefaultValue("Available", "df_physical_slot_status")
                 .HasColumnName("status");
             entity.Property(e => e.TierNo)
-                .HasComment("Tầng trên kệ")
+                .HasComment("Tầng trên kệ (tuỳ chọn)")
                 .HasColumnName("tier_no");
             entity.Property(e => e.UpdatedAt)
                 .HasPrecision(3)

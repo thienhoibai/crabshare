@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 
 /// <summary>
-/// Hộp nuôi vật lý (slot) của người nuôi; vị trí lấy từ sơ đồ cơ sở: dãy, kệ, tầng, cột
+/// Hộp nuôi (slot) của người nuôi, nhận diện bằng số hộp in trên nhãn dán lên hộp; dãy, kệ, tầng, cột là tuỳ chọn
 /// </summary>
 public partial class PhysicalSlot
 {
@@ -13,27 +13,27 @@ public partial class PhysicalSlot
     public long OperatorId { get; set; }
 
     /// <summary>
-    /// Mã vị trí ô sinh từ sơ đồ cơ sở, ví dụ A-03-12; duy nhất trong một trại
+    /// Số hộp do người nuôi đánh và in nhãn, ví dụ 0001; duy nhất trong một trại
     /// </summary>
     public string SlotCode { get; set; } = null!;
 
     /// <summary>
-    /// Dãy trên sơ đồ cơ sở
+    /// Dãy (tuỳ chọn)
     /// </summary>
     public string? RowCode { get; set; }
 
     /// <summary>
-    /// Số kệ trên sơ đồ cơ sở
+    /// Số kệ (tuỳ chọn)
     /// </summary>
     public short? RackNo { get; set; }
 
     /// <summary>
-    /// Tầng trên kệ
+    /// Tầng trên kệ (tuỳ chọn)
     /// </summary>
     public short? TierNo { get; set; }
 
     /// <summary>
-    /// Cột trên tầng
+    /// Cột trên tầng (tuỳ chọn)
     /// </summary>
     public short? ColumnNo { get; set; }
 

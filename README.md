@@ -22,7 +22,9 @@ flowchart LR
 
 ## Chạy trên máy (Windows)
 
-**Cần cài:** [.NET 10 SDK](https://dotnet.microsoft.com/download) · SQL Server **LocalDB** (có sẵn khi cài Visual Studio 2022, hoặc gói *SQL Server Express LocalDB*) · [Node.js 22+](https://nodejs.org) · [Flutter 3.47+](https://docs.flutter.dev/get-started/install) · Android Studio (máy ảo Android) · Git.
+**Cần cài:** [.NET 10 SDK](https://dotnet.microsoft.com/download) · SQL Server **LocalDB** (đi kèm Visual Studio, hoặc gói *SQL Server Express LocalDB*) · [Node.js 22+](https://nodejs.org) · [Flutter 3.47+](https://docs.flutter.dev/get-started/install) · Android Studio (máy ảo Android) · Git.
+
+**IDE:** Visual Studio 2026 hoặc VS Code + C# Dev Kit (cần bản hỗ trợ .NET 10) cho backend · VS Code cho web · Android Studio hoặc VS Code cho mobile.
 
 ```bash
 git clone https://github.com/<owner>/crabshare.git

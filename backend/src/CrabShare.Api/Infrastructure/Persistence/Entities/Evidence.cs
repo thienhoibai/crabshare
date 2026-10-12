@@ -17,7 +17,7 @@ public partial class Evidence
     public long? TrancheId { get; set; }
 
     /// <summary>
-    /// Ô người nuôi chọn trên sơ đồ khi chụp
+    /// Hộp người nuôi chọn khi chụp; số hộp phải nhìn thấy trong ảnh
     /// </summary>
     public long? SlotId { get; set; }
 
