@@ -58,7 +58,8 @@ src/
 | Vai trò | Đường dẫn | File |
 |---|---|---|
 | Ai cũng vào | `/`, `/dang-nhap`, `/dang-ky`, `/cua-hang`, `/san-pham`, `/truy-xuat/:tagCode` | `landing/`, `auth/`, `store/`, `orders/`, `trace/` |
-| Customer, Investor | `/gio-hang`, `/thanh-toan`, `/xac-nhan-don-hang`, `/theo-doi-don-hang`, `/lich-su-don-hang`, `/huy-tra-hang`, `/danh-gia-don-hang` | `orders/CommercePage.tsx` |
+| Customer, Investor | `/thanh-toan` (`/gio-hang` chuyển về đây), `/xac-nhan-don-hang` | `orders/CheckoutPage.tsx`, `orders/OrderConfirmationPage.tsx` |
+| Customer, Investor | `/theo-doi-don-hang`, `/lich-su-don-hang`, `/huy-tra-hang`, `/danh-gia-don-hang` | `orders/CommercePage.tsx` (bản mẫu) |
 | Investor | `/nha-dau-tu/*` | `investor/InvestorPortal.tsx` |
 | OperatorMember | `/operator`, `/operator/kyc`, `/operator/create-batch`, `/operator/contract`, `/operator/harvest`, `/operator/settlement`, `/operator/map`, `/operator/log`, `/operator/batch`, `/operator/batch/detail`, `/operator/alerts`, `/operator/listings` | `operator/*.tsx` |
 | PlatformAdmin, EvidenceReviewer | `/admin`, `/admin/users`, `/admin/batches`, `/admin/storefront`, `/admin/finance`, `/admin/alerts`, `/admin/disputes`, `/admin/settings` (+ trang chi tiết) | `admin/*.tsx` |

@@ -41,7 +41,13 @@ Job nền: giữ tồn quá hạn chưa trả tiền → `Released`, đơn → `
 - Hoàn tiền tạo `payment_instruction` loại `Refund` (module Payments).
 
 ## Màn hình
-- Web: `orders/CommercePage.tsx` (giỏ, thanh toán, theo dõi, lịch sử, huỷ/trả, đánh giá), `admin/AdminDisputes.tsx`, trang đơn hàng trong `operator/` (mới).
+- Web, đã nối API (CS-36, phần làm được trước của CS-43):
+  - Giỏ hàng lưu máy `shared/cart/cartStore.ts` (zustand, `crabshare-cart`); cửa hàng dùng giỏ này, nút "Thanh toán" sang `/thanh-toan`. Hàng **chưa** được giữ khi thêm vào giỏ.
+  - `orders/CheckoutPage.tsx` (`/thanh-toan`, `/gio-hang` chuyển về đây): chọn địa chỉ từ sổ địa chỉ (KH-03), giỏ theo lô, gọi checkout; lỗi 409/422 hiện đúng câu của backend và giữ nguyên giỏ.
+  - `orders/OrderConfirmationPage.tsx` (`/xac-nhan-don-hang`): mỗi lô một đơn, số tài khoản lô, số tiền, nội dung chuyển khoản, đếm ngược tới `expiresAt`. Kết quả lưu ở `crabshare-last-checkout` để tải lại trang vẫn còn, cho tới khi có `GET /api/orders/{orderNo}` (NH-07).
+  - Còn chờ: ảnh QR thật bằng `<VietQrBox>` (TH-05, hiện dùng `QrMock` minh hoạ) và đơn chuyển `Paid` trên web sau webhook (TH-06).
+  - Test: `web/tests/checkout.spec.ts`.
+- Web, còn là bản mẫu: `orders/CommercePage.tsx` (theo dõi, lịch sử, huỷ/trả, đánh giá), `admin/AdminDisputes.tsx`, trang đơn hàng trong `operator/` (mới).
 - Mobile: màn **Đóng gói — quét tem** cho hộ nuôi (mới, UC29).
 
 ## Tài liệu
