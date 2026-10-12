@@ -25,9 +25,9 @@
 
 | Mã | Khi nào | Cách trả |
 |---|---|---|
-| 200 / 201 / 204 | Thành công | `TypedResults.Ok(...)`, `Created(...)`, `NoContent()` |
-| 400 | Dữ liệu vào sai định dạng | Tự động nhờ DataAnnotations trên DTO |
-| 401 | Chưa đăng nhập | Tự động (`RequireAuthorization`) |
+| 200 / 201 / 204 | Thành công | Trong controller: `Ok(...)`, `CreatedAtAction(...)`, `NoContent()` |
+| 400 | Dữ liệu vào sai định dạng | Tự động nhờ `[ApiController]` + DataAnnotations trên DTO |
+| 401 | Chưa đăng nhập | Tự động (`[Authorize]`) |
 | 403 | Không có quyền trên lô / hộ nuôi này | `throw new ForbiddenException("batch.not_owner", "Lô này không thuộc hộ nuôi của bạn.")` |
 | 404 | Không tìm thấy | `throw new NotFoundException("batch.not_found", "Không tìm thấy lô.")` |
 | 409 | Trùng (email, mã...) | `throw new ConflictException("auth.email_taken", "...")` hoặc để CSDL báo unique → 409 `db.unique` |
@@ -42,10 +42,41 @@ Mọi exception đều nhận **(code, message)** theo đúng thứ tự đó.
 
 ### Backend
 1. Tạo thư mục `Features/<Module>/` (đọc `README.md` trong thư mục đó: use case, bảng, endpoint dự kiến).
-2. Copy cách viết của `Features/Auth/`: `<Module>Dtos.cs`, `<Module>Service.cs`, `<Module>Endpoints.cs`.
-3. Bỏ comment 3 dòng của module trong `Common/Endpoints/FeatureRegistry.cs`.
-4. Chạy API → mở `http://localhost:5233/scalar` → thử endpoint.
+2. Copy cách viết của `Features/Auth/`: `<Module>Dtos.cs`, `<Module>Service.cs`, `<Tên thư mục>Controller.cs` (ví dụ `Features/Batches/BatchesController.cs`).
+3. Bỏ comment 2 dòng của module trong `Common/FeatureRegistry.cs` (`using` + `AddScoped<...Service>()`). Controller tự được nhận, không cần đăng ký.
+4. Chạy API (F5 trong Visual Studio) → trình duyệt mở `http://localhost:5233/scalar` → thử endpoint.
 5. Viết test cho quy tắc nghiệp vụ quan trọng (`backend/tests/CrabShare.Api.Tests`).
+
+Controller mẫu:
+
+```csharp
+[ApiController]
+[Route("api/batches")]
+public sealed class BatchesController(BatchService batches) : ControllerBase
+{
+    [Authorize(Policy = Policies.Operator)]
+    [HttpPost]
+    [EndpointSummary("UC07 — Tạo lô")]
+    public async Task<ActionResult<BatchResponse>> Create(CreateBatchRequest req, CancellationToken ct)
+    {
+        var batch = await batches.CreateAsync(req, ct);
+        return CreatedAtAction(nameof(Get), new { code = batch.BatchCode }, batch);
+    }
+
+    [HttpGet("{code}")]
+    public async Task<ActionResult<BatchResponse>> Get(string code, CancellationToken ct)
+        => Ok(await batches.GetAsync(code, ct));
+
+    [HttpGet]
+    public async Task<ActionResult<PagedResult<BatchResponse>>> List([FromQuery] PageQuery paging, CancellationToken ct)
+        => Ok(await batches.ListAsync(paging, ct));
+}
+```
+
+- Controller chỉ nhận/trả HTTP. Nghiệp vụ, kiểm tra quyền trên lô, ném `AppException` đều nằm trong service.
+- Request DTO là `class` có `{ get; set; }` + DataAnnotations; response là `record`.
+- Route ghi rõ bằng `[Route("api/...")]` (chữ thường, gạch ngang), không dùng `[controller]`.
+- Tên action không thêm hậu tố `Async` (ASP.NET bỏ hậu tố này nên `CreatedAtAction(nameof(GetAsync))` sẽ không tìm thấy action).
 
 ### Cần đổi CSDL?
 1. **Không sửa** file migration đã có (`V001`, `V002`...). Tạo file mới `database/migrations/V00X__mo_ta_ngan.sql`.

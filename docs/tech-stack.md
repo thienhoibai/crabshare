@@ -10,7 +10,7 @@ flowchart LR
         F[Flutter 3]
     end
     subgraph BE[Máy chủ]
-        N[.NET 10 Minimal API]
+        N[.NET 10 Web API - Controller]
         E[EF Core 10]
         U[DbUp]
     end
@@ -23,7 +23,7 @@ flowchart LR
 
 | Công nghệ | Dùng để | Vì sao chọn | Không chọn |
 |---|---|---|---|
-| **ASP.NET Core .NET 10 — Minimal API** | Viết REST API | Đã chốt ở Report 2; Minimal API ít file hơn Controller, mỗi endpoint đọc là hiểu | MVC Controller (nhiều boilerplate) |
+| **ASP.NET Core .NET 10 Web API — Controller** | Viết REST API | Đã chốt ở Report 2; kiểu `[ApiController]` cả nhóm đã quen, Visual Studio hỗ trợ sẵn; tự trả 400 khi dữ liệu vào sai | Minimal API (ít file hơn nhưng nhóm chưa quen) |
 | **Lát cắt dọc theo tính năng** (`Features/<Module>`) | Tổ chức code | Một người sửa một thư mục → ít conflict khi 4 người push cùng lúc | Clean Architecture 4 tầng (quá nhiều project cho 21 ngày) |
 | **EF Core 10 — database-first** | Truy vấn CSDL | CSDL đã thiết kế xong bằng SQL; sinh entity bằng lệnh `scaffold`, không viết tay | Code-first migrations (lệch với thiết kế CSDL đã nộp) |
 | **DbUp** | Chạy script `V001__...sql` | Script SQL là nguồn sự thật, ai cũng đọc được; chạy lại tự bỏ qua script đã chạy | EF migrations |

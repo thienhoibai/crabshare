@@ -10,7 +10,7 @@ namespace CrabShare.Api.Features.Auth;
 /// <summary>
 /// UC01 Đăng ký tài khoản, đăng nhập, xem thông tin bản thân.
 /// Đây là TÍNH NĂNG MẪU: các tính năng khác làm theo cùng cấu trúc
-/// (Dtos → Service chứa nghiệp vụ → Endpoints chỉ nhận/trả HTTP).
+/// (Dtos → Service chứa nghiệp vụ → Controller chỉ nhận/trả HTTP).
 /// </summary>
 public sealed class AuthService(AppDbContext db, TokenService tokens, TimeProvider clock)
 {

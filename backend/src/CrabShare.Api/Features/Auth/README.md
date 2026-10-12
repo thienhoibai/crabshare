@@ -8,7 +8,7 @@
 |---|---|
 | `AuthDtos.cs` | `RegisterRequest`, `LoginRequest`, `AuthResponse`, `MeResponse` + DataAnnotations |
 | `AuthService.cs` | Nghiệp vụ: băm mật khẩu (`PasswordHasher`), tạo vai trò, cấp JWT |
-| `AuthEndpoints.cs` | `MapAuthEndpoints()` — 3 route bên dưới |
+| `AuthController.cs` | `[ApiController]`, `[Route("api/auth")]` — 3 action bên dưới |
 
 ## Endpoint
 

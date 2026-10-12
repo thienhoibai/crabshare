@@ -6,7 +6,7 @@ backend/
 ├── dotnet-tools.json                 ← dotnet-ef (chạy dotnet tool restore)
 ├── scripts/scaffold-db.ps1           ← sinh lại Entities từ CSDL
 ├── src/
-│   ├── CrabShare.Api/                ← API (Minimal API, lát cắt dọc theo Features/)
+│   ├── CrabShare.Api/                ← API (Controller, lát cắt dọc theo Features/)
 │   └── CrabShare.SettlementEngine/   ← thư viện quyết toán thuần (không phụ thuộc DB)
 ├── tools/CrabShare.DbMigrator/       ← chạy database/migrations/V*.sql bằng DbUp
 └── tests/
@@ -45,7 +45,7 @@ Test cần CSDL thì gắn `[Trait("Category", "Database")]`; CI chỉ chạy te
 
 ## Thêm tính năng
 
-Đọc `docs/conventions.md` mục 3. Tóm tắt: copy cách viết `Features/Auth/` → bỏ comment 3 dòng của module trong `Common/Endpoints/FeatureRegistry.cs` → thử trên `/scalar`.
+Đọc `docs/conventions.md` mục 3. Tóm tắt: copy cách viết `Features/Auth/` (Dtos + Service + Controller) → bỏ comment 2 dòng của module trong `Common/FeatureRegistry.cs` → thử trên `/scalar`.
 Mỗi thư mục `Features/<Module>/README.md` đã ghi sẵn use case, bảng, endpoint dự kiến, quy tắc.
 
 ## Đổi CSDL

@@ -56,7 +56,7 @@ flowchart TB
         M["mobile/<br/>Flutter 3 · Riverpod · go_router · Dio"]
     end
     subgraph Server["backend/"]
-        A["CrabShare.Api<br/>.NET 10 Minimal API<br/>Features/&lt;Module&gt;/"]
+        A["CrabShare.Api<br/>.NET 10 Web API (Controller)<br/>Features/&lt;Module&gt;/"]
         S["CrabShare.SettlementEngine<br/>thư viện thuần, không phụ thuộc DB"]
         J["Job nền (BackgroundService)<br/>hết hạn giữ chỗ · leo thang cảnh báo · yêu cầu chụp ngẫu nhiên"]
         A --> S
@@ -77,13 +77,13 @@ backend/src/CrabShare.Api/
 ├── Common/
 │   ├── Auth/                      ← JWT, vai trò, ICurrentUser
 │   ├── Errors/                    ← AppException → ProblemDetails (mã lỗi "code")
-│   ├── Endpoints/FeatureRegistry.cs  ← NƠI DUY NHẤT đăng ký module
-│   └── Paging/
+│   ├── Paging/
+│   └── FeatureRegistry.cs         ← NƠI DUY NHẤT đăng ký service của module
 ├── Infrastructure/
 │   ├── Persistence/               ← AppDbContext + Entities (sinh từ CSDL, KHÔNG sửa tay)
 │   ├── Payments/ Signing/ Ekyc/ Detection/ Storage/   ← interface + bản giả
 └── Features/
-    ├── Auth/                      ← MẪU: Dtos + Service + Endpoints
+    ├── Auth/                      ← MẪU: Dtos + Service + Controller
     ├── Batches/  Funding/  Production/  Orders/  Settlement/ ...
 ```
 
@@ -93,13 +93,13 @@ Mỗi module gồm 3 file (thêm file khi cần, không tạo tầng thừa):
 |---|---|
 | `<Module>Dtos.cs` | record request/response + DataAnnotations để validate |
 | `<Module>Service.cs` | toàn bộ nghiệp vụ, dùng `AppDbContext` trực tiếp (không repository riêng) |
-| `<Module>Endpoints.cs` | `Map<Module>Endpoints()` — route, phân quyền, gọi service |
+| `<Tên thư mục>Controller.cs` | `[ApiController]` — route, `[Authorize]`, gọi service; không viết nghiệp vụ |
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant App as Mobile / Web
-    participant EP as XxxEndpoints
+    participant EP as XxxController
     participant SV as XxxService
     participant DB as SQL Server
     App->>EP: POST /api/batches/CS-2610-01/production-logs (JWT)

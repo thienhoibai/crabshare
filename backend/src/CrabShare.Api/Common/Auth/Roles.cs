@@ -15,7 +15,7 @@ public static class Roles
     public static readonly string[] All = [Investor, Customer, OperatorMember, PlatformAdmin, EvidenceReviewer];
 }
 
-/// <summary>Tên policy dùng với .RequireAuthorization(Policies.X)</summary>
+/// <summary>Tên policy dùng trên controller hoặc action: [Authorize(Policy = Policies.Admin)]</summary>
 public static class Policies
 {
     public const string Admin = "Admin";
