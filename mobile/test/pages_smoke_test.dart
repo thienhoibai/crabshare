@@ -64,7 +64,7 @@ void main() {
 
       await tester.pumpWidget(ProviderScope(
         overrides: [sessionProvider.overrideWith(() => SessionController(const SessionState(token: 't', user: _user)))],
-        child: MaterialApp(theme: buildAppTheme(googleFonts: false), home: page),
+        child: MaterialApp(theme: buildAppTheme(), home: page),
       ));
       // Dữ liệu mẫu trả về sau ~300 ms; chờ thêm cho animation đồng hồ chạy xong.
       await tester.pump(const Duration(milliseconds: 500));

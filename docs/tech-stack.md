@@ -57,7 +57,7 @@ flowchart LR
 | **Dio** | HTTP | Interceptor gắn JWT giống axios bên web |
 | **flutter_secure_storage** | Lưu token | Keychain (iOS) / Keystore (Android) |
 | **image_picker** | Chụp ảnh bằng chứng | Chỉ mở camera (chụp trực tiếp), không lấy ảnh có sẵn |
-| **google_fonts (DM Sans)** | Font theo mẫu thiết kế | Bản phát hành nên gói font vào `assets/` |
+| **DM Sans TTF trong assets** | Font theo mẫu thiết kế | Đóng gói 400/500/600/700, dùng offline cho app và test |
 
 ## AI (TSK-13)
 

@@ -1,5 +1,4 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Bảng màu theo mẫu thiết kế (nền be ấm, nhấn cam, thanh điều hướng tối).
 /// Muốn đổi màu toàn app thì chỉ sửa ở đây.
@@ -23,10 +22,11 @@ abstract final class AppRadius {
   static const pill = 30.0;
 }
 
-/// [googleFonts] = false dùng trong test (test không tải font qua mạng được).
-ThemeData buildAppTheme({bool googleFonts = true}) {
+/// DM Sans được đóng gói trong assets, dùng cùng theme khi chạy app và test.
+ThemeData buildAppTheme() {
   final base = ThemeData(
     useMaterial3: true,
+    fontFamily: 'DM Sans',
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.accent,
       primary: AppColors.accent,
@@ -34,9 +34,8 @@ ThemeData buildAppTheme({bool googleFonts = true}) {
     ),
     scaffoldBackgroundColor: AppColors.background,
   );
-  final text = (googleFonts ? GoogleFonts.dmSansTextTheme(base.textTheme) : base.textTheme)
-      .apply(bodyColor: AppColors.ink, displayColor: AppColors.ink);
-  const buttonText = TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
+  final text = base.textTheme.apply(bodyColor: AppColors.ink, displayColor: AppColors.ink);
+  const buttonText = TextStyle(fontFamily: 'DM Sans', fontSize: 16, fontWeight: FontWeight.w600);
   return base.copyWith(
     textTheme: text.copyWith(
       displaySmall: text.displaySmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -1.2, height: 1.05),
@@ -58,7 +57,7 @@ ThemeData buildAppTheme({bool googleFonts = true}) {
         foregroundColor: Colors.white,
         minimumSize: const Size.fromHeight(56),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.pill)),
-        textStyle: googleFonts ? GoogleFonts.dmSans(textStyle: buttonText) : buttonText,
+        textStyle: buttonText,
       ),
     ),
   );
