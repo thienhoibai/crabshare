@@ -7,7 +7,8 @@ public enum AlertSeverity { Low, Medium, High, Critical }
 
 public sealed record AlertResponse(long Id, string BatchCode, string FarmName, string Type, string Severity,
     string Message, DateTimeOffset RaisedAt, DateTimeOffset AckDeadline, string Status,
-    DateTimeOffset? AcknowledgedAt, long? AcknowledgedBy, string? ResponseNote, DateTimeOffset? EscalatedAt);
+    DateTimeOffset? AcknowledgedAt, long? AcknowledgedBy, string? ResponseNote, DateTimeOffset? EscalatedAt,
+    string? ResolutionNote = null);
 
 public sealed class AlertFilter
 {
@@ -19,6 +20,22 @@ public sealed class AcknowledgeAlertRequest
 {
     [Required, StringLength(300), RegularExpression(@"[\s\S]*\S[\s\S]*", ErrorMessage = "Vui lòng ghi cách xử lý cảnh báo.")]
     public string ResponseNote { get; init; } = "";
+}
+
+public sealed class AdminAlertFilter
+{
+    [RegularExpression("^(Open|Acknowledged|Escalated|Resolved)$")]
+    public string? Status { get; init; } = "Escalated";
+    [RegularExpression("^(Low|Medium|High|Critical)$")]
+    public string? Severity { get; init; }
+    [StringLength(100)]
+    public string? Q { get; init; }
+}
+
+public sealed class ResolveAlertRequest
+{
+    [Required, StringLength(300), RegularExpression(@"[\s\S]*\S[\s\S]*", ErrorMessage = "Vui lòng ghi kết quả xử lý cảnh báo.")]
+    public string Note { get; init; } = "";
 }
 
 /// <summary>Ngưỡng cấu hình cho Production/Catalog; không giả định mọi loại cua cùng ngưỡng.</summary>

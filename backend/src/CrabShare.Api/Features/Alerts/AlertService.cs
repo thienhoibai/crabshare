@@ -130,10 +130,13 @@ public sealed partial class AlertService(AppDbContext db, ICurrentUser me, TimeP
         async Task<T> Participate() => await action(await AuditChain.LockAndReadTailAsync(db, ct));
     }
 
-    private void AppendAudit(Alert alert, string action, string? old, string? previous)
+    private void AppendAudit(Alert alert, string action, string? old, string? previous, string? resolutionNote = null)
     {
         var audit = new AuditLog { EntityType = "Alert", EntityId = alert.AlertId, ActionType = action,
-            OldValue = old, NewValue = Snapshot(alert), ActorUserId = me.IsAuthenticated ? me.UserId : null,
+            OldValue = old, NewValue = resolutionNote is null ? Snapshot(alert) : AuditChain.Snapshot(new {
+                alert.BatchId, alert.AlertType, alert.Severity, alert.Message, alert.Status, alert.RaisedAt,
+                alert.AckDeadline, alert.AcknowledgedAt, alert.AcknowledgedBy, alert.ResponseNote, alert.EscalatedAt, ResolutionNote = resolutionNote }),
+            ActorUserId = me.IsAuthenticated ? me.UserId : null,
             OccurredAt = Now(), PrevHash = previous };
         audit.RowHash = AuditChain.Hash(audit); db.AuditLogs.Add(audit);
     }

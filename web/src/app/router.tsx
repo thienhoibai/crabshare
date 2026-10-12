@@ -130,7 +130,7 @@ export const router = createBrowserRouter([
           { path: '/admin/storefront', element: page(AdminStorefront) },
           { path: '/admin/finance', element: page(AdminFinance) },
           { path: '/admin/finance/settlement', element: page(AdminSettlementDetail) },
-          { path: '/admin/alerts', element: page(AdminAlerts) },
+          { path: '/admin/alerts', element: <RequireRole roles={['PlatformAdmin']}>{page(AdminAlerts)}</RequireRole> },
           { path: '/admin/disputes', element: page(AdminDisputes) },
           { path: '/admin/settings', element: page(AdminSettings) },
         ],

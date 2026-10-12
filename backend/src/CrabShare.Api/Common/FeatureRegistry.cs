@@ -64,6 +64,7 @@ public static class FeatureRegistry
         services.AddScoped<AdminAccountService>();
         // services.AddScoped<EvidenceService>();     // Features/Evidence
         services.AddScoped<AlertService>();          // Features/Alerts
+        services.AddScoped<AlertJob>();              // CS-40
         // services.AddScoped<PortfolioService>();    // Features/Portfolio
         // services.AddScoped<AdminService>();        // Features/Admin
 
