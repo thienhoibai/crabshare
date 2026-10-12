@@ -87,6 +87,8 @@ public sealed record ListingResponse(
     string? ImageUrl,
     DateTimeOffset? PublishedAt,
     DateTimeOffset UpdatedAt,
+    DateTimeOffset? HiddenAt,
+    string? HiddenReason,
     IReadOnlyList<PriceRevisionResponse> PriceHistory);
 
 /// <summary>Một hạng cua còn tồn trong lô đang thu hoạch — dùng cho form tạo niêm yết.</summary>
@@ -99,6 +101,45 @@ public sealed record ListingOptionResponse(
     int InStockCount,
     decimal InStockKg,
     long? ExistingListingId);
+
+// ---------- Kiểm duyệt (UC24, quản trị) ----------
+
+/// <summary>?flagged=true&amp;hidden=false&amp;status=Published — bỏ trống = không lọc.</summary>
+public sealed class AdminListingQuery
+{
+    /// <summary>true = lần đổi giá gần nhất bị gắn cờ bất thường.</summary>
+    public bool? Flagged { get; set; }
+
+    public bool? Hidden { get; set; }
+
+    [RegularExpression("^(Draft|Published|SoldOut|Closed)$")]
+    public string? Status { get; set; }
+}
+
+public sealed class HideListingRequest
+{
+    [Required, MaxLength(300)]
+    public string Reason { get; set; } = "";
+}
+
+public sealed record AdminListingResponse(
+    long ListingId,
+    string Title,
+    string Status,
+    string BatchCode,
+    string FarmName,
+    string CrabType,
+    string GradeCode,
+    string GradeName,
+    string StorageType,
+    long PricePerKg,
+    decimal AvailableQtyKg,
+    string? ImageUrl,
+    DateTimeOffset? PublishedAt,
+    PriceRevisionResponse? LatestPrice,
+    DateTimeOffset? HiddenAt,
+    string? HiddenBy,
+    string? HiddenReason);
 
 // ---------- Cửa hàng (UC25, công khai) ----------
 

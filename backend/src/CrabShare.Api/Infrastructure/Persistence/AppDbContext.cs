@@ -2141,6 +2141,8 @@ public partial class AppDbContext : DbContext
 
             entity.HasIndex(e => e.GradeId, "ix_product_listing_grade_id");
 
+            entity.HasIndex(e => e.HiddenBy, "ix_product_listing_hidden_by");
+
             entity.HasIndex(e => new { e.ListingId, e.BatchId }, "ux_listing_batch").IsUnique();
 
             entity.HasIndex(e => new { e.BatchId, e.GradeId, e.StorageType }, "ux_listing_grade").IsUnique();
@@ -2158,6 +2160,13 @@ public partial class AppDbContext : DbContext
                 .HasPrecision(3)
                 .HasColumnName("frozen_at");
             entity.Property(e => e.GradeId).HasColumnName("grade_id");
+            entity.Property(e => e.HiddenAt)
+                .HasPrecision(3)
+                .HasColumnName("hidden_at");
+            entity.Property(e => e.HiddenBy).HasColumnName("hidden_by");
+            entity.Property(e => e.HiddenReason)
+                .HasMaxLength(300)
+                .HasColumnName("hidden_reason");
             entity.Property(e => e.ImageSha256)
                 .HasMaxLength(64)
                 .IsUnicode(false)
@@ -2204,6 +2213,10 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.GradeId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_product_listing_grade_id");
+
+            entity.HasOne(d => d.HiddenByNavigation).WithMany(p => p.ProductListings)
+                .HasForeignKey(d => d.HiddenBy)
+                .HasConstraintName("fk_product_listing_hidden_by");
         });
 
         modelBuilder.Entity<ProductRating>(entity =>
