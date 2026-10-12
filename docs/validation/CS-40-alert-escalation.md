@@ -2,7 +2,7 @@
 
 Branch: `feature/CS-40-canh-bao-leo-thang`, created from develop and includes the CS-37 dependency. Merge CS-37 first.
 
-Local validation: 182 backend tests passed (178 API + 4 Settlement), 23 browser tests passed, 41 Flutter tests passed; Flutter analysis, web production build and Android debug APK build passed. NuGet emitted NU1900 warnings because its vulnerability feed was unavailable locally; compilation and tests succeeded.
+Local validation after integrating CS-36 from develop: 204 backend tests passed (200 API + 4 Settlement), 26 browser tests passed, 41 Flutter tests passed; Flutter analysis, web production build and Android debug APK build passed. NuGet emitted NU1900 warnings because its vulnerability feed was unavailable locally; compilation and tests succeeded.
 
 - `AlertJob.RunAsync` is a callable cycle for the shared scheduler. `AlertJobWorker` runs it at startup and every 15 minutes using BackgroundService/PeriodicTimer, the mechanism described in the repository architecture. No scheduler from TH-02 is currently merged into develop.
 - `Alerts:Jobs` controls Enabled, IntervalMinutes, UtcOffsetHours (7), DailyLogDueHour (18) and AckWithinHours (2). The deadline/hour values are explicit development defaults. Invalid job settings fail startup. Disable this worker when registering the same job in a shared scheduler.
