@@ -19,6 +19,7 @@ const InvestorPortal = lazy(() => import('../features/investor/InvestorPortal'))
 
 const OperatorDashboard = lazy(() => import('../features/operator/OperatorDashboard'))
 const OperatorKyc = lazy(() => import('../features/operator/OperatorKyc'))
+const OperatorRegistration = lazy(() => import('../features/operator/OperatorRegistration'))
 const OperatorCreateBatch = lazy(() => import('../features/operator/OperatorCreateBatch'))
 const OperatorContract = lazy(() => import('../features/operator/OperatorContract'))
 const OperatorHarvest = lazy(() => import('../features/operator/OperatorHarvest'))
@@ -28,6 +29,8 @@ const OperatorDailyLog = lazy(() => import('../features/operator/OperatorDailyLo
 const OperatorBatchStatus = lazy(() => import('../features/operator/OperatorBatchStatus'))
 const OperatorBatchDetail = lazy(() => import('../features/operator/OperatorBatchDetail'))
 const OperatorAlerts = lazy(() => import('../features/operator/OperatorAlerts'))
+const OperatorListings = lazy(() => import('../features/operator/OperatorListings'))
+const OperatorMembers = lazy(() => import('../features/operator/OperatorMembers'))
 
 const AdminDashboard = lazy(() => import('../features/admin/AdminDashboard'))
 const AdminUsers = lazy(() => import('../features/admin/AdminUsers'))
@@ -87,6 +90,9 @@ export const router = createBrowserRouter([
       // ----- Nhà đầu tư -----
       { element: guarded(['Investor']), children: [{ path: '/nha-dau-tu/*', element: page(InvestorPortal) }] },
 
+      // UC04: mọi tài khoản đã đăng nhập đều được đăng ký hộ nuôi.
+      { path: '/operator/register', element: <RequireRole>{page(OperatorRegistration)}</RequireRole> },
+
       // ----- Người nuôi -----
       {
         element: guarded(['OperatorMember']),
@@ -102,6 +108,8 @@ export const router = createBrowserRouter([
           { path: '/operator/batch', element: page(OperatorBatchStatus) },
           { path: '/operator/batch/detail', element: page(OperatorBatchDetail) },
           { path: '/operator/alerts', element: page(OperatorAlerts) },
+          { path: '/operator/listings', element: page(OperatorListings) },
+          { path: '/operator/members', element: page(OperatorMembers) },
         ],
       },
 

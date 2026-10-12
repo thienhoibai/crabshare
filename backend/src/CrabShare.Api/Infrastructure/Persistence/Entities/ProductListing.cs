@@ -40,6 +40,10 @@ public partial class ProductListing
 
     public DateTimeOffset UpdatedAt { get; set; }
 
+    public string? ImageUri { get; set; }
+
+    public string? ImageSha256 { get; set; }
+
     public virtual Batch Batch { get; set; } = null!;
 
     public virtual ProductGrade Grade { get; set; } = null!;

@@ -22,7 +22,15 @@ public partial class PriceHistory
 
     public DateTimeOffset CreatedAt { get; set; }
 
+    public decimal? PreviousPricePerKg { get; set; }
+
+    public string ReasonCode { get; set; } = null!;
+
+    public string? Note { get; set; }
+
     public virtual AppUser ChangedByNavigation { get; set; } = null!;
 
     public virtual ProductListing Listing { get; set; } = null!;
+
+    public virtual PriceCheck? PriceCheck { get; set; }
 }

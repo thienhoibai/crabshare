@@ -6,14 +6,14 @@ using CrabShare.Api.Features.Auth;
 // using CrabShare.Api.Features.Settlement;
 
 // Viên
-// using CrabShare.Api.Features.Operators;
+using CrabShare.Api.Features.Operators;
 // using CrabShare.Api.Features.Boxes;
 // using CrabShare.Api.Features.Batches;
 // using CrabShare.Api.Features.Production;
 // using CrabShare.Api.Features.Harvest;
 
 // Nhân
-// using CrabShare.Api.Features.Catalog;
+using CrabShare.Api.Features.Catalog;
 // using CrabShare.Api.Features.Orders;
 // using CrabShare.Api.Features.Offtake;
 
@@ -46,14 +46,15 @@ public static class FeatureRegistry
         // services.AddScoped<SettlementService>();   // Features/Settlement
 
         // Viên
-        // services.AddScoped<OperatorService>();     // Features/Operators
+        services.AddScoped<OperatorService>();        // Features/Operators
+        services.AddScoped<OperatorReviewService>();  // UC05
         // services.AddScoped<BoxService>();          // Features/Boxes
         // services.AddScoped<BatchService>();        // Features/Batches
         // services.AddScoped<ProductionService>();   // Features/Production
         // services.AddScoped<HarvestService>();      // Features/Harvest
 
         // Nhân
-        // services.AddScoped<CatalogService>();      // Features/Catalog
+        services.AddScoped<CatalogService>();
         // services.AddScoped<OrderService>();        // Features/Orders
         // services.AddScoped<OfftakeService>();      // Features/Offtake
 

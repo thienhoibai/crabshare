@@ -80,6 +80,8 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<PhysicalSlot> PhysicalSlots { get; set; }
 
+    public virtual DbSet<PriceCheck> PriceChecks { get; set; }
+
     public virtual DbSet<PriceHistory> PriceHistories { get; set; }
 
     public virtual DbSet<ProductGrade> ProductGrades { get; set; }
@@ -2006,11 +2008,64 @@ public partial class AppDbContext : DbContext
                 .HasConstraintName("fk_physical_slot_operator_id");
         });
 
+        modelBuilder.Entity<PriceCheck>(entity =>
+        {
+            entity.HasKey(e => e.PriceHistoryId).HasName("pk_price_check");
+
+            entity.ToTable("price_check", tb => tb.HasTrigger("trg_price_check_append_only"));
+
+            entity.Property(e => e.PriceHistoryId)
+                .ValueGeneratedNever()
+                .HasColumnName("price_history_id");
+            entity.Property(e => e.AlgorithmVersion)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("algorithm_version");
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysdatetimeoffset())", "df_price_check_created_at")
+                .HasColumnName("created_at");
+            entity.Property(e => e.HasEnoughData).HasColumnName("has_enough_data");
+            entity.Property(e => e.IsFlagged).HasColumnName("is_flagged");
+            entity.Property(e => e.MadPerKg)
+                .HasColumnType("decimal(18, 2)")
+                .HasColumnName("mad_per_kg");
+            entity.Property(e => e.MedianPricePerKg)
+                .HasColumnType("decimal(18, 0)")
+                .HasColumnName("median_price_per_kg");
+            entity.Property(e => e.Method)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("method");
+            entity.Property(e => e.OperatorCount).HasColumnName("operator_count");
+            entity.Property(e => e.SampleCount).HasColumnName("sample_count");
+            entity.Property(e => e.Score)
+                .HasColumnType("decimal(9, 3)")
+                .HasColumnName("score");
+            entity.Property(e => e.SegmentKey)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("segment_key");
+            entity.Property(e => e.Threshold)
+                .HasColumnType("decimal(9, 3)")
+                .HasColumnName("threshold");
+            entity.Property(e => e.WindowDays).HasColumnName("window_days");
+
+            entity.HasOne(d => d.PriceHistory).WithOne(p => p.PriceCheck)
+                .HasForeignKey<PriceCheck>(d => d.PriceHistoryId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("fk_price_check_price_history_id");
+        });
+
         modelBuilder.Entity<PriceHistory>(entity =>
         {
             entity.HasKey(e => e.PriceHistoryId).HasName("pk_price_history");
 
-            entity.ToTable("price_history", tb => tb.HasComment("Lịch sử đổi giá công khai của mặt hàng"));
+            entity.ToTable("price_history", tb =>
+                {
+                    tb.HasComment("Lịch sử đổi giá công khai của mặt hàng");
+                    tb.HasTrigger("trg_price_history_append_only");
+                });
 
             entity.HasIndex(e => e.ChangedBy, "ix_price_history_changed_by");
 
@@ -2028,9 +2083,20 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("effective_from");
             entity.Property(e => e.FlaggedAbnormal).HasColumnName("flagged_abnormal");
             entity.Property(e => e.ListingId).HasColumnName("listing_id");
+            entity.Property(e => e.Note)
+                .HasMaxLength(300)
+                .HasColumnName("note");
+            entity.Property(e => e.PreviousPricePerKg)
+                .HasColumnType("decimal(18, 0)")
+                .HasColumnName("previous_price_per_kg");
             entity.Property(e => e.PricePerKg)
                 .HasColumnType("decimal(18, 0)")
                 .HasColumnName("price_per_kg");
+            entity.Property(e => e.ReasonCode)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("Initial", "df_price_history_reason_code")
+                .HasColumnName("reason_code");
 
             entity.HasOne(d => d.ChangedByNavigation).WithMany(p => p.PriceHistories)
                 .HasForeignKey(d => d.ChangedBy)
@@ -2092,6 +2158,14 @@ public partial class AppDbContext : DbContext
                 .HasPrecision(3)
                 .HasColumnName("frozen_at");
             entity.Property(e => e.GradeId).HasColumnName("grade_id");
+            entity.Property(e => e.ImageSha256)
+                .HasMaxLength(64)
+                .IsUnicode(false)
+                .IsFixedLength()
+                .HasColumnName("image_sha256");
+            entity.Property(e => e.ImageUri)
+                .HasMaxLength(400)
+                .HasColumnName("image_uri");
             entity.Property(e => e.PublishedAt)
                 .HasPrecision(3)
                 .HasColumnName("published_at");

@@ -54,7 +54,7 @@ src/
 | Ai cũng vào | `/`, `/dang-nhap`, `/dang-ky`, `/cua-hang`, `/san-pham`, `/truy-xuat/:tagCode` | `landing/`, `auth/`, `store/`, `orders/`, `trace/` |
 | Customer, Investor | `/gio-hang`, `/thanh-toan`, `/xac-nhan-don-hang`, `/theo-doi-don-hang`, `/lich-su-don-hang`, `/huy-tra-hang`, `/danh-gia-don-hang` | `orders/CommercePage.tsx` |
 | Investor | `/nha-dau-tu/*` | `investor/InvestorPortal.tsx` |
-| OperatorMember | `/operator`, `/operator/kyc`, `/operator/create-batch`, `/operator/contract`, `/operator/harvest`, `/operator/settlement`, `/operator/map`, `/operator/log`, `/operator/batch`, `/operator/batch/detail`, `/operator/alerts` | `operator/*.tsx` |
+| OperatorMember | `/operator`, `/operator/kyc`, `/operator/create-batch`, `/operator/contract`, `/operator/harvest`, `/operator/settlement`, `/operator/map`, `/operator/log`, `/operator/batch`, `/operator/batch/detail`, `/operator/alerts`, `/operator/listings` | `operator/*.tsx` |
 | PlatformAdmin, EvidenceReviewer | `/admin`, `/admin/users`, `/admin/batches`, `/admin/storefront`, `/admin/finance`, `/admin/alerts`, `/admin/disputes`, `/admin/settings` (+ trang chi tiết) | `admin/*.tsx` |
 
 > `/operator/map` (sơ đồ trại) sẽ được thay bằng trang **Hộp nuôi** (đánh số hộp) — task của Viên.
@@ -105,3 +105,10 @@ Trong trang: `const { data, isLoading, error } = useFundingBatches()`; báo lỗ
 - Tiền hiển thị bằng `formatVnd()`; **không** hiển thị lợi suất kỳ vọng.
 - Thay dần dữ liệu trong `shared/ui/kit/mock-data.ts` bằng dữ liệu API; trang nào xong thì xoá phần mock tương ứng.
 - Giữ phong cách sẵn có của từng khu vực (CSS trong `store.css`, `investor.css`, `operator.css`).
+
+## VI-02 — Duyệt hộ nuôi và nhân viên
+
+- Admin: `/admin/users?tab=operators`, chỉ PlatformAdmin thấy tab Hộ nuôi; mặc định Chờ duyệt. Lọc Đã duyệt để đình chỉ. Các form xác nhận gọi API thật, nhận sức chứa hoặc lý do và cập nhật danh sách sau thành công. Tab Người dùng & eKYC vẫn là màn hình mẫu trước đây.
+- Operator: `/operator/members`, có trong sidebar và menu mobile. Owner thêm Staff bằng email tài khoản có sẵn và xóa Staff có xác nhận; Staff chỉ xem. Thành viên mới cần đăng nhập lại để cập nhật quyền giao diện.
+- Hook API ở `features/admin/adminOperatorsApi.ts` và `features/operator/operatorsApi.ts`; hộp thoại dùng `shared/ui/ActionDialog.tsx`. Không thêm dependency.
+- Chạy `npm run lint` và `npm run build`; API ở `http://localhost:5233`, web dev nên mở `http://localhost:5173` theo cấu hình CORS mặc định.
