@@ -33,6 +33,18 @@ public class StoreQueryTests
     }
 
     [Fact]
+    public void Niem_yet_bi_quan_tri_an_khong_hien()
+    {
+        var hidden = Listing(2, "Published");
+        hidden.HiddenAt = DateTimeOffset.UtcNow;
+        var source = new[] { Listing(1, "Published"), hidden, Listing(3, "SoldOut") }.AsQueryable();
+
+        var result = CatalogService.FilterStore(source, new StoreListingQuery());
+
+        Assert.Equal([1, 3], Ids(result.OrderBy(l => l.ListingId)));
+    }
+
+    [Fact]
     public void Loc_theo_loai_cua_hang_va_bao_quan()
     {
         var source = new[]

@@ -13,6 +13,7 @@ using CrabShare.Api.Features.Operators;
 // using CrabShare.Api.Features.Harvest;
 
 // Nhân
+using CrabShare.Api.Common.Alerts;
 using CrabShare.Api.Features.Catalog;
 using CrabShare.Api.Features.Orders;
 // using CrabShare.Api.Features.Offtake;
@@ -56,6 +57,10 @@ public static class FeatureRegistry
 
         // Nhân
         services.AddScoped<CatalogService>();
+        services.AddScoped<ListingModerationService>(); // UC24 kiểm duyệt
+        services.AddScoped<LowStockMonitor>();
+        services.AddOptions<LowStockOptions>().BindConfiguration(LowStockOptions.Section);
+        services.AddScoped<IAlertRaiser, AlertServiceRaiser>(); // chuyển tiếp sang AlertService (KH-05)
         services.AddScoped<OrderService>();           // Features/Orders
         services.AddOptions<OrderOptions>().BindConfiguration(OrderOptions.Section);
         // services.AddScoped<OfftakeService>();      // Features/Offtake

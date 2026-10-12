@@ -13,7 +13,7 @@ namespace CrabShare.Api.Features.Catalog;
 /// UC24 Niêm yết sản phẩm. Người nuôi tự đặt và đổi giá (TL-27); hệ thống chỉ ghi lịch sử, so giá với giao dịch
 /// tương đồng và gắn cờ. Tồn của niêm yết = tổng cân nặng cua InStock của lô + hạng, không cho nhập tay.
 /// </summary>
-public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorage files, TimeProvider clock)
+public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorage files, LowStockMonitor lowStock, TimeProvider clock)
 {
     public const long MaxImageBytes = 5 * 1024 * 1024;
 
@@ -173,6 +173,7 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
         listing.PublishedAt = now;
         listing.UpdatedAt = now;
         await SaveAsync(ct);
+        await lowStock.CheckAsync([listingId], ct);
         return await GetMineAsync(listingId, ct);
     }
 
@@ -214,6 +215,7 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
         };
         listing.UpdatedAt = clock.GetUtcNow();
         await SaveAsync(ct);
+        await lowStock.CheckAsync([listingId], ct);
         return await GetMineAsync(listingId, ct);
     }
 
@@ -266,7 +268,7 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
     public async Task<StoreListingDetailResponse> GetPublicAsync(long listingId, CancellationToken ct)
     {
         var listing = await db.ProductListings
-                          .Where(l => l.ListingId == listingId && StoreStatuses.Contains(l.Status))
+                          .Where(l => l.ListingId == listingId && StoreStatuses.Contains(l.Status) && l.HiddenAt == null)
                           .Include(l => l.Batch).ThenInclude(b => b.Operator)
                           .Include(l => l.Batch).ThenInclude(b => b.Harvests)
                           .Include(l => l.Grade)
@@ -293,7 +295,7 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
 
     public static IQueryable<ProductListing> FilterStore(IQueryable<ProductListing> source, StoreListingQuery q)
     {
-        var query = source.Where(l => StoreStatuses.Contains(l.Status));
+        var query = source.Where(l => StoreStatuses.Contains(l.Status) && l.HiddenAt == null);
         if (!string.IsNullOrWhiteSpace(q.CrabType))
         {
             var crabType = q.CrabType.Trim();
@@ -484,7 +486,7 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
         r.Median is { } m ? (long)Math.Round(m, 0, MidpointRounding.AwayFromZero) : null,
         r.Score, r.Threshold, r.Method, PriceAnomaly.AlgorithmVersion);
 
-    private static PriceCheckResponse ToCheckResponse(PriceCheck c) => new(
+    internal static PriceCheckResponse ToCheckResponse(PriceCheck c) => new(
         c.HasEnoughData, c.IsFlagged, c.SampleCount, c.OperatorCount, c.WindowDays,
         c.MedianPricePerKg is { } m ? (long)m : null, c.Score, c.Threshold, c.Method, c.AlgorithmVersion);
 
@@ -508,6 +510,6 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
             l.StorageType, l.FrozenAt, SellUntil(l),
             l.Batch.Harvests.Count == 0 ? null : l.Batch.Harvests.Max(h => h.HarvestedAt),
             (long)l.CurrentPricePerKg, l.StockQtyKg, l.ReservedQtyKg, l.StockQtyKg - l.ReservedQtyKg,
-            ImageUrl(l), l.PublishedAt, l.UpdatedAt, history);
+            ImageUrl(l), l.PublishedAt, l.UpdatedAt, l.HiddenAt, l.HiddenReason, history);
     }
 }
