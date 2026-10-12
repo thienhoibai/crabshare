@@ -62,7 +62,7 @@ Tạo tự động khi API chạy lần đầu ở môi trường Development. M
 
 1. Đọc [`docs/conventions.md`](docs/conventions.md) và [`docs/git-workflow.md`](docs/git-workflow.md).
 2. Xem module của mình trong [`docs/feature-map.md`](docs/feature-map.md); đọc `backend/src/CrabShare.Api/Features/<Module>/README.md`.
-3. Nhận task trên Jira (dự án `CS`), tạo nhánh `feature/CS-<số>-...`, mở Pull Request, cần 1 người duyệt + CI xanh.
+3. Nhận task trên Jira (dự án `CS`), tạo nhánh `feature/CS-<số>-...` từ `develop`, mở Pull Request vào `develop`, cần 1 người duyệt + CI xanh. `main` chỉ nhận `develop` ở mỗi mốc.
 
 | Người | Phụ trách |
 |---|---|

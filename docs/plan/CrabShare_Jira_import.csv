@@ -18,14 +18,14 @@
 "E17","","Epic","TSK-12 – Kiểm định quyết toán (nghiên cứu)","Nhóm task: TSK-12 – Kiểm định quyết toán (nghiên cứu)","Medium","r12","","",""
 "E18","","Epic","TSK-13 – Mô hình nhận diện cua","Nhóm task: TSK-13 – Mô hình nhận diện cua","Medium","ai13","","",""
 "E19","","Epic","Triển khai, bảo mật, kiểm thử","Nhóm task: Triển khai, bảo mật, kiểm thử","Medium","opsx","","",""
-"T1","E1","Task","[TH-01] Khởi động: cả nhóm chạy được dự án, bảo vệ nhánh main, dựng board Jira","*Người làm:* Thiện    *Use case:* —    *Ngày:* D1 (13/10 → 13/10)
+"T1","E1","Task","[TH-01] Khởi động: cả nhóm chạy được dự án, bảo vệ nhánh main/develop, dựng board Jira","*Người làm:* Thiện    *Use case:* —    *Ngày:* D1 (13/10 → 13/10)
 
-*Backend:* Mời 3 bạn vào repo GitHub; bật Branch protection cho main (bắt buộc PR, 1 người duyệt, CI xanh). Kiểm tra CI chạy xanh trên PR đầu tiên.
+*Backend:* Mời 3 bạn vào repo GitHub; đặt develop làm nhánh mặc định; bật Branch protection cho main và develop (bắt buộc PR, 1 người duyệt, CI xanh). Kiểm tra CI chạy xanh trên PR đầu tiên.
 *Web:* Hướng dẫn cả nhóm chạy web (npm ci, npm run dev) và đăng nhập nhanh bằng tài khoản demo.
 *Mobile:* Cùng Khôi kiểm tra app chạy được trên Chrome của từng người.
 *Bảng CSDL:* —
 
-*Hoàn thành khi:* 4 máy chạy được API + web + mobile và đăng nhập demo; không ai push thẳng được lên main; Jira có đủ task, mỗi người kéo task D1 sang In Progress.
+*Hoàn thành khi:* 4 máy chạy được API + web + mobile và đăng nhập demo; không ai push thẳng được lên main/develop; Jira có đủ task, mỗi người kéo task D1 sang In Progress.
 *Phụ thuộc:* —
 *Ghi chú:* Họp 15 phút đầu ngày mỗi ngày (daily) trên nhóm chat.
 
@@ -153,7 +153,7 @@
 *Mobile:* —
 *Bảng CSDL:* fee_tier
 
-*Hoàn thành khi:* Thêm bậc phí có hiệu lực từ ngày chọn; lô duyệt sau ngày đó dùng phí mới. Chiều: merge PR tồn, chạy demo M2 trên main.
+*Hoàn thành khi:* Thêm bậc phí có hiệu lực từ ngày chọn; lô duyệt sau ngày đó dùng phí mới. Chiều: merge PR tồn vào develop, chạy demo M2, gộp develop → main.
 *Phụ thuộc:* VI-05
 *Ghi chú:* Mốc M2.
 
@@ -223,7 +223,7 @@
 *Mã trong file kế hoạch:* TH-16","Highest","thien","opsx","2026-11-01","2026-11-01"
 "T17","E19","Task","[TH-17] Chốt bản demo v1.0 + tập dượt","*Người làm:* Thiện    *Use case:* —    *Ngày:* D21 (02/11 → 02/11)
 
-*Backend:* Đóng băng main, gắn tag v1.0, ghi release notes; tập dượt demo 2 lần, bấm giờ.
+*Backend:* Gộp develop → main lần cuối, đóng băng main, gắn tag v1.0, ghi release notes; tập dượt demo 2 lần, bấm giờ.
 *Web:* —
 *Mobile:* APK v1.0 trên GitHub Releases.
 *Bảng CSDL:* —

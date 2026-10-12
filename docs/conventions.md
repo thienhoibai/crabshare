@@ -7,7 +7,8 @@
 | Việc | Quy ước |
 |---|---|
 | Tên biến, hàm, file | Tiếng Anh. `BatchService`, `recordHarvestedCrab`, `daily_log_form_page.dart` |
-| Comment, commit, PR, tài liệu | Tiếng Việt được |
+| Comment, PR, tài liệu | Tiếng Việt được |
+| Commit | `<type>(<scope>): <mô tả tiếng Anh>` — xem `git-workflow.md` |
 | Chữ trên giao diện | Tiếng Việt (bản tiếng Anh làm sau nếu kịp) |
 | **Tiền** | **Số nguyên đồng**: `long` (C#), `DECIMAL(18,0)` (SQL), `number` nguyên (TS), `int` (Dart). Không dùng `double`/`float` cho tiền. Hiển thị bằng `formatVnd()` |
 | Thời gian | `DateTimeOffset` (C#), `DATETIMEOFFSET` (SQL). Hiển thị theo giờ Việt Nam |
