@@ -1,5 +1,9 @@
 # Alerts — Cảnh báo vận hành và leo thang
 
+CS-37 đã triển khai service, API hộ nuôi/nhà đầu tư và Web/Mobile; xem
+[hướng dẫn tích hợp và kiểm thử](../../../../../docs/validation/CS-37-alerts.md).
+Ngưỡng trong `Alerts:Thresholds` là cấu hình dev, cần xác nhận với SRS của nhóm.
+
 **Người làm:** Khôi · **Use case:** UC19 Acknowledge Operations Alert · UC20 Monitor Escalated Alerts
 
 ## Bảng

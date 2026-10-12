@@ -4,6 +4,7 @@ using CrabShare.Api.Infrastructure.Payments;
 using CrabShare.Api.Infrastructure.Persistence;
 using CrabShare.Api.Infrastructure.Signing;
 using CrabShare.Api.Infrastructure.Storage;
+using CrabShare.Api.Features.Alerts;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrabShare.Api.Infrastructure;
@@ -18,6 +19,7 @@ public static class DependencyInjection
 
         services.AddDbContext<AppDbContext>(o => o.UseSqlServer(conn, sql => sql.EnableRetryOnFailure(3)));
         services.AddSingleton(TimeProvider.System);
+        services.Configure<AlertThresholds>(config.GetSection("Alerts:Thresholds"));
 
         services.Configure<StorageOptions>(config.GetSection("Storage"));
         services.AddSingleton<IFileStorage, LocalFileStorage>();
