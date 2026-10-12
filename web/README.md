@@ -53,7 +53,7 @@ src/
 | Ai cũng vào | `/`, `/dang-nhap`, `/dang-ky`, `/cua-hang`, `/san-pham`, `/truy-xuat/:tagCode` | `landing/`, `auth/`, `store/`, `orders/`, `trace/` |
 | Customer, Investor | `/gio-hang`, `/thanh-toan`, `/xac-nhan-don-hang`, `/theo-doi-don-hang`, `/lich-su-don-hang`, `/huy-tra-hang`, `/danh-gia-don-hang` | `orders/CommercePage.tsx` |
 | Investor | `/nha-dau-tu/*` | `investor/InvestorPortal.tsx` |
-| OperatorMember | `/operator`, `/operator/kyc`, `/operator/create-batch`, `/operator/contract`, `/operator/harvest`, `/operator/settlement`, `/operator/map`, `/operator/log`, `/operator/batch`, `/operator/batch/detail`, `/operator/alerts` | `operator/*.tsx` |
+| OperatorMember | `/operator`, `/operator/kyc`, `/operator/create-batch`, `/operator/contract`, `/operator/harvest`, `/operator/settlement`, `/operator/map`, `/operator/log`, `/operator/batch`, `/operator/batch/detail`, `/operator/alerts`, `/operator/listings` | `operator/*.tsx` |
 | PlatformAdmin, EvidenceReviewer | `/admin`, `/admin/users`, `/admin/batches`, `/admin/storefront`, `/admin/finance`, `/admin/alerts`, `/admin/disputes`, `/admin/settings` (+ trang chi tiết) | `admin/*.tsx` |
 
 > `/operator/map` (sơ đồ trại) sẽ được thay bằng trang **Hộp nuôi** (đánh số hộp) — task của Viên.
