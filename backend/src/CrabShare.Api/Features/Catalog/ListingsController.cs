@@ -1,4 +1,5 @@
 using CrabShare.Api.Common.Auth;
+using CrabShare.Api.Common.Paging;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,6 +9,18 @@ namespace CrabShare.Api.Features.Catalog;
 [Route("api/listings")]
 public sealed class ListingsController(CatalogService catalog) : ControllerBase
 {
+    [AllowAnonymous]
+    [HttpGet]
+    [EndpointSummary("UC25 — Cửa hàng: duyệt, lọc theo loại cua / hạng / bảo quản, sắp xếp (công khai)")]
+    public async Task<ActionResult<PagedResult<StoreListingResponse>>> Browse([FromQuery] StoreListingQuery query, CancellationToken ct)
+        => Ok(await catalog.BrowseAsync(query, ct));
+
+    [AllowAnonymous]
+    [HttpGet("{id:long}")]
+    [EndpointSummary("UC25 — Chi tiết sản phẩm: lịch sử giá và mã tem để truy xuất lô (công khai)")]
+    public async Task<ActionResult<StoreListingDetailResponse>> GetPublic(long id, CancellationToken ct)
+        => Ok(await catalog.GetPublicAsync(id, ct));
+
     [Authorize(Policy = Policies.Operator)]
     [HttpPost]
     [EndpointSummary("UC24 — Tạo niêm yết (bản nháp) từ tồn đã thu hoạch của lô + hạng")]
