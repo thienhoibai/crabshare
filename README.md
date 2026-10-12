@@ -27,7 +27,7 @@ flowchart LR
 **IDE:** Visual Studio 2026 hoặc VS Code + C# Dev Kit (cần bản hỗ trợ .NET 10) cho backend · VS Code cho web · Android Studio hoặc VS Code cho mobile.
 
 ```bash
-git clone https://github.com/<owner>/crabshare.git
+git clone https://github.com/thienhoibai/crabshare.git
 cd crabshare
 
 # 1. Tạo CSDL (LocalDB) và chạy API — http://localhost:5233/scalar
