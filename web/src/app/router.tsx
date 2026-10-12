@@ -118,8 +118,8 @@ export const router = createBrowserRouter([
         element: guarded(['PlatformAdmin', 'EvidenceReviewer']),
         children: [
           { path: '/admin', element: page(AdminDashboard) },
-          { path: '/admin/users', element: page(AdminUsers) },
-          { path: '/admin/users/detail', element: page(AdminUserDetail) },
+          { path: '/admin/users', element: <RequireRole roles={['PlatformAdmin']}>{page(AdminUsers)}</RequireRole> },
+          { path: '/admin/users/detail', element: <RequireRole roles={['PlatformAdmin']}>{page(AdminUserDetail)}</RequireRole> },
           { path: '/admin/batches', element: page(AdminBatches) },
           { path: '/admin/batches/detail', element: page(AdminBatchDetail) },
           { path: '/admin/storefront', element: page(AdminStorefront) },

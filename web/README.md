@@ -1,5 +1,10 @@
 # Web — React 19 + Vite + TypeScript
 
+KH-04: Quản trị → Quản lý Người dùng có các tab Người dùng và Ngoại lệ KYC, dùng API
+quản trị thật. Chi tiết `/admin/users/detail?id=<id số>` hiển thị metadata KYC, không
+có ảnh CCCD/selfie. Thao tác khoá, mở khoá và duyệt ngoại lệ yêu cầu lý do. Chạy
+`npm run test:kyc` để kiểm tra cả eKYC và luồng quản trị.
+
 Giao diện lấy từ bản demo `cs-ui-demo` (đã bỏ phần chọn phiên bản):
 **Cửa hàng = bản 1 (nền sáng)**, **Nhà đầu tư = bản 2**, **trang chủ 3D giữ nguyên** (sẽ chỉnh sau).
 

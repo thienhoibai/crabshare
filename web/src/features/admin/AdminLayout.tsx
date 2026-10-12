@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { useAuthStore } from '../../shared/auth/authStore';
 import { LayoutDashboard, Users, FolderKanban, Wallet, LogOut, Menu, X, ShieldAlert, AlertTriangle, MessageSquareWarning, Settings, Store } from 'lucide-react';
 
 export default function AdminLayout({ children, activeTab }: { children: React.ReactNode, activeTab: string }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const logout = useAuthStore(s => s.logout);
+  const signOut = () => { logout(); window.location.href = '/'; };
 
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Tổng quan', path: '/admin' },
@@ -43,7 +46,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
         </nav>
         
         <div className="p-4 border-t border-slate-800">
-          <button onClick={() => window.location.href = '/'} className="flex items-center gap-3 w-full px-3 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+          <button onClick={signOut} className="flex items-center gap-3 w-full px-3 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
             <LogOut className="w-5 h-5" /> Đăng xuất
           </button>
         </div>
@@ -81,7 +84,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
               })}
             </nav>
             <div className="p-4 border-t border-slate-800">
-              <button onClick={() => window.location.href = '/'} className="flex items-center gap-3 text-slate-300 py-2"><LogOut className="w-5 h-5" /> Đăng xuất</button>
+              <button onClick={signOut} className="flex items-center gap-3 text-slate-300 py-2"><LogOut className="w-5 h-5" /> Đăng xuất</button>
             </div>
           </div>
         </div>
