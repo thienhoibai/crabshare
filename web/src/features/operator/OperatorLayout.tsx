@@ -19,7 +19,10 @@ const navGroups = [
   },
   {
     label: 'Pháp lý',
-    items: [{ id: 'kyc', href: '/operator/kyc', icon: ClipboardSignature, label: 'Hồ sơ & eKYC' }],
+    items: [
+      { id: 'register', href: '/operator/register', icon: ClipboardSignature, label: 'Đăng ký hộ nuôi' },
+      { id: 'kyc', href: '/operator/kyc', icon: ClipboardSignature, label: 'Hồ sơ & eKYC' },
+    ],
   },
   {
     label: 'Thu hoạch & tiền',
