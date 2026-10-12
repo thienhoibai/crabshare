@@ -1,5 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react'
-import { Home, LayoutGrid, ClipboardSignature, BellRing, LogOut, Package, DollarSign, Smartphone, Menu, X, Monitor, Map, NotebookPen } from 'lucide-react'
+import { Home, LayoutGrid, ClipboardSignature, BellRing, LogOut, Package, DollarSign, Smartphone, Menu, X, Monitor, Map, NotebookPen, Store } from 'lucide-react'
 import './operator.css'
 
 const navGroups = [
@@ -21,6 +21,7 @@ const navGroups = [
     label: 'Thu hoạch & tiền',
     items: [
       { id: 'harvest', href: '/operator/harvest', icon: Package, label: 'Thu hoạch & đóng gói' },
+      { id: 'listings', href: '/operator/listings', icon: Store, label: 'Niêm yết sản phẩm' },
       { id: 'settlement', href: '/operator/settlement', icon: DollarSign, label: 'Đối soát doanh thu' },
     ],
   },
@@ -103,6 +104,7 @@ export default function OperatorLayout({ children, activeTab }: { children: Reac
             </div>
             <nav className="op-nav">
               <a href="/operator/kyc" className={linkClass('kyc')}><ClipboardSignature className="w-4 h-4" /> Hồ sơ & eKYC</a>
+              <a href="/operator/listings" className={linkClass('listings')}><Store className="w-4 h-4" /> Niêm yết sản phẩm</a>
               <a href="/operator/settlement" className={linkClass('settlement')}><DollarSign className="w-4 h-4" /> Đối soát doanh thu</a>
               {extraLinks}
               <a href="/" className="op-nav-link" style={{ color: '#b42318', marginTop: 12 }}>

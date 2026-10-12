@@ -13,7 +13,7 @@ using CrabShare.Api.Features.Auth;
 // using CrabShare.Api.Features.Harvest;
 
 // Nhân
-// using CrabShare.Api.Features.Catalog;
+using CrabShare.Api.Features.Catalog;
 // using CrabShare.Api.Features.Orders;
 // using CrabShare.Api.Features.Offtake;
 
@@ -53,7 +53,7 @@ public static class FeatureRegistry
         // services.AddScoped<HarvestService>();      // Features/Harvest
 
         // Nhân
-        // services.AddScoped<CatalogService>();      // Features/Catalog
+        services.AddScoped<CatalogService>();
         // services.AddScoped<OrderService>();        // Features/Orders
         // services.AddScoped<OfftakeService>();      // Features/Offtake
 

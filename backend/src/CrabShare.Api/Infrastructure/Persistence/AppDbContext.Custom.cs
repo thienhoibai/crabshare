@@ -13,5 +13,8 @@ public partial class AppDbContext
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
     {
         // Ví dụ: modelBuilder.Entity<Entities.Batch>().HasQueryFilter(b => b.Status != "Cancelled");
+
+        // Hai người đổi giá cùng lúc: lần lưu sau bị từ chối thay vì ghi "giá cũ" sai vào lịch sử giá
+        modelBuilder.Entity<Entities.ProductListing>().Property(l => l.UpdatedAt).IsConcurrencyToken();
     }
 }
