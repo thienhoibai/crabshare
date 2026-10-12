@@ -5,6 +5,7 @@ using System.Text.Json;
 using CrabShare.Api.Common.Alerts;
 using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Paging;
+using CrabShare.Api.Features.Alerts;
 using CrabShare.Api.Features.Catalog;
 using CrabShare.Api.Infrastructure.Persistence.Entities;
 using Microsoft.AspNetCore.TestHost;
@@ -20,9 +21,9 @@ public class ListingModerationDatabaseTests(OrderDatabaseFixture fixture) : ICla
 {
     private sealed class FakeAlertRaiser : IAlertRaiser
     {
-        public ConcurrentQueue<(long BatchId, string Type, string Severity, string Message, TimeSpan AckWithin)> Calls { get; } = new();
+        public ConcurrentQueue<(long BatchId, AlertType Type, AlertSeverity Severity, string Message, TimeSpan AckWithin)> Calls { get; } = new();
 
-        public Task RaiseAsync(long batchId, string type, string severity, string message, TimeSpan ackWithin, CancellationToken ct)
+        public Task RaiseAsync(long batchId, AlertType type, AlertSeverity severity, string message, TimeSpan ackWithin, CancellationToken ct)
         {
             Calls.Enqueue((batchId, type, severity, message, ackWithin));
             return Task.CompletedTask;
@@ -164,10 +165,32 @@ public class ListingModerationDatabaseTests(OrderDatabaseFixture fixture) : ICla
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var call = Assert.Single(_alerts.Calls, c => c.BatchId == batchId);
-        Assert.Equal(AlertTypes.LowStock, call.Type);
-        Assert.Equal(AlertSeverities.Medium, call.Severity);
+        Assert.Equal(AlertType.LowStock, call.Type);
+        Assert.Equal(AlertSeverity.Medium, call.Severity);
         Assert.Equal(TimeSpan.FromHours(24), call.AckWithin);
         Assert.Contains("còn 4 kg", call.Message);
+    }
+
+    [Fact]
+    public async Task Checkout_duoi_nguong_ghi_canh_bao_that_va_lan_sau_cap_nhat_cung_dong()
+    {
+        var listingId = await fixture.CreateListingAsync(stockKg: 8);
+        var batchId = await BatchIdAsync(listingId);
+        var (customerId, addressId) = await fixture.CreateCustomerAsync();
+        using var customer = fixture.Client(customerId);
+
+        using var first = await customer.PostAsJsonAsync("/api/orders/checkout", Cart(addressId, listingId, 2));
+        using var second = await customer.PostAsJsonAsync("/api/orders/checkout", Cart(addressId, listingId, 1));
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        var alerts = await fixture.WithDbAsync(db => db.Alerts.AsNoTracking().Where(a => a.BatchId == batchId).ToListAsync());
+        var alert = Assert.Single(alerts);
+        Assert.Equal("LowStock", alert.AlertType);
+        Assert.Equal("Medium", alert.Severity);
+        Assert.Equal("Open", alert.Status);
+        Assert.Contains("còn 5 kg", alert.Message);
+        Assert.InRange(alert.AckDeadline - alert.RaisedAt, TimeSpan.FromHours(23), TimeSpan.FromHours(24));
     }
 
     [Fact]

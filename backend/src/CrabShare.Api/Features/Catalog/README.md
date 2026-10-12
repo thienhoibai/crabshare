@@ -30,7 +30,7 @@
 
 ## Quy tắc phải giữ
 - Không bán quá tồn: tồn khả dụng = `stock_qty_kg − reserved_qty_kg` (giữ tồn làm ở Orders).
-- Còn ít hàng → `LowStockMonitor` gọi `IAlertRaiser.RaiseAsync(batchId, "LowStock", ...)` sau khi đăng bán, làm mới tồn và checkout. Ngưỡng `Alerts:Thresholds:LowStockKg` (mặc định 5 kg). Một lô một cảnh báo, liệt kê mọi niêm yết thấp của lô. Bản hiện tại `LoggingAlertRaiser` chỉ ghi log; KH-05 xong thì đổi đăng ký sang AlertService.
+- Còn ít hàng → `LowStockMonitor` gọi `IAlertRaiser.RaiseAsync(batchId, AlertType.LowStock, ...)` (bản thật `AlertServiceRaiser` → `AlertService` của KH-05) sau khi đăng bán, làm mới tồn và checkout, luôn SAU khi transaction của thao tác đã commit. Ngưỡng `Alerts:Thresholds:LowStockKg` (dùng chung `AlertThresholds`), hạn phản hồi `Alerts:Thresholds:LowStockAckHours` (24 giờ). Một lô một cảnh báo, liệt kê mọi niêm yết thấp của lô; người nuôi thấy ở `/api/operators/me/alerts`.
 - Niêm yết bị ẩn: status giữ nguyên, người nuôi vẫn thấy kèm lý do; cửa hàng (`FilterStore`, `GetPublicAsync`) và checkout bỏ qua.
 - Hàng cấp đông quá `frozen_stock_cap_months` → tự `Closed` (TL-23).
 - So giá (`PriceAnomaly`, `mad-v1`): đơn `Completed` cùng loại cua + hạng + bảo quản trong 30 ngày (thiếu thì 90 ngày); cần ≥ 20 giao dịch và ≥ 3 hộ nuôi, không đủ thì ghi "chưa đủ dữ liệu" và không gắn cờ. Chưa lọc theo tỉnh vì địa chỉ hộ nuôi là chuỗi tự do.

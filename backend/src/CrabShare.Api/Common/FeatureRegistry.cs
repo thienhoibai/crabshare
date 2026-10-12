@@ -60,7 +60,7 @@ public static class FeatureRegistry
         services.AddScoped<ListingModerationService>(); // UC24 kiểm duyệt
         services.AddScoped<LowStockMonitor>();
         services.AddOptions<LowStockOptions>().BindConfiguration(LowStockOptions.Section);
-        services.AddScoped<IAlertRaiser, LoggingAlertRaiser>(); // KH-05 xong → đổi sang AlertService
+        services.AddScoped<IAlertRaiser, AlertServiceRaiser>(); // chuyển tiếp sang AlertService (KH-05)
         services.AddScoped<OrderService>();           // Features/Orders
         services.AddOptions<OrderOptions>().BindConfiguration(OrderOptions.Section);
         // services.AddScoped<OfftakeService>();      // Features/Offtake

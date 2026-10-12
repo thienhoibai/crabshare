@@ -1,4 +1,5 @@
 using CrabShare.Api.Common.Alerts;
+using CrabShare.Api.Features.Alerts;
 using CrabShare.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -10,7 +11,8 @@ namespace CrabShare.Api.Features.Catalog;
 /// liệt kê mọi niêm yết thấp của lô đó. Gọi SAU khi đã lưu thay đổi tồn: lỗi ở đây chỉ ghi log, không làm hỏng
 /// thao tác đã xong của người dùng.
 /// </summary>
-public sealed class LowStockMonitor(AppDbContext db, IAlertRaiser alerts, IOptions<LowStockOptions> options, ILogger<LowStockMonitor> logger)
+public sealed class LowStockMonitor(AppDbContext db, IAlertRaiser alerts, IOptions<AlertThresholds> thresholds,
+    IOptions<LowStockOptions> options, ILogger<LowStockMonitor> logger)
 {
     private const int MessageMaxLength = 300;
 
@@ -30,7 +32,8 @@ public sealed class LowStockMonitor(AppDbContext db, IAlertRaiser alerts, IOptio
     {
         var ids = listingIds.Distinct().ToList();
         if (ids.Count == 0) return;
-        var settings = options.Value;
+        var thresholdKg = thresholds.Value.LowStockKg;
+        var ackWithin = TimeSpan.FromHours(options.Value.LowStockAckHours);
 
         try
         {
@@ -47,11 +50,10 @@ public sealed class LowStockMonitor(AppDbContext db, IAlertRaiser alerts, IOptio
 
             foreach (var batch in listings.GroupBy(l => l.BatchId))
             {
-                if (!batch.Any(l => ids.Contains(l.ListingId) && IsLow(l, settings.LowStockKg)))
+                if (!batch.Any(l => ids.Contains(l.ListingId) && IsLow(l, thresholdKg)))
                     continue;
-                var low = batch.Where(l => IsLow(l, settings.LowStockKg)).OrderBy(l => l.ListingId).ToList();
-                await alerts.RaiseAsync(batch.Key, AlertTypes.LowStock, AlertSeverities.Medium, Message(low, settings.LowStockKg),
-                    TimeSpan.FromHours(settings.LowStockAckHours), ct);
+                var low = batch.Where(l => IsLow(l, thresholdKg)).OrderBy(l => l.ListingId).ToList();
+                await alerts.RaiseAsync(batch.Key, AlertType.LowStock, AlertSeverity.Medium, Message(low, thresholdKg), ackWithin, ct);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
