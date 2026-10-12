@@ -1,56 +1,64 @@
-import { UploadCloud, CheckCircle, ShieldCheck, FileText } from 'lucide-react'
+import { CheckCircle2, FileText, ShieldCheck, UploadCloud } from 'lucide-react'
 import OperatorLayout from './OperatorLayout'
-import { OpBadge, OpBtn, OpHeading, OpPanel } from './operatorUi'
+import { OpBadge, OpBtn, OpFacts, OpHeading, OpNote, OpPanel, OpStat } from './operatorUi'
 
 export default function OperatorKyc() {
   return (
     <OperatorLayout activeTab="kyc">
       <OpHeading
-        eyebrow="Định danh · eKYC"
+        eyebrow="Định danh"
         title="Hồ sơ pháp lý & eKYC"
-        description="Xác thực CCCD, liveness và giấy phép kinh doanh của trại."
+        description="Xác thực CCCD, khuôn mặt và giấy phép kinh doanh của trại."
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <OpPanel
-          title="1. Xác thực danh tính"
-          action={<OpBadge tone="ok"><CheckCircle className="w-3 h-3" /> Đã duyệt</OpBadge>}
-        >
-          <div className="flex gap-4 mb-4">
-            <div className="w-1/2 aspect-[1.6] rounded-xl border border-[#e8dccb] overflow-hidden relative bg-[#ece4d8]">
-              <img src="/assets/imgQuestionCardSection.png" className="opacity-40 object-cover w-full h-full absolute" alt="" />
-              <span className="absolute inset-0 grid place-items-center text-xs font-bold">Mặt trước CCCD</span>
-            </div>
-            <div className="w-1/2 aspect-[1.6] rounded-xl border border-[#e8dccb] grid place-items-center bg-[#ece4d8] text-xs font-bold text-[#9a8f84]">
-              Mặt sau CCCD
-            </div>
-          </div>
-          <div className="p-4 rounded-xl bg-[#f4efe8] border border-[#f0e8dc] text-sm space-y-1">
-            <p><strong>Họ và tên:</strong> Nguyễn Văn A</p>
-            <p><strong>Số CCCD:</strong> 079200123456</p>
-            <p><strong>Liveness:</strong> <span className="text-[#15803d] font-bold">Khớp 99.8%</span></p>
+      <div className="op-grid">
+        <OpStat className="op-span-5" label="Tiến độ hồ sơ" value="1 / 2" unit="bước" sub="Danh tính đã duyệt. Còn thiếu giấy phép trại để mở gọi vốn." />
+        <OpPanel className="op-span-7" title="Việc còn lại">
+          <div className="op-todo">
+            <a href="#giay-phep">
+              <span className="op-dot" />
+              <span><b>Tải giấy phép kinh doanh</b><small>PDF hoặc ảnh chụp rõ nét</small></span>
+            </a>
+            <a href="#giay-phep">
+              <span className="op-dot" />
+              <span><b>Tải chứng nhận VietGAP</b><small>Hoặc giấy đủ điều kiện nuôi trồng</small></span>
+            </a>
           </div>
         </OpPanel>
 
-        <OpPanel
-          accent
-          title="2. Giấy phép trại"
-          action={<OpBadge tone="warn"><ShieldCheck className="w-3 h-3" /> Cần bổ sung</OpBadge>}
-        >
-          <div className="space-y-4">
-            <div className="op-field">
-              <label>Giấy phép đăng ký kinh doanh</label>
-              <div className="op-drop is-accent"><UploadCloud className="w-6 h-6" /> Tải lên giấy phép KD (PDF/JPG)</div>
+        <OpPanel className="op-span-6" title="1. Danh tính" action={<OpBadge tone="ok"><CheckCircle2 /> Đã duyệt</OpBadge>}>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="op-cover" style={{ aspectRatio: '1.6' }}>
+              <img src="/assets/imgQuestionCardSection.png" alt="" style={{ opacity: 0.5 }} />
+              <span className="op-cover__text"><small>Mặt trước CCCD</small></span>
             </div>
-            <div className="op-field">
-              <label>Chứng nhận VietGAP / đủ điều kiện</label>
-              <div className="op-drop"><UploadCloud className="w-6 h-6" /> Tải lên chứng nhận</div>
-            </div>
-            <OpBtn variant="ink" full onClick={() => window.alert('Đã gửi hồ sơ cho Admin xét duyệt!')}>
-              <FileText className="w-4 h-4" /> Gửi xét duyệt
-            </OpBtn>
+            <div className="op-drop" style={{ aspectRatio: '1.6', alignContent: 'center' }}>Mặt sau CCCD</div>
           </div>
+          <OpFacts
+            items={[
+              { label: 'Họ và tên', value: 'Nguyễn Văn A' },
+              { label: 'Số CCCD', value: <span className="op-mono">079200123456</span> },
+              { label: 'Khớp khuôn mặt', value: '99,8%', tone: 'ok' },
+            ]}
+          />
         </OpPanel>
+
+        <div className="op-span-6" id="giay-phep">
+          <OpPanel accent title="2. Giấy phép trại" action={<OpBadge tone="warn"><ShieldCheck /> Cần bổ sung</OpBadge>}>
+            <div className="op-field">
+              <span className="op-label">Giấy phép đăng ký kinh doanh</span>
+              <div className="op-drop is-accent"><UploadCloud size={24} /> Tải lên giấy phép (PDF/JPG)</div>
+            </div>
+            <div className="op-field">
+              <span className="op-label">Chứng nhận VietGAP / đủ điều kiện</span>
+              <div className="op-drop"><UploadCloud size={24} /> Tải lên chứng nhận</div>
+            </div>
+            <OpNote>Admin xét duyệt trong 1–2 ngày làm việc. Bạn sẽ nhận thông báo khi có kết quả.</OpNote>
+            <OpBtn variant="ink" full onClick={() => window.alert('Đã gửi hồ sơ cho Admin xét duyệt!')}>
+              <FileText size={16} /> Gửi xét duyệt
+            </OpBtn>
+          </OpPanel>
+        </div>
       </div>
     </OperatorLayout>
   )

@@ -1,180 +1,135 @@
 import { useState } from 'react'
-import { PenTool, Download, ShieldCheck, Key, FileCheck, CheckCircle2, Loader2, X } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Download, Key, Loader2, PenTool, ShieldCheck } from 'lucide-react'
 import OperatorLayout from './OperatorLayout'
-import { OpBadge, OpBtn, OpHeading, OpPanel } from './operatorUi'
+import { OpAside, OpBack, OpBadge, OpBtn, OpHeading, OpIcon, OpModal, OpNote, OpPanel } from './operatorUi'
 
 export default function OperatorContract() {
   const [agreed, setAgreed] = useState(false)
-  const [showViettelCA, setShowViettelCA] = useState(false)
+  const [showSigner, setShowSigner] = useState(false)
   const [signStep, setSignStep] = useState(0)
   const [isSigned, setIsSigned] = useState(false)
 
-  const handleSignClick = () => {
-    if (!agreed) return alert('Vui lòng đồng ý với các điều khoản trước khi ký!')
-    setShowViettelCA(true)
+  const openSigner = () => {
+    if (!agreed) return
+    setShowSigner(true)
     setSignStep(0)
   }
 
-  const handleViettelAuth = () => {
+  const sign = () => {
     setSignStep(1)
     setTimeout(() => {
       setSignStep(2)
       setIsSigned(true)
-      setTimeout(() => setShowViettelCA(false), 2000)
+      setTimeout(() => setShowSigner(false), 2000)
     }, 2500)
   }
 
   return (
     <OperatorLayout activeTab="batch">
       <OpHeading
-        eyebrow="UC-04 · Viettel-CA Cloud"
+        crumb={<OpBack href="/operator/batch/detail"><ArrowLeft size={16} /> Quay lại chi tiết lô</OpBack>}
+        eyebrow="Ký số Viettel-CA"
         title="Ký hợp đồng hợp tác"
         description="Lô BATCH-2026-11A · Cua lột 11A"
-        action={<OpBtn variant="outline"><Download className="w-4 h-4" /> Tải bản PDF</OpBtn>}
+        action={<OpBtn variant="ghost"><Download size={16} /> Tải bản PDF</OpBtn>}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <OpPanel className="lg:col-span-2 h-[600px] overflow-y-auto">
-          <div className="max-w-xl mx-auto space-y-5 text-sm leading-relaxed font-serif relative">
-            {isSigned && (
-              <div className="absolute inset-0 grid place-items-center pointer-events-none opacity-10">
-                <ShieldCheck className="w-64 h-64 text-[#15803d]" />
-              </div>
-            )}
-            <h2 className="text-xl font-bold text-center font-sans">HỢP ĐỒNG HỢP TÁC SẢN XUẤT<br /><span className="text-sm font-normal">Số: BATCH-2026-11A/HTSX</span></h2>
-            <p>Hôm nay, ngày 01 tháng 10 năm 2026, tại nền tảng CrabShare, chúng tôi gồm:</p>
-            <div>
-              <strong>BÊN A (NỀN TẢNG CRABSHARE):</strong>
-              <p>Công ty CP Công nghệ CrabShare Vietnam · MST 0318928419</p>
-            </div>
-            <div>
-              <strong>BÊN B (OPERATOR):</strong>
-              <p>Trại Cần Giờ 01 (Ông Nguyễn Văn A) · CCCD 079200123456</p>
-            </div>
-            <h3 className="font-bold font-sans mt-4">ĐIỀU 1: NỘI DUNG HỢP TÁC</h3>
-            <p>Bên B nhận vốn giải ngân <strong>75.000.000 VNĐ</strong> để nuôi 1.500 con giống cua lột theo tiêu chuẩn RAS.</p>
-            <h3 className="font-bold font-sans mt-4">ĐIỀU 2: ĐỊNH MỨC VÀ LỢI NHUẬN</h3>
-            <p>Tỷ lệ ăn chia doanh thu ròng: Bên B <strong>60%</strong>, nhà đầu tư và nền tảng 40%.</p>
-            <h3 className="font-bold font-sans mt-4">ĐIỀU 3: DANH SÁCH NHÀ ĐẦU TƯ</h3>
-            <table className="op-table font-sans">
-              <thead><tr><th>Nhà đầu tư</th><th>Tỷ lệ</th><th>Số tiền</th></tr></thead>
-              <tbody>
-                <tr><td>Trần Trọng A</td><td>30%</td><td>22.500.000 ₫</td></tr>
-                <tr><td>Lê Thị B</td><td>50%</td><td>37.500.000 ₫</td></tr>
-                <tr><td>Phạm Văn C</td><td>20%</td><td>15.000.000 ₫</td></tr>
-                <tr className="font-bold"><td>Tổng cộng</td><td>100%</td><td>75.000.000 ₫</td></tr>
-              </tbody>
-            </table>
-            <div className="pt-12 pb-6 flex flex-col sm:flex-row justify-between gap-10 font-sans">
-              <div className="text-center">
-                <strong>ĐẠI DIỆN BÊN A</strong>
-                <div className="w-48 border-2 border-green-600 bg-green-50 mt-2 mx-auto p-2 text-green-700 text-[10px] font-bold rounded-lg -rotate-2">
-                  <span className="text-xs">Ký bởi: CRABSHARE VN</span>
-                  <p>01/10/2026 · Viettel-CA Cloud</p>
+      <div className="op-split">
+        <div>
+          <OpPanel>
+            <div className="op-doc">
+              <div>
+                {isSigned && <span className="op-watermark"><ShieldCheck size={240} /></span>}
+                <h2>HỢP ĐỒNG HỢP TÁC SẢN XUẤT<br /><small className="op-muted">Số: BATCH-2026-11A/HTSX</small></h2>
+                <p>Hôm nay, ngày 01 tháng 10 năm 2026, tại nền tảng CrabShare, chúng tôi gồm:</p>
+                <p><b>BÊN A (NỀN TẢNG CRABSHARE):</b><br />Công ty CP Công nghệ CrabShare Vietnam · MST 0318928419</p>
+                <p><b>BÊN B (HỘ NUÔI):</b><br />Trại Cần Giờ 01 (Ông Nguyễn Văn A) · CCCD 079200123456</p>
+                <h3>ĐIỀU 1: NỘI DUNG HỢP TÁC</h3>
+                <p>Bên B nhận vốn giải ngân <b>75.000.000 VNĐ</b> để nuôi 1.500 con giống cua lột theo tiêu chuẩn RAS.</p>
+                <h3>ĐIỀU 2: ĐỊNH MỨC VÀ LỢI NHUẬN</h3>
+                <p>Tỷ lệ ăn chia doanh thu ròng: Bên B <b>60%</b>, nhà đầu tư và nền tảng 40%.</p>
+                <h3>ĐIỀU 3: DANH SÁCH NHÀ ĐẦU TƯ</h3>
+                <table className="op-table">
+                  <thead><tr><th>Nhà đầu tư</th><th className="is-num">Tỷ lệ</th><th className="is-num">Số tiền</th></tr></thead>
+                  <tbody>
+                    <tr><td>Trần Trọng A</td><td className="is-num">30%</td><td className="is-num">22.500.000 ₫</td></tr>
+                    <tr><td>Lê Thị B</td><td className="is-num">50%</td><td className="is-num">37.500.000 ₫</td></tr>
+                    <tr><td>Phạm Văn C</td><td className="is-num">20%</td><td className="is-num">15.000.000 ₫</td></tr>
+                    <tr><td><b>Tổng cộng</b></td><td className="is-num"><b>100%</b></td><td className="is-num"><b>75.000.000 ₫</b></td></tr>
+                  </tbody>
+                </table>
+                <div className="op-signs">
+                  <div>
+                    <b>ĐẠI DIỆN BÊN A</b>
+                    <span className="op-stamp">Ký bởi: CRABSHARE VN<small>01/10/2026 · Viettel-CA</small></span>
+                  </div>
+                  <div>
+                    <b>ĐẠI DIỆN BÊN B</b>
+                    {isSigned
+                      ? <span className="op-stamp">Ký bởi: NGUYỄN VĂN A<small>Vừa xong · Viettel-CA</small></span>
+                      : <span className="op-stamp is-pending">Khu vực ký</span>}
+                  </div>
                 </div>
               </div>
-              <div className="text-center">
-                <strong>ĐẠI DIỆN BÊN B</strong>
-                {!isSigned ? (
-                  <div className="w-32 h-16 border-2 border-dashed border-red-300 bg-red-50 mt-2 mx-auto grid place-items-center text-red-500 text-xs font-bold">Khu vực ký</div>
-                ) : (
-                  <div className="w-48 border-2 border-red-600 bg-red-50 mt-2 mx-auto p-2 text-red-700 text-[10px] font-bold rounded-lg rotate-1">
-                    <span className="text-xs uppercase">Ký bởi: Nguyễn Văn A</span>
-                    <p>Vừa xong · Viettel-CA Cloud</p>
-                  </div>
-                )}
-              </div>
             </div>
-          </div>
-        </OpPanel>
+          </OpPanel>
+        </div>
 
-        <OpPanel accent title="Trạng thái ký kết" className="self-start sticky top-6">
-          <div className="space-y-3 mb-6 text-sm">
-            <div className="flex justify-between border-b border-[#f4cf9c] pb-2">
-              <span className="text-[#6f675e]">Platform</span>
-              <OpBadge tone="ok">Đã ký</OpBadge>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-[#6f675e]">Operator (bạn)</span>
-              {isSigned ? <OpBadge tone="ok">Đã ký</OpBadge> : <OpBadge tone="danger">Chờ ký</OpBadge>}
-            </div>
-          </div>
+        <OpAside>
+          <p className="rd-eyebrow">Trạng thái ký</p>
+          <dl className="op-dl">
+            <dt>CrabShare</dt><dd><OpBadge tone="ok">Đã ký</OpBadge></dd>
+            <dt>Hộ nuôi (bạn)</dt><dd>{isSigned ? <OpBadge tone="ok">Đã ký</OpBadge> : <OpBadge tone="danger">Chờ ký</OpBadge>}</dd>
+          </dl>
           {!isSigned ? (
-            <div className="space-y-3">
-              <label className="flex items-start gap-2 text-xs text-[#4a433c] cursor-pointer">
-                <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 accent-[#7d4b1a] w-4 h-4" />
+            <>
+              <label className="op-check">
+                <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
                 Tôi đã đọc và đồng ý toàn bộ điều khoản hợp đồng BATCH-2026-11A.
               </label>
-              <OpBtn variant="ink" full onClick={handleSignClick}><PenTool className="w-4 h-4" /> Ký hợp đồng ngay</OpBtn>
-              <p className="flex items-center justify-center gap-2 pt-3 border-t border-[#f4cf9c] text-[11px] font-bold text-[#6f675e] uppercase tracking-wide">
-                <ShieldCheck className="w-5 h-5 text-red-600" /> Viettel-CA Cloud
-              </p>
-            </div>
+              <OpBtn full disabled={!agreed} onClick={openSigner}><PenTool size={16} /> Ký hợp đồng</OpBtn>
+              <p className="rd-note"><ShieldCheck size={14} /> Chữ ký số do Viettel-CA cấp, có giá trị pháp lý như chữ ký tay.</p>
+            </>
           ) : (
-            <div className="text-center p-4 bg-[#f0fdf4] border border-[#bbf7d0] rounded-xl">
-              <ShieldCheck className="w-10 h-10 text-[#15803d] mx-auto mb-2" />
-              <p className="font-bold text-[#15803d]">Hợp đồng đã có hiệu lực</p>
-              <p className="text-xs text-[#6f675e] mt-1">Đã ký số và lưu trên hệ thống.</p>
-              <OpBtn variant="outline" full className="mt-4" onClick={() => { window.location.href = '/operator/batch' }}>
-                Trở về danh sách lô
-              </OpBtn>
-            </div>
+            <>
+              <OpNote tone="ok"><b>Hợp đồng đã có hiệu lực.</b> Đã ký số và lưu trên hệ thống.</OpNote>
+              <OpBtn variant="ghost" full onClick={() => { window.location.href = '/operator/batch' }}>Về danh sách lô</OpBtn>
+            </>
           )}
-        </OpPanel>
+        </OpAside>
       </div>
 
-      {showViettelCA && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] grid place-items-center p-4">
-          <div className="bg-[#faf6f0] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="bg-red-600 p-4 flex items-center justify-between text-white">
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="w-6 h-6" />
-                <div>
-                  <h3 className="font-bold">Cổng ký số điện tử</h3>
-                  <p className="text-[10px] uppercase opacity-90">Cung cấp bởi Viettel-CA</p>
-                </div>
+      {showSigner && (
+        <OpModal title="Cổng ký số điện tử" sub="Cung cấp bởi Viettel-CA" onClose={() => setShowSigner(false)}>
+          {signStep === 0 && (
+            <div className="op-form">
+              <OpNote>Bạn đang ký số văn bản <b>BATCH-2026-11A/HTSX</b>.</OpNote>
+              <div className="op-field">
+                <label htmlFor="ca-id">Tài khoản Viettel-CA (CCCD)</label>
+                <input id="ca-id" className="op-input" defaultValue="079200123456" />
               </div>
-              <button type="button" onClick={() => setShowViettelCA(false)}><X className="w-5 h-5" /></button>
+              <div className="op-field">
+                <label htmlFor="ca-pin">Mã PIN</label>
+                <input id="ca-pin" className="op-input" type="password" defaultValue="123456" />
+              </div>
+              <OpBtn full onClick={sign}><Key size={16} /> Xác thực & ký</OpBtn>
             </div>
-            <div className="p-6">
-              {signStep === 0 && (
-                <div className="space-y-4">
-                  <div className="bg-red-50 text-red-700 p-3 rounded-xl flex gap-3 border border-red-100 text-xs">
-                    <FileCheck className="w-5 h-5 shrink-0" />
-                    Bạn đang ký số văn bản <strong>BATCH-2026-11A/HTSX</strong>.
-                  </div>
-                  <div className="op-field">
-                    <label>Tài khoản Viettel-CA (CCCD)</label>
-                    <input className="op-input" defaultValue="079200123456" />
-                  </div>
-                  <div className="op-field">
-                    <label>Mã PIN</label>
-                    <input className="op-input" type="password" defaultValue="123456" />
-                  </div>
-                  <button type="button" onClick={handleViettelAuth} className="op-btn op-btn-full" style={{ background: '#dc2626', color: '#fff' }}>
-                    <Key className="w-4 h-4" /> Xác thực & ký ngay
-                  </button>
-                </div>
-              )}
-              {signStep === 1 && (
-                <div className="py-12 text-center">
-                  <Loader2 className="w-12 h-12 text-red-600 animate-spin mx-auto mb-4" />
-                  <h4 className="font-bold text-lg">Đang xác thực chứng thư…</h4>
-                  <p className="text-sm text-[#6f675e] mt-2">Vui lòng không đóng cửa sổ này.</p>
-                </div>
-              )}
-              {signStep === 2 && (
-                <div className="py-10 text-center">
-                  <div className="w-16 h-16 bg-green-100 rounded-full grid place-items-center mx-auto mb-4">
-                    <CheckCircle2 className="w-10 h-10 text-green-600" />
-                  </div>
-                  <h4 className="font-bold text-green-700 text-lg">Ký số thành công</h4>
-                  <p className="text-sm text-[#6f675e] mt-2">Chứng thư số Nguyễn Văn A đã đóng dấu văn bản.</p>
-                </div>
-              )}
+          )}
+          {signStep === 1 && (
+            <div className="op-empty">
+              <Loader2 size={40} className="animate-spin" />
+              <b>Đang xác thực chứng thư…</b>
+              <span>Vui lòng không đóng cửa sổ này.</span>
             </div>
-          </div>
-        </div>
+          )}
+          {signStep === 2 && (
+            <div className="op-empty">
+              <OpIcon tone="ok" round><CheckCircle2 size={24} /></OpIcon>
+              <b>Ký số thành công</b>
+              <span>Chứng thư số Nguyễn Văn A đã đóng dấu văn bản.</span>
+            </div>
+          )}
+        </OpModal>
       )}
     </OperatorLayout>
   )

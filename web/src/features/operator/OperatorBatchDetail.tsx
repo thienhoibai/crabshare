@@ -1,74 +1,72 @@
-import { Briefcase, FileText, Users, ExternalLink, AlertTriangle, ArrowRight, ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ExternalLink, FileText } from 'lucide-react'
 import OperatorLayout from './OperatorLayout'
-import { OpBack, OpBadge, OpBtn, OpHeading, OpNote, OpPanel } from './operatorUi'
+import { OpAside, OpBack, OpBadge, OpBtn, OpFacts, OpHeading, OpNote, OpPanel, crabImg } from './operatorUi'
+
+const investors = [
+  { name: 'Trần Trọng A', role: 'Nhà đầu tư cá nhân', amount: '22.500.000 ₫', percent: '30%', status: 'Đã giải ngân' },
+  { name: 'Lê Thị B', role: 'Nhà đầu tư cá nhân', amount: '37.500.000 ₫', percent: '50%', status: 'Đã giải ngân' },
+  { name: 'Phạm Văn C', role: 'Nhà đầu tư cá nhân', amount: '15.000.000 ₫', percent: '20%', status: 'Đã giải ngân' },
+]
 
 export default function OperatorBatchDetail() {
-  const investors = [
-    { name: 'Trần Trọng A', role: 'Nhà đầu tư cá nhân', amount: '22.500.000 ₫', percent: '30%', status: 'Đã giải ngân' },
-    { name: 'Lê Thị B', role: 'Nhà đầu tư cá nhân', amount: '37.500.000 ₫', percent: '50%', status: 'Đã giải ngân' },
-    { name: 'Phạm Văn C', role: 'Nhà đầu tư cá nhân', amount: '15.000.000 ₫', percent: '20%', status: 'Đã giải ngân' },
-  ]
-
   return (
     <OperatorLayout activeTab="batch">
       <OpHeading
-        eyebrow="Chi tiết lô · BATCH-2026-11A"
+        crumb={<OpBack href="/operator/batch"><ArrowLeft size={16} /> Quay lại danh sách lô</OpBack>}
+        eyebrow="Chi tiết lô"
         title="Nguồn vốn & bao tiêu"
         description="Tài chính, nhà đầu tư và hồ sơ pháp lý của mẻ cua lột 11A."
-        crumb={
-          <OpBack href="/operator/batch">
-            <ArrowLeft className="w-4 h-4" /> Quay lại danh sách lô
-          </OpBack>
-        }
       />
 
-      <OpNote tone="danger" className="">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 bg-[#b42318] text-white rounded-full grid place-items-center shrink-0">
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-            <div>
-              <strong>Lô này đang có 2 cảnh báo cần xử lý.</strong>
-              <p>Bất thường tại ô <u>S-54</u> và <u>S-102</u> (pH tăng cao).</p>
-            </div>
+      <div className="op-split">
+        <div>
+          <div className="op-cover">
+            <img src={crabImg('Cua lột', 1200)} alt="" />
+            <OpBadge tone="info">Đang sản xuất</OpBadge>
+            <span className="op-cover__text"><b>BATCH-2026-11A</b><small>Cua lột · 1.500 con giống · 125 ô RAS</small></span>
           </div>
-          <OpBtn variant="danger" sm onClick={() => { window.location.href = '/operator/alerts' }}>
-            Xử lý cảnh báo <ArrowRight className="w-4 h-4" />
-          </OpBtn>
-        </div>
-      </OpNote>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-5">
-        <div className="lg:col-span-2 space-y-5">
-          <OpPanel accent title="Đối tác bao tiêu" action={<div className="op-icon-pill"><Briefcase className="w-4 h-4" /></div>}>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-              <div><p className="text-[11px] font-bold uppercase text-[#6f675e] mb-1">Đơn vị mua</p><p className="font-extrabold">Chuỗi nhà hàng Biển Đông</p></div>
-              <div><p className="text-[11px] font-bold uppercase text-[#6f675e] mb-1">Giá chốt</p><p className="font-extrabold text-[#15803d]">350.000 ₫/kg</p></div>
-              <div><p className="text-[11px] font-bold uppercase text-[#6f675e] mb-1">Cam kết</p><p className="font-extrabold">100% sản lượng</p></div>
-              <div><p className="text-[11px] font-bold uppercase text-[#6f675e] mb-1">Trạng thái</p><OpBadge tone="ok">Đã ký HĐ</OpBadge></div>
+          <OpFacts
+            items={[
+              { label: 'Vốn huy động', value: '75 triệu' },
+              { label: 'Đã góp', value: '100%', tone: 'ok' },
+              { label: 'Chu kỳ', value: 'Ngày 34 / 45' },
+              { label: 'Cảnh báo mở', value: '2', tone: 'danger' },
+            ]}
+          />
+
+          <OpNote tone="danger">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <span><b>Lô đang có 2 cảnh báo.</b> pH tăng cao tại ô S-54 và S-102.</span>
+              <OpBtn variant="danger" sm onClick={() => { window.location.href = '/operator/alerts' }}>
+                Xử lý cảnh báo <ArrowRight size={14} />
+              </OpBtn>
             </div>
+          </OpNote>
+
+          <OpPanel title="Đối tác bao tiêu" action={<OpBadge tone="ok">Đã ký hợp đồng</OpBadge>}>
+            <OpFacts
+              items={[
+                { label: 'Đơn vị mua', value: 'Nhà hàng Biển Đông' },
+                { label: 'Giá chốt', value: '350.000 ₫/kg', tone: 'ok' },
+                { label: 'Cam kết', value: '100% sản lượng' },
+              ]}
+            />
           </OpPanel>
 
-          <OpPanel title="Danh sách nhà đầu tư" action={<span className="text-sm text-[#6f675e]">Tổng huy động <strong className="text-[#171717]">75.000.000 ₫</strong></span>}>
-            <div className="overflow-x-auto">
+          <OpPanel title="Nhà đầu tư" subtitle="3 người góp · tổng 75.000.000 ₫">
+            <div className="op-tablewrap">
               <table className="op-table">
                 <thead>
-                  <tr>
-                    <th>Nhà đầu tư</th>
-                    <th>Phân loại</th>
-                    <th className="text-right">Số tiền góp</th>
-                    <th className="text-right">Tỷ lệ</th>
-                    <th>Trạng thái</th>
-                  </tr>
+                  <tr><th>Nhà đầu tư</th><th>Phân loại</th><th className="is-num">Số tiền góp</th><th className="is-num">Tỷ lệ</th><th>Trạng thái</th></tr>
                 </thead>
                 <tbody>
                   {investors.map((inv) => (
                     <tr key={inv.name}>
-                      <td className="font-extrabold text-[#7d4b1a]">{inv.name}</td>
-                      <td>{inv.role}</td>
-                      <td className="text-right font-bold">{inv.amount}</td>
-                      <td className="text-right font-bold">{inv.percent}</td>
+                      <td><b>{inv.name}</b></td>
+                      <td className="op-muted">{inv.role}</td>
+                      <td className="is-num"><b>{inv.amount}</b></td>
+                      <td className="is-num">{inv.percent}</td>
                       <td><OpBadge tone="ok">{inv.status}</OpBadge></td>
                     </tr>
                   ))}
@@ -78,22 +76,22 @@ export default function OperatorBatchDetail() {
           </OpPanel>
         </div>
 
-        <OpPanel title="Hồ sơ pháp lý lô nuôi" action={<Users className="w-4 h-4 text-[#9c815f]" />}>
-          <button
-            type="button"
-            onClick={() => { window.location.href = '/operator/contract' }}
-            className="w-full flex items-center justify-between p-3 border border-[#e8dccb] rounded-xl hover:border-[#7d4b1a] hover:bg-[#fff8ef] transition-all"
-          >
-            <div className="flex items-center gap-3 text-left">
-              <FileText className="w-5 h-5 text-[#9c815f]" />
-              <div>
-                <p className="text-sm font-bold">Hợp đồng sản xuất</p>
-                <p className="text-[11px] text-[#6f675e]">Ký giữa trại và CrabShare</p>
-              </div>
-            </div>
-            <ExternalLink className="w-4 h-4 text-[#c4b8a8]" />
-          </button>
-        </OpPanel>
+        <OpAside>
+          <p className="rd-eyebrow">Tổng huy động</p>
+          <p className="op-big">75.000.000 <small>₫</small></p>
+          <dl className="op-dl">
+            <dt>Nhà đầu tư</dt><dd>3 người</dd>
+            <dt>Đã giải ngân</dt><dd>2 / 3 đợt</dd>
+            <dt>Thù lao người nuôi</dt><dd>7% khi Pool dương</dd>
+          </dl>
+          <p className="rd-eyebrow">Hồ sơ pháp lý</p>
+          <a className="op-tile" href="/operator/contract">
+            <FileText size={20} />
+            <span><b>Hợp đồng sản xuất</b><small>Ký giữa trại và CrabShare</small></span>
+            <ExternalLink size={16} />
+          </a>
+          <OpBtn variant="ink" full onClick={() => { window.location.href = '/operator/map' }}>Xem sơ đồ ô nuôi</OpBtn>
+        </OpAside>
       </div>
     </OperatorLayout>
   )

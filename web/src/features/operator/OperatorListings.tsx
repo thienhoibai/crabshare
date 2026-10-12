@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { AlertTriangle, ImagePlus, Plus, RefreshCw, Store, X } from 'lucide-react'
+import { ImagePlus, Plus, RefreshCw, Store, X } from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
 import { formatDate, formatDateTime, formatVnd } from '../../shared/lib/format'
 import OperatorLayout from './OperatorLayout'
-import { OpBadge, OpBtn, OpHeading, OpNote, OpPanel } from './operatorUi'
+import { OpBadge, OpBtn, OpFacts, OpHeading, OpNote, OpPanel } from './operatorUi'
 import {
   CRAB_TYPE_LABELS,
   REASON_LABELS,
@@ -39,12 +39,12 @@ function PriceCheckLine({ check }: { check: PriceCheck | null }) {
   if (!check) return null
   if (!check.hasEnoughData)
     return (
-      <span className="text-xs text-[#6f675e]">
+      <span className="text-xs op-muted">
         Chưa đủ dữ liệu so sánh ({check.sampleCount} giao dịch, {check.operatorCount} hộ nuôi trong {check.windowDays} ngày; cần ≥ 20 và ≥ 3).
       </span>
     )
   return (
-    <span className={`text-xs ${check.isFlagged ? 'text-[#b42318] font-bold' : 'text-[#6f675e]'}`}>
+    <span className={`text-xs ${check.isFlagged ? 'op-danger font-semibold' : 'op-muted'}`}>
       {check.isFlagged ? 'Lệch đáng kể so với giao dịch tương đồng. ' : ''}
       Giá trung vị nội bộ {formatVnd(check.medianPricePerKg ?? 0)}/kg · {check.sampleCount} giao dịch, {check.windowDays} ngày.
     </span>
@@ -84,12 +84,15 @@ function CreateListingForm({ onDone }: { onDone: () => void }) {
   return (
     <OpPanel title="Tạo niêm yết" subtitle="Tồn lấy từ số cua đã cân trong kho của lô + hạng; không nhập tay số kg." accent>
       {isLoading ? (
-        <p className="text-sm text-[#6f675e]">Đang tải…</p>
+        <p className="op-muted">Đang tải…</p>
       ) : free.length === 0 ? (
-        <OpNote>Không còn hạng nào của lô đang thu hoạch chưa có niêm yết. Cân và xếp hạng cua ở trang Thu hoạch trước.</OpNote>
+        <>
+          <OpNote>Không còn hạng nào của lô đang thu hoạch chưa có niêm yết. Cân và xếp hạng cua ở trang Thu hoạch trước.</OpNote>
+          <OpBtn type="button" variant="ghost" sm onClick={onDone} className="justify-self-start">Đóng</OpBtn>
+        </>
       ) : (
-        <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
-          <div className="op-field md:col-span-2">
+        <form onSubmit={submit} className="op-form">
+          <div className="op-field">
             <label htmlFor="ls-choice">Lô + hạng</label>
             <select id="ls-choice" className="op-select" value={choice} onChange={(e) => setChoice(e.target.value)}>
               {free.map((o) => (
@@ -99,31 +102,33 @@ function CreateListingForm({ onDone }: { onDone: () => void }) {
               ))}
             </select>
           </div>
-          <div className="op-field">
-            <label htmlFor="ls-storage">Bảo quản</label>
-            <select id="ls-storage" className="op-select" value={storage} onChange={(e) => setStorage(e.target.value as StorageType)}>
-              <option value="Fresh">Tươi sống</option>
-              <option value="Frozen">Cấp đông</option>
-            </select>
-          </div>
-          {storage === 'Frozen' && (
+          <div className="op-form__row">
             <div className="op-field">
-              <label htmlFor="ls-frozen">Ngày cấp đông (bỏ trống = hôm nay)</label>
-              <input id="ls-frozen" type="date" className="op-input" value={frozenAt} onChange={(e) => setFrozenAt(e.target.value)} />
+              <label htmlFor="ls-storage">Bảo quản</label>
+              <select id="ls-storage" className="op-select" value={storage} onChange={(e) => setStorage(e.target.value as StorageType)}>
+                <option value="Fresh">Tươi sống</option>
+                <option value="Frozen">Cấp đông</option>
+              </select>
             </div>
-          )}
-          <div className="op-field">
-            <label htmlFor="ls-price">Giá bán (đồng/kg)</label>
-            <input id="ls-price" type="number" min={1} step={1000} required className="op-input" value={price} onChange={(e) => setPrice(e.target.value)} />
+            {storage === 'Frozen' && (
+              <div className="op-field">
+                <label htmlFor="ls-frozen">Ngày cấp đông (trống = hôm nay)</label>
+                <input id="ls-frozen" type="date" className="op-input" value={frozenAt} onChange={(e) => setFrozenAt(e.target.value)} />
+              </div>
+            )}
+            <div className="op-field">
+              <label htmlFor="ls-price">Giá bán (đồng/kg)</label>
+              <input id="ls-price" type="number" min={1} step={1000} required className="op-input" value={price} onChange={(e) => setPrice(e.target.value)} />
+            </div>
           </div>
-          <div className="op-field md:col-span-2">
-            <label htmlFor="ls-title">Tên hiển thị (bỏ trống để hệ thống đặt theo loại cua, hạng, lô)</label>
+          <div className="op-field">
+            <label htmlFor="ls-title">Tên hiển thị (trống để hệ thống đặt theo loại cua, hạng, lô)</label>
             <input id="ls-title" className="op-input" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
-          {create.error && <OpNote tone="danger" className="md:col-span-2">{errorMessage(create.error)}</OpNote>}
-          <div className="md:col-span-2 flex gap-2">
+          {create.error && <OpNote tone="danger">{errorMessage(create.error)}</OpNote>}
+          <div className="flex flex-wrap gap-2">
             <OpBtn type="submit" disabled={create.isPending || !choice || !price}>Lưu bản nháp</OpBtn>
-            <OpBtn type="button" variant="outline" onClick={onDone}>Huỷ</OpBtn>
+            <OpBtn type="button" variant="ghost" onClick={onDone}>Huỷ</OpBtn>
           </div>
         </form>
       )}
@@ -154,7 +159,7 @@ function ChangePriceForm({ listing, onDone }: { listing: Listing; onDone: () => 
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-3 md:grid-cols-3 mt-4 p-4 rounded-2xl bg-[#fff8ef] border border-[#ead9c2]">
+    <form onSubmit={submit} className="op-subform">
       <div className="op-field">
         <label htmlFor={`pr-${listing.listingId}`}>Giá mới (đồng/kg)</label>
         <input id={`pr-${listing.listingId}`} type="number" min={1} step={1000} required className="op-input" value={price} onChange={(e) => setPrice(e.target.value)} />
@@ -171,20 +176,19 @@ function ChangePriceForm({ listing, onDone }: { listing: Listing; onDone: () => 
         <label htmlFor={`nt-${listing.listingId}`}>Ghi chú {reason === 'Other' ? '(bắt buộc)' : ''}</label>
         <input id={`nt-${listing.listingId}`} className="op-input" maxLength={300} required={reason === 'Other'} value={note} onChange={(e) => setNote(e.target.value)} />
       </div>
-      <div className="md:col-span-3">
+      <div className="is-wide">
         {preview?.isFlagged ? (
           <OpNote tone="danger">
-            <AlertTriangle className="inline w-4 h-4 mr-1" />
             Giá này lệch đáng kể so với giao dịch tương đồng. Bạn vẫn lưu được; nhà đầu tư của lô sẽ thấy cờ này cùng lý do bạn chọn.
           </OpNote>
         ) : (
           <PriceCheckLine check={preview} />
         )}
       </div>
-      {change.error && <OpNote tone="danger" className="md:col-span-3">{errorMessage(change.error)}</OpNote>}
-      <div className="md:col-span-3 flex gap-2">
+      {change.error && <div className="is-wide"><OpNote tone="danger">{errorMessage(change.error)}</OpNote></div>}
+      <div className="is-wide flex flex-wrap gap-2">
         <OpBtn type="submit" sm disabled={change.isPending || !value || value === listing.pricePerKg}>Lưu giá mới</OpBtn>
-        <OpBtn type="button" sm variant="outline" onClick={onDone}>Huỷ</OpBtn>
+        <OpBtn type="button" sm variant="ghost" onClick={onDone}>Huỷ</OpBtn>
       </div>
     </form>
   )
@@ -202,14 +206,14 @@ function ListingCard({ listing }: { listing: Listing }) {
 
   return (
     <OpPanel>
-      <div className="flex flex-col md:flex-row gap-5">
-        <div className="w-full md:w-48 shrink-0">
-          <div className="aspect-square rounded-2xl overflow-hidden bg-[#f4efe8] border border-[#ead9c2] flex items-center justify-center">
-            {img ? <img src={img} alt={listing.title} className="w-full h-full object-cover" /> : <Store className="w-10 h-10 text-[#c9b8a3]" />}
+      <div className="op-listing">
+        <div className="op-listing__media">
+          <div className="op-listing__img">
+            {img ? <img src={img} alt={listing.title} /> : <Store size={40} />}
           </div>
           {!closed && (
-            <label className="op-btn op-btn-outline op-btn-sm op-btn-full mt-2 cursor-pointer">
-              <ImagePlus className="w-4 h-4" /> {img ? 'Đổi ảnh' : 'Tải ảnh'}
+            <label className="rd-btn rd-btn--ghost rd-btn--sm rd-btn--block cursor-pointer">
+              <ImagePlus size={16} /> {img ? 'Đổi ảnh' : 'Tải ảnh'}
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
@@ -224,33 +228,37 @@ function ListingCard({ listing }: { listing: Listing }) {
           )}
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap gap-2 mb-2">
+        <div className="op-listing__body">
+          <div className="op-listing__tags">
             <OpBadge tone={STATUS_TONE[listing.status]}>{STATUS_LABELS[listing.status]}</OpBadge>
             <OpBadge tone="gold">Lô {listing.batchCode}</OpBadge>
-            <OpBadge tone="mute">{listing.gradeName}</OpBadge>
+            <OpBadge>{listing.gradeName}</OpBadge>
             <OpBadge tone="info">{listing.storageType === 'Frozen' ? 'Cấp đông' : 'Tươi sống'}</OpBadge>
           </div>
-          <h3 className="font-extrabold text-lg">{listing.title}</h3>
-          <p className="text-2xl font-extrabold mt-2">{formatVnd(listing.pricePerKg)}<span className="text-sm font-semibold text-[#6f675e]"> /kg</span></p>
-          <p className="text-sm text-[#6f675e] mt-1">
-            Tồn {kg(listing.stockQtyKg)} · đang giữ cho đơn {kg(listing.reservedQtyKg)} · còn bán được <b>{kg(listing.availableQtyKg)}</b>
-          </p>
-          <p className="text-xs text-[#9a8f84] mt-1">
+          <h3 className="rd-h3">{listing.title}</h3>
+          <p className="op-big">{formatVnd(listing.pricePerKg)} <small>/ kg</small></p>
+          <OpFacts
+            items={[
+              { label: 'Tồn kho', value: kg(listing.stockQtyKg) },
+              { label: 'Đang giữ cho đơn', value: kg(listing.reservedQtyKg) },
+              { label: 'Còn bán được', value: kg(listing.availableQtyKg), tone: listing.availableQtyKg > 0 ? 'ok' : 'warn' },
+            ]}
+          />
+          <p className="op-listing__meta">
             {listing.harvestedAt && <>Thu hoạch {formatDate(listing.harvestedAt)} · </>}
             {listing.frozenAt && <>Cấp đông {formatDate(listing.frozenAt)} · </>}
-            {listing.sellUntil && <>Bán tới {formatDate(listing.sellUntil)} (trần TL-23) · </>}
+            {listing.sellUntil && <>Bán tới {formatDate(listing.sellUntil)} · </>}
             {listing.farmName}
           </p>
 
           {!closed && (
-            <div className="flex flex-wrap gap-2 mt-4">
+            <div className="flex flex-wrap gap-2">
               {listing.status === 'Draft' && (
                 <OpBtn sm onClick={() => publish.mutate(listing.listingId)} disabled={publish.isPending}>Đăng bán</OpBtn>
               )}
               <OpBtn sm variant="ink" onClick={() => setEditingPrice((v) => !v)}>Đổi giá</OpBtn>
-              <OpBtn sm variant="outline" onClick={() => refresh.mutate(listing.listingId)} disabled={refresh.isPending}>
-                <RefreshCw className="w-4 h-4" /> Cập nhật tồn
+              <OpBtn sm variant="ghost" onClick={() => refresh.mutate(listing.listingId)} disabled={refresh.isPending}>
+                <RefreshCw size={14} /> Cập nhật tồn
               </OpBtn>
               <OpBtn
                 sm
@@ -258,16 +266,16 @@ function ListingCard({ listing }: { listing: Listing }) {
                 onClick={() => { if (window.confirm('Ngừng bán niêm yết này? Không mở lại được.')) close.mutate(listing.listingId) }}
                 disabled={close.isPending}
               >
-                <X className="w-4 h-4" /> Ngừng bán
+                <X size={14} /> Ngừng bán
               </OpBtn>
             </div>
           )}
-          {error && <OpNote tone="danger" className="mt-3">{errorMessage(error)}</OpNote>}
+          {error && <OpNote tone="danger">{errorMessage(error)}</OpNote>}
           {editingPrice && <ChangePriceForm listing={listing} onDone={() => setEditingPrice(false)} />}
         </div>
       </div>
 
-      <div className="mt-5 overflow-x-auto">
+      <div className="op-tablewrap">
         <table className="op-table">
           <thead>
             <tr><th>Thời điểm</th><th>Giá</th><th>Lý do</th><th>Người đổi</th><th>So sánh</th></tr>
@@ -275,9 +283,9 @@ function ListingCard({ listing }: { listing: Listing }) {
           <tbody>
             {listing.priceHistory.map((h) => (
               <tr key={h.priceHistoryId}>
-                <td className="whitespace-nowrap">{formatDateTime(h.effectiveFrom)}</td>
+                <td className="whitespace-nowrap op-muted">{formatDateTime(h.effectiveFrom)}</td>
                 <td className="whitespace-nowrap">
-                  {h.previousPricePerKg !== null && <span className="text-[#9a8f84] line-through mr-1">{formatVnd(h.previousPricePerKg)}</span>}
+                  {h.previousPricePerKg !== null && <span className="op-muted line-through mr-2">{formatVnd(h.previousPricePerKg)}</span>}
                   <b>{formatVnd(h.pricePerKg)}</b>
                 </td>
                 <td>{REASON_LABELS[h.reason]}{h.note ? ` — ${h.note}` : ''}</td>
@@ -295,25 +303,37 @@ function ListingCard({ listing }: { listing: Listing }) {
 export default function OperatorListings() {
   const { data: listings = [], isLoading, error } = useMyListings()
   const [creating, setCreating] = useState(false)
+  const selling = listings.filter((l) => l.status === 'Published')
 
   return (
     <OperatorLayout activeTab="listings">
       <OpHeading
-        eyebrow="UC24 · Niêm yết"
+        eyebrow="Cửa hàng"
         title="Niêm yết sản phẩm"
-        description="Bạn tự đặt và đổi giá. Mọi lần đổi giá được lưu công khai cho nhà đầu tư của lô; giá lệch nhiều so với giao dịch tương đồng chỉ bị gắn cờ, không bị chặn (TL-27)."
-        action={!creating && <OpBtn onClick={() => setCreating(true)}><Plus className="w-4 h-4" /> Tạo niêm yết</OpBtn>}
+        description="Bạn tự đặt và đổi giá. Mọi lần đổi giá được lưu công khai cho nhà đầu tư của lô; giá lệch nhiều so với giao dịch tương đồng chỉ bị gắn cờ, không bị chặn."
+        action={!creating && <OpBtn onClick={() => setCreating(true)}><Plus size={16} /> Tạo niêm yết</OpBtn>}
       />
 
-      <div className="space-y-4 max-w-5xl">
+      {listings.length > 0 && (
+        <OpFacts
+          items={[
+            { label: 'Đang bán', value: selling.length, tone: 'ok' },
+            { label: 'Bản nháp', value: listings.filter((l) => l.status === 'Draft').length },
+            { label: 'Hết hàng', value: listings.filter((l) => l.status === 'SoldOut').length, tone: 'warn' },
+            { label: 'Còn bán được', value: kg(selling.reduce((s, l) => s + l.availableQtyKg, 0)) },
+          ]}
+        />
+      )}
+
+      <div className="op-stack">
         {creating && <CreateListingForm onDone={() => setCreating(false)} />}
-        {isLoading && <p className="text-sm text-[#6f675e]">Đang tải…</p>}
+        {isLoading && <p className="op-muted">Đang tải…</p>}
         {error && <OpNote tone="danger">{errorMessage(error)}</OpNote>}
         {!isLoading && !error && listings.length === 0 && !creating && (
-          <div className="op-panel text-center py-16">
-            <Store className="w-12 h-12 text-[#c9b8a3] mx-auto mb-3" />
-            <h3 className="font-bold text-lg">Chưa có niêm yết</h3>
-            <p className="text-sm text-[#6f675e] mt-1">Sau khi cân và xếp hạng cua thu hoạch, tạo niêm yết để đưa lên cửa hàng.</p>
+          <div className="op-panel op-empty">
+            <Store size={44} />
+            <b>Chưa có niêm yết</b>
+            <span>Sau khi cân và xếp hạng cua thu hoạch, tạo niêm yết để đưa lên cửa hàng.</span>
           </div>
         )}
         {listings.map((l) => <ListingCard key={l.listingId} listing={l} />)}

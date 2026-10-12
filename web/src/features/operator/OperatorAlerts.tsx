@@ -1,53 +1,62 @@
-import { AlertTriangle, Clock, CheckCircle2, Droplets, ArrowRight } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock, Droplets } from 'lucide-react'
 import OperatorLayout from './OperatorLayout'
-import { OpBadge, OpBtn, OpHeading } from './operatorUi'
+import { OpBadge, OpBtn, OpFacts, OpHeading, OpIcon } from './operatorUi'
+
+const alerts = [
+  { id: 1, batch: 'BATCH-2026-11A', box: 'S-54', title: 'Độ pH tăng đột biến', time: '10 phút trước', severity: 'high', desc: 'pH đạt 8,5 (ngưỡng an toàn 7,5–8,0).' },
+  { id: 2, batch: 'BATCH-2026-11A', box: 'S-102', title: 'Thiếu nhật ký hằng ngày', time: '1 giờ trước', severity: 'medium', desc: 'Chưa nhập nhật ký hôm nay (nhiệt độ nước, pH, thức ăn).' },
+]
 
 export default function OperatorAlerts() {
-  const alerts = [
-    { id: 1, batch: 'BATCH-2026-11A', box: 'S-54', title: 'Độ pH tăng đột biến', time: '10 phút trước', severity: 'high', desc: 'pH đạt 8.5 (ngưỡng an toàn 7.5–8.0).' },
-    { id: 2, batch: 'BATCH-2026-11A', box: 'S-102', title: 'Thiếu nhật ký hằng ngày', time: '1 giờ trước', severity: 'medium', desc: 'Chưa nhập nhật ký hôm nay (nhiệt độ nước, pH, thức ăn).' },
-  ]
+  const high = alerts.filter((a) => a.severity === 'high').length
 
   return (
     <OperatorLayout activeTab="alerts">
       <OpHeading
-        eyebrow="UC-06 · Cảnh báo"
+        eyebrow="Cảnh báo"
         title="Trung tâm cảnh báo"
         description="Sinh từ chỉ số người nuôi nhập trong nhật ký hằng ngày (nhiệt độ nước, độ mặn, pH) và khi thiếu nhật ký."
       />
 
-      <div className="space-y-4 max-w-4xl">
-        {alerts.map((a) => (
-          <article key={a.id} className="op-panel flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:border-[#b42318] transition-colors">
-            <div className="flex gap-4 items-start">
-              <div className={`p-3 rounded-full ${a.severity === 'high' ? 'bg-[#fef2f2] text-[#b42318]' : 'bg-[#fffbeb] text-[#b45309]'}`}>
-                {a.severity === 'high' ? <AlertTriangle className="w-6 h-6" /> : <Droplets className="w-6 h-6" />}
-              </div>
-              <div>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  <OpBadge tone="mute">{a.batch}</OpBadge>
+      <OpFacts
+        items={[
+          { label: 'Đang mở', value: alerts.length, tone: alerts.length ? 'danger' : 'ok' },
+          { label: 'Nghiêm trọng', value: high, tone: high ? 'danger' : undefined },
+          { label: 'Trung bình', value: alerts.length - high, tone: 'warn' },
+        ]}
+      />
+
+      <div className="op-panel op-list">
+        {alerts.map((a) => {
+          const isHigh = a.severity === 'high'
+          return (
+            <article key={a.id} className="op-row op-row--alert">
+              <OpIcon tone={isHigh ? 'danger' : 'warn'} round>{isHigh ? <AlertTriangle size={20} /> : <Droplets size={20} />}</OpIcon>
+              <span className="grid gap-1 min-w-0">
+                <span className="flex flex-wrap gap-2">
+                  <OpBadge tone={isHigh ? 'danger' : 'warn'}>{isHigh ? 'Nghiêm trọng' : 'Trung bình'}</OpBadge>
+                  <OpBadge>{a.batch}</OpBadge>
                   <OpBadge tone="gold">Ô {a.box}</OpBadge>
-                  <OpBadge tone={a.severity === 'high' ? 'danger' : 'warn'}>{a.severity === 'high' ? 'Nghiêm trọng' : 'Trung bình'}</OpBadge>
-                </div>
-                <h3 className="font-extrabold text-lg">{a.title}</h3>
-                <p className="text-sm text-[#6f675e] mt-1">{a.desc}</p>
-                <p className="flex items-center gap-1 text-xs text-[#9a8f84] mt-2"><Clock className="w-3 h-3" /> {a.time}</p>
-              </div>
-            </div>
-            <div className="w-full sm:w-auto flex flex-col gap-2 shrink-0">
-              <OpBtn variant="ink" onClick={() => { window.location.href = `/operator/log?action=resolve&batch=${a.batch}&box=${a.box}` }}>
-                Ghi log xử lý <ArrowRight className="w-4 h-4" />
-              </OpBtn>
-              <button type="button" className="text-xs font-bold text-[#9a8f84] hover:text-[#171717] py-1">Bỏ qua (báo cáo sai)</button>
-            </div>
-          </article>
-        ))}
+                </span>
+                <b className="text-lg">{a.title}</b>
+                <span className="op-muted text-sm">{a.desc}</span>
+                <span className="op-muted text-xs flex items-center gap-1"><Clock size={12} /> {a.time}</span>
+              </span>
+              <span className="grid gap-2 justify-items-end">
+                <OpBtn variant="ink" sm onClick={() => { window.location.href = `/operator/log?action=resolve&batch=${a.batch}&box=${a.box}` }}>
+                  Ghi log xử lý <ArrowRight size={14} />
+                </OpBtn>
+                <button type="button" className="op-link text-xs">Bỏ qua (báo sai)</button>
+              </span>
+            </article>
+          )
+        })}
 
         {alerts.length === 0 && (
-          <div className="op-panel text-center py-16">
-            <CheckCircle2 className="w-12 h-12 text-[#15803d] mx-auto mb-3 opacity-50" />
-            <h3 className="font-bold text-lg">Mọi thứ đều ổn</h3>
-            <p className="text-sm text-[#6f675e] mt-1">Không có cảnh báo lúc này.</p>
+          <div className="op-empty">
+            <OpIcon tone="ok" round><CheckCircle2 size={24} /></OpIcon>
+            <b>Mọi thứ đều ổn</b>
+            <span>Không có cảnh báo lúc này.</span>
           </div>
         )}
       </div>
