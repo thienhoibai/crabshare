@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  Bell, BellRing, ClipboardSignature, DollarSign, Home, LayoutGrid, LogOut, Map, Menu, Monitor, NotebookPen, Package, Smartphone, Store, X,
+  Bell, BellRing, ClipboardSignature, DollarSign, Home, LayoutGrid, LogOut, Map, Menu, Monitor, NotebookPen, Package, Smartphone, Store, Users, X,
 } from 'lucide-react'
 import { Logo, Shell } from '../../shared/ui/kit/kit'
 import { useAuthStore } from '../../shared/auth/authStore'
+import { useOperatorApplication } from './operatorsApi'
 import './operator.css'
 
 const ALERT_COUNT = 2
@@ -15,6 +16,7 @@ const navGroups = [
       { id: 'dashboard', href: '/operator', icon: Home, label: 'Tổng quan' },
       { id: 'batch', href: '/operator/batch', icon: LayoutGrid, label: 'Quản lý lô nuôi' },
       { id: 'map', href: '/operator/map', icon: Map, label: 'Sơ đồ trại' },
+      { id: 'members', href: '/operator/members', icon: Users, label: 'Nhân viên' },
     ],
   },
   {
@@ -114,6 +116,7 @@ function Simulator({ onClose }: { onClose: () => void }) {
 }
 
 export default function OperatorLayout({ children, activeTab }: { children: ReactNode; activeTab: string }) {
+  const application = useOperatorApplication()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const [showSimulator, setShowSimulator] = useState(false)
@@ -123,6 +126,8 @@ export default function OperatorLayout({ children, activeTab }: { children: Reac
   useEffect(() => { setIsDemoFrame(window.self !== window.top) }, [])
 
   const name = user?.fullName ?? 'Hộ nuôi'
+  const farmName = application.isPending ? 'Đang tải hồ sơ…' : application.isError ? 'Không tải được hồ sơ' : application.data?.legalName ?? 'Chưa có hồ sơ'
+  const memberRole = application.data ? application.data.memberRole === 'Owner' ? 'Chủ hộ nuôi' : 'Nhân viên hộ nuôi' : 'CrabShare Operator'
   const signOut = () => { logout(); window.location.href = '/' }
   const bell = (
     <a href="/operator/alerts" className="rd-iconbtn o2-bell" aria-label={`Cảnh báo, ${ALERT_COUNT} mới`}>
@@ -136,9 +141,9 @@ export default function OperatorLayout({ children, activeTab }: { children: Reac
         <aside className="o2-side">
           <Logo href="/operator" />
           <div className="o2-farm">
-            <small>Trại đang vận hành</small>
-            <b>Trại Cần Giờ 01</b>
-            <span>Hộp RAS · 155 ô</span>
+            <small>Hồ sơ hộ nuôi</small>
+            <b>{farmName}</b>
+            <span>{memberRole}</span>
           </div>
           <NavLinks activeTab={activeTab} />
           <div className="o2-side__foot">
@@ -149,7 +154,7 @@ export default function OperatorLayout({ children, activeTab }: { children: Reac
             )}
             <div className="o2-me">
               <span className="rd-avatar">{initials(name)}</span>
-              <span><b className="truncate">{name}</b><small>Hộ nuôi</small></span>
+              <span><b className="truncate">{name}</b><small>{memberRole}</small></span>
             </div>
             <button type="button" className="o2-out" onClick={signOut}><LogOut size={16} /> Đăng xuất</button>
           </div>
@@ -162,7 +167,7 @@ export default function OperatorLayout({ children, activeTab }: { children: Reac
 
         <main className="o2-main">
           <div className="o2-top">
-            <p className="o2-top__where">Trại Cần Giờ 01 · <b>{new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' })}</b></p>
+            <p className="o2-top__where">{farmName} · <b>{new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' })}</b></p>
             <div className="o2-top__right">
               {bell}
               <span className="rd-avatar" title={name}>{initials(name)}</span>
@@ -185,7 +190,7 @@ export default function OperatorLayout({ children, activeTab }: { children: Reac
               <div className="o2-sheet__head">
                 <div className="o2-me">
                   <span className="rd-avatar">{initials(name)}</span>
-                  <span><b>{name}</b><small>Trại Cần Giờ 01</small></span>
+                  <span><b>{name}</b><small>{farmName}</small></span>
                 </div>
                 <button type="button" className="rd-iconbtn" onClick={() => setMenuOpen(false)} aria-label="Đóng"><X size={18} /></button>
               </div>
