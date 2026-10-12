@@ -1,0 +1,26 @@
+.account-stack { display: grid; gap: 20px; }
+.account-stack > .rd-note { display: block; }
+.account-title, .account-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.account-actions { justify-content: flex-start; gap: 10px; }
+.account-title .rd-muted { margin-top: 8px; }
+.account-notice { display: flex; align-items: flex-start; gap: 12px; background: var(--surface-2); border-radius: 16px; padding: 18px; }
+.account-notice svg { flex-shrink: 0; }
+.account-notice p { margin-top: 5px; color: var(--muted); font-size: 14px; }
+.account-notice.is-good { background: var(--ok-soft, #e9f5ed); color: var(--ok, #176a38); }
+.account-form fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; border: 0; padding: 0; min-width: 0; }
+.account-form input { width: 100%; min-width: 0; color: var(--fg); }
+.account-form .account-wide { grid-column: 1 / -1; }
+.account-form > button { justify-self: start; }
+.account-form button:disabled { opacity: .5; cursor: not-allowed; }
+.account-form .account-checkbox { display: flex; align-items: center; gap: 10px; }
+.account-checkbox input { width: 18px; height: 18px; accent-color: var(--accent); }
+.account-error, .account-delete { color: var(--danger, #b42318); }
+.account-customer { max-width: 1100px; margin: 0 auto; padding: 28px 24px 80px; }
+.account-customer > header { margin-bottom: 48px; }
+.account-card { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 24px; }
+.address-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.address-card { display: grid; gap: 12px; overflow-wrap: anywhere; }
+.address-card .account-actions { margin-top: 12px; }
+.account-empty { display: grid; justify-items: center; gap: 14px; text-align: center; padding: 48px 24px; }
+.account-profile { display: grid; gap: 24px; }
+@media (max-width: 640px) { .account-form fieldset, .address-grid { grid-template-columns: 1fr; } .account-customer { padding: 20px 16px 60px; } .account-card { padding: 20px; } }

@@ -32,6 +32,7 @@ const navGroups = [
       { id: 'harvest', href: '/operator/harvest', icon: Package, label: 'Thu hoạch & đóng gói' },
       { id: 'listings', href: '/operator/listings', icon: Store, label: 'Niêm yết sản phẩm' },
       { id: 'settlement', href: '/operator/settlement', icon: DollarSign, label: 'Đối soát doanh thu' },
+      { id: 'payout', href: '/operator/payout-account', icon: DollarSign, label: 'Tài khoản nhận tiền' },
     ],
   },
   {

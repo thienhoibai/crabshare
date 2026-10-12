@@ -69,21 +69,20 @@ public sealed class OrderDatabaseFixture : IAsyncLifetime
         {
             Email = $"buyer-{n}-{Guid.NewGuid():N}@test.local", FullName = $"Khách {n}", PasswordHash = "test-only",
             Status = "Active", CreatedAt = now, UpdatedAt = now,
-            Customer = new Customer
-            {
-                DisplayName = $"Khách {n}", CreatedAt = now,
-                CustomerAddress = new CustomerAddress
-                {
-                    RecipientName = $"Người nhận {n}", RecipientPhone = "0900000000",
-                    AddressLine = $"{n} Đường Test", Province = "Cà Mau", IsDefault = true, CreatedAt = now,
-                },
-            },
+            Customer = new Customer { DisplayName = $"Khách {n}", CreatedAt = now },
         };
         return await WithDbAsync(async db =>
         {
             db.AppUsers.Add(user);
             await db.SaveChangesAsync();
-            return (user.UserId, user.Customer!.CustomerAddress!.AddressId);
+            var address = new CustomerAddress
+            {
+                CustomerId = user.UserId, RecipientName = $"Người nhận {n}", RecipientPhone = "0900000000",
+                AddressLine = $"{n} Đường Test", Province = "Cà Mau", IsDefault = true, CreatedAt = now,
+            };
+            db.CustomerAddresses.Add(address);
+            await db.SaveChangesAsync();
+            return (user.UserId, address.AddressId);
         });
     }
 

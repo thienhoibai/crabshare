@@ -29,7 +29,39 @@
 - Nhà đầu tư chưa `Verified` thì Funding **từ chối** giữ chỗ góp vốn.
 - Mọi thay đổi trạng thái tài khoản / KYC phải ghi `audit_log`.
 
+## KH-03 — API tài khoản nhận tiền và địa chỉ
+
+- `GET/PUT /api/me/payout-account?ownerType=Investor|Operator`. Bỏ query thì ưu tiên
+  Investor nếu có vai này; frontend hộ nuôi gửi Operator rõ ràng. GET trả
+  `{ ownerType, expectedHolderName, account }`, `account=null` nếu chưa đăng ký.
+- PUT nhận `{ bankCode, accountNo, accountHolderName }`: mã ngân hàng tối đa 20 ký tự
+  chữ/số/_/-, số tài khoản 4–30 chữ số, tên tối đa 150 ký tự. `FakeBankNameMatcher`
+  bỏ dấu, hoa/thường và khoảng trắng thừa; chưa xác minh số tài khoản với ngân hàng.
+  Tên đối chiếu: `app_user.full_name` (Investor) / `operator.legal_name` (Operator).
+- Chỉ người dùng Active. Owner được kiểm tra từ `operator_member` trên DB; Staff
+  không được xem/sửa. Tài khoản hai vai quản lý hai chủ sở hữu riêng, không nhận
+  owner id do client cung cấp.
+- BankNameMatch ghi Passed/Failed + mã tham chiếu, không đổi trạng thái eKYC.
+  Khớp → Matched/Active; không khớp → Mismatched/Locked (HTTP 200 để hiện kết quả).
+  Mismatched được sửa rồi đối chiếu lại; Matched bị quản trị khoá không tự mở bằng PUT.
+- Đổi ngân hàng/số tài khoản đóng bản cũ, giữ lịch sử số tài khoản cho lệnh chi.
+  Tài khoản Closed cùng chủ có thể dùng lại; không sửa tên đã có lệnh chi.
+  Trùng tài khoản của chủ khác trả 409. Payout + KYC + audit lưu trong transaction;
+  audit chỉ có metadata, không có số tài khoản/tên người nhận.
+- V004 thêm 2 unique index có filter: tối đa 1 Active/chủ. Chạy migrator trước API
+  mới. Không đổi cột/entity, không chỉnh file scaffold bằng tay.
+- Địa chỉ: `GET/POST /api/me/addresses`, `GET/PUT/DELETE /api/me/addresses/{id}`.
+  POST 201 + Location; DELETE 204. Chỉ Customer, lấy customer id từ JWT; địa chỉ
+  người khác/không tồn tại trả 404. SĐT: `0` + 9 chữ số hoặc `+84` + 9 chữ số.
+- Đầu tiên tự mặc định; chọn mới bỏ mặc định cũ; xoá mặc định chọn địa chỉ còn lại
+  có id nhỏ nhất. Sổ không rỗng luôn có một mặc định. Serializable + khoá theo chủ/
+  khách hàng giữ đúng khi cập nhật đồng thời.
+- `AppDbContext.Custom.cs` sửa quan hệ nhiều địa chỉ/khách vì scaffold hiểu nhầm
+  unique index có filter `is_default=1` thành quan hệ 1:1.
+
 ## Màn hình
+- KH-03: Web nhà đầu tư ở Hồ sơ & eKYC; chủ hộ nuôi ở `/operator/payout-account`;
+  khách hàng ở `/tai-khoan/dia-chi`. Mobile ở Tài khoản → Tài khoản nhận tiền.
 - Web: `admin/AdminUsers.tsx`, `admin/AdminUserDetail.tsx`, `operator/OperatorKyc.tsx`, hồ sơ trong `investor/`.
 - Mobile: `investor/kyc/kyc_page.dart`, `account/account_page.dart` (mục Tài khoản nhận tiền).
 

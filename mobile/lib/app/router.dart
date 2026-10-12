@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/auth/session.dart';
 import '../features/account/account_page.dart';
+import '../features/account/payout_account_page.dart';
 import '../features/auth/login_page.dart';
 import '../features/common/unsupported_role_page.dart';
 import '../features/investor/batches/batch_detail_page.dart';
@@ -38,6 +39,7 @@ String? redirectFor(SessionState session, String location) {
   if (location == Routes.onboarding || location == Routes.login) return homeFor(user);
   if (location.startsWith('/o/') && !user.isOperator) return homeFor(user);
   if (location.startsWith('/i/') && !user.isInvestor) return homeFor(user);
+  if (location == Routes.payoutAccount && !user.isInvestor && !user.isOperator) return homeFor(user);
   return null;
 }
 
@@ -57,6 +59,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: Routes.scan, builder: (context, state) => const ScanPage()),
       GoRoute(path: '/trace/:tagCode', builder: (context, state) => TraceResultPage(tagCode: state.pathParameters['tagCode']!)),
       GoRoute(path: Routes.unsupported, builder: (context, state) => const UnsupportedRolePage()),
+      GoRoute(path: Routes.payoutAccount, builder: (context, state) => const PayoutAccountPage()),
       GoRoute(path: '/batches/:code', builder: (context, state) => BatchDetailPage(code: state.pathParameters['code']!)),
 
       // ---------- Nhà đầu tư ----------
