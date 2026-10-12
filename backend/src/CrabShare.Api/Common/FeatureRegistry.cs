@@ -2,7 +2,7 @@
 using CrabShare.Api.Features.Auth;
 // using CrabShare.Api.Features.Funding;
 // using CrabShare.Api.Features.Contracts;
-// using CrabShare.Api.Features.Payments;
+using CrabShare.Api.Features.Payments;
 // using CrabShare.Api.Features.Settlement;
 
 // Viên
@@ -14,7 +14,7 @@ using CrabShare.Api.Features.Operators;
 
 // Nhân
 using CrabShare.Api.Features.Catalog;
-// using CrabShare.Api.Features.Orders;
+using CrabShare.Api.Features.Orders;
 // using CrabShare.Api.Features.Offtake;
 
 // Khôi
@@ -43,6 +43,7 @@ public static class FeatureRegistry
         // services.AddScoped<FundingService>();      // Features/Funding
         // services.AddScoped<ContractService>();     // Features/Contracts
         // services.AddScoped<PaymentService>();      // Features/Payments
+        services.AddScoped<PaymentRequestService>();  // Features/Payments — bản tối thiểu cho CS-36, TH-05 mở rộng
         // services.AddScoped<SettlementService>();   // Features/Settlement
 
         // Viên
@@ -55,7 +56,8 @@ public static class FeatureRegistry
 
         // Nhân
         services.AddScoped<CatalogService>();
-        // services.AddScoped<OrderService>();        // Features/Orders
+        services.AddScoped<OrderService>();           // Features/Orders
+        services.AddOptions<OrderOptions>().BindConfiguration(OrderOptions.Section);
         // services.AddScoped<OfftakeService>();      // Features/Offtake
 
         // Khôi
