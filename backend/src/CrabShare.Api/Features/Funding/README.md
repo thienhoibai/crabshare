@@ -12,15 +12,19 @@
 | `capital_share` | ảnh chụp vốn đã xác nhận của từng nhà đầu tư khi chốt vốn |
 | `payment_request` | `reference_code` ≤ 13 ký tự (giới hạn VietQR) · `purpose = Contribution` |
 
-## Endpoint dự kiến
+## Endpoint
 | Method | Path | Ai gọi | Ghi chú |
 |---|---|---|---|
-| GET | `/api/risk-disclosures/active` | Investor | Nội dung + mã phiên bản |
-| POST | `/api/risk-acknowledgements` | Investor | `{ riskDisclosureId, scrolledToEnd: true }` |
-| POST | `/api/batches/{code}/contributions` | Investor | `{ amount }` → `Reserved`, `expires_at` = now + thời hạn giữ chỗ |
-| DELETE | `/api/contributions/{id}` | Investor | Huỷ giữ chỗ khi chưa trả tiền |
-| POST | `/api/contributions/{id}/payment-requests` | Investor | Gọi `IPaymentGateway.CreateVietQrAsync` → trả nội dung QR |
-| GET | `/api/me/contributions` | Investor | Các khoản góp của tôi |
+| GET | `/api/risk-disclosures/active` | Investor | **Đã làm (TH-04).** Toàn văn đọc từ `database/reference/risk-disclosure-<mã>.md`, SHA-256 phải khớp `content_hash` (không khớp → 500 `funding.disclosure_unavailable`); kèm `acknowledgedAt` nếu tôi đã xác nhận |
+| POST | `/api/risk-acknowledgements` | Investor | **Đã làm.** `{ riskDisclosureId, scrolledToEnd: true }`; chưa cuộn hết → 422 `funding.must_scroll_to_end`; bản đã cũ → 422 `funding.disclosure_outdated`; gọi lại không tạo trùng. Ghi audit |
+| GET | `/api/funding/batches` | Investor | **Đã làm.** Lô đang mở gọi vốn: tiến độ, còn nhận trước trần |
+| GET | `/api/funding/batches/{code}` | Investor | **Đã làm.** Số liệu cho màn 2 + `me.kycVerified`, `me.riskAcknowledged` + khoản tôi đang giữ chỗ |
+| POST | `/api/batches/{code}/contributions` | Investor | **Đã làm.** `{ amount }` → 201 `Reserved`, `expires_at` = now + `Funding:ReservationMinutes` (30). Lỗi 422: `funding.kyc_required`, `funding.risk_ack_required`, `funding.not_open`, `funding.below_min_contribution`, `funding.over_max_capital`; 409 `funding.reservation_exists` (mỗi người một chỗ đang giữ / lô). Ghi audit |
+| DELETE | `/api/contributions/{id}` | Investor | **Đã làm.** Huỷ khoản đang giữ chỗ, chưa trả tiền → `Expired` (CSDL không có trạng thái Cancelled), yêu cầu thanh toán Pending → `Cancelled`. Ghi audit |
+| POST | `/api/contributions/{id}/payment-requests` | Investor | TH-05: gọi `IPaymentGateway.CreateVietQrAsync` → trả nội dung QR |
+| GET | `/api/me/contributions` | Investor | **Đã làm.** Các khoản góp của tôi (giữ chỗ quá hạn hiện `Expired` ngay, job TH-07 sẽ đổi hẳn) |
+
+Chống vượt trần: trong một transaction, khoá chuỗi audit (`IAuditLog.LockAsync`) rồi khoá dòng lô `UPDLOCK, HOLDLOCK`, cộng Confirmed + Reserved còn hạn rồi mới thêm. Test `FundingDatabaseTests`: 5 người giữ chỗ 3 tr cùng lúc vào lô trần 10 tr → đúng 3 người được.
 
 Job nền:
 - Hết hạn giữ chỗ → `Expired`.
@@ -41,6 +45,8 @@ Job nền:
 
 ## Màn hình
 - Web: luồng góp vốn trong `investor/` (Xác nhận rủi ro → Số tiền & giữ chỗ → Ký hợp đồng → VietQR → Hoàn tất).
+  **Đã làm màn 1–2 (TH-04):** trang `/nha-dau-tu/gop-von/:code` (`web/src/features/investor/funding/ContributePage.tsx`); nút Xác nhận chỉ bật khi cuộn hết bản công bố; màn 2 hiện mức tối thiểu, phần còn lại trước trần, đồng hồ giữ chỗ. Danh sách lô đang mở gọi vốn (số liệu thật) ở đầu mục Khám phá lô (`OpenBatches.tsx`). Màn 3 chờ TH-08, màn 4 chờ TH-05.
+- Mobile: nút "Góp vốn" ở chi tiết lô mở trang web trên bằng `url_launcher` (`--dart-define=WEB_URL=...`, mặc định `http://localhost:5173`).
 - Mobile: nút "Góp vốn" ở `investor/batches/batch_detail_page.dart` (đang hiện danh sách bước).
 
 ## Tài liệu

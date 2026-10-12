@@ -16,6 +16,7 @@ const StorePage = lazy(() => import('../features/store/StorePage'))
 const CommercePage = lazy(() => import('../features/orders/CommercePage'))
 const TracePage = lazy(() => import('../features/trace/TracePage'))
 const InvestorPortal = lazy(() => import('../features/investor/InvestorPortal'))
+const ContributePage = lazy(() => import('../features/investor/funding/ContributePage'))
 const CustomerAddresses = lazy(() => import('../features/accounts/CustomerAddresses'))
 const OperatorPayoutAccount = lazy(() => import('../features/operator/OperatorPayoutAccount'))
 
@@ -92,7 +93,13 @@ export const router = createBrowserRouter([
       { element: guarded(['Customer']), children: [{ path: '/tai-khoan/dia-chi', element: page(CustomerAddresses) }] },
 
       // ----- Nhà đầu tư -----
-      { element: guarded(['Investor']), children: [{ path: '/nha-dau-tu/*', element: page(InvestorPortal) }] },
+      {
+        element: guarded(['Investor']),
+        children: [
+          { path: '/nha-dau-tu/gop-von/:code', element: page(ContributePage) },
+          { path: '/nha-dau-tu/*', element: page(InvestorPortal) },
+        ],
+      },
 
       // UC04: mọi tài khoản đã đăng nhập đều được đăng ký hộ nuôi.
       { path: '/operator/register', element: <RequireRole>{page(OperatorRegistration)}</RequireRole> },

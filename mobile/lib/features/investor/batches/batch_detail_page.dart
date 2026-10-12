@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/theme/app_images.dart';
 import '../../../app/theme/app_theme.dart';
@@ -124,7 +125,8 @@ class _Body extends StatelessWidget {
     );
   }
 
-  /// Luồng góp vốn ≤ 5 màn hình (Phiếu, yêu cầu Usability). Mỗi bước là một task riêng.
+  /// Luồng góp vốn ≤ 5 màn hình (Phiếu, yêu cầu Usability) chạy trên web (TH-04): app chỉ giới thiệu các bước
+  /// rồi mở trang /nha-dau-tu/gop-von/{mã lô} bằng trình duyệt của máy.
   void _showContributeFlow(BuildContext context, BatchSummary b) {
     const steps = [
       ('Xác nhận công bố rủi ro', 'Đọc và xác nhận bản RD hiện hành'),
@@ -158,15 +160,26 @@ class _Body extends StatelessWidget {
                   subtitle: Text(step.$2),
                 ),
               const SizedBox(height: 8),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Bắt đầu (đang xây dựng)'),
+              Text('Các bước làm trên web CrabShare, đăng nhập bằng cùng tài khoản.', style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => _openWebFlow(context, b.code),
+                icon: const Icon(Icons.open_in_new_rounded),
+                label: const Text('Mở trang góp vốn'),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _openWebFlow(BuildContext context, String code) async {
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pop();
+    final opened = await launchUrl(Uri.parse('$webUrl/nha-dau-tu/gop-von/${Uri.encodeComponent(code)}'),
+        mode: LaunchMode.externalApplication);
+    if (!opened) messenger.showSnackBar(const SnackBar(content: Text('Không mở được trình duyệt. Thử lại hoặc mở web CrabShare.')));
   }
 }
 

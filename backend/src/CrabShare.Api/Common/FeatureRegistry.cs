@@ -1,6 +1,6 @@
 // Thiện
 using CrabShare.Api.Features.Auth;
-// using CrabShare.Api.Features.Funding;
+using CrabShare.Api.Features.Funding;
 // using CrabShare.Api.Features.Contracts;
 // using CrabShare.Api.Features.Payments;
 // using CrabShare.Api.Features.Settlement;
@@ -40,7 +40,9 @@ public static class FeatureRegistry
     {
         // Thiện
         services.AddScoped<AuthService>();
-        // services.AddScoped<FundingService>();      // Features/Funding
+        services.AddScoped<FundingService>();         // Features/Funding
+        services.AddSingleton<RiskDisclosureDocuments>();
+        services.AddOptions<FundingOptions>().BindConfiguration("Funding");
         // services.AddScoped<ContractService>();     // Features/Contracts
         // services.AddScoped<PaymentService>();      // Features/Payments
         // services.AddScoped<SettlementService>();   // Features/Settlement
