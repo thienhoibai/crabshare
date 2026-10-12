@@ -35,3 +35,75 @@
 
 ## Tài liệu
 TL-06 Định danh người dùng · TL-01 Ranh giới vai trò nền tảng.
+
+## Backend eKYC đã triển khai (CS-27, phần API)
+
+`AccountsController` và `AccountService` cung cấp hai endpoint cho vai `Investor`:
+
+- `POST /api/kyc/ekyc`: `multipart/form-data`, các trường `idCardFront`,
+  `idCardBack`, `selfie` (file) và `consent=true`. Mỗi ảnh tối đa **5 MB**, tổng
+  request tối đa **16 MB**; hỗ trợ JPEG/PNG/WebP, kiểm tra cả MIME và chữ ký file.
+  Form được buffer trong RAM, không dùng thư mục temp cho ảnh trong giới hạn này.
+  Ảnh chỉ đi vào `IEkycProvider`; không gọi `IFileStorage` và không lưu tên file
+  hay họ tên đọc từ CCCD.
+- `GET /api/me/kyc`: lấy trạng thái nhà đầu tư và lần `EkycIdFace` mới nhất,
+  không lấy `BankNameMatch` làm kết quả xác minh danh tính.
+
+Hai endpoint lấy chủ hồ sơ từ JWT, không nhận `userId` do client chọn. Trả **401**
+khi chưa đăng nhập, **403** khi sai vai hoặc tài khoản đã khóa, **404** nếu thiếu
+hồ sơ nhà đầu tư. Consent không có/false, thiếu ảnh, ảnh rỗng, quá dung lượng hoặc
+sai định dạng trả **400** (request vượt 16 MB được Kestrel trả **413**).
+
+Provider đạt → `kyc_check.result = Passed`, `investor.verification_status = Verified`,
+có `verified_at`. Provider không đạt → `Failed` / `Rejected`, không có `verified_at`;
+nhà đầu tư có thể thử lại. Người đã `Verified` gửi lại nhận **409**
+`kyc.already_verified` để tránh một lần thử lại hạ trạng thái đã xác minh.
+Provider giả mặc định luôn đạt; các test thay provider để kiểm tra nhánh không đạt.
+
+Cả POST và GET trả dạng:
+
+```json
+{
+  "verificationStatus": "Verified",
+  "verifiedAt": "2026-10-14T08:00:00+00:00",
+  "lastCheck": {
+    "id": 1,
+    "checkType": "EkycIdFace",
+    "result": "Passed",
+    "providerReference": "FAKE-EKYC-...",
+    "consentAt": "2026-10-14T08:00:00+00:00",
+    "checkedAt": "2026-10-14T08:00:00+00:00",
+    "failureReason": null
+  }
+}
+```
+
+Nhà đầu tư mới có `verificationStatus = Unverified`, `verifiedAt = null`,
+`lastCheck = null`. Các tài khoản demo đã được seed Verified; để thử POST trên
+Scalar, đăng ký một tài khoản Investor mới rồi dùng JWT của tài khoản đó.
+
+### Audit và giao dịch
+
+Kết quả KYC, trạng thái nhà đầu tư và audit `Investor` / `VerifyIdentity` được ghi
+trong cùng transaction Serializable. Query audit dùng `UPDLOCK, HOLDLOCK` để không
+tách nhánh chuỗi băm khi nhiều nhà đầu tư gửi đồng thời. Timestamp được chuẩn hóa
+đến mili giây để khớp `DATETIMEOFFSET(3)` khi đọc lại từ SQL Server.
+
+Hiện TH-02 chưa có `IAuditLog`: writer của KYC nằm trong `AccountService`. Khi tích
+hợp writer chung, giữ định dạng chuỗi hiện có: `SHA-256(prev_hash hoặc chuỗi rỗng +
+JSON UTF-8)` bằng `JsonSerializer.Serialize` mặc định, với các trường đúng thứ tự
+`EntityType`, `EntityId`, `ActionType`, `OldValue`, `NewValue`, `ActorUserId`,
+`OccurredAt`. `OldValue`/`NewValue` là chuỗi JSON trạng thái, không chứa ảnh/CCCD.
+Không cần đổi migration hoặc entity.
+
+### Kiểm thử
+
+```powershell
+dotnet test backend/CrabShare.sln
+dotnet test backend/CrabShare.sln --filter "Category!=Database"
+```
+
+Test phân quyền/validation chạy trong CI. Test Database dùng LocalDB trên Windows,
+tạo CSDL riêng `CrabShareKycTests_<guid>` từ migration rồi xoá sau kiểm thử; không
+đụng dữ liệu `CrabShareDev`. Kiểm tra provider đạt/không đạt, retry, quyền sở hữu,
+trạng thái đã Verified/Locked, chữ ký ảnh, không tạo storage và audit đồng thời.
