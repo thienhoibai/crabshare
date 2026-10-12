@@ -24,7 +24,7 @@ flowchart LR
 
 **Cần cài:** [.NET 10 SDK](https://dotnet.microsoft.com/download) · SQL Server **LocalDB** (đi kèm Visual Studio, hoặc gói *SQL Server Express LocalDB*) · [Node.js 22+](https://nodejs.org) · [Flutter 3.47+](https://docs.flutter.dev/get-started/install) · Android Studio (máy ảo Android) · Git.
 
-**IDE:** Visual Studio 2026 hoặc VS Code + C# Dev Kit (cần bản hỗ trợ .NET 10) cho backend · VS Code cho web · Android Studio hoặc VS Code cho mobile.
+**IDE:** Visual Studio 2026 (mở file `backend/CrabShare.sln`, xem [hướng dẫn](backend/README.md#mở-bằng-visual-studio-2026)) hoặc VS Code + C# Dev Kit cho backend · VS Code cho web · Android Studio hoặc VS Code cho mobile.
 
 ```bash
 git clone https://github.com/thienhoibai/crabshare.git

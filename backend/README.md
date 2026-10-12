@@ -14,7 +14,16 @@ backend/
     └── CrabShare.SettlementEngine.Tests/  ← xUnit + FsCheck (TSK-12)
 ```
 
-## Chạy
+## Mở bằng Visual Studio 2026
+
+1. **File → Open → Project/Solution…** → chọn `backend\CrabShare.sln` (hoặc nhấp đúp file này trong Explorer). Đừng dùng *Open a local folder* với thư mục gốc `crabshare\`: thư mục gốc chứa cả web và mobile nên Visual Studio không coi đó là solution C#.
+2. Lần đầu trên máy: chuột phải `CrabShare.DbMigrator` → **Debug → Start New Instance** để tạo CSDL LocalDB `CrabShareDev`. Chạy lại mỗi khi có file `V00X__*.sql` mới.
+3. Chuột phải `CrabShare.Api` → **Set as Startup Project**, chọn profile **http** trên thanh công cụ → **F5**. Trình duyệt tự mở http://localhost:5233/scalar để thử API.
+4. Chạy test: **Test → Test Explorer → Run All Tests**.
+
+Cần workload **ASP.NET and web development** trong Visual Studio Installer. F5 báo `CrabShare.Api.exe` bị khoá hoặc cổng 5233 đã dùng → đang có API khác chạy (ví dụ `dotnet run` ở terminal), tắt nó rồi chạy lại.
+
+## Chạy bằng dòng lệnh
 
 ```bash
 dotnet tool restore
