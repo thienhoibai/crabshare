@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router'
 import { ArrowLeft, Bell, ChevronRight, Compass, House, Receipt, ShoppingBag, UserRound } from 'lucide-react'
 import { useAuthStore } from '../../shared/auth/authStore'
 import KycVerification, { KycStatusCard } from '../accounts/KycVerification'
+import PayoutAccountForm from '../accounts/PayoutAccountForm'
 import {
   HOLDINGS, LOTS, NOTICES, STAGES, activeHoldings, activeTotal, closedPayout2610, lot, maxCapital, minContribution,
   pct, small, stage, tr, vnd, type Lot,
@@ -192,11 +193,13 @@ function InvV2Inner() {
           </div>
         )}
 
-        {nav.view === 'profile' && <section className="iv-card">
+        {nav.view === 'profile' && <div className="account-profile"><section className="iv-card">
           <h3 className="rd-h3">Thông tin nhà đầu tư</h3>
           <p><strong>{fullName}</strong><br />{user?.email}</p>
           <KycVerification />
-        </section>}
+        </section><section className="iv-card"><h3 className="rd-h3">Tài khoản nhận tiền</h3><PayoutAccountForm owner="Investor" /></section>
+          {user?.roles.includes('Customer') && <section className="iv-card"><h3 className="rd-h3">Địa chỉ giao hàng</h3><a className="rd-btn rd-btn--ghost" href="/tai-khoan/dia-chi">Mở sổ địa chỉ</a></section>}
+        </div>}
 
         {nav.view === 'explore' && (
           <div className="i2-explore">

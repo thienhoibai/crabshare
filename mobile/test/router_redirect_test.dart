@@ -17,6 +17,7 @@ void main() {
     expect(redirectFor(guest, Routes.trace('CSAB23CD45EF')), isNull);
     expect(redirectFor(guest, Routes.investorHome), Routes.onboarding);
     expect(redirectFor(guest, Routes.operatorToday), Routes.onboarding);
+    expect(redirectFor(guest, Routes.payoutAccount), Routes.onboarding);
   });
 
   test('đăng nhập xong về trang chủ theo vai trò', () {
@@ -29,5 +30,8 @@ void main() {
     expect(redirectFor(_as([Roles.investor]), Routes.operatorToday), Routes.investorHome);
     expect(redirectFor(_as([Roles.operatorMember]), Routes.investorHome), Routes.operatorToday);
     expect(redirectFor(_as([Roles.investor]), Routes.batch('CS-2610-01')), isNull);
+    expect(redirectFor(_as([Roles.investor]), Routes.payoutAccount), isNull);
+    expect(redirectFor(_as([Roles.operatorMember]), Routes.payoutAccount), isNull);
+    expect(redirectFor(_as([Roles.customer]), Routes.payoutAccount), Routes.unsupported);
   });
 }

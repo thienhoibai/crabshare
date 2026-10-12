@@ -16,6 +16,8 @@ const StorePage = lazy(() => import('../features/store/StorePage'))
 const CommercePage = lazy(() => import('../features/orders/CommercePage'))
 const TracePage = lazy(() => import('../features/trace/TracePage'))
 const InvestorPortal = lazy(() => import('../features/investor/InvestorPortal'))
+const CustomerAddresses = lazy(() => import('../features/accounts/CustomerAddresses'))
+const OperatorPayoutAccount = lazy(() => import('../features/operator/OperatorPayoutAccount'))
 
 const OperatorDashboard = lazy(() => import('../features/operator/OperatorDashboard'))
 const OperatorKyc = lazy(() => import('../features/operator/OperatorKyc'))
@@ -87,6 +89,8 @@ export const router = createBrowserRouter([
         ],
       },
 
+      { element: guarded(['Customer']), children: [{ path: '/tai-khoan/dia-chi', element: page(CustomerAddresses) }] },
+
       // ----- Nhà đầu tư -----
       { element: guarded(['Investor']), children: [{ path: '/nha-dau-tu/*', element: page(InvestorPortal) }] },
 
@@ -99,6 +103,7 @@ export const router = createBrowserRouter([
         children: [
           { path: '/operator', element: page(OperatorDashboard) },
           { path: '/operator/kyc', element: page(OperatorKyc) },
+          { path: '/operator/payout-account', element: page(OperatorPayoutAccount) },
           { path: '/operator/create-batch', element: page(OperatorCreateBatch) },
           { path: '/operator/contract', element: page(OperatorContract) },
           { path: '/operator/harvest', element: page(OperatorHarvest) },
