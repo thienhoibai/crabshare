@@ -1,0 +1,10 @@
+.action-dialog { margin: auto; width: min(560px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overflow-wrap: anywhere; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: white; color: #0f172a; }
+.action-dialog::backdrop { background: rgb(15 23 42 / .55); }
+.action-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.action-dialog-head h2 { font-size: 20px; font-weight: 800; line-height: 1.4; }
+.action-dialog-head button { padding: 4px; border-radius: 8px; flex-shrink: 0; }
+.action-dialog button:disabled, .vi02 button:disabled, .op-btn:disabled { opacity: .55; cursor: not-allowed; }
+.action-dialog :focus-visible, .vi02 :focus-visible { outline: 2px solid #b91c1c; outline-offset: 3px; }
+.action-dialog-operator { background: #fffcf7; color: #2d251d; border-color: #e8dfd4; }
+.action-dialog-operator :focus-visible { outline-color: #9f5728; }
+@media (max-width: 480px) { .action-dialog { padding: 20px; } }

@@ -88,7 +88,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
       )}
 
       {/* Main Content */}
-      <main className="flex-1 md:ml-64 pt-16 md:pt-0 p-4 md:p-8 min-w-0">
+      <main className="flex-1 md:ml-64 p-4 pt-20 md:p-8 min-w-0">
         <div className="max-w-6xl mx-auto">
           {children}
         </div>
