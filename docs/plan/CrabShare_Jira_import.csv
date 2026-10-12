@@ -1,0 +1,950 @@
+"Issue Id","Parent Id","Issue Type","Summary","Description","Priority","Labels","Labels","Start date","Due date"
+"E1","","Epic","Khởi động & hạ tầng chung","Nhóm task: Khởi động & hạ tầng chung","Medium","setup","","",""
+"E2","","Epic","Accounts – eKYC & tài khoản","Nhóm task: Accounts – eKYC & tài khoản","Medium","acc","","",""
+"E3","","Epic","Operators & Boxes – Hộ nuôi, đánh số hộp","Nhóm task: Operators & Boxes – Hộ nuôi, đánh số hộp","Medium","ops","","",""
+"E4","","Epic","Batches – Lô & chi phí chuẩn","Nhóm task: Batches – Lô & chi phí chuẩn","Medium","bat","","",""
+"E5","","Epic","Funding & Payments – Góp vốn, thanh toán, giải ngân","Nhóm task: Funding & Payments – Góp vốn, thanh toán, giải ngân","Medium","fund","","",""
+"E6","","Epic","Contracts – Hợp đồng","Nhóm task: Contracts – Hợp đồng","Medium","con","","",""
+"E7","","Epic","Production – Nhật ký, sự kiện hộp, timeline","Nhóm task: Production – Nhật ký, sự kiện hộp, timeline","Medium","prod","","",""
+"E8","","Epic","Evidence – Bằng chứng & thẩm định","Nhóm task: Evidence – Bằng chứng & thẩm định","Medium","evi","","",""
+"E9","","Epic","Alerts – Cảnh báo","Nhóm task: Alerts – Cảnh báo","Medium","alr","","",""
+"E10","","Epic","Harvest – Thu hoạch, tem, truy xuất","Nhóm task: Harvest – Thu hoạch, tem, truy xuất","Medium","har","","",""
+"E11","","Epic","Catalog – Niêm yết","Nhóm task: Catalog – Niêm yết","Medium","cat","","",""
+"E12","","Epic","Orders – Đơn hàng, đặt trước, khiếu nại","Nhóm task: Orders – Đơn hàng, đặt trước, khiếu nại","Medium","ord","","",""
+"E13","","Epic","Offtake – Bao tiêu","Nhóm task: Offtake – Bao tiêu","Medium","off","","",""
+"E14","","Epic","Settlement – Quyết toán","Nhóm task: Settlement – Quyết toán","Medium","set","","",""
+"E15","","Epic","Portfolio & Notifications – Danh mục NĐT","Nhóm task: Portfolio & Notifications – Danh mục NĐT","Medium","port","","",""
+"E16","","Epic","Admin – Phí, dashboard, nhật ký kiểm toán","Nhóm task: Admin – Phí, dashboard, nhật ký kiểm toán","Medium","adm","","",""
+"E17","","Epic","TSK-12 – Kiểm định quyết toán (nghiên cứu)","Nhóm task: TSK-12 – Kiểm định quyết toán (nghiên cứu)","Medium","r12","","",""
+"E18","","Epic","TSK-13 – Mô hình nhận diện cua","Nhóm task: TSK-13 – Mô hình nhận diện cua","Medium","ai13","","",""
+"E19","","Epic","Triển khai, bảo mật, kiểm thử","Nhóm task: Triển khai, bảo mật, kiểm thử","Medium","opsx","","",""
+"T1","E1","Task","[TH-01] Khởi động: cả nhóm chạy được dự án, bảo vệ nhánh main, dựng board Jira","*Người làm:* Thiện    *Use case:* —    *Ngày:* D1 (13/10 → 13/10)
+
+*Backend:* Mời 3 bạn vào repo GitHub; bật Branch protection cho main (bắt buộc PR, 1 người duyệt, CI xanh). Kiểm tra CI chạy xanh trên PR đầu tiên.
+*Web:* Hướng dẫn cả nhóm chạy web (npm ci, npm run dev) và đăng nhập nhanh bằng tài khoản demo.
+*Mobile:* Cùng Khôi kiểm tra app chạy được trên Chrome của từng người.
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* 4 máy chạy được API + web + mobile và đăng nhập demo; không ai push thẳng được lên main; Jira có đủ task, mỗi người kéo task D1 sang In Progress.
+*Phụ thuộc:* —
+*Ghi chú:* Họp 15 phút đầu ngày mỗi ngày (daily) trên nhóm chat.
+
+*Nhánh git:* feature/<mã task này>-khoi-dong
+*Mã trong file kế hoạch:* TH-01","Highest","thien","setup","2026-10-13","2026-10-13"
+"T2","E1","Task","[TH-02] Nhật ký kiểm toán dùng chung + khung job nền","*Người làm:* Thiện    *Use case:* — (TL-08)    *Ngày:* D1–D2 (13/10 → 14/10)
+
+*Backend:* Viết IAuditLog.WriteAsync(entityType, entityId, action, oldValue, newValue) ghi audit_log với chuỗi băm: row_hash = SHA-256(prev_hash + nội dung), ghi tuần tự (khoá) để không gãy chuỗi. Viết RecurringJob (BackgroundService chạy theo chu kỳ, có log, bắt lỗi) cho Funding/Alerts/Orders dùng. Hàm VerifyChainAsync(from, to).
+*Web:* —
+*Mobile:* —
+*Bảng CSDL:* audit_log
+
+*Hoàn thành khi:* Có test: ghi 100 dòng → chuỗi hợp lệ; sửa tay 1 dòng → VerifyChain báo gãy đúng dòng. README module Admin có ví dụ gọi.
+*Phụ thuộc:* —
+*Ghi chú:* Mọi API đổi tiền / hợp đồng / chi phí chuẩn / trạng thái lô / quyết toán đều phải gọi IAuditLog.
+
+*Nhánh git:* feature/<mã task này>-audit-log-job-nen
+*Mã trong file kế hoạch:* TH-02","Highest","thien","setup","2026-10-13","2026-10-14"
+"T3","E1","Task","[TH-03] Dữ liệu demo đủ vòng đời để cả nhóm làm song song","*Người làm:* Thiện    *Use case:* —    *Ngày:* D3 (15/10 → 15/10)
+
+*Backend:* Mở rộng DevDataSeeder: 4 lô ở các trạng thái Funding / InProduction / Harvesting / Settlement; chi phí chuẩn đã khoá; góp vốn Confirmed + capital_share; 1.200 hộp (0001–1200) gán cho lô đang nuôi + crab_item; nhật ký 30 ngày; lô Harvesting có cua InStock + tem Active; niêm yết có tồn; vài đơn Completed.
+*Web:* —
+*Mobile:* —
+*Bảng CSDL:* batch, standard_cost_*, contribution, capital_share, physical_slot, slot_allocation, crab_item, crab_tag, production_log, product_listing, sales_order, order_line
+
+*Hoàn thành khi:* Chạy DbMigrator --reset rồi chạy API là có đủ dữ liệu cho mọi module; ghi danh sách dữ liệu mẫu vào database/README.md.
+*Phụ thuộc:* —
+*Ghi chú:* Ai cần thêm dữ liệu mẫu thì nhắn Thiện hoặc tự thêm vào seeder (PR riêng).
+
+*Nhánh git:* feature/<mã task này>-du-lieu-demo
+*Mã trong file kế hoạch:* TH-03","Highest","thien","setup","2026-10-15","2026-10-15"
+"T4","E5","Task","[TH-04] Xác nhận rủi ro + giữ chỗ góp vốn (luồng góp vốn màn 1–2)","*Người làm:* Thiện    *Use case:* UC11, UC10    *Ngày:* D4–D5 (16/10 → 17/10)
+
+*Backend:* GET /api/risk-disclosures/active; POST /api/risk-acknowledgements (scrolledToEnd = true); POST /api/batches/{code}/contributions: bắt buộc investor Verified + đã xác nhận RD đang Active, amount ≥ min_contribution, tổng giữ chỗ + đã xác nhận ≤ max_capital (kiểm tra trong transaction, khoá dòng lô), expires_at = now + Funding:ReservationMinutes; DELETE /api/contributions/{id}; GET /api/me/contributions. Ghi audit.
+*Web:* Cổng NĐT (bản 2): màn 1 đọc bản công bố rủi ro — nút Xác nhận chỉ bật khi cuộn hết; màn 2 nhập số tiền (hiện tối thiểu, còn lại trước trần), giữ chỗ, hiện đồng hồ đếm ngược.
+*Mobile:* Nút ""Góp vốn"" ở chi tiết lô: mở luồng web bằng url_launcher (thống nhất với Khôi).
+*Bảng CSDL:* risk_disclosure, risk_acknowledgement, contribution
+
+*Hoàn thành khi:* Test 2 người giữ chỗ cùng lúc không vượt max_capital; chưa KYC → 422 funding.kyc_required; chưa xác nhận RD → 422.
+*Phụ thuộc:* KH-02 (trạng thái Verified), TH-03
+*Ghi chú:* Luồng góp vốn tổng cộng ≤ 5 màn (Phiếu, Usability).
+
+*Nhánh git:* feature/<mã task này>-gop-von-giu-cho
+*Mã trong file kế hoạch:* TH-04","Highest","thien","fund","2026-10-16","2026-10-17"
+"T5","E5","Task","[TH-05] Thanh toán VietQR (dùng chung cho góp vốn, đơn hàng, cọc)","*Người làm:* Thiện    *Use case:* UC12    *Ngày:* D6 (18/10 → 18/10)
+
+*Backend:* PaymentRequestService.CreateAsync(purpose, amount, batchAccountId, contributionId?/orderId?/offtakeId?) → reference_code ≤ 13 ký tự, không trùng; gọi IPaymentGateway.CreateVietQrAsync. POST /api/contributions/{id}/payment-requests dùng service này.
+*Web:* Component dùng chung <VietQrBox> (thêm package qrcode.react): QR, số tiền, nội dung chuyển khoản, đếm ngược hạn. Màn 4 của luồng góp vốn.
+*Mobile:* —
+*Bảng CSDL:* payment_request, batch_account
+
+*Hoàn thành khi:* QR hiện đúng số tiền + nội dung; Nhân dùng lại được service + component cho đơn hàng (NH-06).
+*Phụ thuộc:* TH-04
+*Ghi chú:* Báo Nhân ngay khi merge để NH-06 dùng.
+
+*Nhánh git:* feature/<mã task này>-thanh-toan-vietqr
+*Mã trong file kế hoạch:* TH-05","Highest","thien","fund","2026-10-18","2026-10-18"
+"T6","E5","Task","[TH-06] Webhook thanh toán (chống trùng) + giả lập chuyển khoản","*Người làm:* Thiện    *Use case:* UC12 (+ TL-10)    *Ngày:* D7–D8 (19/10 → 20/10)
+
+*Backend:* POST /api/webhooks/payment-provider: kiểm tra chữ ký HMAC giả lập; ghi provider_transaction (unique provider_txn_id → gửi lại không ghi trùng); khớp reference_code → payment_request Paid → gọi xử lý theo purpose (contribution Confirmed, đơn Paid, cọc Held); tiền đến sau hạn → LatePayment + tạo lệnh hoàn. POST /api/dev/payments/simulate (chỉ Development) gọi lại đúng luồng webhook.
+*Web:* Màn 5 Hoàn tất: tự cập nhật khi tiền về (refetch 3 giây); nút ""Giả lập đã chuyển khoản"" chỉ hiện khi chạy dev.
+*Mobile:* —
+*Bảng CSDL:* provider_transaction, payment_request, contribution, payment_instruction
+
+*Hoàn thành khi:* Test tự động: gửi cùng webhook 2 lần → 1 giao dịch; trả sau hạn → LatePayment + Refund. Luồng góp vốn web đi hết 5 màn.
+*Phụ thuộc:* TH-05
+*Ghi chú:* NFR Integrity: mỗi giao dịch ngân hàng ghi đúng một lần.
+
+*Nhánh git:* feature/<mã task này>-webhook-thanh-toan
+*Mã trong file kế hoạch:* TH-06","Highest","thien","fund","2026-10-19","2026-10-20"
+"T7","E5","Task","[TH-07] Job hết hạn giữ chỗ, chốt vốn hoặc huỷ lô + hoàn tiền","*Người làm:* Thiện    *Use case:* UC10 (job)    *Ngày:* D9 (21/10 → 21/10)
+
+*Backend:* Job 1 phút: contribution Reserved quá expires_at → Expired. Job tới funding_deadline: đủ min_viable_capital → chụp capital_share, ghi total_confirmed_capital; thiếu → batch Cancelled + payment_instruction Refund cho từng khoản Confirmed. Ghi audit.
+*Web:* AdminFinance: bảng vốn vào theo lô (đã giữ chỗ / đã xác nhận / mục tiêu), danh sách lệnh hoàn tiền.
+*Mobile:* —
+*Bảng CSDL:* contribution, capital_share, batch, payment_instruction
+
+*Hoàn thành khi:* Sửa funding_deadline của lô seed về quá khứ → job chạy đúng cả 2 nhánh (đủ vốn / thiếu vốn).
+*Phụ thuộc:* TH-02, TH-06
+
+*Nhánh git:* feature/<mã task này>-chot-von-hoan-tien
+*Mã trong file kế hoạch:* TH-07","High","thien","fund","2026-10-21","2026-10-21"
+"T8","E6","Task","[TH-08] Hợp đồng: sinh từ mẫu + ký số theo thứ tự (Operator → Investor)","*Người làm:* Thiện    *Use case:* UC14    *Ngày:* D10–D11 (22/10 → 23/10)
+
+*Backend:* POST /api/contributions/{id}/contract: điền {{placeholder}} của mẫu CT-2026-01, xuất PDF (QuestPDF), draft_hash SHA-256. POST /api/contracts/{id}/sign: Operator ký trước, Investor ký sau qua IDigitalSigningService (giả lập Viettel); đủ 2 chữ ký → FullySigned + final_hash. GET /api/contracts/{id}, GET /api/contracts/{id}/file.
+*Web:* operator/OperatorContract.tsx: danh sách hợp đồng chờ ký + ký. Luồng góp vốn màn 3: xem PDF + ký.
+*Mobile:* —
+*Bảng CSDL:* contract_template, investment_contract, contract_signature
+
+*Hoàn thành khi:* Ký sai thứ tự → 422 contract.wrong_signing_order; FullySigned có final_hash; tải được PDF; ghi audit.
+*Phụ thuộc:* TH-04, VI-02 (chủ hộ nuôi)
+*Ghi chú:* Ghi rõ trên PDF: mẫu chưa rà soát pháp lý, chỉ dùng demo.
+
+*Nhánh git:* feature/<mã task này>-hop-dong-ky-so
+*Mã trong file kế hoạch:* TH-08","High","thien","con","2026-10-22","2026-10-23"
+"T9","E6","Task","[TH-09] Hợp đồng ký tay (tải bản scan) + kho hợp đồng","*Người làm:* Thiện    *Use case:* UC15    *Ngày:* D12 (24/10 → 24/10)
+
+*Backend:* POST /api/contracts/{id}/offline-upload (PDF, băm final_hash, signing_method = OfflineUpload); GET /api/admin/batches/{code}/contracts.
+*Web:* Admin xem / tải hợp đồng theo lô; tab Hợp đồng trong cổng NĐT.
+*Mobile:* —
+*Bảng CSDL:* investment_contract
+
+*Hoàn thành khi:* Upload bản scan → FullySigned (OfflineUpload), có audit; NĐT chỉ thấy hợp đồng của mình.
+*Phụ thuộc:* TH-08
+
+*Nhánh git:* feature/<mã task này>-hop-dong-ky-tay
+*Mã trong file kế hoạch:* TH-09","Medium","thien","con","2026-10-24","2026-10-24"
+"T10","E5","Task","[TH-10] Giải ngân theo mốc + đối soát chi trả","*Người làm:* Thiện    *Use case:* UC18, UC40    *Ngày:* D13 (25/10 → 25/10)
+
+*Backend:* POST /api/batches/{code}/tranches/{no}/request (Operator; kiểm tra điều kiện mốc + có bằng chứng); admin release / block / need-explanation → payment_instruction Disbursement; POST /api/admin/payment-instructions/{id}/send (IPaymentGateway.SendPayoutAsync); GET /api/admin/payments/unmatched.
+*Web:* Nút Xin giải ngân trong operator/OperatorBatchDetail; AdminFinance thêm tab Giải ngân + Đối soát (giao dịch không khớp, lệnh chi theo trạng thái).
+*Mobile:* —
+*Bảng CSDL:* disbursement_tranche, payment_instruction, provider_transaction
+
+*Hoàn thành khi:* Xin → duyệt → gửi lệnh → Succeeded; giao dịch không khớp hiện trong danh sách đối soát.
+*Phụ thuộc:* VI-05 (đợt giải ngân), KH-07 (bằng chứng)
+*Ghi chú:* TL-03.
+
+*Nhánh git:* feature/<mã task này>-giai-ngan-doi-soat
+*Mã trong file kế hoạch:* TH-10","High","thien","fund","2026-10-25","2026-10-25"
+"T11","E16","Task","[TH-11] Cấu hình bậc phí nền tảng + tích hợp giữa kỳ","*Người làm:* Thiện    *Use case:* UC41    *Ngày:* D14 (26/10 → 26/10)
+
+*Backend:* GET/POST /api/admin/fee-tiers (bậc mới có effective_from, không chồng lấn); áp phí khi duyệt lô (thống nhất với Viên ở VI-05).
+*Web:* admin/AdminSettings.tsx dùng API.
+*Mobile:* —
+*Bảng CSDL:* fee_tier
+
+*Hoàn thành khi:* Thêm bậc phí có hiệu lực từ ngày chọn; lô duyệt sau ngày đó dùng phí mới. Chiều: merge PR tồn, chạy demo M2 trên main.
+*Phụ thuộc:* VI-05
+*Ghi chú:* Mốc M2.
+
+*Nhánh git:* feature/<mã task này>-cau-hinh-phi
+*Mã trong file kế hoạch:* TH-11","Medium","thien","adm","2026-10-26","2026-10-26"
+"T12","E14","Task","[TH-12] Tính quyết toán (Revenue Pool, thù lao, chia theo vốn, thuế)","*Người làm:* Thiện    *Use case:* UC38    *Ngày:* D15–D16 (27/10 → 28/10)
+
+*Backend:* SettlementService.CalculateAsync: actual_revenue từ v_batch_actual_revenue (đơn Completed); locked_standard_cost; pool = revenue − cost; thù lao = operator_share_pct × pool (= 0 khi pool ≤ 0); phần còn lại chia theo capital_share bằng LargestRemainderAllocator; pool âm → lỗ chia theo vốn, chặn ở vốn góp; thuế khấu trừ theo tỉ lệ cấu hình (chốt theo TL-07); revision_no. POST /api/admin/batches/{code}/settlements.
+*Web:* AdminSettlementDetail: bảng tính bản nháp (doanh thu, chi phí khoá, pool, thù lao, từng dòng NĐT).
+*Mobile:* —
+*Bảng CSDL:* settlement, settlement_line, v_batch_actual_revenue
+
+*Hoàn thành khi:* Test: tổng dòng = pool đúng 1 đồng; pool âm; lô 100 NĐT × 2.000 hộp tính < 10 giây. Đối chiếu số với ví dụ trong TL-12/TL-13.
+*Phụ thuộc:* NH-10 (đơn Completed), TH-07 (capital_share)
+*Ghi chú:* Phối hợp Viên (TSK-12) dùng chung bộ test.
+
+*Nhánh git:* feature/<mã task này>-tinh-quyet-toan
+*Mã trong file kế hoạch:* TH-12","Highest","thien","set","2026-10-27","2026-10-28"
+"T13","E14","Task","[TH-13] Công bố quyết toán + sao kê NĐT + góp ý trong hạn","*Người làm:* Thiện    *Use case:* UC37, UC35, UC36    *Ngày:* D17 (29/10 → 29/10)
+
+*Backend:* POST /api/admin/settlements/{id}/propose (feedback_deadline ≥ proposed_at + 7 ngày); GET /api/settlements/{id} (NĐT chỉ thấy tổng + dòng của mình); POST /api/settlements/{id}/feedback (trong hạn); POST /api/admin/settlement-feedback/{id}/answer.
+*Web:* Nút Công bố ở AdminSettlementDetail; tab Sao kê + form góp ý trong cổng NĐT.
+*Mobile:* Chi tiết lô của NĐT: mục Sao kê (chỉ đọc) khi lô ở Settlement.
+*Bảng CSDL:* settlement, settlement_line, settlement_feedback
+
+*Hoàn thành khi:* Góp ý sau hạn → 422; NĐT không xem được dòng của người khác (test).
+*Phụ thuộc:* TH-12
+
+*Nhánh git:* feature/<mã task này>-cong-bo-sao-ke-gop-y
+*Mã trong file kế hoạch:* TH-13","High","thien","set","2026-10-29","2026-10-29"
+"T14","E14","Task","[TH-14] Duyệt quyết toán + phát lệnh chi trả + đóng lô","*Người làm:* Thiện    *Use case:* UC39    *Ngày:* D18 (30/10 → 30/10)
+
+*Backend:* POST /api/admin/settlements/{id}/approve → payment_instruction Payout cho từng dòng → gửi → PaidOut → batch Closed. Quyết toán đã duyệt không sửa được (trigger trg_settlement_locked); muốn sửa phải tạo revision mới.
+*Web:* AdminFinance / AdminSettlementDetail: nút Duyệt + theo dõi chi trả; operator/OperatorSettlement.tsx dùng API.
+*Mobile:* —
+*Bảng CSDL:* settlement, payment_instruction, batch
+
+*Hoàn thành khi:* Lô seed đi hết Settlement → Closed; mọi bước có audit.
+*Phụ thuộc:* TH-13
+
+*Nhánh git:* feature/<mã task này>-duyet-chi-tra
+*Mã trong file kế hoạch:* TH-14","High","thien","set","2026-10-30","2026-10-30"
+"T15","E19","Task","[TH-15] Rà soát mọi đường tiền + nhật ký kiểm toán","*Người làm:* Thiện    *Use case:* — (TL-08, TL-10)    *Ngày:* D19 (31/10 → 31/10)
+
+*Backend:* Rà soát: mọi API đổi tiền / hợp đồng / chi phí chuẩn / quyết toán đều ghi audit; webhook idempotent; không có double cho tiền; không có trường lợi suất trong response. Sửa lỗi tìm được.
+*Web:* —
+*Mobile:* —
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* Checklist TL-08 + TL-10 đạt; ghi kết quả vào docs.
+*Phụ thuộc:* —
+*Ghi chú:* Mốc M3.
+
+*Nhánh git:* feature/<mã task này>-ra-soat-duong-tien
+*Mã trong file kế hoạch:* TH-15","High","thien","opsx","2026-10-31","2026-10-31"
+"T16","E19","Task","[TH-16] Chạy kịch bản demo đầu-cuối lần 1 (cả nhóm) + sửa lỗi","*Người làm:* Thiện    *Use case:* Tất cả    *Ngày:* D20 (01/11 → 01/11)
+
+*Backend:* Viết kịch bản demo: một lô từ duyệt → gọi vốn → ký → nuôi có bằng chứng → thu hoạch + tem → bán → quyết toán → chi trả, kèm các nhánh lỗi (thiếu vốn hoàn tiền, bằng chứng bị gắn cờ, 50 checkout đồng thời, pool âm).
+*Web:* Chạy trên server thật.
+*Mobile:* Chạy trên điện thoại thật.
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* Kịch bản chạy hết không lỗi chặn; lỗi còn lại có task.
+*Phụ thuộc:* Tất cả
+
+*Nhánh git:* feature/<mã task này>-demo-dau-cuoi
+*Mã trong file kế hoạch:* TH-16","Highest","thien","opsx","2026-11-01","2026-11-01"
+"T17","E19","Task","[TH-17] Chốt bản demo v1.0 + tập dượt","*Người làm:* Thiện    *Use case:* —    *Ngày:* D21 (02/11 → 02/11)
+
+*Backend:* Đóng băng main, gắn tag v1.0, ghi release notes; tập dượt demo 2 lần, bấm giờ.
+*Web:* —
+*Mobile:* APK v1.0 trên GitHub Releases.
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* Mốc M4.
+*Phụ thuộc:* TH-16
+
+*Nhánh git:* feature/<mã task này>-chot-ban-demo
+*Mã trong file kế hoạch:* TH-17","Highest","thien","opsx","2026-11-02","2026-11-02"
+"T18","E3","Task","[VI-01] Đăng ký hồ sơ hộ nuôi","*Người làm:* Viên    *Use case:* UC04    *Ngày:* D1 (13/10 → 13/10)
+
+*Backend:* POST /api/operators (người tạo thành Owner, thêm vai OperatorMember); GET/PUT /api/operators/me (sửa khi Draft/Rejected); POST /api/operators/me/submit (Draft → Submitted).
+*Web:* Trang Đăng ký hộ nuôi (mới) trong operator/: tên pháp nhân, mã số thuế, số đăng ký kinh doanh, địa chỉ trại.
+*Mobile:* —
+*Bảng CSDL:* operator, operator_member, app_user_role
+
+*Hoàn thành khi:* Người dùng mới tạo hồ sơ → Submitted; đăng nhập lại có claim operator_id.
+*Phụ thuộc:* —
+*Ghi chú:* Copy cách viết Features/Auth.
+
+*Nhánh git:* feature/<mã task này>-dang-ky-ho-nuoi
+*Mã trong file kế hoạch:* VI-01","Highest","vien","ops","2026-10-13","2026-10-13"
+"T19","E3","Task","[VI-02] Duyệt hộ nuôi + quản lý nhân viên hộ nuôi","*Người làm:* Viên    *Use case:* UC05    *Ngày:* D2 (14/10 → 14/10)
+
+*Backend:* GET /api/admin/operators?status=Submitted; POST approve (approved_slot_capacity) / reject / suspend (kèm lý do, ghi audit); POST/DELETE /api/operators/me/members (vai Staff).
+*Web:* Admin: tab Hộ nuôi trong AdminUsers (danh sách chờ duyệt, duyệt với sức chứa); Operator: trang Nhân viên.
+*Mobile:* —
+*Bảng CSDL:* operator, operator_member
+
+*Hoàn thành khi:* Chỉ hộ nuôi Approved mới tạo lô (test ở VI-04); duyệt / từ chối có audit.
+*Phụ thuộc:* VI-01, TH-02
+
+*Nhánh git:* feature/<mã task này>-duyet-ho-nuoi
+*Mã trong file kế hoạch:* VI-02","Highest","vien","ops","2026-10-14","2026-10-14"
+"T20","E3","Task","[VI-03] Đánh số hộp nuôi (thay sơ đồ trại)","*Người làm:* Viên    *Use case:* UC44    *Ngày:* D3 (15/10 → 15/10)
+
+*Backend:* POST /api/boxes/range {from, to, width} tạo hàng loạt (0001…1200); POST /api/boxes (một hộp, dãy/kệ/tầng/cột tuỳ chọn); GET /api/boxes?status=&search=&page=; PATCH /api/boxes/{slotCode} (Available ↔ Maintenance). Tổng hộp ≤ approved_slot_capacity.
+*Web:* Thay operator/OperatorFarmMap.tsx bằng trang Hộp nuôi: lưới số hộp, nút tạo hàng loạt, lọc trạng thái; đổi route /operator/map → /operator/boxes.
+*Mobile:* Khôi dùng GET /api/boxes ở màn Chụp bằng chứng (KH-07).
+*Bảng CSDL:* physical_slot
+
+*Hoàn thành khi:* Tạo 1.200 hộp bằng 1 lệnh < 2 giây; vượt sức chứa → 422 box.over_capacity.
+*Phụ thuộc:* VI-02
+*Ghi chú:* Quyết định nhóm: đánh số hộp, không vẽ sơ đồ trại.
+
+*Nhánh git:* feature/<mã task này>-danh-so-hop
+*Mã trong file kế hoạch:* VI-03","Highest","vien","ops","2026-10-15","2026-10-15"
+"T21","E4","Task","[VI-04] Tạo lô + soạn chi phí chuẩn","*Người làm:* Viên    *Use case:* UC07    *Ngày:* D4–D5 (16/10 → 17/10)
+
+*Backend:* POST /api/batches (Draft; hộ nuôi phải Approved); PUT /api/batches/{code}; PUT /api/batches/{code}/standard-cost (khoản chi theo category + tranche_no, bắt buộc có MortalityReserve); POST submit (→ PendingApproval). Validate: min_viable ≤ target ≤ max, operator_share_pct 5–10, cycle_days > 0.
+*Web:* operator/OperatorCreateBatch.tsx dùng API (form lô + bảng khoản chi + tổng); OperatorBatchStatus.tsx danh sách lô của tôi.
+*Mobile:* —
+*Bảng CSDL:* batch, standard_cost_version, standard_cost_item
+
+*Hoàn thành khi:* Tạo → gửi duyệt thành công; sai dải vốn → lỗi có thông báo rõ; thiếu MortalityReserve → 422.
+*Phụ thuộc:* VI-02
+*Ghi chú:* Không có trường lợi suất kỳ vọng (BR-49).
+
+*Nhánh git:* feature/<mã task này>-tao-lo-chi-phi-chuan
+*Mã trong file kế hoạch:* VI-04","Highest","vien","bat","2026-10-16","2026-10-17"
+"T22","E4","Task","[VI-05] Duyệt lô: mở gọi vốn + khoá chi phí chuẩn","*Người làm:* Viên    *Use case:* UC08    *Ngày:* D6 (18/10 → 18/10)
+
+*Backend:* GET /api/admin/batches?status=PendingApproval; POST approve {fundingOpenAt, fundingDeadline} → Funding, chi phí Locked (locked_at), chọn fee_tier theo target_capital, ghi platform_fee_amount, sinh disbursement_tranche theo tranche_no; POST reject {reason}. Audit.
+*Web:* admin/AdminBatches.tsx + AdminBatchDetail.tsx dùng API.
+*Mobile:* —
+*Bảng CSDL:* batch, standard_cost_version, fee_tier, disbursement_tranche
+
+*Hoàn thành khi:* Sau khi duyệt, sửa chi phí chuẩn bị chặn ở cả service lẫn trigger CSDL (test).
+*Phụ thuộc:* VI-04
+*Ghi chú:* TL-11.
+
+*Nhánh git:* feature/<mã task này>-duyet-lo
+*Mã trong file kế hoạch:* VI-05","Highest","vien","bat","2026-10-18","2026-10-18"
+"T23","E4","Task","[VI-06] Khám phá lô (web + mobile)","*Người làm:* Viên    *Use case:* UC09    *Ngày:* D7 (19/10 → 19/10)
+
+*Backend:* GET /api/batches?status=&crabType=&page= và GET /api/batches/{code}: điều khoản đã công bố, tóm tắt chi phí chuẩn đã khoá, tiến độ từ v_batch_funding_progress.
+*Web:* Danh sách + chi tiết lô trong cổng NĐT (bản 2) dùng API.
+*Mobile:* ApiInvestorRepository.batches() + batchByCode() → màn Khám phá lô và Chi tiết lô dùng dữ liệu thật.
+*Bảng CSDL:* batch, v_batch_funding_progress
+
+*Hoàn thành khi:* Không có trường lợi suất; % gọi vốn trên mobile = trên web.
+*Phụ thuộc:* VI-05
+
+*Nhánh git:* feature/<mã task này>-kham-pha-lo
+*Mã trong file kế hoạch:* VI-06","High","vien","bat","2026-10-19","2026-10-19"
+"T24","E7","Task","[VI-07] Thả giống: gán hộp cho lô, tạo từng con cua","*Người làm:* Viên    *Use case:* UC17 (thả giống)    *Ngày:* D8 (20/10 → 20/10)
+
+*Backend:* POST /api/batches/{code}/stocking {slotCodes | range} → slot_allocation, crab_item Growing (một hộp một con), slot_event Stocked, crab_item_event; batch → Stocked → InProduction; hộp → Occupied.
+*Web:* Nút Thả giống trong operator/OperatorBatchDetail.tsx (chọn khoảng số hộp).
+*Mobile:* —
+*Bảng CSDL:* slot_allocation, crab_item, slot_event, crab_item_event
+
+*Hoàn thành khi:* Số crab_item = seed_quantity; hộp đang dùng không gán được lần 2.
+*Phụ thuộc:* VI-03, TH-07
+
+*Nhánh git:* feature/<mã task này>-tha-giong-gan-hop
+*Mã trong file kế hoạch:* VI-07","High","vien","prod","2026-10-20","2026-10-20"
+"T25","E7","Task","[VI-08] Nhật ký ngày (pH, nhiệt độ nước, độ mặn, thức ăn) — web + mobile","*Người làm:* Viên    *Use case:* UC17    *Ngày:* D9 (21/10 → 21/10)
+
+*Backend:* POST/GET /api/batches/{code}/production-logs (Manual; 1 bản/ngày/nguồn; plausibility_flag; ngoài ngưỡng → AlertService.RaiseAsync WaterQuality).
+*Web:* operator/OperatorDailyLog.tsx dùng API.
+*Mobile:* ApiOperatorRepository.submitLog / logs / activeBatches → Form nhật ký, tab Nhật ký, thẻ lô ở Hôm nay dùng API.
+*Bảng CSDL:* production_log
+
+*Hoàn thành khi:* Ghi 2 lần cùng ngày → 409; pH ngoài ngưỡng → có cảnh báo WaterQuality trong tab Cảnh báo.
+*Phụ thuộc:* VI-07, KH-05 (AlertService)
+*Ghi chú:* Hệ thống không có hệ thống nước — người nuôi tự nhập số đo.
+
+*Nhánh git:* feature/<mã task này>-nhat-ky-ngay
+*Mã trong file kế hoạch:* VI-08","Highest","vien","prod","2026-10-21","2026-10-21"
+"T26","E7","Task","[VI-09] Sự kiện từng hộp: lột xác, chết, thả bù, chuyển hộp","*Người làm:* Viên    *Use case:* UC17    *Ngày:* D10 (22/10 → 22/10)
+
+*Backend:* POST /api/batches/{code}/slot-events {slotCode, eventType, occurredAt, quantity, note}: Mortality → crab Dead + giải phóng hộp (+ cảnh báo Mortality theo ngưỡng); Restocked trước restock_cutoff_days → crab mới replaces_crab_item_id; Relocated đổi hộp. Đối chiếu v_crab_count_reconciliation.
+*Web:* Mục Sự kiện hộp trong OperatorBatchDetail.
+*Mobile:* Màn mới Sự kiện hộp: nhập/chọn số hộp → chọn loại sự kiện → lưu (vào từ thẻ lô ở Hôm nay).
+*Bảng CSDL:* slot_event, crab_item, crab_item_event
+
+*Hoàn thành khi:* Thả bù sau hạn → 422; số con khớp sau mọi sự kiện (test).
+*Phụ thuộc:* VI-08
+*Ghi chú:* TL-21. Thêm màn mới vào test/pages_smoke_test.dart.
+
+*Nhánh git:* feature/<mã task này>-su-kien-hop
+*Mã trong file kế hoạch:* VI-09","High","vien","prod","2026-10-22","2026-10-22"
+"T27","E7","Task","[VI-10] Ingestion API cho phần mềm của trại + đặc tả","*Người làm:* Viên    *Use case:* UC17 (FarmApi)    *Ngày:* D11 (23/10 → 23/10)
+
+*Backend:* POST /api/ingest/v1/production-logs, /api/ingest/v1/slot-events: xác thực header X-Api-Key theo hộ nuôi, source = FarmApi, cùng quy tắc với nhập tay. Script giả lập một hệ thống trại gửi 7 ngày dữ liệu.
+*Web:* —
+*Mobile:* —
+*Bảng CSDL:* production_log, slot_event
+
+*Hoàn thành khi:* Có docs/ingestion-api.md (đặc tả, ví dụ request/response, mã lỗi); script giả lập chạy được, dữ liệu hiện trên timeline.
+*Phụ thuộc:* VI-09
+*Ghi chú:* Ngày nộp SRS — task nhẹ để còn thời gian viết tài liệu.
+
+*Nhánh git:* feature/<mã task này>-ingestion-api
+*Mã trong file kế hoạch:* VI-10","Medium","vien","prod","2026-10-23","2026-10-23"
+"T28","E7","Task","[VI-11] Timeline sản xuất cho nhà đầu tư","*Người làm:* Viên    *Use case:* UC21    *Ngày:* D12 (24/10 → 24/10)
+
+*Backend:* GET /api/batches/{code}/timeline: gộp nhật ký + sự kiện hộp + bằng chứng Accepted + cảnh báo, phân trang theo ngày; chỉ NĐT của lô / hộ nuôi / admin.
+*Web:* Timeline trong OperatorBatchDetail và trong chi tiết lô của NĐT.
+*Mobile:* Chi tiết lô của NĐT có mục Timeline (dùng API).
+*Bảng CSDL:* production_log, slot_event, evidence, alert
+
+*Hoàn thành khi:* NĐT không góp lô → 403; timeline hiển thị đúng thứ tự thời gian.
+*Phụ thuộc:* VI-09, KH-07
+
+*Nhánh git:* feature/<mã task này>-timeline-san-xuat
+*Mã trong file kế hoạch:* VI-11","High","vien","prod","2026-10-24","2026-10-24"
+"T29","E17","Task","[VI-12] TSK-12: property-based + metamorphic + model-based test cho engine quyết toán","*Người làm:* Viên    *Use case:* — (TSK-12)    *Ngày:* D13 (25/10 → 25/10)
+
+*Backend:* Trong CrabShare.SettlementEngine.Tests (FsCheck): bảo toàn tổng, lệch ≤ 1 đồng, không phụ thuộc thứ tự, metamorphic (nhân đều vốn → tỉ lệ không đổi; tách/gộp NĐT), pool âm chặn ở vốn góp; model-based: so với cài đặt tham chiếu đơn giản (BigInteger).
+*Web:* —
+*Mobile:* —
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* ≥ 10 property, mỗi property 1.000 ca, xanh trên CI.
+*Phụ thuộc:* —
+*Ghi chú:* Phối hợp Thiện (TH-12) để engine có đủ hàm cho quyết toán.
+
+*Nhánh git:* feature/<mã task này>-tsk12-property-test
+*Mã trong file kế hoạch:* VI-12","High","vien","r12","2026-10-25","2026-10-25"
+"T30","E17","Task","[VI-13] TSK-12: mutation testing bằng Stryker.NET","*Người làm:* Viên    *Use case:* — (TSK-12)    *Ngày:* D14 (26/10 → 26/10)
+
+*Backend:* Thêm dotnet-stryker vào dotnet-tools.json; chạy trên CrabShare.SettlementEngine; xử lý mutant sống sót (thêm test); xuất báo cáo HTML.
+*Web:* —
+*Mobile:* —
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* Mutation score + danh sách mutant sống sót có giải thích; hướng dẫn chạy trong backend/README.md.
+*Phụ thuộc:* VI-12
+
+*Nhánh git:* feature/<mã task này>-tsk12-mutation-test
+*Mã trong file kế hoạch:* VI-13","High","vien","r12","2026-10-26","2026-10-26"
+"T31","E10","Task","[VI-14] Thu hoạch: cân từng con, xếp hạng, tạo tem","*Người làm:* Viên    *Use case:* UC22    *Ngày:* D15 (27/10 → 27/10)
+
+*Backend:* POST /api/batches/{code}/harvests (lô → Harvesting); POST /api/harvests/{id}/crabs {slotCode, weightG} → hạng theo product_grade, crab_item InStock (weight_g, grade_id, harvest_id), crab_tag Printed (mã 12 ký tự, không trùng, bỏ ký tự dễ nhầm), giải phóng hộp.
+*Web:* operator/OperatorHarvest.tsx dùng API.
+*Mobile:* Màn Thu hoạch dùng API (recordHarvestedCrab), bỏ mock.
+*Bảng CSDL:* harvest, crab_item, crab_tag, product_grade, slot_allocation
+
+*Hoàn thành khi:* Biên hạng đúng L1–L4/SOFT (test); 1.000 mã tem sinh liên tiếp không trùng.
+*Phụ thuộc:* VI-07
+*Ghi chú:* Mở cửa sổ bao tiêu cho NH-15.
+
+*Nhánh git:* feature/<mã task này>-thu-hoach-can-hang
+*Mã trong file kế hoạch:* VI-14","Highest","vien","har","2026-10-27","2026-10-27"
+"T32","E10","Task","[VI-15] In tem + kích hoạt tem bằng ảnh xác nhận","*Người làm:* Viên    *Use case:* UC46    *Ngày:* D16 (28/10 → 28/10)
+
+*Backend:* GET /api/tags/{tag}/label: nội dung in (mã + QR trỏ /truy-xuat/{tag}); POST /api/tags/{tag}/activate (ảnh đi qua Evidence của Khôi) → Active + activation_evidence_id; POST /api/tags/{tag}/void {reason} → in lại tem mới.
+*Web:* Trang in nhãn (khổ 40×30 mm, nhiều tem/trang) cho máy in của trại.
+*Mobile:* Nút Chụp xác nhận gọi API kích hoạt; danh sách tem chưa kích hoạt.
+*Bảng CSDL:* crab_tag, crab_item_event, evidence
+
+*Hoàn thành khi:* Active bắt buộc có ảnh (CHECK); tem Void không quét được.
+*Phụ thuộc:* VI-14, KH-07
+*Ghi chú:* Máy in nhãn là phần cứng ngoài phạm vi — chỉ xuất nội dung in.
+
+*Nhánh git:* feature/<mã task này>-in-kich-hoat-tem
+*Mã trong file kế hoạch:* VI-15","High","vien","har","2026-10-28","2026-10-28"
+"T33","E10","Task","[VI-16] Chốt đợt thu hoạch → tồn kho cho cửa hàng","*Người làm:* Viên    *Use case:* UC22    *Ngày:* D17 (29/10 → 29/10)
+
+*Backend:* POST /api/harvests/{id}/complete: tổng số con, tổng kg; cộng stock_qty_kg vào product_listing theo lô + hạng (thống nhất hàm với Nhân); trần tồn cấp đông frozen_stock_cap_months.
+*Web:* Tóm tắt đợt thu hoạch (theo hạng: số con, kg).
+*Mobile:* Nút Kết thúc thu hoạch.
+*Bảng CSDL:* harvest, product_listing
+
+*Hoàn thành khi:* Tồn trên cửa hàng tăng đúng tổng kg từng hạng.
+*Phụ thuộc:* VI-14, NH-02
+*Ghi chú:* TL-23.
+
+*Nhánh git:* feature/<mã task này>-chot-thu-hoach-ton-kho
+*Mã trong file kế hoạch:* VI-16","High","vien","har","2026-10-29","2026-10-29"
+"T34","E10","Task","[VI-17] Truy xuất bằng tem (công khai) — web + mobile","*Người làm:* Viên    *Use case:* UC33    *Ngày:* D18 (30/10 → 30/10)
+
+*Backend:* GET /api/trace/{tagCode} (công khai, dùng v_traceability): hộ nuôi, lô, số hộp, ngày thả, ngày thu hoạch, hạng, khối lượng, hành trình tới đơn hàng; ghi tag_scan; không trả ảnh nuôi.
+*Web:* trace/TracePage.tsx dùng API (route /truy-xuat/:tagCode = URL trong QR).
+*Mobile:* Thêm mobile_scanner: màn Quét tem đọc QR thật → màn Kết quả dùng API.
+*Bảng CSDL:* crab_tag, tag_scan, v_traceability
+
+*Hoàn thành khi:* In một tem thật, quét bằng điện thoại → mở đúng trang truy xuất.
+*Phụ thuộc:* VI-15
+
+*Nhánh git:* feature/<mã task này>-truy-xuat-tem
+*Mã trong file kế hoạch:* VI-17","High","vien","har","2026-10-30","2026-10-30"
+"T35","E17","Task","[VI-18] TSK-12: tổng hợp kết quả nghiên cứu + test quyết toán với dữ liệu thật","*Người làm:* Viên    *Use case:* — (TSK-12)    *Ngày:* D19 (31/10 → 31/10)
+
+*Backend:* Chạy bộ property/mutation trên bản engine cuối; thêm test tích hợp SettlementService với dữ liệu seed; tổng hợp bảng kết quả cho báo cáo.
+*Web:* —
+*Mobile:* —
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* Có mục kết quả TSK-12 (số property, số ca, mutation score, lỗi tìm được) để đưa vào báo cáo.
+*Phụ thuộc:* TH-14
+*Ghi chú:* Mốc M3.
+
+*Nhánh git:* feature/<mã task này>-tsk12-ket-qua
+*Mã trong file kế hoạch:* VI-18","Medium","vien","r12","2026-10-31","2026-10-31"
+"T36","E19","Task","[VI-19] Kiểm thử đầu-cuối nhánh hộ nuôi → sản xuất → thu hoạch + sửa lỗi","*Người làm:* Viên    *Use case:* UC04–09, 17, 21, 22, 33, 44, 46    *Ngày:* D20–D21 (01/11 → 02/11)
+
+*Backend:* Chạy ca kiểm thử của mình trên server thật; sửa lỗi; bổ sung dữ liệu demo.
+*Web:* Rà giao diện khu vực hộ nuôi.
+*Mobile:* Rà màn hộ nuôi trên điện thoại thật.
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* Không còn lỗi chặn trong phần mình; ca kiểm thử có kết quả.
+*Phụ thuộc:* NH-17
+
+*Nhánh git:* feature/<mã task này>-kiem-thu-san-xuat
+*Mã trong file kế hoạch:* VI-19","Highest","vien","opsx","2026-11-01","2026-11-02"
+"T37","E18","Task","[NH-01] TSK-13: kế hoạch dữ liệu ảnh + bắt đầu gán nhãn","*Người làm:* Nhân    *Use case:* — (TSK-13)    *Ngày:* D1 (13/10 → 13/10)
+
+*Backend:* Tạo ml/data.yaml (1 lớp: crab), quy ước gán nhãn; tạo project gán nhãn (Roboflow hoặc Label Studio); thu ảnh hộp có / không có cua từ nguồn được phép (ảnh nhóm tự chụp, ảnh của trại hợp tác).
+*Web:* —
+*Mobile:* —
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* Có quy trình + ≥ 100 ảnh đã gán nhãn trong ngày; mục tiêu ≥ 300 ảnh trước D9 (làm xen kẽ).
+*Phụ thuộc:* —
+*Ghi chú:* Ảnh không commit vào git — để trên Drive nhóm.
+
+*Nhánh git:* feature/<mã task này>-tsk13-du-lieu
+*Mã trong file kế hoạch:* NH-01","High","nhan","ai13","2026-10-13","2026-10-13"
+"T38","E11","Task","[NH-02] Niêm yết sản phẩm","*Người làm:* Nhân    *Use case:* UC24    *Ngày:* D2 (14/10 → 14/10)
+
+*Backend:* POST /api/listings (từ tồn của lô + hạng; hoặc lô đang nuôi cho đặt trước); PATCH /api/listings/{id}/price (ghi price_history, đổi bất thường → flagged_abnormal); POST publish / close.
+*Web:* Trang Niêm yết của hộ nuôi (mới, trong operator/): danh sách, tạo, đổi giá, đăng/ngừng.
+*Mobile:* —
+*Bảng CSDL:* product_listing, price_history
+
+*Hoàn thành khi:* Đổi giá ghi lịch sử; reserved > stock không bao giờ xảy ra (CHECK).
+*Phụ thuộc:* TH-03 (lô có tồn)
+*Ghi chú:* TL-27.
+
+*Nhánh git:* feature/<mã task này>-niem-yet
+*Mã trong file kế hoạch:* NH-02","Highest","nhan","cat","2026-10-14","2026-10-14"
+"T39","E11","Task","[NH-03] Cửa hàng: duyệt, lọc, sắp xếp sản phẩm","*Người làm:* Nhân    *Use case:* UC25    *Ngày:* D3 (15/10 → 15/10)
+
+*Backend:* GET /api/listings?crabType=&grade=&storage=&sort=&page= (công khai), GET /api/listings/{id} (kèm lịch sử giá, link truy xuất lô).
+*Web:* store/StorePage.tsx (bản 1, nền sáng) dùng API + trang chi tiết sản phẩm.
+*Mobile:* —
+*Bảng CSDL:* product_listing, product_grade
+
+*Hoàn thành khi:* Lọc / sắp xếp đúng; hết hàng hiện ""Hết hàng"", không cho thêm vào giỏ.
+*Phụ thuộc:* NH-02
+
+*Nhánh git:* feature/<mã task này>-cua-hang
+*Mã trong file kế hoạch:* NH-03","Highest","nhan","cat","2026-10-15","2026-10-15"
+"T40","E11","Task","[NH-04] Kiểm duyệt niêm yết + cảnh báo sắp hết hàng","*Người làm:* Nhân    *Use case:* UC24 (kiểm duyệt)    *Ngày:* D4 (16/10 → 16/10)
+
+*Backend:* GET /api/admin/listings?flagged=true; POST /api/admin/listings/{id}/hide; tồn khả dụng dưới ngưỡng → AlertService.RaiseAsync(LowStock).
+*Web:* admin/AdminStorefront.tsx dùng API.
+*Mobile:* —
+*Bảng CSDL:* product_listing, price_history, alert
+
+*Hoàn thành khi:* Giá đổi bất thường hiện trong danh sách kiểm duyệt; ẩn xong khách không thấy.
+*Phụ thuộc:* NH-02, KH-05
+
+*Nhánh git:* feature/<mã task này>-kiem-duyet-niem-yet
+*Mã trong file kế hoạch:* NH-04","Medium","nhan","cat","2026-10-16","2026-10-16"
+"T41","E12","Task","[NH-05] Đặt hàng: giữ tồn nguyên tử, không bán vượt","*Người làm:* Nhân    *Use case:* UC26    *Ngày:* D5–D6 (17/10 → 18/10)
+
+*Backend:* POST /api/orders/checkout {lines, addressId}: tách đơn theo lô; giữ tồn bằng UPDATE … SET reserved_qty_kg += @q WHERE stock_qty_kg − reserved_qty_kg >= @q (kiểm tra số dòng bị ảnh hưởng); stock_reservation Active + expires_at; sales_order PendingPayment; tạo payment_request qua PaymentRequestService (TH-05).
+*Web:* —
+*Mobile:* —
+*Bảng CSDL:* sales_order, order_line, stock_reservation, product_listing
+
+*Hoàn thành khi:* Test: 50 checkout song song trên 1 niêm yết → không bán vượt, tổng giữ = tồn.
+*Phụ thuộc:* NH-03, KH-03 (địa chỉ), TH-05
+*Ghi chú:* TL-28, TL-29. NFR Integrity.
+
+*Nhánh git:* feature/<mã task này>-dat-hang-giu-ton
+*Mã trong file kế hoạch:* NH-05","Highest","nhan","ord","2026-10-17","2026-10-18"
+"T42","E12","Task","[NH-06] Giỏ hàng + thanh toán trên web","*Người làm:* Nhân    *Use case:* UC26    *Ngày:* D7 (19/10 → 19/10)
+
+*Backend:* Xử lý đơn khi webhook báo Paid (hàm callback cho purpose OrderPayment, phối hợp TH-06).
+*Web:* orders/CommercePage.tsx: giỏ hàng (zustand + lưu máy), chọn địa chỉ (API Khôi), thanh toán bằng <VietQrBox>, màn xác nhận đơn.
+*Mobile:* —
+*Bảng CSDL:* sales_order, payment_request
+
+*Hoàn thành khi:* Đặt 1 đơn → giả lập chuyển khoản (TH-06) → đơn Paid hiện trên web.
+*Phụ thuộc:* NH-05, TH-05, TH-06
+
+*Nhánh git:* feature/<mã task này>-gio-hang-thanh-toan
+*Mã trong file kế hoạch:* NH-06","Highest","nhan","ord","2026-10-19","2026-10-19"
+"T43","E12","Task","[NH-07] Theo dõi đơn, lịch sử, huỷ + job trả tồn quá hạn","*Người làm:* Nhân    *Use case:* UC28    *Ngày:* D8 (20/10 → 20/10)
+
+*Backend:* GET /api/orders, GET /api/orders/{orderNo} (dòng thời gian trạng thái); POST cancel (khi chưa đóng gói → trả tồn, hoàn tiền nếu đã trả); job: giữ tồn quá hạn chưa trả → Released, đơn Cancelled.
+*Web:* theo-doi-don-hang, lich-su-don-hang, huy-tra-hang dùng API.
+*Mobile:* —
+*Bảng CSDL:* sales_order, stock_reservation
+
+*Hoàn thành khi:* Không trả tiền quá hạn → tồn trả lại đúng, đơn Cancelled.
+*Phụ thuộc:* NH-06, TH-02 (job)
+
+*Nhánh git:* feature/<mã task này>-theo-doi-don
+*Mã trong file kế hoạch:* NH-07","High","nhan","ord","2026-10-20","2026-10-20"
+"T44","E18","Task","[NH-08] TSK-13: huấn luyện mô hình lần 1 + đánh giá","*Người làm:* Nhân    *Use case:* — (TSK-13)    *Ngày:* D9 (21/10 → 21/10)
+
+*Backend:* ml/train.ipynb (Google Colab GPU): fine-tune yolo11n / yolov8n 50–100 epoch trên ảnh đã gán nhãn; ml/evaluate.ipynb: precision, recall, mAP50 trên tập test giữ riêng.
+*Web:* —
+*Mobile:* —
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* Có số liệu lần 1 trong ml/report/; biết còn thiếu ảnh loại nào để bổ sung.
+*Phụ thuộc:* NH-01
+*Ghi chú:* Mục tiêu precision ≥ 0,85, recall ≥ 0,80.
+
+*Nhánh git:* feature/<mã task này>-tsk13-huan-luyen
+*Mã trong file kế hoạch:* NH-08","High","nhan","ai13","2026-10-21","2026-10-21"
+"T45","E12","Task","[NH-09] Đóng gói đơn bằng quét tem (mobile hộ nuôi)","*Người làm:* Nhân    *Use case:* UC29    *Ngày:* D10 (22/10 → 22/10)
+
+*Backend:* GET /api/operators/me/orders?status=; POST /api/orders/{orderNo}/pack {tagCodes}: tem phải Active, đúng lô, đúng hạng, đủ kg → crab_item Packed, gắn order_line, crab_item_event Packed.
+*Web:* Trang Đơn hàng của hộ nuôi (mới, trong operator/).
+*Mobile:* Màn mới Đóng gói đơn: danh sách đơn cần đóng → quét tem từng con (mobile_scanner) → xác nhận. Thêm vào router + smoke test.
+*Bảng CSDL:* sales_order, order_line, crab_item, crab_tag, crab_item_event
+
+*Hoàn thành khi:* Quét tem sai lô / sai hạng → báo lỗi; đủ kg → Packed.
+*Phụ thuộc:* NH-06, TH-03 (tem Active trong seed), KH-01 (mobile_scanner)
+
+*Nhánh git:* feature/<mã task này>-dong-goi-quet-tem
+*Mã trong file kế hoạch:* NH-09","High","nhan","ord","2026-10-22","2026-10-22"
+"T46","E12","Task","[NH-10] Giao hàng + xác nhận đã nhận → hoàn tất đơn","*Người làm:* Nhân    *Use case:* UC30    *Ngày:* D11 (23/10 → 23/10)
+
+*Backend:* POST ship / deliver (hộ nuôi cập nhật — nền tảng không tự giao); POST receive; job: hết return_window → Completed. Đơn Completed là doanh thu cho quyết toán.
+*Web:* Nút Đã nhận hàng; trạng thái giao trên trang theo dõi.
+*Mobile:* Nút Đã giao trong màn Đóng gói đơn.
+*Bảng CSDL:* sales_order
+
+*Hoàn thành khi:* Đơn Completed xuất hiện trong v_batch_actual_revenue.
+*Phụ thuộc:* NH-09
+*Ghi chú:* TL-31.
+
+*Nhánh git:* feature/<mã task này>-giao-hang-nhan-hang
+*Mã trong file kế hoạch:* NH-10","High","nhan","ord","2026-10-23","2026-10-23"
+"T47","E12","Task","[NH-11] Khiếu nại + giải quyết tranh chấp","*Người làm:* Nhân    *Use case:* UC31, UC32    *Ngày:* D12 (24/10 → 24/10)
+
+*Backend:* POST /api/orders/{orderNo}/complaints (loại, mô tả, ảnh); POST /api/complaints/{id}/respond (hộ nuôi); quá hạn phản hồi → Escalated; POST /api/admin/complaints/{id}/resolve (Refund → payment_instruction Refund).
+*Web:* Form khiếu nại (huy-tra-hang), admin/AdminDisputes.tsx dùng API, hộ nuôi phản hồi.
+*Mobile:* —
+*Bảng CSDL:* complaint, payment_instruction
+
+*Hoàn thành khi:* Khiếu nại → hoàn tiền tạo lệnh Refund; có audit.
+*Phụ thuộc:* NH-10
+
+*Nhánh git:* feature/<mã task này>-khieu-nai-tranh-chap
+*Mã trong file kế hoạch:* NH-11","High","nhan","ord","2026-10-24","2026-10-24"
+"T48","E12","Task","[NH-12] Đánh giá đơn hàng + trả hàng","*Người làm:* Nhân    *Use case:* UC34    *Ngày:* D13 (25/10 → 25/10)
+
+*Backend:* POST /api/orders/{orderNo}/rating (đơn Completed, 1 lần, 1–5 sao); trả hàng trong hạn → Returned (TL-31).
+*Web:* danh-gia-don-hang dùng API; điểm đánh giá hiện ở trang sản phẩm.
+*Mobile:* —
+*Bảng CSDL:* product_rating, sales_order
+
+*Hoàn thành khi:* Đánh giá lần 2 → 409.
+*Phụ thuộc:* NH-10
+
+*Nhánh git:* feature/<mã task này>-danh-gia-tra-hang
+*Mã trong file kế hoạch:* NH-12","Medium","nhan","ord","2026-10-25","2026-10-25"
+"T49","E12","Task","[NH-13] Đặt trước có cọc cho lô đang nuôi","*Người làm:* Nhân    *Use case:* UC27    *Ngày:* D14 (26/10 → 26/10)
+
+*Backend:* POST /api/preorders (lô InProduction; cọc PreOrderDeposit; tổng bao tiêu + đặt trước ≤ trần qua v_batch_commitment_cap); khi thu hoạch: tạo payment_request PreOrderBalance phần còn lại.
+*Web:* Nút Đặt trước trên cửa hàng cho lô đang nuôi.
+*Mobile:* —
+*Bảng CSDL:* sales_order, payment_request, v_batch_commitment_cap
+
+*Hoàn thành khi:* Vượt trần → 422; cọc được ghi nhận qua webhook.
+*Phụ thuộc:* NH-06
+*Ghi chú:* Mốc M2.
+
+*Nhánh git:* feature/<mã task này>-dat-truoc-coc
+*Mã trong file kế hoạch:* NH-13","High","nhan","ord","2026-10-26","2026-10-26"
+"T50","E13","Task","[NH-14] Cam kết bao tiêu","*Người làm:* Nhân    *Use case:* UC13    *Ngày:* D15 (27/10 → 27/10)
+
+*Backend:* POST /api/batches/{code}/offtake-commitments {contributionId, gradeCode, qtyKg, fixedUnitPrice}: chặn hộ nuôi / bên liên quan bao tiêu lô mình; trần offtake_preorder_cap_pct; cọc = offtake_deposit_pct (payment_request OfftakeDeposit); GET /api/me/offtake-commitments.
+*Web:* Tab Bao tiêu trong cổng NĐT (bản 2).
+*Mobile:* —
+*Bảng CSDL:* offtake_commitment, payment_request
+
+*Hoàn thành khi:* Hộ nuôi tự bao tiêu lô mình → 422 offtake.related_party.
+*Phụ thuộc:* TH-06
+*Ghi chú:* TL-30.
+
+*Nhánh git:* feature/<mã task này>-cam-ket-bao-tieu
+*Mã trong file kế hoạch:* NH-14","High","nhan","off","2026-10-27","2026-10-27"
+"T51","E13","Task","[NH-15] Nhận hàng bao tiêu trong cửa sổ ưu tiên","*Người làm:* Nhân    *Use case:* UC23    *Ngày:* D16 (28/10 → 28/10)
+
+*Backend:* Job: lô thu hoạch → mở cửa sổ (WindowOpen, window_opens_at/expires_at); POST /api/offtake-commitments/{id}/claim → sales_order Offtake (trừ cọc); hết cửa sổ → Expired, xử lý cọc theo TL-30.
+*Web:* Nút Nhận hàng ưu tiên + đếm ngược cửa sổ.
+*Mobile:* —
+*Bảng CSDL:* offtake_commitment, sales_order
+
+*Hoàn thành khi:* Nhận ngoài cửa sổ → 422; trong cửa sổ → đơn Offtake đúng giá cố định.
+*Phụ thuộc:* NH-14, VI-14
+
+*Nhánh git:* feature/<mã task này>-nhan-hang-bao-tieu
+*Mã trong file kế hoạch:* NH-15","High","nhan","off","2026-10-28","2026-10-28"
+"T52","E18","Task","[NH-16] TSK-13: xuất ONNX + tích hợp vào API","*Người làm:* Nhân    *Use case:* — (TSK-13)    *Ngày:* D17 (29/10 → 29/10)
+
+*Backend:* Xuất crab-detector-v1.onnx; viết OnnxCrabDetector (Microsoft.ML.OnnxRuntime) cài ICrabDetector; đường dẫn mô hình trong appsettings; đổi đăng ký trong DependencyInjection; phối hợp Khôi lưu evidence_detection kèm model_version.
+*Web:* —
+*Mobile:* —
+*Bảng CSDL:* evidence_detection
+
+*Hoàn thành khi:* Chụp ảnh hộp có cua → crab_detected = true + confidence; báo cáo precision/recall cuối trong ml/report/.
+*Phụ thuộc:* NH-08, KH-07
+*Ghi chú:* File .onnx đưa lên GitHub Releases, không commit.
+
+*Nhánh git:* feature/<mã task này>-tsk13-tich-hop
+*Mã trong file kế hoạch:* NH-16","High","nhan","ai13","2026-10-29","2026-10-29"
+"T53","E19","Task","[NH-17] Kế hoạch + ca kiểm thử hệ thống","*Người làm:* Nhân    *Use case:* Tất cả    *Ngày:* D18 (30/10 → 30/10)
+
+*Backend:* Viết test plan + test case cho các luồng chính (đăng ký → góp vốn → nuôi → thu hoạch → bán → quyết toán) và nhánh lỗi; chia ca cho cả nhóm chạy.
+*Web:* —
+*Mobile:* —
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* File ca kiểm thử dùng được cho Report 5; mỗi người có danh sách ca để chạy D20–21.
+*Phụ thuộc:* —
+
+*Nhánh git:* feature/<mã task này>-ke-hoach-kiem-thu
+*Mã trong file kế hoạch:* NH-17","High","nhan","opsx","2026-10-30","2026-10-30"
+"T54","E19","Task","[NH-18] Kiểm thử tải và đồng thời","*Người làm:* Nhân    *Use case:* — (NFR)    *Ngày:* D19 (31/10 → 31/10)
+
+*Backend:* Project console .NET (HttpClient): 100 người dùng đồng thời gọi các API phổ biến (đo p95 < 1 giây); 50 checkout song song trên 1 niêm yết; quyết toán lô 100 NĐT.
+*Web:* —
+*Mobile:* —
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* Bảng số liệu (p95, lỗi, bán vượt = 0) cho báo cáo kiểm thử.
+*Phụ thuộc:* NH-05, TH-12
+*Ghi chú:* Chạy trên server thật sau khi deploy (KH-16).
+
+*Nhánh git:* feature/<mã task này>-kiem-thu-tai
+*Mã trong file kế hoạch:* NH-18","High","nhan","opsx","2026-10-31","2026-10-31"
+"T55","E19","Task","[NH-19] Chạy ca kiểm thử, báo lỗi, báo cáo kiểm thử","*Người làm:* Nhân    *Use case:* Tất cả    *Ngày:* D20–D21 (01/11 → 02/11)
+
+*Backend:* Điều phối cả nhóm chạy ca kiểm thử; ghi lỗi lên Jira; sửa lỗi phần mình; tổng hợp test report.
+*Web:* Rà cửa hàng / đơn hàng.
+*Mobile:* Rà màn Đóng gói đơn.
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* Test report có tỉ lệ đạt; không còn lỗi chặn.
+*Phụ thuộc:* NH-17
+
+*Nhánh git:* feature/<mã task này>-chay-kiem-thu
+*Mã trong file kế hoạch:* NH-19","Highest","nhan","opsx","2026-11-01","2026-11-02"
+"T56","E1","Task","[KH-01] Mobile chạy trên Android + thêm package cho các task sau","*Người làm:* Khôi    *Use case:* —    *Ngày:* D1 (13/10 → 13/10)
+
+*Backend:* —
+*Web:* —
+*Mobile:* Chạy trên máy ảo + điện thoại thật (API_URL bằng IP LAN); thêm mobile_scanner + geolocator, khai báo quyền camera / vị trí (AndroidManifest, Info.plist); gói font DM Sans vào assets (bỏ tải qua mạng); icon + tên app.
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* APK debug cài được trên điện thoại thật; đăng nhập cả vai NĐT và hộ nuôi; flutter analyze + test xanh.
+*Phụ thuộc:* —
+*Ghi chú:* Hướng dẫn cả nhóm chạy mobile.
+
+*Nhánh git:* feature/<mã task này>-mobile-android
+*Mã trong file kế hoạch:* KH-01","Highest","khoi","setup","2026-10-13","2026-10-13"
+"T57","E2","Task","[KH-02] Xác minh danh tính (eKYC) — mobile + web","*Người làm:* Khôi    *Use case:* UC02    *Ngày:* D2 (14/10 → 14/10)
+
+*Backend:* POST /api/kyc/ekyc (multipart: CCCD trước, sau, selfie + consent) → IEkycProvider.VerifyAsync (giả lập); ghi kyc_check (EkycIdFace, consent_at); đạt → investor Verified. Ảnh chỉ chuyển cho nhà cung cấp, KHÔNG lưu. GET /api/me/kyc.
+*Web:* Mục Xác minh danh tính trong hồ sơ NĐT; operator/OperatorKyc.tsx.
+*Mobile:* Màn eKYC: chụp 3 ảnh bằng camera → gửi → kết quả; banner ở Tổng quan theo trạng thái thật (bỏ mock kycStatus).
+*Bảng CSDL:* kyc_check, investor
+
+*Hoàn thành khi:* Không đồng ý điều khoản → 400; sau khi xác minh, thư mục storage không có ảnh CCCD.
+*Phụ thuộc:* KH-01
+*Ghi chú:* TL-06.
+
+*Nhánh git:* feature/<mã task này>-ekyc
+*Mã trong file kế hoạch:* KH-02","Highest","khoi","acc","2026-10-14","2026-10-14"
+"T58","E2","Task","[KH-03] Tài khoản nhận tiền + sổ địa chỉ giao hàng","*Người làm:* Khôi    *Use case:* UC03    *Ngày:* D3 (15/10 → 15/10)
+
+*Backend:* GET/PUT /api/me/payout-account (NĐT hoặc chủ hộ nuôi; kiểm tra khớp tên giả lập → kyc_check BankNameMatch); CRUD /api/me/addresses (khách hàng).
+*Web:* Form tài khoản nhận tiền (NĐT, hộ nuôi); sổ địa chỉ cho khách (dùng ở thanh toán).
+*Mobile:* Mục Tài khoản nhận tiền trong tab Tài khoản.
+*Bảng CSDL:* payout_account, customer_address, kyc_check
+
+*Hoàn thành khi:* Nhân dùng được API địa chỉ từ D5; một chủ sở hữu chỉ 1 tài khoản Active.
+*Phụ thuộc:* KH-02
+
+*Nhánh git:* feature/<mã task này>-tai-khoan-nhan-tien
+*Mã trong file kế hoạch:* KH-03","Highest","khoi","acc","2026-10-15","2026-10-15"
+"T59","E2","Task","[KH-04] Ngoại lệ KYC + quản lý người dùng","*Người làm:* Khôi    *Use case:* UC06    *Ngày:* D4 (16/10 → 16/10)
+
+*Backend:* GET /api/admin/users?role=&status=&page=, GET /api/admin/users/{id}, POST lock / unlock; GET /api/admin/kyc-checks?result=Failed; POST /api/admin/kyc-checks/{id}/approve-exception (→ ExceptionApproved, reviewed_by). Audit.
+*Web:* admin/AdminUsers.tsx + AdminUserDetail.tsx dùng API.
+*Mobile:* —
+*Bảng CSDL:* app_user, kyc_check, investor
+
+*Hoàn thành khi:* Khoá tài khoản → đăng nhập 403 auth.locked; duyệt ngoại lệ → investor Verified.
+*Phụ thuộc:* KH-02
+
+*Nhánh git:* feature/<mã task này>-ngoai-le-kyc-nguoi-dung
+*Mã trong file kế hoạch:* KH-04","High","khoi","acc","2026-10-16","2026-10-16"
+"T60","E9","Task","[KH-05] Cảnh báo — lõi dùng chung + xác nhận cảnh báo","*Người làm:* Khôi    *Use case:* UC19    *Ngày:* D5 (17/10 → 17/10)
+
+*Backend:* AlertService.RaiseAsync(batchId, type, severity, message, ackWithin) (cùng lô + loại còn Open thì cập nhật, không thêm); ngưỡng trong appsettings Alerts:Thresholds; GET /api/operators/me/alerts; POST /api/alerts/{id}/acknowledge (bắt buộc ghi chú); GET /api/batches/{code}/alerts.
+*Web:* operator/OperatorAlerts.tsx dùng API.
+*Mobile:* Tab Cảnh báo: AlertsController gọi API.
+*Bảng CSDL:* alert
+
+*Hoàn thành khi:* Viên và Nhân gọi được RaiseAsync (chốt chữ ký hàm trong nhóm chat ngày D1); xác nhận không ghi chú → 400.
+*Phụ thuộc:* TH-03
+*Ghi chú:* TL-22.
+
+*Nhánh git:* feature/<mã task này>-canh-bao-loi
+*Mã trong file kế hoạch:* KH-05","Highest","khoi","alr","2026-10-17","2026-10-17"
+"T61","E9","Task","[KH-06] Cảnh báo — job leo thang + màn quản trị","*Người làm:* Khôi    *Use case:* UC20    *Ngày:* D6 (18/10 → 18/10)
+
+*Backend:* Job 15 phút (RecurringJob của Thiện): quá ack_deadline → Escalated (v_overdue_alerts); DataSilence (lô đang nuôi chưa có nhật ký tới giờ quy định); MilestoneDelay (đợt giải ngân quá planned_date). GET /api/admin/alerts?status=Escalated, POST resolve.
+*Web:* admin/AdminAlerts.tsx dùng API.
+*Mobile:* —
+*Bảng CSDL:* alert, v_overdue_alerts
+
+*Hoàn thành khi:* Sửa ack_deadline về quá khứ → Escalated sau 1 chu kỳ job.
+*Phụ thuộc:* KH-05, TH-02
+
+*Nhánh git:* feature/<mã task này>-canh-bao-leo-thang
+*Mã trong file kế hoạch:* KH-06","High","khoi","alr","2026-10-18","2026-10-18"
+"T62","E8","Task","[KH-07] Chụp & gửi bằng chứng (mobile) + xử lý ảnh trên server","*Người làm:* Khôi    *Use case:* UC45    *Ngày:* D7–D8 (19/10 → 20/10)
+
+*Backend:* POST /api/evidence (multipart: batchCode, slotCode, capturedAt, latitude, longitude, captureRequestId?, ảnh) → IFileStorage (SHA-256) → so trùng SHA-256 + perceptual hash (dHash, SixLabors.ImageSharp) → ICrabDetector → risk_score → review_status (trùng ảnh → Flagged); received_at = giờ máy chủ.
+*Web:* —
+*Mobile:* Màn Chụp bằng chứng: danh sách hộp từ GET /api/boxes, lấy vị trí (geolocator), gửi ảnh qua API (bỏ mock uploadEvidence).
+*Bảng CSDL:* evidence, evidence_detection
+
+*Hoàn thành khi:* Gửi lại đúng ảnh cũ → Flagged; mỗi ảnh có SHA-256, giờ máy chủ, vị trí, số hộp (NFR Evidence).
+*Phụ thuộc:* VI-03, KH-01
+*Ghi chú:* TL-04.
+
+*Nhánh git:* feature/<mã task này>-upload-bang-chung
+*Mã trong file kế hoạch:* KH-07","Highest","khoi","evi","2026-10-19","2026-10-20"
+"T63","E8","Task","[KH-08] Yêu cầu chụp ngẫu nhiên","*Người làm:* Khôi    *Use case:* UC45    *Ngày:* D9 (21/10 → 21/10)
+
+*Backend:* Job hằng ngày: chọn ngẫu nhiên hộp của lô InProduction → capture_request (due_at); GET /api/operators/me/capture-requests?status=Open; upload kèm captureRequestId → Fulfilled; quá hạn → Expired + AlertService.RaiseAsync(EvidenceFlag).
+*Web:* —
+*Mobile:* Mục Yêu cầu chụp ở Hôm nay dùng API; bấm vào mở màn chụp đúng hộp.
+*Bảng CSDL:* capture_request, alert
+
+*Hoàn thành khi:* Chụp đúng hộp trước hạn → Fulfilled; quá hạn → cảnh báo.
+*Phụ thuộc:* KH-07
+
+*Nhánh git:* feature/<mã task này>-yeu-cau-chup-ngau-nhien
+*Mã trong file kế hoạch:* KH-08","High","khoi","evi","2026-10-21","2026-10-21"
+"T64","E8","Task","[KH-09] Thẩm định bằng chứng bị gắn cờ","*Người làm:* Khôi    *Use case:* UC47    *Ngày:* D10 (22/10 → 22/10)
+
+*Backend:* GET /api/review/evidence?status=Flagged, GET /api/review/evidence/{id} (ảnh + metadata + kết quả mô hình + giải trình), POST /api/review/evidence/{id}/verdict {verdict, note}. Người thẩm định đã góp vốn lô đó → 403.
+*Web:* Trang Thẩm định bằng chứng (mới, trong admin/, vai EvidenceReviewer).
+*Mobile:* —
+*Bảng CSDL:* evidence, evidence_review
+
+*Hoàn thành khi:* Reviewer có góp vốn lô → 403 evidence.reviewer_conflict; phán quyết đổi review_status.
+*Phụ thuộc:* KH-07
+
+*Nhánh git:* feature/<mã task này>-tham-dinh-bang-chung
+*Mã trong file kế hoạch:* KH-09","High","khoi","evi","2026-10-22","2026-10-22"
+"T65","E8","Task","[KH-10] Giải trình bằng chứng","*Người làm:* Khôi    *Use case:* UC48    *Ngày:* D11 (23/10 → 23/10)
+
+*Backend:* GET /api/operators/me/evidence?status=Flagged; POST /api/evidence/{id}/explanation {text}.
+*Web:* Hộ nuôi xem & giải trình trong operator/.
+*Mobile:* Trong tab Cảnh báo: mục Bằng chứng bị gắn cờ → giải trình.
+*Bảng CSDL:* evidence
+
+*Hoàn thành khi:* Giải trình xong hiện cho người thẩm định.
+*Phụ thuộc:* KH-09
+
+*Nhánh git:* feature/<mã task này>-giai-trinh-bang-chung
+*Mã trong file kế hoạch:* KH-10","Medium","khoi","evi","2026-10-23","2026-10-23"
+"T66","E15","Task","[KH-11] Danh mục nhà đầu tư — mobile + web","*Người làm:* Khôi    *Use case:* UC16    *Ngày:* D12 (24/10 → 24/10)
+
+*Backend:* GET /api/investor/portfolio (v_investor_portfolio), GET /api/investor/portfolio/{batchCode}.
+*Web:* Tab Danh mục trong cổng NĐT (bản 2) dùng API.
+*Mobile:* Tổng quan dùng API: đồng hồ chu kỳ, thẻ khoản góp (bỏ MockInvestorRepository.myContributions).
+*Bảng CSDL:* contribution, capital_share, v_investor_portfolio
+
+*Hoàn thành khi:* Không có trường lợi suất; số tiền / % vốn khớp CSDL.
+*Phụ thuộc:* TH-07
+*Ghi chú:* BR-49.
+
+*Nhánh git:* feature/<mã task này>-danh-muc-ndt
+*Mã trong file kế hoạch:* KH-11","High","khoi","port","2026-10-24","2026-10-24"
+"T67","E15","Task","[KH-12] Thông báo trong app","*Người làm:* Khôi    *Use case:* UC16    *Ngày:* D13 (25/10 → 25/10)
+
+*Backend:* GET /api/me/notifications?after= (tính từ sự kiện: tiền xác nhận, hợp đồng đủ chữ ký, nhật ký mới, cảnh báo, quyết toán công bố, đã chi trả).
+*Web:* Chuông thông báo ở đầu trang NĐT.
+*Mobile:* Tab Thông báo dùng API + chấm số chưa đọc (lưu mốc đã đọc trên máy).
+*Bảng CSDL:* — (đọc nhiều bảng)
+
+*Hoàn thành khi:* Góp vốn xong → có thông báo ""Đã nhận tiền"" trên app.
+*Phụ thuộc:* KH-11
+*Ghi chú:* Đẩy thông báo (FCM) là phần thêm nếu còn thời gian.
+
+*Nhánh git:* feature/<mã task này>-thong-bao
+*Mã trong file kế hoạch:* KH-12","Medium","khoi","port","2026-10-25","2026-10-25"
+"T68","E15","Task","[KH-13] Hoàn thiện mobile giữa kỳ","*Người làm:* Khôi    *Use case:* —    *Ngày:* D14 (26/10 → 26/10)
+
+*Backend:* —
+*Web:* —
+*Mobile:* Trạng thái lỗi / mất mạng, kéo để tải lại, khung tải (skeleton), kiểm tra khổ nhỏ; build APK release thử; rà các màn còn mock.
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* Không màn nào crash khi tắt mạng; smoke test xanh.
+*Phụ thuộc:* —
+*Ghi chú:* Mốc M2.
+
+*Nhánh git:* feature/<mã task này>-hoan-thien-mobile
+*Mã trong file kế hoạch:* KH-13","Medium","khoi","port","2026-10-26","2026-10-26"
+"T69","E16","Task","[KH-14] Dashboard quản trị + hộ nuôi","*Người làm:* Khôi    *Use case:* UC42    *Ngày:* D15 (27/10 → 27/10)
+
+*Backend:* GET /api/admin/dashboard (vốn vào theo ngày, lô theo trạng thái, cảnh báo leo thang, đơn hàng, chi trả); GET /api/operators/me/dashboard; GET /api/admin/reports/{name}.csv.
+*Web:* admin/AdminDashboard.tsx (recharts) + operator/OperatorDashboard.tsx dùng API.
+*Mobile:* —
+*Bảng CSDL:* — (tổng hợp)
+
+*Hoàn thành khi:* Số liệu khớp truy vấn trực tiếp CSDL; xuất CSV mở được bằng Excel (UTF-8).
+*Phụ thuộc:* —
+
+*Nhánh git:* feature/<mã task này>-dashboard
+*Mã trong file kế hoạch:* KH-14","High","khoi","adm","2026-10-27","2026-10-27"
+"T70","E16","Task","[KH-15] Xem + xuất nhật ký kiểm toán","*Người làm:* Khôi    *Use case:* UC43    *Ngày:* D16 (28/10 → 28/10)
+
+*Backend:* GET /api/admin/audit-log?entityType=&from=&to=&page=; GET /api/admin/audit-log/export (CSV + kết quả kiểm tra chuỗi băm bằng IAuditLog.VerifyChainAsync).
+*Web:* Trang Nhật ký kiểm toán (mới, trong admin/).
+*Mobile:* —
+*Bảng CSDL:* audit_log
+
+*Hoàn thành khi:* Sửa tay 1 dòng trong CSDL → trang báo gãy chuỗi đúng vị trí.
+*Phụ thuộc:* TH-02
+*Ghi chú:* TL-08.
+
+*Nhánh git:* feature/<mã task này>-xuat-nhat-ky-kiem-toan
+*Mã trong file kế hoạch:* KH-15","High","khoi","adm","2026-10-28","2026-10-28"
+"T71","E19","Task","[KH-16] Triển khai lên server","*Người làm:* Khôi    *Use case:* —    *Ngày:* D17 (29/10 → 29/10)
+
+*Backend:* Chọn máy chủ (VPS sinh viên / Azure for Students); Dockerfile cho API; SQL Server; HTTPS (Caddy/Nginx); bí mật qua biến môi trường (Jwt__SigningKey, chuỗi kết nối); chạy DbMigrator khi deploy; workflow deploy.
+*Web:* Web lên Vercel (VITE_API_URL trỏ API thật).
+*Mobile:* —
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* Link công khai chạy được, đăng nhập demo được; ghi lại cách deploy trong docs.
+*Phụ thuộc:* —
+*Ghi chú:* Mốc M3.
+
+*Nhánh git:* feature/<mã task này>-trien-khai-server
+*Mã trong file kế hoạch:* KH-16","Highest","khoi","opsx","2026-10-29","2026-10-29"
+"T72","E19","Task","[KH-17] Phát hành app cho demo","*Người làm:* Khôi    *Use case:* —    *Ngày:* D18 (30/10 → 30/10)
+
+*Backend:* —
+*Web:* —
+*Mobile:* APK release trỏ API thật (--dart-define=API_URL=...), đưa lên GitHub Releases; thử trên 2 điện thoại thật; hướng dẫn cài.
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* Cài APK từ link, đăng nhập, chụp bằng chứng, quét tem đều chạy.
+*Phụ thuộc:* KH-16
+
+*Nhánh git:* feature/<mã task này>-phat-hanh-app
+*Mã trong file kế hoạch:* KH-17","High","khoi","opsx","2026-10-30","2026-10-30"
+"T73","E19","Task","[KH-18] Rà bảo mật + phân quyền","*Người làm:* Khôi    *Use case:* — (NFR Security)    *Ngày:* D19 (31/10 → 31/10)
+
+*Backend:* Test phân quyền: mỗi vai gọi API của vai khác → 403; mã hoá số tài khoản ngân hàng khi lưu (ASP.NET Data Protection); bắt buộc HTTPS; giới hạn số lần đăng nhập sai.
+*Web:* —
+*Mobile:* —
+*Bảng CSDL:* payout_account
+
+*Hoàn thành khi:* Bộ test phân quyền xanh; số tài khoản trong CSDL không đọc được trực tiếp.
+*Phụ thuộc:* —
+*Ghi chú:* NFR Security.
+
+*Nhánh git:* feature/<mã task này>-bao-mat
+*Mã trong file kế hoạch:* KH-18","High","khoi","opsx","2026-10-31","2026-10-31"
+"T74","E19","Task","[KH-19] Kiểm thử đầu-cuối trên server + chuẩn bị máy demo","*Người làm:* Khôi    *Use case:* UC02, 03, 06, 16, 19, 20, 42, 43, 45, 47, 48    *Ngày:* D20–D21 (01/11 → 02/11)
+
+*Backend:* Chạy ca kiểm thử của mình trên server thật; sửa lỗi.
+*Web:* Rà admin.
+*Mobile:* Cài app lên điện thoại demo, chuẩn bị tài khoản, sạc pin.
+*Bảng CSDL:* —
+
+*Hoàn thành khi:* Không còn lỗi chặn trong phần mình.
+*Phụ thuộc:* NH-17
+
+*Nhánh git:* feature/<mã task này>-kiem-thu-mobile
+*Mã trong file kế hoạch:* KH-19","Highest","khoi","opsx","2026-11-01","2026-11-02"
