@@ -11,7 +11,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
     { id: 'dashboard', icon: LayoutDashboard, label: 'Tổng quan', path: '/admin' },
     { id: 'users', icon: Users, label: 'Quản lý Người dùng', path: '/admin/users' },
     { id: 'batches', icon: FolderKanban, label: 'Kiểm duyệt Dự án', path: '/admin/batches' },
-    { id: 'storefront', icon: Store, label: 'Duyệt Lên Kệ (Store)', path: '/admin/storefront' },
+    { id: 'storefront', icon: Store, label: 'Kiểm duyệt niêm yết', path: '/admin/storefront' },
     { id: 'finance', icon: Wallet, label: 'Đối soát & Tài chính', path: '/admin/finance' },
     { id: 'alerts', icon: AlertTriangle, label: 'Cảnh báo', path: '/admin/alerts' },
     { id: 'disputes', icon: MessageSquareWarning, label: 'Xử lý Khiếu nại', path: '/admin/disputes' },

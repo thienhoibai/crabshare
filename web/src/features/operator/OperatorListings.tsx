@@ -234,8 +234,14 @@ function ListingCard({ listing }: { listing: Listing }) {
             <OpBadge tone="gold">Lô {listing.batchCode}</OpBadge>
             <OpBadge>{listing.gradeName}</OpBadge>
             <OpBadge tone="info">{listing.storageType === 'Frozen' ? 'Cấp đông' : 'Tươi sống'}</OpBadge>
+            {listing.hiddenAt && <OpBadge tone="danger">Bị ẩn khỏi cửa hàng</OpBadge>}
           </div>
           <h3 className="rd-h3">{listing.title}</h3>
+          {listing.hiddenAt && (
+            <OpNote tone="danger">
+              Quản trị đã ẩn niêm yết này lúc {formatDateTime(listing.hiddenAt)}: {listing.hiddenReason}. Khách không còn thấy và không đặt được.
+            </OpNote>
+          )}
           <p className="op-big">{formatVnd(listing.pricePerKg)} <small>/ kg</small></p>
           <OpFacts
             items={[
