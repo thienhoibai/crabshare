@@ -1,6 +1,7 @@
 # CS-27 / KH-02 — eKYC trên backend, mobile và web
 
-Nhánh: `feature/CS-27-ekyc`. PR: https://github.com/thienhoibai/crabshare/pull/2.
+Nhánh mobile/web: `feature/CS-27-ekyc-clients`. Backend đã merge qua PR:
+https://github.com/thienhoibai/crabshare/pull/2.
 
 ## Luồng đã triển khai
 
@@ -16,7 +17,7 @@ Nhánh: `feature/CS-27-ekyc`. PR: https://github.com/thienhoibai/crabshare/pull/
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Backend (`dotnet test backend/CrabShare.sln`) | 31 test đạt |
+| Backend (`dotnet test backend/CrabShare.sln`) | 85 test đạt sau khi cập nhật develop (81 API + 4 Settlement) |
 | Không consent | 400, không gọi provider, không ghi KYC/audit, trạng thái không đổi |
 | Xác minh thành công | Passed + Verified; GET trả kết quả vừa ghi |
 | Ảnh không được ghi xuống đĩa server | Storage không được tạo; temp upload trống ngay trong lúc provider xử lý ảnh >64 KB |
