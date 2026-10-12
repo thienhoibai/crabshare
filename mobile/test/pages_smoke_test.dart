@@ -3,6 +3,8 @@
 import 'package:crabshare_mobile/app/theme/app_theme.dart';
 import 'package:crabshare_mobile/core/auth/session.dart';
 import 'package:crabshare_mobile/features/account/account_page.dart';
+import 'package:crabshare_mobile/features/account/payout_account_page.dart';
+import 'package:crabshare_mobile/features/account/data/payout_repository.dart';
 import 'package:crabshare_mobile/features/auth/login_page.dart';
 import 'package:crabshare_mobile/features/common/unsupported_role_page.dart';
 import 'package:crabshare_mobile/features/investor/batches/batch_detail_page.dart';
@@ -56,6 +58,7 @@ void main() {
     'Quét tem': const ScanPage(),
     'Kết quả truy xuất': const TraceResultPage(tagCode: 'CSAB23CD45EF'),
     'Tài khoản': const AccountPage(),
+    'Tài khoản nhận tiền': const PayoutAccountPage(),
   };
 
   for (final MapEntry(key: name, value: page) in pages.entries) {
@@ -68,6 +71,7 @@ void main() {
         overrides: [
           sessionProvider.overrideWith(() => SessionController(const SessionState(token: 't', user: _user))),
           kycRepositoryProvider.overrideWithValue(_SmokeKycRepository()),
+          payoutRepositoryProvider.overrideWithValue(_SmokePayoutRepository()),
         ],
         child: MaterialApp(theme: buildAppTheme(), home: page),
       ));
@@ -87,4 +91,11 @@ class _SmokeKycRepository implements KycRepository {
   Future<KycVerification> status() async => const KycVerification(status: KycStatus.unverified);
   @override
   Future<KycVerification> verify({required List<KycImage> images, required bool consent}) => throw UnimplementedError();
+}
+
+class _SmokePayoutRepository implements PayoutRepository {
+  @override
+  Future<PayoutProfile> get(String ownerType) async => PayoutProfile(ownerType: ownerType, expectedHolderName: 'Nguyễn Văn Test');
+  @override
+  Future<PayoutProfile> save(String ownerType, PayoutInput input) => throw UnimplementedError();
 }

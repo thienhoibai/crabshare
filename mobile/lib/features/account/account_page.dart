@@ -73,7 +73,6 @@ class AccountPage extends ConsumerWidget {
                 children: [
                   if (user.isInvestor) ...[
                     _MenuTile(icon: Icons.verified_user_outlined, title: 'Xác minh danh tính (eKYC)', onTap: () => context.push(Routes.kyc)),
-                    _MenuTile(icon: Icons.account_balance_outlined, title: 'Tài khoản nhận tiền', onTap: soon),
                     _MenuTile(icon: Icons.description_outlined, title: 'Hợp đồng đã ký', onTap: soon),
                   ],
                   if (user.isOperator) ...[
@@ -81,6 +80,8 @@ class AccountPage extends ConsumerWidget {
                     _MenuTile(icon: Icons.grid_view_rounded, title: 'Danh sách hộp (đánh số)', onTap: soon),
                     _MenuTile(icon: Icons.print_outlined, title: 'Máy in tem', onTap: soon),
                   ],
+                  if (user.isInvestor || user.isOperator)
+                    _MenuTile(icon: Icons.account_balance_outlined, title: 'Tài khoản nhận tiền', onTap: () => context.push(Routes.payoutAccount)),
                   _MenuTile(icon: Icons.translate_rounded, title: 'Ngôn ngữ', trailing: 'Tiếng Việt', onTap: soon),
                   _MenuTile(icon: Icons.dns_outlined, title: 'Máy chủ', trailing: apiUrl.replaceFirst(RegExp(r'^https?://'), ''), onTap: null),
                 ],

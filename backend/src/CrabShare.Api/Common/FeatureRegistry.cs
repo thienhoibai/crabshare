@@ -60,6 +60,7 @@ public static class FeatureRegistry
 
         // Khôi
         services.AddScoped<AccountService>();        // Features/Accounts
+        services.AddScoped<PaymentProfileService>();
         // services.AddScoped<EvidenceService>();     // Features/Evidence
         // services.AddScoped<AlertService>();        // Features/Alerts
         // services.AddScoped<PortfolioService>();    // Features/Portfolio

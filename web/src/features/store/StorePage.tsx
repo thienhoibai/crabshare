@@ -5,8 +5,13 @@ import { ArrowUpRight, Plus, X } from 'lucide-react'
 import { IMG, KINDS, filterProducts, product, small, vnd, type KindFilter, type Product } from '../../shared/ui/kit/mock-data'
 import { CartButton, CartDrawer, CartProvider, ProductView, Shell, Tabs, TopBar, useCart, useModalLock } from '../../shared/ui/kit/kit'
 import './store.css'
+import { useAuthStore } from '../../shared/auth/authStore'
 
 type Sort = 'new' | 'asc' | 'desc'
+function AddressBookLink() {
+  const isCustomer = useAuthStore(s => s.user?.roles.includes('Customer'))
+  return isCustomer ? <a className="rd-btn rd-btn--ghost rd-btn--sm" href="/tai-khoan/dia-chi">Sổ địa chỉ</a> : null
+}
 const sortProducts = (list: Product[], s: Sort) =>
   s === 'new' ? list : [...list].sort((a, b) => (s === 'asc' ? 1 : -1) * (a.sizes[0].price - b.sizes[0].price))
 
@@ -68,7 +73,7 @@ function StoreV1Inner() {
   const list = sortProducts(filterProducts(kind), sort)
   return (
     <>
-      <TopBar area="store" right={<CartButton />} />
+      <TopBar area="store" right={<><AddressBookLink /><CartButton /></>} />
       <main className="s1">
         <section className="s1-head">
           <p className="rd-eyebrow">Cửa hàng · hàng từ các lô đang bán</p>

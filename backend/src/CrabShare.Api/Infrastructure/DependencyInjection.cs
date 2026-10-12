@@ -27,6 +27,7 @@ public static class DependencyInjection
         services.AddSingleton<IPaymentGateway, FakePaymentGateway>();
         services.AddSingleton<IDigitalSigningService, FakeSigningService>();
         services.AddSingleton<IEkycProvider, FakeEkycProvider>();
+        services.AddSingleton<IBankNameMatcher, FakeBankNameMatcher>();
         services.AddSingleton<ICrabDetector, NoopCrabDetector>();
 
         return services;

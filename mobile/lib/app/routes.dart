@@ -8,6 +8,7 @@ abstract final class Routes {
 
   // Dùng chung sau đăng nhập
   static const unsupported = '/unsupported';
+  static const payoutAccount = '/account/payout-account';
   static String batch(String code) => '/batches/$code';
 
   // Nhà đầu tư — 4 tab dưới + màn con
