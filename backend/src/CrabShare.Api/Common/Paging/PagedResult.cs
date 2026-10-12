@@ -24,7 +24,8 @@ public static class PagingExtensions
     public static async Task<PagedResult<T>> ToPagedAsync<T>(this IQueryable<T> query, int page, int pageSize, CancellationToken ct)
     {
         var total = await query.CountAsync(ct);
-        var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        var offset = (long)(page - 1) * pageSize;
+        List<T> items = offset >= total ? [] : await query.Skip((int)offset).Take(pageSize).ToListAsync(ct);
         return new PagedResult<T>(items, page, pageSize, total);
     }
 

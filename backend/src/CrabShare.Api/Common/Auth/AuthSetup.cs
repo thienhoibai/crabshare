@@ -2,6 +2,8 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using CrabShare.Api.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace CrabShare.Api.Common.Auth;
 
@@ -25,6 +27,18 @@ public static class AuthSetup
             .AddJwtBearer(o =>
             {
                 o.MapInboundClaims = false;
+                // Khoá tài khoản có hiệu lực cả với JWT đã cấp, không chờ token hết hạn.
+                o.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        if (!long.TryParse(context.Principal?.FindFirstValue("sub"), out var userId)) { context.Fail("Invalid subject."); return; }
+                        var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                        var status = await db.AppUsers.AsNoTracking().Where(u => u.UserId == userId).Select(u => u.Status)
+                            .SingleOrDefaultAsync(context.HttpContext.RequestAborted);
+                        if (status is null or "Locked") context.Fail("Account unavailable.");
+                    },
+                };
                 o.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidIssuer = jwt.Issuer,

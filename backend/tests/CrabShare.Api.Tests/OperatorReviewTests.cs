@@ -332,15 +332,15 @@ public class OperatorReviewTests(OperatorDatabaseFixture fixture) : IClassFixtur
         await using var db = fixture.OpenDb();
         await db.AppUsers.Where(u => u.UserId == adminAuth.User.UserId || u.UserId == ownerAuth.User.UserId)
             .ExecuteUpdateAsync(s => s.SetProperty(u => u.Status, "Locked"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await admin.GetAsync("/api/admin/operators")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await admin.PostAsJsonAsync($"/api/admin/operators/{id}/approve", new { approvedSlotCapacity = 10 })).StatusCode);
-        async Task AssertOwnerDenied()
+        Assert.Equal(HttpStatusCode.Unauthorized, (await admin.GetAsync("/api/admin/operators")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await admin.PostAsJsonAsync($"/api/admin/operators/{id}/approve", new { approvedSlotCapacity = 10 })).StatusCode);
+        async Task AssertOwnerDenied(HttpStatusCode expected = HttpStatusCode.Forbidden)
         {
-            Assert.Equal(HttpStatusCode.Forbidden, (await owner.GetAsync("/api/operators/me/members")).StatusCode);
-            Assert.Equal(HttpStatusCode.Forbidden, (await owner.PostAsJsonAsync("/api/operators/me/members", new { email = staff.User.Email })).StatusCode);
-            Assert.Equal(HttpStatusCode.Forbidden, (await owner.DeleteAsync($"/api/operators/me/members/{staff.User.UserId}")).StatusCode);
+            Assert.Equal(expected, (await owner.GetAsync("/api/operators/me/members")).StatusCode);
+            Assert.Equal(expected, (await owner.PostAsJsonAsync("/api/operators/me/members", new { email = staff.User.Email })).StatusCode);
+            Assert.Equal(expected, (await owner.DeleteAsync($"/api/operators/me/members/{staff.User.UserId}")).StatusCode);
         }
-        await AssertOwnerDenied();
+        await AssertOwnerDenied(HttpStatusCode.Unauthorized);
         await db.AppUsers.Where(u => u.UserId == ownerAuth.User.UserId).ExecuteUpdateAsync(s => s.SetProperty(u => u.Status, "Active"));
         await db.AppUserRoles.Where(r => r.UserId == ownerAuth.User.UserId && r.RoleCode == Roles.OperatorMember).ExecuteDeleteAsync();
         await AssertOwnerDenied();

@@ -1,24 +1,22 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using CrabShare.Api.Common.Auth;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.TestHost;
 
 namespace CrabShare.Api.Tests;
 
 /// <summary>Phân quyền và kiểm tra dữ liệu vào của niêm yết — dừng trước khi chạm CSDL.</summary>
 public class ListingsControllerTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
 {
-    private HttpClient Client(params string[] roles)
+    private HttpClient Client(string? role = null)
     {
-        var app = factory.WithWebHostBuilder(b => b.UseSetting("Seed:Enabled", "false"));
+        var app = factory.WithWebHostBuilder(b => b.UseSetting("Seed:Enabled", "false").ConfigureTestServices(KycControllerTests.AddTestAuth));
         var client = app.CreateClient();
-        if (roles.Length > 0)
+        if (role is not null)
         {
-            var tokens = app.Services.GetRequiredService<TokenService>();
-            var (token, _) = tokens.Create(99, "test@crabshare.local", "Test", roles, roles.Contains(Roles.OperatorMember) ? 1 : null);
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            client.DefaultRequestHeaders.Add("X-Test-User", "99");
+            client.DefaultRequestHeaders.Add("X-Test-Role", role);
         }
         return client;
     }
