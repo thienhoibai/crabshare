@@ -19,6 +19,7 @@ const InvestorPortal = lazy(() => import('../features/investor/InvestorPortal'))
 
 const OperatorDashboard = lazy(() => import('../features/operator/OperatorDashboard'))
 const OperatorKyc = lazy(() => import('../features/operator/OperatorKyc'))
+const OperatorRegistration = lazy(() => import('../features/operator/OperatorRegistration'))
 const OperatorCreateBatch = lazy(() => import('../features/operator/OperatorCreateBatch'))
 const OperatorContract = lazy(() => import('../features/operator/OperatorContract'))
 const OperatorHarvest = lazy(() => import('../features/operator/OperatorHarvest'))
@@ -87,6 +88,9 @@ export const router = createBrowserRouter([
 
       // ----- Nhà đầu tư -----
       { element: guarded(['Investor']), children: [{ path: '/nha-dau-tu/*', element: page(InvestorPortal) }] },
+
+      // UC04: mọi tài khoản đã đăng nhập đều được đăng ký hộ nuôi.
+      { path: '/operator/register', element: <RequireRole>{page(OperatorRegistration)}</RequireRole> },
 
       // ----- Người nuôi -----
       {
