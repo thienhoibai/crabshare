@@ -45,7 +45,7 @@ public static class FeatureRegistry
         services.AddOptions<FundingOptions>().BindConfiguration("Funding");
         // services.AddScoped<ContractService>();     // Features/Contracts
         // services.AddScoped<PaymentService>();      // Features/Payments
-        services.AddScoped<PaymentRequestService>();  // Features/Payments — bản tối thiểu cho CS-36, TH-05 mở rộng
+        services.AddScoped<PaymentRequestService>();  // Features/Payments — VietQR dùng chung (TH-05)
         // services.AddScoped<SettlementService>();   // Features/Settlement
 
         // Viên

@@ -19,9 +19,9 @@
 | POST | `/api/risk-acknowledgements` | Investor | **Đã làm.** `{ riskDisclosureId, scrolledToEnd: true }`; chưa cuộn hết → 422 `funding.must_scroll_to_end`; bản đã cũ → 422 `funding.disclosure_outdated`; gọi lại không tạo trùng. Ghi audit |
 | GET | `/api/funding/batches` | Investor | **Đã làm.** Lô đang mở gọi vốn: tiến độ, còn nhận trước trần |
 | GET | `/api/funding/batches/{code}` | Investor | **Đã làm.** Số liệu cho màn 2 + `me.kycVerified`, `me.riskAcknowledged` + khoản tôi đang giữ chỗ |
-| POST | `/api/batches/{code}/contributions` | Investor | **Đã làm.** `{ amount }` → 201 `Reserved`, `expires_at` = now + `Funding:ReservationMinutes` (30). Lỗi 422: `funding.kyc_required`, `funding.risk_ack_required`, `funding.not_open`, `funding.below_min_contribution`, `funding.over_max_capital`; 409 `funding.reservation_exists` (mỗi người một chỗ đang giữ / lô). Ghi audit |
+| POST | `/api/batches/{code}/contributions` | Investor | **Đã làm.** `{ amount }` → 201 `Reserved`, `expires_at` = min(now + `Funding:ReservationMinutes` (30), `funding_deadline`) (TL-17 §6.1). Lỗi 422: `funding.kyc_required`, `funding.risk_ack_required`, `funding.not_open`, `funding.below_min_contribution`, `funding.over_max_capital`; 409 `funding.reservation_exists` (mỗi người một chỗ đang giữ / lô). Ghi audit |
 | DELETE | `/api/contributions/{id}` | Investor | **Đã làm.** Huỷ khoản đang giữ chỗ, chưa trả tiền → `Expired` (CSDL không có trạng thái Cancelled), yêu cầu thanh toán Pending → `Cancelled`. Ghi audit |
-| POST | `/api/contributions/{id}/payment-requests` | Investor | TH-05: gọi `IPaymentGateway.CreateVietQrAsync` → trả nội dung QR |
+| POST | `/api/contributions/{id}/payment-requests` | Investor | **Đã làm (TH-05).** Mã VietQR cho khoản `Reserved` còn hạn của chính mình → 201, mã đối chiếu `GV` + 11 ký tự, hết hạn cùng giữ chỗ. Còn mã `Pending` chưa hết hạn thì trả lại đúng mã đó (200), không sinh mã mới. Lỗi: 403 `contribution.not_owner`; 422 `contribution.not_payable`, `funding.not_open`, `funding.batch_account_unavailable`. Ghi audit (`payment_request` / `create`) |
 | GET | `/api/me/contributions` | Investor | **Đã làm.** Các khoản góp của tôi (giữ chỗ quá hạn hiện `Expired` ngay, job TH-07 sẽ đổi hẳn) |
 
 Chống vượt trần: trong một transaction, khoá chuỗi audit (`IAuditLog.LockAsync`) rồi khoá dòng lô `UPDLOCK, HOLDLOCK`, cộng Confirmed + Reserved còn hạn rồi mới thêm. Test `FundingDatabaseTests`: 5 người giữ chỗ 3 tr cùng lúc vào lô trần 10 tr → đúng 3 người được.
@@ -45,9 +45,9 @@ Job nền:
 
 ## Màn hình
 - Web: luồng góp vốn trong `investor/` (Xác nhận rủi ro → Số tiền & giữ chỗ → Ký hợp đồng → VietQR → Hoàn tất).
-  **Đã làm màn 1–2 (TH-04):** trang `/nha-dau-tu/gop-von/:code` (`web/src/features/investor/funding/ContributePage.tsx`); nút Xác nhận chỉ bật khi cuộn hết bản công bố; màn 2 hiện mức tối thiểu, phần còn lại trước trần, đồng hồ giữ chỗ. Danh sách lô đang mở gọi vốn (số liệu thật) ở đầu mục Khám phá lô (`OpenBatches.tsx`). Màn 3 chờ TH-08, màn 4 chờ TH-05.
-- Mobile: nút "Góp vốn" ở chi tiết lô mở trang web trên bằng `url_launcher` (`--dart-define=WEB_URL=...`, mặc định `http://localhost:5173`).
-- Mobile: nút "Góp vốn" ở `investor/batches/batch_detail_page.dart` (đang hiện danh sách bước).
+  **Đã làm màn 1–2 (TH-04):** trang `/nha-dau-tu/gop-von/:code` (`web/src/features/investor/funding/ContributePage.tsx`); nút Xác nhận chỉ bật khi cuộn hết bản công bố; màn 2 hiện mức tối thiểu, phần còn lại trước trần, đồng hồ giữ chỗ. Danh sách lô đang mở gọi vốn (số liệu thật) ở đầu mục Khám phá lô (`OpenBatches.tsx`). Màn 3 chờ TH-08.
+  **Đã làm màn 4–5 (TH-05):** màn 4 lấy mã ngay khi vào và hiện bằng `<VietQrBox>` (`web/src/shared/payments/`); màn 5 "đang chờ tiền về" hỏi lại `GET /api/payment-requests/{id}` 5 giây một lần và chuyển sang "Đã nhận tiền" khi webhook (TH-06) đổi yêu cầu sang `Paid`. Nút "Tôi đã chuyển khoản" chỉ chuyển màn, không xác nhận gì.
+- Mobile: nút "Góp vốn" ở chi tiết lô (`investor/batches/batch_detail_page.dart`) mở trang web trên bằng `url_launcher` (`--dart-define=WEB_URL=...`, mặc định `http://localhost:5173`).
 
 ## Tài liệu
 TL-02 Mô hình giữ tiền · TL-09 Xác nhận rủi ro · TL-16 Đơn vị góp vốn · TL-17 Hạn mức góp, giữ chỗ và dải vốn khả thi · TL-05 Cơ sở pháp lý huy động vốn.

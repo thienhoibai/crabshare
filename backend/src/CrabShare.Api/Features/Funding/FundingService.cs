@@ -2,6 +2,7 @@ using System.Globalization;
 using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Errors;
+using CrabShare.Api.Features.Payments;
 using CrabShare.Api.Infrastructure.Persistence;
 using CrabShare.Api.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -10,13 +11,13 @@ using Microsoft.Extensions.Options;
 namespace CrabShare.Api.Features.Funding;
 
 /// <summary>
-/// UC11 xác nhận rủi ro và UC10 giữ chỗ góp vốn (TL-09, TL-17).
+/// UC11 xác nhận rủi ro, UC10 giữ chỗ góp vốn và UC12 mã VietQR cho khoản đang giữ chỗ (TL-09, TL-17, TL-10).
 /// Giữ chỗ chạy trong transaction: khoá chuỗi audit rồi khoá dòng lô, nên hai người giữ chỗ cùng lúc
 /// chạy lần lượt và tổng (đã xác nhận + đang giữ chỗ) không bao giờ vượt max_capital.
 /// </summary>
 public sealed class FundingService(
     AppDbContext db, ICurrentUser me, IAuditLog audit, TimeProvider clock,
-    IOptions<FundingOptions> options, RiskDisclosureDocuments documents)
+    IOptions<FundingOptions> options, RiskDisclosureDocuments documents, PaymentRequestService payments)
 {
     private static readonly CultureInfo Vi = CultureInfo.GetCultureInfo("vi-VN");
 
@@ -140,10 +141,13 @@ public sealed class FundingService(
                     ? "Lô đã nhận đủ vốn tối đa."
                     : $"Lô chỉ còn nhận tối đa {Vnd(remaining)}.");
 
+            // expiresAt = min(lúc giữ + thời hạn giữ chỗ, hạn gọi vốn) (TL-17 §6.1 bước 4)
+            var expiresAt = now.AddMinutes(options.Value.ReservationMinutes);
+            if (batch.FundingDeadline < expiresAt) expiresAt = batch.FundingDeadline.Value;
             var contribution = new Contribution
             {
                 BatchId = batch.BatchId, InvestorId = investor.UserId, Amount = req.Amount, Status = "Reserved",
-                ReservedAt = now, ExpiresAt = now.AddMinutes(options.Value.ReservationMinutes), CreatedAt = now, UpdatedAt = now,
+                ReservedAt = now, ExpiresAt = expiresAt, CreatedAt = now, UpdatedAt = now,
             };
             db.Contributions.Add(contribution);
             await db.SaveChangesAsync(ct);
@@ -177,6 +181,49 @@ public sealed class FundingService(
             }
             await audit.WriteAsync("contribution", contributionId, "cancel_reservation", new { status = "Reserved" },
                 new { status = "Expired", reason = "Nhà đầu tư huỷ giữ chỗ" }, now, ct);
+        }, ct);
+
+    // ---------- Chuyển tiền ----------
+
+    /// <summary>
+    /// Màn 4: mã VietQR cho khoản đang giữ chỗ, chuyển thẳng vào tài khoản chuyên dùng của lô; mã hết hạn cùng lúc với
+    /// giữ chỗ. Đang còn yêu cầu chờ thanh toán thì trả lại đúng yêu cầu đó (Created = false), không sinh mã mới:
+    /// mỗi khoản góp chỉ có một mã đang hiệu lực, quét mã cũ vẫn khớp.
+    /// </summary>
+    public Task<(PaymentRequestResponse Payment, bool Created)> RequestPaymentAsync(long contributionId, CancellationToken ct)
+        => db.InTransactionAsync(async () =>
+        {
+            await audit.LockAsync(ct);
+            var investor = await RequireInvestorAsync(ct);
+            var contribution = await db.Contributions.Include(c => c.Batch).ThenInclude(b => b.BatchAccount)
+                                   .SingleOrDefaultAsync(c => c.ContributionId == contributionId, ct)
+                               ?? throw new NotFoundException("contribution.not_found", "Không tìm thấy khoản góp.");
+            if (contribution.InvestorId != investor.UserId)
+                throw new ForbiddenException("contribution.not_owner", "Khoản góp này không phải của bạn.");
+            var now = Now();
+            if (contribution.Status != "Reserved" || contribution.ExpiresAt <= now)
+                throw new BusinessRuleException("contribution.not_payable",
+                    "Khoản góp không còn được giữ chỗ (đã hết hạn, đã huỷ hoặc đã thanh toán). Giữ chỗ lại nếu vẫn muốn góp.");
+            var batch = contribution.Batch;
+            if (!IsOpen(batch, now))
+                throw new BusinessRuleException("funding.not_open", "Lô này hiện không nhận góp vốn.");
+            if (batch.BatchAccount is not { Status: "Open" } account)
+                throw new BusinessRuleException("funding.batch_account_unavailable", $"Lô {batch.BatchCode} chưa có tài khoản chuyên dùng để nhận tiền.");
+
+            var pending = await db.PaymentRequests
+                .Where(r => r.ContributionId == contributionId && r.Status == "Pending" && r.ExpiresAt > now)
+                .OrderByDescending(r => r.PaymentRequestId)
+                .FirstOrDefaultAsync(ct);
+            if (pending is not null)
+                return (await payments.DescribeAsync(pending, account, batch.BatchCode, ct), false);
+
+            var created = await payments.CreateAsync(PaymentPurposes.Contribution, contribution.Amount, account.BatchAccountId,
+                account.ProviderAccountNo, contribution.ExpiresAt, PaymentTarget.ForContribution(contributionId), null, ct);
+            await db.SaveChangesAsync(ct);
+            var request = created.Request;
+            await audit.WriteAsync("payment_request", request.PaymentRequestId, "create", null,
+                new { request.Purpose, request.ReferenceCode, amount = (long)request.Amount, contributionId, request.ExpiresAt }, now, ct);
+            return (payments.Describe(created, account, batch.BatchCode), true);
         }, ct);
 
     public async Task<IReadOnlyList<ContributionResponse>> MineAsync(CancellationToken ct)

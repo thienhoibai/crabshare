@@ -10,12 +10,30 @@
 | `payment_instruction` | lệnh chi: `Disbursement`, `Payout`, `Refund`, `TaxPayment` · `Created` → `Sent` → `Succeeded` / `Failed` / `Disputed` |
 | `disbursement_tranche` | `Planned` → `Requested` → `Released`; `NeedsExplanation`, `Blocked` |
 
-## Đã có
-`PaymentRequestService.CreateForOrderAsync` — **bản tối thiểu làm trong CS-36** để Orders sinh mã VietQR cho đơn hàng: thêm `payment_request` (`OrderPayment`, `Pending`) vào DbContext **không** SaveChanges (module gọi lưu trong transaction của mình), rồi gọi `IPaymentGateway.CreateVietQrAsync`. TH-05 mở rộng cho góp vốn / cọc; giữ nguyên chữ ký hàm hoặc báo Nhân khi đổi.
+## Đã có (TH-05)
+`PaymentRequestService.CreateAsync(purpose, amount, batchAccountId, batchAccountNo, expiresAt, target, referenceCode, ct)` — dùng chung cho mọi khoản thu:
+- Thêm `payment_request` (`Pending`) vào DbContext, **không** SaveChanges: module gọi lưu trong transaction của mình, nên yêu cầu thu tiền không tồn tại tách rời khỏi nghĩa vụ. Trả `CreatedPaymentRequest(Request, Qr)`.
+- `target` = `PaymentTarget.ForContribution(id)` · `ForOrder(order)` (đơn chưa lưu cũng được) · `ForOfftake(id)` — luôn đúng một nghĩa vụ (`ck_payment_request_target`).
+- `referenceCode = null` → sinh mã 13 ký tự = tiền tố theo `PaymentPurposes` + 11 ký tự Crockford, kiểm tra không trùng: `GV` góp vốn · `OD` đơn hàng · `DC`/`DT` cọc và phần còn lại của đơn đặt trước · `BT`/`BH` cọc và tiền hàng bao tiêu. Truyền mã sẵn (đơn hàng dùng `order_no`) thì chỉ kiểm tra ≤ 13 ký tự `A–Z`, `0–9`.
+- `expiresAt` = hạn giữ chỗ của nghĩa vụ (mã QR không sống lâu hơn, TL-10 §6.1). Module gọi tự kiểm tra tài khoản lô `Open`.
+- `CreateForOrderAsync` của CS-36 giữ nguyên chữ ký, giờ gọi qua `CreateAsync`.
+- `Describe` / `DescribeAsync` → `PaymentRequestResponse` cho web/app; `Pending` đã quá hạn trả `Expired` ngay (job TH-07 sẽ đổi hẳn), `qrContent` chỉ có khi còn chờ.
 
-## Endpoint dự kiến
+Ví dụ (Funding, `FundingService.RequestPaymentAsync`):
+```csharp
+var created = await payments.CreateAsync(PaymentPurposes.Contribution, contribution.Amount, account.BatchAccountId,
+    account.ProviderAccountNo, contribution.ExpiresAt, PaymentTarget.ForContribution(contribution.ContributionId), null, ct);
+await db.SaveChangesAsync(ct);
+await audit.WriteAsync("payment_request", created.Request.PaymentRequestId, "create", null, new { created.Request.ReferenceCode }, ct);
+return payments.Describe(created, account, batch.BatchCode);
+```
+Web: `<VietQrBox>` + `usePaymentRequest` ở `web/src/shared/payments/` (xem `web/README.md`). Trang xác nhận đơn hàng (NH-06) thay `PaymentBox` tạm bằng `<VietQrBox payment={{ ...order.payment, batchCode: order.batchCode }} />`.
+
+## Endpoint
 | Method | Path | Ai gọi | Ghi chú |
 |---|---|---|---|
+| GET | `/api/payment-requests/{id}` | Chủ nghĩa vụ (người góp, người mua, người bao tiêu) | **Đã làm (TH-05).** Trạng thái + mã QR khi còn chờ; web hỏi lại 5 giây/lần để biết tiền đã về. Người khác → 403 `payment.not_owner` |
+| POST | `/api/contributions/{id}/payment-requests` | Investor | **Đã làm (TH-05)**, ở `Features/Funding` |
 | POST | `/api/webhooks/payment-provider` | Trung gian thanh toán | Kiểm tra chữ ký; **idempotent** theo `provider_txn_id`; khớp `reference_code` → `payment_request.Paid` → báo module chủ (contribution `Confirmed`, đơn `Paid`...) |
 | POST | `/api/dev/payments/simulate` | Chỉ môi trường Development | Giả lập "khách đã chuyển khoản" để demo (gọi lại đúng luồng webhook) |
 | POST | `/api/batches/{code}/tranches/{no}/request` | Operator Owner | UC18: xin giải ngân đợt `no`; kiểm tra điều kiện mốc + bằng chứng (TL-03) |

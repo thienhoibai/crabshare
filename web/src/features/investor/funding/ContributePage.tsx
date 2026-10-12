@@ -1,14 +1,16 @@
 /* Luồng góp vốn ≤ 5 màn (Phiếu, Usability): Rủi ro → Số tiền & giữ chỗ → Hợp đồng → Chuyển tiền → Xong.
-   Màn 1–2 chạy với API thật (TH-04). Màn 3 chờ ký số (TH-08), màn 4 chờ VietQR (TH-05).
+   Màn 1–2 (TH-04) và 4–5 (TH-05) chạy với API thật. Màn 3 chờ ký số (TH-08).
    Không hiển thị lợi suất kỳ vọng ở bất kỳ đâu (TL-05 §8, BR-49). */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
-import { ArrowLeft, Check, Clock, FileSignature, QrCode, ShieldCheck, Wallet } from 'lucide-react'
+import { ArrowLeft, Check, Clock, FileSignature, Hourglass, QrCode, ShieldCheck, Wallet } from 'lucide-react'
 import { errorMessage } from '../../../shared/api/http'
 import { formatDate, formatDateTime, formatVnd } from '../../../shared/lib/format'
+import { usePaymentRequest } from '../../../shared/payments/paymentsApi'
+import { VietQrBox } from '../../../shared/payments/VietQrBox'
 import { Shell, useCountdown } from '../../../shared/ui/kit/kit'
 import {
-  useAcknowledgeRisk, useActiveDisclosure, useCancelReservation, useFundingBatch, useReserve,
+  useAcknowledgeRisk, useActiveDisclosure, useCancelReservation, useFundingBatch, useRequestPayment, useReserve,
   type Contribution, type FundingBatch,
 } from './fundingApi'
 import '../investor.css'
@@ -16,6 +18,8 @@ import './funding.css'
 
 const STEPS = ['Rủi ro', 'Số tiền', 'Hợp đồng', 'Chuyển tiền', 'Xong'] as const
 type Countdown = { left: number; text: string }
+/** Yêu cầu chuyển khoản đã lấy cho khoản giữ chỗ nào (giữ chỗ lại thì phải lấy mã mới). */
+type PaymentRef = { contributionId: number; paymentRequestId: number }
 
 export default function ContributePage() {
   const { code = '' } = useParams()
@@ -30,6 +34,7 @@ function ContributeFlow({ code }: { code: string }) {
   const batch = useFundingBatch(code)
   const { refetch } = batch
   const [step, setStep] = useState<number | null>(null)
+  const [payment, setPayment] = useState<PaymentRef | null>(null)
   const reservation = batch.data?.myActiveReservation ?? null
   const until = reservation ? Date.parse(reservation.expiresAt) : null
   const countdown = useCountdown(until)
@@ -76,7 +81,11 @@ function ContributeFlow({ code }: { code: string }) {
       {current === 0 && <RiskStep code={code} onDone={() => setStep(1)} />}
       {current === 1 && <AmountStep b={b} reservation={reservation} countdown={countdown} onNext={() => setStep(2)} />}
       {current === 2 && <ContractStep b={b} onBack={() => setStep(1)} onNext={() => setStep(3)} />}
-      {current === 3 && <PaymentStep onBack={() => setStep(2)} />}
+      {current === 3 && (
+        <PaymentStep reservation={reservation} payment={payment} onCreated={setPayment} onExpire={() => void refetch()}
+          onBack={() => setStep(2)} onTransferred={() => setStep(4)} onReserveAgain={() => setStep(1)} />
+      )}
+      {current === 4 && <DoneStep payment={payment} onShowQr={() => setStep(3)} onReserveAgain={() => setStep(1)} />}
     </Frame>
   )
 }
@@ -274,17 +283,110 @@ function ContractStep({ b, onBack, onNext }: { b: FundingBatch; onBack: () => vo
   )
 }
 
-/* ---------- Màn 4: chuyển tiền (TH-05) ---------- */
-function PaymentStep({ onBack }: { onBack: () => void }) {
+/* ---------- Màn 4: chuyển tiền bằng VietQR (TH-05) ---------- */
+function PaymentStep({ reservation, payment, onCreated, onExpire, onBack, onTransferred, onReserveAgain }: {
+  reservation: Contribution | null
+  payment: PaymentRef | null
+  onCreated: (payment: PaymentRef) => void
+  onExpire: () => void
+  onBack: () => void
+  onTransferred: () => void
+  onReserveAgain: () => void
+}) {
+  const { mutate, isError, error } = useRequestPayment()
+  const contributionId = reservation?.contributionId ?? null
+  // Hết giữ chỗ thì vẫn theo dõi mã cũ, để còn biết tiền đã về hay mã đã hết hạn
+  const id = payment && (contributionId === null || payment.contributionId === contributionId) ? payment.paymentRequestId : null
+  const request = usePaymentRequest(id)
+  const started = useRef<number | null>(null)
+
+  // Vào màn là lấy mã ngay. StrictMode chạy effect hai lần nên nhớ đã gọi cho khoản góp nào (API cũng trả lại mã cũ).
+  useEffect(() => {
+    if (contributionId === null || id !== null || started.current === contributionId) return
+    started.current = contributionId
+    mutate(contributionId, { onSuccess: (p) => onCreated({ contributionId, paymentRequestId: p.paymentRequestId }) })
+  }, [contributionId, id, mutate, onCreated])
+
+  // Ngân hàng báo tiền về (webhook TH-06) thì sang màn Xong
+  const status = request.data?.status
+  useEffect(() => {
+    if (status === 'Paid') onTransferred()
+  }, [status, onTransferred])
+
+  const payable = reservation !== null && status === 'Pending'
+  const lapsed = (reservation === null && !request.data) || status === 'Expired' || status === 'Cancelled'
   return (
     <>
-      <StepHead icon={<QrCode size={20} />} title="Chuyển tiền bằng VietQR" sub="Tiền vào tài khoản chuyên dùng của lô tại trung gian thanh toán, không qua CrabShare." />
-      <div className="cf-soon">
-        <b>Đang làm ở task TH-05</b>
-        <p>Mã VietQR, số tiền và nội dung chuyển khoản sẽ hiện ở đây.</p>
-      </div>
+      <StepHead icon={<QrCode size={20} />} title="Chuyển tiền bằng VietQR"
+        sub="Tiền vào thẳng tài khoản chuyên dùng của lô tại trung gian thanh toán, CrabShare không giữ tiền." />
+      {request.data ? (
+        <VietQrBox payment={request.data} status={request.data.status} onExpire={onExpire} />
+      ) : reservation === null ? (
+        <p className="cf-error">Đã hết thời gian giữ chỗ nên chưa tạo được mã chuyển khoản. Hãy giữ chỗ lại.</p>
+      ) : isError ? (
+        <p className="cf-error">{errorMessage(error)}</p>
+      ) : (
+        <p className="rd-muted">Đang tạo mã chuyển khoản…</p>
+      )}
       <footer className="cf-foot">
-        <button type="button" className="rd-btn rd-btn--ghost" onClick={onBack}>Quay lại</button>
+        {lapsed ? (
+          <button type="button" className="rd-btn rd-btn--primary rd-btn--lg" onClick={onReserveAgain}>Giữ chỗ lại</button>
+        ) : (
+          <>
+            <button type="button" className="rd-btn rd-btn--ghost" onClick={onBack}>Quay lại</button>
+            <button type="button" className="rd-btn rd-btn--primary rd-btn--lg" disabled={!payable} onClick={onTransferred}>Tôi đã chuyển khoản</button>
+          </>
+        )}
+      </footer>
+    </>
+  )
+}
+
+/* ---------- Màn 5: chờ tiền về hoặc đã xác nhận ---------- */
+function DoneStep({ payment, onShowQr, onReserveAgain }: { payment: PaymentRef | null; onShowQr: () => void; onReserveAgain: () => void }) {
+  const request = usePaymentRequest(payment?.paymentRequestId ?? null)
+  const p = request.data
+
+  if (!p) {
+    return request.isError
+      ? <p className="cf-error">{errorMessage(request.error)}</p>
+      : <p className="rd-muted">Đang tải…</p>
+  }
+  if (p.status === 'Paid') {
+    return (
+      <>
+        <div className="rd-done" role="status">
+          <span className="rd-done__icon"><Check size={28} /></span>
+          <h3>Đã nhận tiền góp vốn</h3>
+          <p>{formatVnd(p.amount)} vào lô {p.batchCode}. Khoản góp đã được xác nhận.</p>
+        </div>
+        <footer className="cf-foot"><Link className="rd-btn rd-btn--primary rd-btn--lg" to="/nha-dau-tu">Về cổng nhà đầu tư</Link></footer>
+      </>
+    )
+  }
+  if (p.status === 'Pending') {
+    return (
+      <>
+        <StepHead icon={<Hourglass size={20} />} title="Đang chờ tiền về tài khoản của lô"
+          sub="Hệ thống tự xác nhận khi ngân hàng báo có giao dịch, bạn không cần gửi biên lai." />
+        <dl className="rd-review">
+          <dt>Số tiền</dt><dd>{formatVnd(p.amount)}</dd>
+          <dt>Nội dung chuyển khoản</dt><dd>{p.referenceCode}</dd>
+          <dt>Mã hết hạn</dt><dd>{formatDateTime(p.expiresAt)}</dd>
+        </dl>
+        <p className="rd-note"><Clock size={14} /> Trang tự cập nhật khi tiền về. Khoản góp chỉ được tính khi tiền đã vào tài khoản của lô.</p>
+        <footer className="cf-foot">
+          <button type="button" className="rd-btn rd-btn--ghost" onClick={onShowQr}>Xem lại mã QR</button>
+        </footer>
+      </>
+    )
+  }
+  return (
+    <>
+      <StepHead icon={<Clock size={20} />} title={p.status === 'Cancelled' ? 'Mã chuyển khoản đã huỷ' : 'Mã đã hết hạn mà chưa nhận được tiền'}
+        sub="Chỗ giữ đã được trả lại. Nếu bạn lỡ chuyển sau khi hết hạn, khoản tiền sẽ được hoàn về tài khoản đã chuyển." />
+      <footer className="cf-foot">
+        <button type="button" className="rd-btn rd-btn--primary rd-btn--lg" onClick={onReserveAgain}>Giữ chỗ lại</button>
       </footer>
     </>
   )

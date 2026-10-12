@@ -1,10 +1,11 @@
 using CrabShare.Api.Common.Auth;
+using CrabShare.Api.Features.Payments;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CrabShare.Api.Features.Funding;
 
-/// <summary>Luồng góp vốn màn 1–2: xác nhận rủi ro (UC11) → số tiền và giữ chỗ (UC10).</summary>
+/// <summary>Luồng góp vốn màn 1–2 và 4: xác nhận rủi ro (UC11) → số tiền và giữ chỗ (UC10) → mã VietQR (UC12).</summary>
 [ApiController]
 [Route("api")]
 [Authorize(Policy = Policies.Investor)]
@@ -36,6 +37,14 @@ public sealed class FundingController(FundingService funding) : ControllerBase
     {
         var contribution = await funding.ReserveAsync(code, req, ct);
         return Created($"/api/me/contributions#{contribution.ContributionId}", contribution);
+    }
+
+    [HttpPost("contributions/{id:long}/payment-requests")]
+    [EndpointSummary("UC12 — Mã VietQR cho khoản đang giữ chỗ; gọi lại khi mã còn hạn thì trả đúng mã đó (200), không sinh mã mới")]
+    public async Task<ActionResult<PaymentRequestResponse>> RequestPayment(long id, CancellationToken ct)
+    {
+        var (payment, created) = await funding.RequestPaymentAsync(id, ct);
+        return created ? Created($"/api/payment-requests/{payment.PaymentRequestId}", payment) : Ok(payment);
     }
 
     [HttpDelete("contributions/{id:long}")]

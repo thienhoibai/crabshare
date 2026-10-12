@@ -1,0 +1,40 @@
+/* Khung chuyển khoản VietQR (shared/payments) — dùng biến màu của bộ giao diện (kit.css) */
+.vq { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px 24px; align-items: start; padding: 18px; border-radius: 18px; border: 1px solid var(--line); background: var(--input); }
+
+/* Mã QR luôn đen trên nền trắng để app ngân hàng đọc được, kể cả giao diện tối */
+.vq-code { position: relative; padding: 10px; border-radius: 16px; background: #fff; line-height: 0; border: 1px solid var(--line); }
+.vq-code__svg { display: block; width: min(208px, 100%); height: auto; }
+.vq-code__tag { position: absolute; top: 6px; right: 6px; padding: 2px 8px; border-radius: 999px; background: #15130f; color: #fff; font-size: 11px; font-weight: 600; line-height: 1.6; }
+
+.vq-info { display: grid; gap: 2px; min-width: 0; }
+.vq-info__label { font-size: 12px; color: var(--muted); }
+.vq-info__amount { margin-bottom: 10px; font-size: clamp(26px, 5vw, 34px); font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.vq-info__ref { margin-bottom: 10px; font: 700 20px/1.3 ui-monospace, 'Cascadia Mono', Consolas, monospace; letter-spacing: 0.08em; overflow-wrap: anywhere; }
+.vq-info .rd-note { margin-top: 6px; }
+.vq-timer { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.vq-timer b { color: var(--accent); font-variant-numeric: tabular-nums; }
+
+.vq-manual { grid-column: 1 / -1; display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.vq-manual__toggle { justify-self: start; padding: 4px 0; border: 0; background: none; color: var(--fg); font-size: 13px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.vq-manual__body { display: grid; gap: 10px; }
+.vq-manual__body[hidden] { display: none; }
+.vq-warn { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--bad); background: color-mix(in srgb, var(--bad) 8%, transparent); font-size: 13px; line-height: 1.45; }
+.vq-warn svg { flex: none; margin-top: 2px; color: var(--bad); }
+.vq-manual__list { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; align-items: center; font-size: 14px; }
+.vq-manual__list dt { color: var(--muted); }
+.vq-manual__list dd { min-width: 0; text-align: right; }
+.vq-copy { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; max-width: 100%; }
+.vq-copy b { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.vq-copy .rd-iconbtn { width: 32px; height: 32px; }
+
+/* Đã nhận tiền / đã huỷ / hết hạn */
+.vq--state { grid-template-columns: 1fr; justify-items: center; gap: 8px; padding: 24px 18px; text-align: center; }
+.vq-state__icon { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; }
+.vq--done .vq-state__icon { background: var(--ok); color: #06140d; }
+.vq--off .vq-state__icon { background: var(--surface-2); color: var(--muted); }
+.vq--state small, .vq--state p { max-width: 46ch; color: var(--muted); font-size: 13px; }
+
+@media (max-width: 560px) {
+  .vq { grid-template-columns: 1fr; padding: 14px; }
+  .vq-code { justify-self: center; }
+}

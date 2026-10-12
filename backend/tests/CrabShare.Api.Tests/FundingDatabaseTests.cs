@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Features.Auth;
 using CrabShare.Api.Features.Funding;
+using CrabShare.Api.Features.Payments;
 using CrabShare.Api.Infrastructure.Persistence;
 using CrabShare.Api.Infrastructure.Persistence.Entities;
 using Microsoft.AspNetCore.Hosting;
@@ -93,25 +94,45 @@ public class FundingDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtur
         return (client, auth.User.UserId);
     }
 
-    private async Task<string> FundingBatchAsync(long maxCapital = 10_000_000, long minContribution = 1_000_000)
+    /// <param name="accountStatus">Trạng thái tài khoản chuyên dùng của lô; null = lô chưa có tài khoản.</param>
+    private async Task<string> FundingBatchAsync(long maxCapital = 10_000_000, long minContribution = 1_000_000,
+        string? accountStatus = "Open", TimeSpan? deadlineIn = null)
     {
         await using var db = fixture.OpenDb();
         var now = DateTimeOffset.UtcNow;
         var code = $"TF-{Guid.NewGuid():N}"[..20];
-        db.Batches.Add(new Batch
+        var batch = new Batch
         {
             BatchCode = code, OperatorId = fixture.OperatorId, CrabType = "FatteningMudCrab", Title = "Lô test góp vốn",
             SeedQuantity = 100, ExpectedOutputKg = 40, CycleDays = 90, RestockCutoffDays = 15,
             MinViableCapital = maxCapital / 2, TargetCapital = maxCapital, MaxCapital = maxCapital, MinContribution = minContribution,
             OperatorSharePct = 7, FrozenStockCapMonths = 4, OfftakePreorderCapPct = 60, OfftakeDepositPct = 15,
-            Status = "Funding", FundingOpenAt = now.AddDays(-1), FundingDeadline = now.AddDays(10), CreatedAt = now, UpdatedAt = now,
-        });
+            Status = "Funding", FundingOpenAt = now.AddDays(-1), FundingDeadline = now + (deadlineIn ?? TimeSpan.FromDays(10)),
+            CreatedAt = now, UpdatedAt = now,
+        };
+        if (accountStatus is not null)
+            batch.BatchAccount = new BatchAccount
+            {
+                ProviderName = "Sandbox", ProviderAccountNo = "SBX" + code[3..], Status = accountStatus,
+                OpenedAt = now, CreatedAt = now, UpdatedAt = now,
+            };
+        db.Batches.Add(batch);
         await db.SaveChangesAsync();
         return code;
     }
 
     private static Task<HttpResponseMessage> Reserve(HttpClient client, string code, long amount)
         => client.PostAsJsonAsync($"/api/batches/{code}/contributions", new { amount });
+
+    private static async Task<ContributionResponse> ReservedAsync(HttpClient client, string code, long amount)
+    {
+        var response = await Reserve(client, code, amount);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<ContributionResponse>())!;
+    }
+
+    private static Task<HttpResponseMessage> RequestPayment(HttpClient client, long contributionId)
+        => client.PostAsync($"/api/contributions/{contributionId}/payment-requests", null);
 
     private static async Task<string?> ErrorCode(HttpResponseMessage response)
         => (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString();
@@ -260,5 +281,120 @@ public class FundingDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtur
         var open = (await client.GetFromJsonAsync<List<FundingBatchSummary>>("/api/funding/batches"))!;
 
         Assert.Contains(open, b => b.BatchCode == code && b.RemainingCapacity == 10_000_000);
+    }
+
+    [Fact]
+    public async Task Giu_cho_sat_han_goi_von_thi_het_han_dung_luc_dong_goi_von()
+    {
+        var code = await FundingBatchAsync(deadlineIn: TimeSpan.FromMinutes(10));
+        var (client, _) = await InvestorAsync();
+
+        var contribution = await ReservedAsync(client, code, 2_000_000);
+
+        await using var db = fixture.OpenDb();
+        var deadline = await db.Batches.Where(b => b.BatchCode == code).Select(b => b.FundingDeadline).SingleAsync();
+        Assert.Equal(deadline, contribution.ExpiresAt);
+    }
+
+    // ---------- TH-05: mã VietQR ----------
+
+    [Fact]
+    public async Task Ma_VietQR_dung_so_tien_noi_dung_va_het_han_cung_giu_cho()
+    {
+        var code = await FundingBatchAsync();
+        var (client, userId) = await InvestorAsync();
+        var contribution = await ReservedAsync(client, code, 3_000_000);
+
+        var response = await RequestPayment(client, contribution.ContributionId);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var payment = (await response.Content.ReadFromJsonAsync<PaymentRequestResponse>())!;
+        Assert.Equal($"/api/payment-requests/{payment.PaymentRequestId}", response.Headers.Location?.OriginalString);
+        Assert.Matches("^GV[0-9A-HJKMNP-TV-Z]{11}$", payment.ReferenceCode);
+        Assert.Equal(("Contribution", "Pending", code, 3_000_000L), (payment.Purpose, payment.Status, payment.BatchCode, payment.Amount));
+        Assert.Equal(contribution.ExpiresAt, payment.ExpiresAt);
+        Assert.Equal(("Sandbox", "SBX" + code[3..]), (payment.ProviderName, payment.AccountNo));
+        Assert.Equal($"VIETQR|SANDBOX|{payment.AccountNo}|3000000|{payment.ReferenceCode}", payment.QrContent);
+
+        await using var db = fixture.OpenDb();
+        var row = await db.PaymentRequests.SingleAsync(r => r.PaymentRequestId == payment.PaymentRequestId);
+        Assert.Equal((contribution.ContributionId, (long?)null, (long?)null), (row.ContributionId, row.OrderId, row.OfftakeId));
+        var audit = await db.AuditLogs.SingleAsync(a => a.EntityType == "payment_request" && a.EntityId == payment.PaymentRequestId);
+        Assert.Equal(("create", userId), (audit.ActionType, audit.ActorUserId));
+        Assert.Contains(payment.ReferenceCode, audit.NewValue);
+        Assert.True(AuditChainVerifier.Verify(await db.AuditLogs.OrderBy(a => a.AuditId).ToListAsync()).IsValid);
+    }
+
+    [Fact]
+    public async Task Goi_lai_khi_ma_con_han_thi_tra_dung_ma_cu()
+    {
+        var code = await FundingBatchAsync();
+        var (client, _) = await InvestorAsync();
+        var contribution = await ReservedAsync(client, code, 2_000_000);
+        var first = (await (await RequestPayment(client, contribution.ContributionId)).Content.ReadFromJsonAsync<PaymentRequestResponse>())!;
+
+        var again = await RequestPayment(client, contribution.ContributionId);
+
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+        var second = (await again.Content.ReadFromJsonAsync<PaymentRequestResponse>())!;
+        Assert.Equal((first.PaymentRequestId, first.ReferenceCode, first.QrContent), (second.PaymentRequestId, second.ReferenceCode, second.QrContent));
+        await using var db = fixture.OpenDb();
+        Assert.Equal(1, await db.PaymentRequests.CountAsync(r => r.ContributionId == contribution.ContributionId));
+    }
+
+    [Fact]
+    public async Task Khong_tao_ma_cho_khoan_cua_nguoi_khac_hoac_da_huy()
+    {
+        var code = await FundingBatchAsync();
+        var (owner, _) = await InvestorAsync();
+        var (stranger, _) = await InvestorAsync();
+        var contribution = await ReservedAsync(owner, code, 2_000_000);
+
+        var foreign = await RequestPayment(stranger, contribution.ContributionId);
+        Assert.Equal(HttpStatusCode.Forbidden, foreign.StatusCode);
+        Assert.Equal("contribution.not_owner", await ErrorCode(foreign));
+
+        (await owner.DeleteAsync($"/api/contributions/{contribution.ContributionId}")).EnsureSuccessStatusCode();
+        var cancelled = await RequestPayment(owner, contribution.ContributionId);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, cancelled.StatusCode);
+        Assert.Equal("contribution.not_payable", await ErrorCode(cancelled));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Frozen")]
+    public async Task Lo_chua_co_tai_khoan_dang_mo_thi_khong_tao_ma(string? accountStatus)
+    {
+        var code = await FundingBatchAsync(accountStatus: accountStatus);
+        var (client, _) = await InvestorAsync();
+        var contribution = await ReservedAsync(client, code, 2_000_000);
+
+        var response = await RequestPayment(client, contribution.ContributionId);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal("funding.batch_account_unavailable", await ErrorCode(response));
+    }
+
+    [Fact]
+    public async Task Xem_yeu_cau_chuyen_khoan_chi_chu_khoan_gop_va_huy_giu_cho_thi_het_ma()
+    {
+        var code = await FundingBatchAsync();
+        var (owner, _) = await InvestorAsync();
+        var (stranger, _) = await InvestorAsync();
+        var contribution = await ReservedAsync(owner, code, 2_000_000);
+        var created = (await (await RequestPayment(owner, contribution.ContributionId)).Content.ReadFromJsonAsync<PaymentRequestResponse>())!;
+        var url = $"/api/payment-requests/{created.PaymentRequestId}";
+
+        var mine = (await owner.GetFromJsonAsync<PaymentRequestResponse>(url))!;
+        Assert.Equal(("Pending", created.QrContent), (mine.Status, mine.QrContent));
+        var foreign = await stranger.GetAsync(url);
+        Assert.Equal(HttpStatusCode.Forbidden, foreign.StatusCode);
+        Assert.Equal("payment.not_owner", await ErrorCode(foreign));
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync($"/api/payment-requests/{long.MaxValue}")).StatusCode);
+
+        (await owner.DeleteAsync($"/api/contributions/{contribution.ContributionId}")).EnsureSuccessStatusCode();
+        var after = (await owner.GetFromJsonAsync<PaymentRequestResponse>(url))!;
+        Assert.Equal("Cancelled", after.Status);
+        Assert.Null(after.QrContent);
     }
 }

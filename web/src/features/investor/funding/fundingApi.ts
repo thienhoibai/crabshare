@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { http } from '../../../shared/api/http'
+import { paymentKeys, type PaymentRequest } from '../../../shared/payments/paymentsApi'
 
-/* API Features/Funding (TH-04). Tiền là số nguyên đồng. Không có trường lợi suất kỳ vọng (BR-49). */
+/* API Features/Funding (TH-04, TH-05). Tiền là số nguyên đồng. Không có trường lợi suất kỳ vọng (BR-49). */
 
 export interface RiskDisclosure {
   riskDisclosureId: number
@@ -109,6 +110,17 @@ export function useReserve(code: string) {
     mutationFn: async (amount: number) =>
       (await http.post<Contribution>(`/api/batches/${encodeURIComponent(code)}/contributions`, { amount })).data,
     onSuccess: refresh,
+  })
+}
+
+/** Mã VietQR cho khoản đang giữ chỗ. Gọi lại khi mã còn hạn thì nhận lại đúng mã đó, nên an toàn khi trang tải lại. */
+export function useRequestPayment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    retry: false,
+    mutationFn: async (contributionId: number) =>
+      (await http.post<PaymentRequest>(`/api/contributions/${contributionId}/payment-requests`)).data,
+    onSuccess: (payment) => queryClient.setQueryData(paymentKeys.request(payment.paymentRequestId), payment),
   })
 }
 
