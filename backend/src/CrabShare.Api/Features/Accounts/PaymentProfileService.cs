@@ -1,4 +1,5 @@
 using System.Data;
+using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Errors;
 using CrabShare.Api.Infrastructure.Ekyc;
@@ -26,6 +27,7 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
         var result = await matcher.MatchAsync(owner.Name, req.AccountHolderName.Trim(), ct);
         return await TransactionAsync(async () =>
         {
+            var previousHash = await AuditChain.LockAndReadTailAsync(db, ct);
             if (await RequireOwnerAsync(owner.Type, true, ct) != owner)
                 throw new ConflictException("payout.owner_changed", "Thông tin chủ sở hữu đã thay đổi. Vui lòng tải lại và thử lại.");
             var bankCode = req.BankCode.ToUpperInvariant();
@@ -65,8 +67,8 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
                 CheckedAt = now, CreatedAt = now,
             });
             await db.SaveChangesAsync(ct);
-            await AccountAuditWriter.AppendAsync(db, me.UserId, "PayoutAccount", account.PayoutAccountId, "MaintainPayoutAccount",
-                null, System.Text.Json.JsonSerializer.Serialize(new { account.PayoutAccountId, OwnerType = owner.Type, account.NameMatchStatus, account.Status }), now, ct);
+            AccountAuditWriter.Append(db, me.UserId, "PayoutAccount", account.PayoutAccountId, "MaintainPayoutAccount",
+                null, AuditChain.Snapshot(new { account.PayoutAccountId, OwnerType = owner.Type, account.NameMatchStatus, account.Status }), now, previousHash);
             await db.SaveChangesAsync(ct);
             return Profile(owner, account);
         }, ct);
@@ -176,7 +178,7 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
             return value;
         });
 
-    private DateTimeOffset Now() => DateTimeOffset.FromUnixTimeMilliseconds(clock.GetUtcNow().ToUnixTimeMilliseconds());
+    private DateTimeOffset Now() => AuditChain.Timestamp(clock.GetUtcNow());
     private static ForbiddenException Denied() => new("accounts.access_denied", "Tài khoản không có quyền thao tác.");
     private static NotFoundException MissingAddress() => new("addresses.not_found", "Không tìm thấy địa chỉ của bạn.");
     private static AddressResponse Address(CustomerAddress a) => new(a.AddressId, a.RecipientName, a.RecipientPhone, a.AddressLine, a.Province, a.IsDefault, a.CreatedAt);

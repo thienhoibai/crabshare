@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/models/batch_enums.dart';
 import 'operator_models.dart';
+export 'alert_repository.dart' show alertsProvider;
 
 /// Hợp đồng dữ liệu của tính năng Hộ nuôi.
 /// Hiện dùng [MockOperatorRepository]; khi backend có endpoint thì viết ApiOperatorRepository
@@ -33,22 +34,6 @@ final todaySummaryProvider = FutureProvider((ref) => ref.watch(operatorRepositor
 final captureRequestsProvider = FutureProvider((ref) => ref.watch(operatorRepositoryProvider).captureRequests());
 final dailyLogsProvider = FutureProvider((ref) => ref.watch(operatorRepositoryProvider).logs());
 final boxesProvider = FutureProvider((ref) => ref.watch(operatorRepositoryProvider).boxes());
-
-/// Danh sách cảnh báo có hành động "xác nhận" → dùng AsyncNotifier để cập nhật tại chỗ.
-class AlertsController extends AsyncNotifier<List<AlertItem>> {
-  @override
-  Future<List<AlertItem>> build() => ref.watch(operatorRepositoryProvider).alerts();
-
-  Future<void> acknowledge(int alertId, String note) async {
-    await ref.read(operatorRepositoryProvider).acknowledgeAlert(alertId, note);
-    final current = state.value ?? const [];
-    state = AsyncData([
-      for (final a in current) a.id == alertId ? a.copyWith(status: AlertStatus.acknowledged, responseNote: note) : a,
-    ]);
-  }
-}
-
-final alertsProvider = AsyncNotifierProvider<AlertsController, List<AlertItem>>(AlertsController.new);
 
 /// Dữ liệu mẫu để dựng giao diện (số liệu ví dụ, không lấy từ backend).
 class MockOperatorRepository implements OperatorRepository {

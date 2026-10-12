@@ -16,6 +16,9 @@ import 'package:crabshare_mobile/features/investor/data/investor_models.dart';
 import 'package:crabshare_mobile/features/investor/notifications/notifications_page.dart';
 import 'package:crabshare_mobile/features/onboarding/onboarding_page.dart';
 import 'package:crabshare_mobile/features/operator/alerts/alerts_page.dart';
+import 'package:crabshare_mobile/features/operator/data/alert_repository.dart';
+import 'package:crabshare_mobile/features/operator/data/operator_repository.dart';
+import 'package:crabshare_mobile/features/operator/data/operator_models.dart';
 import 'package:crabshare_mobile/features/operator/evidence/capture_page.dart';
 import 'package:crabshare_mobile/features/operator/harvest/harvest_page.dart';
 import 'package:crabshare_mobile/features/operator/logs/daily_log_form_page.dart';
@@ -72,6 +75,7 @@ void main() {
           sessionProvider.overrideWith(() => SessionController(const SessionState(token: 't', user: _user))),
           kycRepositoryProvider.overrideWithValue(_SmokeKycRepository()),
           payoutRepositoryProvider.overrideWithValue(_SmokePayoutRepository()),
+          alertRepositoryProvider.overrideWithValue(_SmokeAlertRepository()),
         ],
         child: MaterialApp(theme: buildAppTheme(), home: page),
       ));
@@ -84,6 +88,13 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
   }
+}
+
+class _SmokeAlertRepository implements AlertRepository {
+  @override
+  Future<List<AlertItem>> list() => MockOperatorRepository().alerts();
+  @override
+  Future<AlertItem> acknowledge(int id, String note) => throw UnimplementedError();
 }
 
 class _SmokeKycRepository implements KycRepository {

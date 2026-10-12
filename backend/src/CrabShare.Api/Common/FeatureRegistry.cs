@@ -21,7 +21,7 @@ using CrabShare.Api.Features.Orders;
 // Khôi
 using CrabShare.Api.Features.Accounts;
 // using CrabShare.Api.Features.Evidence;
-// using CrabShare.Api.Features.Alerts;
+using CrabShare.Api.Features.Alerts;
 // using CrabShare.Api.Features.Portfolio;
 // using CrabShare.Api.Features.Admin;
 
@@ -68,8 +68,10 @@ public static class FeatureRegistry
         // Khôi
         services.AddScoped<AccountService>();        // Features/Accounts
         services.AddScoped<PaymentProfileService>();
+        services.AddScoped<AdminAccountService>();
         // services.AddScoped<EvidenceService>();     // Features/Evidence
-        // services.AddScoped<AlertService>();        // Features/Alerts
+        services.AddScoped<AlertService>();          // Features/Alerts
+        services.AddScoped<AlertJob>();              // CS-40
         // services.AddScoped<PortfolioService>();    // Features/Portfolio
         // services.AddScoped<AdminService>();        // Features/Admin
 

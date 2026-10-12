@@ -1,7 +1,5 @@
 using System.Data;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Errors;
 using CrabShare.Api.Infrastructure.Ekyc;
@@ -51,9 +49,10 @@ public sealed class AccountService(AppDbContext db, ICurrentUser me, IEkycProvid
             // Một lần retry bắt đầu với dữ liệu đọc lại từ DB, không giữ entity của lần bị rollback.
             db.ChangeTracker.Clear();
             await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+            var previousHash = await AuditChain.LockAndReadTailAsync(db, ct);
             var current = await GetInvestorAsync(tracking: true, ct);
             RequireUnverified(current);
-            var oldValue = JsonSerializer.Serialize(new { current.VerificationStatus, current.VerifiedAt });
+            var oldValue = AuditChain.Snapshot(new { current.VerificationStatus, current.VerifiedAt });
 
             current.VerificationStatus = result.Passed ? "Verified" : "Rejected";
             current.VerifiedAt = result.Passed ? checkedAt : null;
@@ -70,14 +69,14 @@ public sealed class AccountService(AppDbContext db, ICurrentUser me, IEkycProvid
             };
             db.KycChecks.Add(check);
 
-            var newValue = JsonSerializer.Serialize(new
+            var newValue = AuditChain.Snapshot(new
             {
                 current.VerificationStatus,
                 current.VerifiedAt,
                 check.Result,
                 check.ProviderRef,
             });
-            await AppendAuditAsync(current.UserId, oldValue, newValue, checkedAt, ct);
+            AppendAudit(current.UserId, oldValue, newValue, checkedAt, previousHash);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
             return ToResponse(current, check);
@@ -130,13 +129,8 @@ public sealed class AccountService(AppDbContext db, ICurrentUser me, IEkycProvid
         image.Position = 0;
     }
 
-    private async Task AppendAuditAsync(long userId, string oldValue, string newValue, DateTimeOffset now, CancellationToken ct)
+    private void AppendAudit(long userId, string oldValue, string newValue, DateTimeOffset now, string? previousHash)
     {
-        // Khoá cả khi audit_log trống; ghi nối chuỗi và thay đổi KYC trong cùng transaction.
-        // TH-02 chưa có IAuditLog. Định dạng hash được ghi trong README để tích hợp writer chung.
-        var previousHash = await db.AuditLogs
-            .FromSqlRaw("SELECT * FROM dbo.audit_log WITH (UPDLOCK, HOLDLOCK)")
-            .OrderByDescending(a => a.AuditId).Select(a => a.RowHash).FirstOrDefaultAsync(ct);
         var audit = new AuditLog
         {
             EntityType = "Investor",
@@ -148,12 +142,7 @@ public sealed class AccountService(AppDbContext db, ICurrentUser me, IEkycProvid
             OccurredAt = now,
             PrevHash = previousHash,
         };
-        var content = JsonSerializer.Serialize(new
-        {
-            audit.EntityType, audit.EntityId, audit.ActionType,
-            audit.OldValue, audit.NewValue, audit.ActorUserId, audit.OccurredAt,
-        });
-        audit.RowHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes((previousHash ?? "") + content)));
+        audit.RowHash = AuditChain.Hash(audit);
         db.AuditLogs.Add(audit);
     }
 
@@ -163,7 +152,7 @@ public sealed class AccountService(AppDbContext db, ICurrentUser me, IEkycProvid
     private static string Truncate(string value, int max) => value.Length <= max ? value : value[..max];
 
     // SQL dùng DATETIMEOFFSET(3). Băm timestamp ở cùng độ chính xác để đọc lại vẫn khớp audit.
-    private DateTimeOffset UtcNow() => DateTimeOffset.FromUnixTimeMilliseconds(clock.GetUtcNow().ToUnixTimeMilliseconds());
+    private DateTimeOffset UtcNow() => AuditChain.Timestamp(clock.GetUtcNow());
 
     private static KycStatusResponse ToResponse(Investor investor, KycCheck? check)
         => new(investor.VerificationStatus, investor.VerifiedAt, check is null ? null : new(

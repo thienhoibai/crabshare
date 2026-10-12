@@ -5,6 +5,10 @@ KH-03: nhà đầu tư đăng ký tài khoản nhận tiền tại Hồ sơ & eK
 Form dùng API thật và style rd/OperatorLayout hiện có. `npm run test:kyc` chạy cả
 test eKYC và tài khoản/địa chỉ. Test trình duyệt dùng API mock; backend test LocalDB
 kiểm tra lưu dữ liệu, quyền và cập nhật đồng thời.
+KH-04: Quản trị → Quản lý Người dùng có các tab Người dùng và Ngoại lệ KYC, dùng API
+quản trị thật. Chi tiết `/admin/users/detail?id=<id số>` hiển thị metadata KYC, không
+có ảnh CCCD/selfie. Thao tác khoá, mở khoá và duyệt ngoại lệ yêu cầu lý do. Chạy
+`npm run test:kyc` để kiểm tra cả eKYC và luồng quản trị.
 
 Giao diện lấy từ bản demo `cs-ui-demo` (đã bỏ phần chọn phiên bản):
 **Cửa hàng = bản 1 (nền sáng)**, **Nhà đầu tư = bản 2**, **trang chủ 3D giữ nguyên** (sẽ chỉnh sau).

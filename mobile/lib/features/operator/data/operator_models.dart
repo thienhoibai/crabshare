@@ -67,7 +67,14 @@ class DailyLog {
 
 /// Dữ liệu gửi lên khi lưu nhật ký (POST /api/production-logs — xem backend Features/Production).
 class DailyLogInput {
-  const DailyLogInput({required this.batchCode, this.waterTempC, this.salinityPpt, this.ph, this.feedKg, this.note});
+  const DailyLogInput({
+    required this.batchCode,
+    this.waterTempC,
+    this.salinityPpt,
+    this.ph,
+    this.feedKg,
+    this.note,
+  });
 
   final String batchCode;
   final double? waterTempC;
@@ -77,18 +84,23 @@ class DailyLogInput {
   final String? note;
 
   Map<String, dynamic> toJson() => {
-        'batchCode': batchCode,
-        'waterTempC': waterTempC,
-        'salinityPpt': salinityPpt,
-        'ph': ph,
-        'feedKg': feedKg,
-        'note': note,
-      };
+    'batchCode': batchCode,
+    'waterTempC': waterTempC,
+    'salinityPpt': salinityPpt,
+    'ph': ph,
+    'feedKg': feedKg,
+    'note': note,
+  };
 }
 
 /// Yêu cầu chụp ngẫu nhiên — bảng capture_request.
 class CaptureRequest {
-  const CaptureRequest({required this.id, required this.batchCode, required this.slotCode, required this.dueAt});
+  const CaptureRequest({
+    required this.id,
+    required this.batchCode,
+    required this.slotCode,
+    required this.dueAt,
+  });
 
   final int id;
   final String batchCode;
@@ -143,6 +155,7 @@ class AlertItem {
     required this.ackDeadline,
     required this.status,
     this.responseNote,
+    this.acknowledgedAt,
   });
 
   final int id;
@@ -154,18 +167,44 @@ class AlertItem {
   final DateTime ackDeadline;
   final AlertStatus status;
   final String? responseNote;
+  final DateTime? acknowledgedAt;
+  bool get canAcknowledge =>
+      (status == AlertStatus.open || status == AlertStatus.escalated) &&
+      acknowledgedAt == null;
+
+  factory AlertItem.fromJson(Map<String, dynamic> json) => AlertItem(
+    id: json['id'] as int,
+    batchCode: json['batchCode'] as String,
+    type: AlertType.values.firstWhere(
+      (value) => value.apiValue == json['type'],
+    ),
+    severity: AlertSeverity.values.firstWhere(
+      (value) => value.apiValue == json['severity'],
+    ),
+    message: json['message'] as String,
+    raisedAt: DateTime.parse(json['raisedAt'] as String).toLocal(),
+    ackDeadline: DateTime.parse(json['ackDeadline'] as String).toLocal(),
+    status: AlertStatus.values.firstWhere(
+      (value) => value.apiValue == json['status'],
+    ),
+    responseNote: json['responseNote'] as String?,
+    acknowledgedAt: json['acknowledgedAt'] == null
+        ? null
+        : DateTime.parse(json['acknowledgedAt'] as String).toLocal(),
+  );
 
   AlertItem copyWith({AlertStatus? status, String? responseNote}) => AlertItem(
-        id: id,
-        batchCode: batchCode,
-        type: type,
-        severity: severity,
-        message: message,
-        raisedAt: raisedAt,
-        ackDeadline: ackDeadline,
-        status: status ?? this.status,
-        responseNote: responseNote ?? this.responseNote,
-      );
+    id: id,
+    batchCode: batchCode,
+    type: type,
+    severity: severity,
+    message: message,
+    raisedAt: raisedAt,
+    ackDeadline: ackDeadline,
+    status: status ?? this.status,
+    responseNote: responseNote ?? this.responseNote,
+    acknowledgedAt: acknowledgedAt,
+  );
 }
 
 /// Khớp CHECK ck_physical_slot_status.
@@ -188,12 +227,22 @@ class TodaySummary {
 
 /// Một con cua đã cân lúc thu hoạch, kèm tem đã in.
 class HarvestedCrab {
-  const HarvestedCrab({required this.tagCode, required this.weightG, required this.gradeCode, this.activated = false});
+  const HarvestedCrab({
+    required this.tagCode,
+    required this.weightG,
+    required this.gradeCode,
+    this.activated = false,
+  });
 
   final String tagCode;
   final int weightG;
   final String gradeCode;
   final bool activated;
 
-  HarvestedCrab activate() => HarvestedCrab(tagCode: tagCode, weightG: weightG, gradeCode: gradeCode, activated: true);
+  HarvestedCrab activate() => HarvestedCrab(
+    tagCode: tagCode,
+    weightG: weightG,
+    gradeCode: gradeCode,
+    activated: true,
+  );
 }
