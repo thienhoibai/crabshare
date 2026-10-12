@@ -13,3 +13,5 @@ Branch: `feature/CS-37-canh-bao-loi`, based on develop.
 - Web uses existing OperatorLayout, Op components and ActionDialog. Mobile uses the existing cards and confirmation sheet with the real alert API; other unfinished operator features retain their existing repository.
 
 Verification: backend tests include concurrent raises, farm isolation, stale roles, investor access, late acknowledgements and audit-chain verification. Browser and Flutter tests cover notes, real request payloads, server status, errors and phone layout. Database tests use an isolated LocalDB database and are excluded from Linux CI.
+
+Local validation: all 18 alert backend tests passed; Flutter analysis and all 41 Flutter tests passed; four alert browser tests cover confirmation, conflicts, phone layout and cache isolation across accounts. Web production build and the Android debug APK build passed. The combined CS-37/CS-40 backend run passed all 182 tests. NuGet emitted NU1900 warnings because its vulnerability feed was unavailable locally.

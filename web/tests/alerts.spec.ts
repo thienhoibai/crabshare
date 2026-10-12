@@ -58,3 +58,17 @@ test('operator shows fetch error, retries, and filters real empty results on a p
   await expect(page.getByText('Không có cảnh báo', { exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
+
+test('operator alert cache is isolated when the signed-in user changes', async ({ page }) => {
+  await signIn(page)
+  await page.route('**/api/operators/me/alerts*', route => route.fulfill({ json: [{ ...alert, message: route.request().headers().authorization === 'Bearer second-token' ? 'Cảnh báo hộ thứ hai' : 'Cảnh báo hộ thứ nhất' }] }))
+  await page.goto('/operator/alerts')
+  await expect(page.getByText('Cảnh báo hộ thứ nhất')).toBeVisible()
+  await page.evaluate(async () => {
+    const modulePath = '/src/shared/auth/authStore.ts'
+    const { useAuthStore } = await import(modulePath)
+    useAuthStore.getState().setSession('second-token', '2099-01-01T00:00:00Z', { userId: 2, fullName: 'Second user', email: 'second@test.local', phone: null, status: 'Active', roles: ['OperatorMember'], operatorId: 2 })
+  })
+  await expect(page.getByText('Cảnh báo hộ thứ hai')).toBeVisible()
+  await expect(page.getByText('Cảnh báo hộ thứ nhất')).toHaveCount(0)
+})

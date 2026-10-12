@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, CheckCircle2, Clock, Droplets, RefreshCw } from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
+import { useAuthStore } from '../../shared/auth/authStore'
 import { ActionDialog } from '../../shared/ui/ActionDialog'
 import { acknowledgeAlert, alertSeverities, alertStatuses, alertTypes, myAlerts, type AlertItem } from '../alerts/api'
 import OperatorLayout from './OperatorLayout'
@@ -27,7 +28,8 @@ export default function OperatorAlerts() {
   const [selected, setSelected] = useState<AlertItem | null>(null)
   const [notice, setNotice] = useState('')
   const client = useQueryClient()
-  const query = useQuery({ queryKey: ['operator-alerts', status], queryFn: () => myAlerts(status) })
+  const userId = useAuthStore(state => state.user?.userId)
+  const query = useQuery({ queryKey: ['operator-alerts', userId, status], queryFn: () => myAlerts(status), enabled: !!userId })
   const list = query.data ?? []
   const open = list.filter(a => a.status === 'Open' || a.status === 'Escalated')
   const high = open.filter(a => a.severity === 'High' || a.severity === 'Critical').length
