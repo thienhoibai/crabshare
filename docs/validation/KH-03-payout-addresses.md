@@ -19,7 +19,7 @@ Nhánh: `feature/KH-03-payout-addresses`, tạo từ develop.
 
 | Kiểm tra | Kết quả |
 |---|---|
-| `dotnet test backend/CrabShare.sln --no-restore` | 113 đạt (109 API + 4 Settlement) |
+| `dotnet test backend/CrabShare.sln -c Release --no-restore` | 122 đạt (118 API + 4 Settlement), sau khi tích hợp develop mới nhất |
 | BankNameMatch | Khớp tên → Active + Passed; không khớp → Locked + Failed, sửa được; eKYC giữ nguyên |
 | Phân quyền | Staff/khác vai/người dùng bị khoá bị từ chối; không thể bỏ qua khoá ngân hàng đã Matched |
 | Đồng thời | Hai lần PUT cùng chủ chỉ còn 1 Active; hai lần thêm mặc định giữ đủ 2 địa chỉ và 1 mặc định |
