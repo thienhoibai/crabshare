@@ -8,7 +8,7 @@ namespace CrabShare.Api.Infrastructure.Persistence;
 
 /// <summary>
 /// Dữ liệu demo cho môi trường Development: tài khoản mỗi vai trò, một người nuôi đã duyệt với 1.500 hộp đánh số,
-/// rồi 5 lô ở đủ các giai đoạn (DemoLifecycleSeeder). Danh sách đầy đủ: database/README.md.
+/// rồi 6 lô ở đủ các giai đoạn (DemoLifecycleSeeder). Danh sách đầy đủ: database/README.md.
 /// Chỉ chạy khi Seed:Enabled = true và bảng app_user còn trống (chạy DbMigrator --reset để seed lại).
 /// Cần thêm dữ liệu mẫu cho tính năng của mình thì bổ sung vào đây (PR riêng).
 /// </summary>
@@ -125,7 +125,7 @@ public static class DevDataSeeder
             [new(buyer, buyerAddress), new(investors[0], investorAddress)], farm, farmPayout);
         await DemoLifecycleSeeder.SeedAsync(db, people, now);
 
-        logger.LogInformation("Đã seed dữ liệu demo sau {Seconds:N1} giây: 9 tài khoản, 1 người nuôi, 1.700 hộp, 5 lô (database/README.md).",
+        logger.LogInformation("Đã seed dữ liệu demo sau {Seconds:N1} giây: 9 tài khoản, 1 người nuôi, 1.700 hộp, 6 lô (database/README.md).",
             Stopwatch.GetElapsedTime(started).TotalSeconds);
     }
 }

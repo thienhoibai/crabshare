@@ -44,14 +44,16 @@ rồi chạy API (F5). Mốc thời gian tính lùi từ lúc seed nên dữ li�
 
 | Lô | Trạng thái | Dùng cho | Có sẵn |
 |---|---|---|---|
-| `CS-2610-02` | PendingApproval | VI-05 duyệt lô | Chi phí chuẩn đã gửi (Submitted); chưa có bậc phí, tài khoản lô |
-| `CS-2610-01` | Funding | TH-04 giữ chỗ, TH-05 VietQR, NH-13 đặt trước | Cua lột. Mục tiêu 120 tr (tối thiểu 90, trần 150); đã Confirmed 50 tr (investor1 30, investor2 20); hạn gọi vốn còn 11 ngày; tài khoản lô Open; 3 đợt giải ngân Planned |
-| `CS-2608-01` | InProduction | VI-08/09/11 nhật ký, sự kiện hộp, timeline · KH-07..10 bằng chứng · KH-11 danh mục | 1.200 con ở hộp 0001–1200 (20 chết → 1.180 còn sống), đang "ngày 45/90"; nhật ký 30 ngày (một ngày pH vượt ngưỡng); 30 lần lột xác; 9 ảnh bằng chứng (1 ảnh Flagged); vốn 180 tr từ 4 nhà đầu tư; đã giải ngân đợt 1–2 |
-| `CS-2607-01` | Harvesting | NH-02..10 bán hàng · VI-15/17 tem, truy xuất · TH-10 giải ngân | 288 con InStock (≈125 kg) có tem Active và ảnh kích hoạt; 4 niêm yết Published L1–L4 còn tồn; đợt giải ngân 3 đang Requested |
+| `CS-2611-01` | PendingApproval | VI-05 duyệt lô | Chi phí chuẩn đã gửi (Submitted); chưa có bậc phí, tài khoản lô |
+| `CS-2610-03` | Funding | TH-04 giữ chỗ, TH-05 VietQR, NH-13 đặt trước | Cua lột. Mục tiêu 120 tr (tối thiểu 90, trần 150); đã Confirmed 50 tr (investor1 30, investor2 20); hạn gọi vốn còn 11 ngày; tài khoản lô Open; 3 đợt giải ngân Planned |
+| `CS-2610-02` | Funding | như trên (lô thứ hai cho danh sách gọi vốn) | Cua gạch. Mục tiêu 60 tr (tối thiểu 45, trần 75); đã Confirmed 25 tr (investor3 15, investor4 10); hạn gọi vốn còn 10 ngày |
+| `CS-2610-01` | InProduction | VI-08/09/11 nhật ký, sự kiện hộp, timeline · KH-07..10 bằng chứng · KH-11 danh mục | 1.200 con ở hộp 0001–1200 (20 chết → 1.180 còn sống), đang "ngày 45/90"; nhật ký 30 ngày (một ngày pH vượt ngưỡng); 30 lần lột xác; 9 ảnh bằng chứng (1 ảnh Flagged); vốn 180 tr từ 4 nhà đầu tư; đã giải ngân đợt 1–2 |
+| `CS-2609-04` | Harvesting | NH-02..10 bán hàng · VI-15/17 tem, truy xuất · TH-10 giải ngân | 288 con InStock (≈125 kg) có tem Active và ảnh kích hoạt; 4 niêm yết Published L1–L4 còn tồn; đợt giải ngân 3 đang Requested |
 | `CS-2605-01` | Settlement | TH-12..14 quyết toán · KH-14 dashboard | Cua gạch, 192 con bán hết qua 12 đơn Completed: doanh thu thực ≈ 55,3 tr, chi phí chuẩn đã khoá 33,99 tr; capital_share 3 nhà đầu tư (48 tr); đã giải ngân đủ 3 đợt |
 
 - Mỗi khoản góp Confirmed có hợp đồng FullySigned (người nuôi ký trước, nhà đầu tư ký sau), `payment_request` Paid và `provider_transaction` đã khớp. Mỗi đơn Completed có `payment_request` Paid với mã đối chiếu = `order_no`.
 - `DemoSeedDatabaseTests` kiểm tra các con số trên (chạy cùng `dotnet test`).
+- Mã lô trùng dữ liệu mẫu (mock) của app mobile (`CS-2610-01` đang nuôi, `CS-2610-02/03` gọi vốn, `CS-2609-04` thu hoạch) để khi đổi màn sang API thật không lệch mã.
 - Mỗi lô dùng một dải hộp riêng vì EF đang map `physical_slot ↔ slot_allocation` thành quan hệ một-một (do index UNIQUE có điều kiện `ux_slot_active`), nên chưa dùng lại hộp đã trả trong cùng một DbContext được.
 - Cần thêm dữ liệu mẫu cho tính năng của mình: bổ sung vào `DemoLifecycleSeeder` (PR riêng).
 

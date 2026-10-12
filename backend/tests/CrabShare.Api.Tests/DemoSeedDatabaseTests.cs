@@ -53,13 +53,13 @@ public sealed class DemoSeedFixture : IAsyncLifetime
 public class DemoSeedDatabaseTests(DemoSeedFixture fixture) : IClassFixture<DemoSeedFixture>
 {
     [Fact]
-    public async Task Co_du_5_lo_o_5_giai_doan()
+    public async Task Co_du_6_lo_o_5_giai_doan()
     {
         await using var db = fixture.OpenDb();
 
         var statuses = await db.Batches.OrderBy(b => b.BatchCode).Select(b => b.BatchCode + "=" + b.Status).ToListAsync();
 
-        Assert.Equal(new[] { "CS-2605-01=Settlement", "CS-2607-01=Harvesting", "CS-2608-01=InProduction", "CS-2610-01=Funding", "CS-2610-02=PendingApproval" }, statuses);
+        Assert.Equal(new[] { "CS-2605-01=Settlement", "CS-2609-04=Harvesting", "CS-2610-01=InProduction", "CS-2610-02=Funding", "CS-2610-03=Funding", "CS-2611-01=PendingApproval" }, statuses);
     }
 
     [Fact]
@@ -67,12 +67,12 @@ public class DemoSeedDatabaseTests(DemoSeedFixture fixture) : IClassFixture<Demo
     {
         await using var db = fixture.OpenDb();
 
-        var growing = await db.CrabItems.Where(c => c.Batch.BatchCode == "CS-2608-01" && c.Status == "Growing")
+        var growing = await db.CrabItems.Where(c => c.Batch.BatchCode == "CS-2610-01" && c.Status == "Growing")
             .Select(c => c.SlotAllocation.Slot.SlotCode).ToListAsync();
 
         Assert.Equal(1180, growing.Count);
         Assert.All(growing, code => Assert.InRange(int.Parse(code), 1, 1200));
-        Assert.Equal(30, await db.ProductionLogs.CountAsync(l => l.Batch.BatchCode == "CS-2608-01"));
+        Assert.Equal(30, await db.ProductionLogs.CountAsync(l => l.Batch.BatchCode == "CS-2610-01"));
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public class DemoSeedDatabaseTests(DemoSeedFixture fixture) : IClassFixture<Demo
     {
         await using var db = fixture.OpenDb();
 
-        var batch = await db.Batches.SingleAsync(b => b.BatchCode == "CS-2610-01");
+        var batch = await db.Batches.SingleAsync(b => b.BatchCode == "CS-2610-03");
         var confirmed = await db.Contributions.Where(c => c.BatchId == batch.BatchId && c.Status == "Confirmed").SumAsync(c => c.Amount);
 
         Assert.Equal(50_000_000, confirmed);

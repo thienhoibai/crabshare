@@ -7,11 +7,13 @@ namespace CrabShare.Api.Infrastructure.Persistence;
 
 /// <summary>
 /// Dữ liệu demo đủ vòng đời (TH-03) để cả nhóm làm song song. Danh sách đầy đủ: database/README.md.
+/// Mã lô trùng dữ liệu mẫu của app mobile để màn đang dùng mock chuyển sang API không bị lệch.
 ///   CS-2605-01 Settlement      cua gạch 200 con (hộp 1501–1700), bán hết qua 12 đơn Completed, chờ quyết toán
-///   CS-2607-01 Harvesting      cua thịt 300 con (hộp 1201–1500), 288 con InStock có tem Active, niêm yết còn tồn
-///   CS-2608-01 InProduction    cua thịt 1.200 con (hộp 0001–1200), 20 con chết, nhật ký 30 ngày, ảnh bằng chứng
-///   CS-2610-01 Funding         cua lột, đang gọi vốn: đã xác nhận 50/120 triệu
-///   CS-2610-02 PendingApproval cua gạch, chi phí chuẩn đã gửi, chờ quản trị duyệt
+///   CS-2609-04 Harvesting      cua thịt 300 con (hộp 1201–1500), 288 con InStock có tem Active, niêm yết còn tồn
+///   CS-2610-01 InProduction    cua thịt 1.200 con (hộp 0001–1200), 20 con chết, nhật ký 30 ngày, ảnh bằng chứng
+///   CS-2610-02 Funding         cua gạch, đang gọi vốn: đã xác nhận 25/60 triệu
+///   CS-2610-03 Funding         cua lột, đang gọi vốn: đã xác nhận 50/120 triệu
+///   CS-2611-01 PendingApproval cua gạch, chi phí chuẩn đã gửi, chờ quản trị duyệt
 /// Mốc thời gian tính lùi từ lúc seed nên dữ liệu luôn "đang diễn ra"; Random cố định nên chạy lại cho cùng số liệu.
 /// Tiền là số nguyên đồng. Mọi khoản góp Confirmed đều có hợp đồng đã ký, yêu cầu thanh toán Paid và giao dịch ngân hàng khớp.
 /// </summary>
@@ -76,10 +78,11 @@ internal sealed class DemoLifecycleSeeder
         await HarvestingBatchAsync();
         await InProductionBatchAsync();
         await FundingBatchAsync();
+        await RoeFundingBatchAsync();
         await PendingApprovalBatchAsync();
     }
 
-    // ---------- 5 lô ----------
+    // ---------- 6 lô ----------
 
     private async Task SettlementBatchAsync()
     {
@@ -120,7 +123,7 @@ internal sealed class DemoLifecycleSeeder
 
     private async Task HarvestingBatchAsync()
     {
-        var b = NewBatch("CS-2607-01", "FatteningMudCrab", "Cua thịt vỗ béo — vụ tháng 7", 300, 120m, 95,
+        var b = NewBatch("CS-2609-04", "FatteningMudCrab", "Cua thịt vỗ béo — vụ tháng 7", 300, 120m, 95,
             60_000_000, 80_000_000, 100_000_000, Day(-120));
         Approve(b, Day(-115), Day(-101));
         var costs = Costs(b, "Locked", Day(-117), Day(-115),
@@ -155,7 +158,7 @@ internal sealed class DemoLifecycleSeeder
 
     private async Task InProductionBatchAsync()
     {
-        var b = NewBatch("CS-2608-01", "FatteningMudCrab", "Cua thịt vỗ béo 1.200 hộp — vụ tháng 8", 1200, 480m, 90,
+        var b = NewBatch("CS-2610-01", "FatteningMudCrab", "Cua thịt vỗ béo Năm Căn — 1.200 hộp", 1200, 480m, 90,
             150_000_000, 180_000_000, 220_000_000, Day(-70));
         Approve(b, Day(-65), Day(-51));
         var costs = Costs(b, "Locked", Day(-67), Day(-65),
@@ -187,7 +190,7 @@ internal sealed class DemoLifecycleSeeder
 
     private async Task FundingBatchAsync()
     {
-        var b = NewBatch("CS-2610-01", "SoftShellCrab", "Cua lột Năm Căn — gọi vốn tháng 10", 600, 150m, 60,
+        var b = NewBatch("CS-2610-03", "SoftShellCrab", "Cua lột hộp nhựa Năm Căn — gọi vốn tháng 10", 600, 150m, 60,
             90_000_000, 120_000_000, 150_000_000, Day(-8));
         Approve(b, Day(-3), Day(11));
         var costs = Costs(b, "Locked", Day(-6), Day(-3),
@@ -207,9 +210,31 @@ internal sealed class DemoLifecycleSeeder
         await db.SaveChangesAsync();
     }
 
+    private async Task RoeFundingBatchAsync()
+    {
+        var b = NewBatch("CS-2610-02", "RoeCrab", "Cua gạch Năm Căn — gọi vốn tháng 10", 250, 100m, 90,
+            45_000_000, 60_000_000, 75_000_000, Day(-6));
+        Approve(b, Day(-4), Day(10));
+        var costs = Costs(b, "Locked", Day(-5), Day(-4),
+            new("Seed", "Cua gạch giống 180–200 g/con", 250, "con", 56_000, 1),
+            new("Feed", "Thức ăn tháng 1–2", 250, "kg", 25_000, 1),
+            new("Feed", "Thức ăn tháng 3", 250, "kg", 25_000, 2),
+            new("Utilities", "Điện bơm, sục khí, lọc nước", 3, "tháng", 1_000_000, 2),
+            new("Labour", "Nhân công chăm sóc", 3, "tháng", 2_500_000, 2),
+            new("MortalityReserve", "Dự phòng hao hụt", 1, "gói", 2_500_000, 3),
+            new("Depreciation", "Khấu hao hộp và hệ thống lọc", 1, "vụ", 1_800_000, null),
+            new("Other", "Đóng gói, vận chuyển khi bán", 1, "gói", 1_200_000, 3));
+        Contribute(b, p.Investors[2], 15_000_000, Day(-3), snapshot: false);
+        Contribute(b, p.Investors[3], 10_000_000, Day(-2), snapshot: false);
+        Tranches(b, costs, DateOf(14), DateOf(44), DateOf(100));
+
+        b.Status = "Funding";
+        await db.SaveChangesAsync();
+    }
+
     private async Task PendingApprovalBatchAsync()
     {
-        var b = NewBatch("CS-2610-02", "RoeCrab", "Cua gạch Năm Căn — đợt tháng 11", 250, 100m, 90,
+        var b = NewBatch("CS-2611-01", "RoeCrab", "Cua gạch Năm Căn — đợt tháng 11", 250, 100m, 90,
             45_000_000, 60_000_000, 75_000_000, Day(-2));
         Costs(b, "Submitted", Day(-1), null,
             new("Seed", "Cua gạch giống 180–200 g/con", 250, "con", 56_000, 1),
