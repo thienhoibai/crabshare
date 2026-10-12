@@ -178,10 +178,16 @@ export function QrMock({ size = 150 }: { size?: number }) {
 }
 
 /* ---------- giỏ hàng ---------- */
-export type CartLine = { id: string; size: number; qty: number }
+/** item: sản phẩm lấy từ API (không có trong dữ liệu mẫu) được lưu kèm dòng giỏ. */
+export type CartLine = { id: string; size: number; qty: number; item?: Product }
+export const lineProduct = (l: CartLine) => l.item ?? product(l.id)
+/** Số lượng tối đa mua được (đơn vị nguyên); 0 = hết hàng. */
+export const maxQty = (p: Product) => (p.soldOut ? 0 : Math.floor(p.stock))
+const qtyFmt = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 })
+
 type CartState = {
   lines: CartLine[]
-  add: (id: string, size: number, qty?: number) => void
+  add: (id: string, size: number, qty?: number, item?: Product) => void
   setQty: (id: string, size: number, qty: number) => void
   clear: () => void
   open: boolean
@@ -200,7 +206,7 @@ export function cartTotals(lines: CartLine[]) {
   let subtotal = 0, today = 0, deposit = 0, count = 0
   const map = new Map<string, CartLine[]>()
   for (const l of lines) {
-    const p = product(l.id)
+    const p = lineProduct(l)
     const price = p.sizes[l.size].price * l.qty
     subtotal += price
     count += l.qty
@@ -229,20 +235,29 @@ export function CartProvider({ children, seed = [] }: { children: ReactNode; see
       holdUntil,
       toast,
       ...t,
-      add: (id, size, qty = 1) => {
+      add: (id, size, qty = 1, item) => {
+        const p = item ?? lines.find((l) => l.id === id)?.item ?? product(id)
+        const max = maxQty(p)
+        const flash = (msg: string) => {
+          setToast(msg)
+          window.clearTimeout(timer.current)
+          timer.current = window.setTimeout(() => setToast(null), 2400)
+        }
+        if (max < 1) {
+          flash(`${p.name} đã hết hàng`)
+          return
+        }
         setLines((ls) => {
           const i = ls.findIndex((l) => l.id === id && l.size === size)
           if (i >= 0) {
             const next = [...ls]
-            next[i] = { ...next[i], qty: Math.min(product(id).stock, next[i].qty + qty) }
+            next[i] = { ...next[i], item: item ?? next[i].item, qty: Math.min(max, next[i].qty + qty) }
             return next
           }
-          return [...ls, { id, size, qty }]
+          return [...ls, { id, size, qty: Math.min(max, qty), item }]
         })
         setHoldUntil((h) => h ?? Date.now() + HOLD_MIN * 60000)
-        setToast(`Đã thêm ${product(id).name}`)
-        window.clearTimeout(timer.current)
-        timer.current = window.setTimeout(() => setToast(null), 2400)
+        flash(`Đã thêm ${p.name}`)
       },
       setQty: (id, size, qty) =>
         setLines((ls) => {
@@ -330,16 +345,16 @@ export function CartDrawer() {
             ) : (
               c.groups.map((g) => (
                 <section key={g.lot} className="rd-cartgroup">
-                  <p className="rd-cartgroup__head"><span>Lô {g.lot}</span><span>{OPERATOR}</span></p>
+                  <p className="rd-cartgroup__head"><span>Lô {g.lot}</span><span>{lineProduct(g.lines[0]).farm ?? OPERATOR}</span></p>
                   {g.lines.map((l) => {
-                    const p = product(l.id)
+                    const p = lineProduct(l)
                     return (
                       <div key={`${l.id}-${l.size}`} className="rd-cartline">
                         <img src={small(p.img, 200)} alt="" />
                         <div className="rd-cartline__info">
                           <b>{p.name}</b>
                           <small>{p.sizes[l.size].label}{p.preorder ? ' · đặt trước' : ''}</small>
-                          <Qty small value={l.qty} max={p.stock} onChange={(v) => c.setQty(l.id, l.size, v)} />
+                          <Qty small value={l.qty} max={maxQty(p)} onChange={(v) => c.setQty(l.id, l.size, v)} />
                         </div>
                         <span className="rd-cartline__price">{vnd(p.sizes[l.size].price * l.qty)}</span>
                       </div>
@@ -413,6 +428,22 @@ export function CartDrawer() {
 
 /* ---------- xem sản phẩm ---------- */
 export function TraceCard({ p }: { p: Product }) {
+  if (p.farm) {
+    return (
+      <div className="rd-trace">
+        <div className="rd-trace__head">
+          <span className="rd-trace__icon"><QrCode size={20} /></span>
+          <div><b>Nguồn gốc</b><small>Mỗi con có mã QR riêng trên dây buộc</small></div>
+        </div>
+        <dl>
+          <dt>Lô</dt><dd>{p.lot} · {p.crab}</dd>
+          <dt>Người nuôi</dt><dd>{p.farm}</dd>
+          <dt>Ngày thu</dt><dd>{p.harvest}</dd>
+        </dl>
+        {p.traceTag && <a className="rd-btn rd-btn--ghost rd-btn--block" href={`/truy-xuat/${p.traceTag}`}>Truy xuất lô {p.lot}</a>}
+      </div>
+    )
+  }
   const l = lot(p.lot)
   return (
     <div className="rd-trace">
@@ -435,8 +466,9 @@ export function ProductView({ p, onAdded }: { p: Product; onAdded?: () => void }
   const [size, setSize] = useState(0)
   const [qty, setQty] = useState(1)
   const [shot, setShot] = useState(0)
-  const gallery = [p.img, IMG.sorter, IMG.qr]
+  const gallery = p.gallery ?? [p.img, IMG.sorter, IMG.qr]
   const price = p.sizes[size].price
+  const max = maxQty(p)
   return (
     <div className="rd-pv">
       <div className="rd-pv__gallery">
@@ -450,15 +482,17 @@ export function ProductView({ p, onAdded }: { p: Product; onAdded?: () => void }
       <div className="rd-pv__info">
         <div className="rd-pv__tags">
           <span className="rd-tag">{p.kind}</span>
-          {p.preorder ? <span className="rd-tag rd-tag--accent">Đặt trước · cọc 15%</span> : <span className="rd-tag">Còn {p.stock} {p.unit}</span>}
+          {p.preorder ? <span className="rd-tag rd-tag--accent">Đặt trước · cọc 15%</span>
+            : max < 1 ? <span className="rd-tag">Hết hàng</span>
+            : <span className="rd-tag">Còn {qtyFmt.format(p.stock)} {p.unit}</span>}
         </div>
         <h2 className="rd-pv__name">{p.name}</h2>
         <p className="rd-pv__price">{vnd(price)}<small> / {p.unit}</small></p>
         <SizePills p={p} value={size} onChange={setSize} />
         <div className="rd-pv__buy">
-          <Qty value={qty} max={p.stock} onChange={(v) => setQty(Math.max(1, v))} />
-          <button type="button" className="rd-btn rd-btn--primary rd-btn--lg rd-pv__cta" onClick={() => { cart.add(p.id, size, qty); onAdded?.() }}>
-            {p.preorder ? `Đặt trước · cọc ${vnd(price * qty * DEPOSIT)}` : `Thêm vào giỏ · ${vnd(price * qty)}`}
+          <Qty value={qty} max={Math.max(1, max)} onChange={(v) => setQty(Math.max(1, v))} />
+          <button type="button" className="rd-btn rd-btn--primary rd-btn--lg rd-pv__cta" disabled={max < 1} onClick={() => { cart.add(p.id, size, qty, p); onAdded?.() }}>
+            {max < 1 ? 'Hết hàng' : p.preorder ? `Đặt trước · cọc ${vnd(price * qty * DEPOSIT)}` : `Thêm vào giỏ · ${vnd(price * qty)}`}
           </button>
         </div>
         <p className="rd-pv__hint"><Clock size={14} /> Giữ hàng 15 phút khi bạn thêm vào giỏ.</p>

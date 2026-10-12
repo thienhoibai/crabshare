@@ -67,7 +67,7 @@ export const router = createBrowserRouter([
       { path: '/', element: page(Landing) },
       { path: '/dang-nhap', element: page(LoginPage) },
       { path: '/dang-ky', element: page(RegisterPage) },
-      { path: '/cua-hang', element: page(StorePage) },
+      { path: '/cua-hang/:listingId?', element: page(StorePage) },
       { path: '/truy-xuat/:tagCode', element: page(TracePage) },
       { path: '/san-pham', element: page(CommercePage) },
 
