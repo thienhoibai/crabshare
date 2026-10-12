@@ -1,5 +1,9 @@
 # Mobile — Flutter
 
+KH-03: Tài khoản → Tài khoản nhận tiền đã dùng `GET/PUT /api/me/payout-account`.
+Hai vai có thể chọn Cá nhân/Hộ nuôi; quyền chủ hộ kiểm tra trên backend. Form dùng
+AppCard, AppColors, AppRadius và theme chung. Test luồng: `flutter test test/payout_test.dart`.
+
 App cho **nhà đầu tư** (theo dõi lô, eKYC, thông báo, quét tem) và **hộ nuôi** (nhật ký, chụp bằng chứng, cảnh báo, thu hoạch & in tem).
 Giao diện theo mẫu *AI calorie tracker*: nền be ấm, nhấn cam, thẻ trắng bo lớn, đồng hồ bán nguyệt chia vạch, thanh điều hướng tối có nút tròn cam ở giữa.
 

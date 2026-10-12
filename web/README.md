@@ -1,5 +1,11 @@
 # Web — React 19 + Vite + TypeScript
 
+KH-03: nhà đầu tư đăng ký tài khoản nhận tiền tại Hồ sơ & eKYC; chủ hộ nuôi tại
+`/operator/payout-account`; khách hàng mở Sổ địa chỉ từ Cửa hàng (`/tai-khoan/dia-chi`).
+Form dùng API thật và style rd/OperatorLayout hiện có. `npm run test:kyc` chạy cả
+test eKYC và tài khoản/địa chỉ. Test trình duyệt dùng API mock; backend test LocalDB
+kiểm tra lưu dữ liệu, quyền và cập nhật đồng thời.
+
 Giao diện lấy từ bản demo `cs-ui-demo` (đã bỏ phần chọn phiên bản):
 **Cửa hàng = bản 1 (nền sáng)**, **Nhà đầu tư = bản 2**, **trang chủ 3D giữ nguyên** (sẽ chỉnh sau).
 

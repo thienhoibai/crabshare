@@ -13,7 +13,12 @@ import {
   type CrabType, type PublicPriceRevision, type StoreSort,
 } from './storeApi'
 import './store.css'
+import { useAuthStore } from '../../shared/auth/authStore'
 
+function AddressBookLink() {
+  const isCustomer = useAuthStore(s => s.user?.roles.includes('Customer'))
+  return isCustomer ? <a className="rd-btn rd-btn--ghost rd-btn--sm" href="/tai-khoan/dia-chi">Sổ địa chỉ</a> : null
+}
 const PAGE_SIZE = 12
 
 const KINDS = ['Tất cả', 'Cua thịt', 'Cua gạch', 'Cua lột'] as const
@@ -153,7 +158,7 @@ function StoreV1Inner() {
 
   return (
     <>
-      <TopBar area="store" right={<CartButton />} />
+      <TopBar area="store" right={<><AddressBookLink /><CartButton /></>} />
       <main className="s1">
         <section className="s1-head">
           <p className="rd-eyebrow">Cửa hàng · hàng từ các lô đang bán</p>

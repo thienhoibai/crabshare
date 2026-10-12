@@ -16,5 +16,14 @@ public partial class AppDbContext
 
         // Hai người đổi giá cùng lúc: lần lưu sau bị từ chối thay vì ghi "giá cũ" sai vào lịch sử giá
         modelBuilder.Entity<Entities.ProductListing>().Property(l => l.UpdatedAt).IsConcurrencyToken();
+
+        // Scaffold hiểu nhầm index unique có filter thành quan hệ 1:1.
+        // Một khách có nhiều địa chỉ; chỉ địa chỉ mặc định mới unique.
+        var addresses = modelBuilder.Entity<Entities.CustomerAddress>();
+        var scaffoldedRelation = addresses.Metadata.FindNavigation(nameof(Entities.CustomerAddress.Customer))!.ForeignKey;
+        addresses.Metadata.RemoveForeignKey(scaffoldedRelation);
+        modelBuilder.Entity<Entities.Customer>().Ignore(c => c.CustomerAddress);
+        addresses.HasOne(a => a.Customer).WithMany()
+            .HasForeignKey(a => a.CustomerId).HasConstraintName("fk_customer_address_customer_id");
     }
 }
