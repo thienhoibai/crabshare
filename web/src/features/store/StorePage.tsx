@@ -1,7 +1,7 @@
 /* Cửa hàng (bản 1, nền sáng): lưới ảnh lớn, xem sản phẩm toàn màn hình, giỏ hàng trượt từ bên phải.
-   UC25: dữ liệu lấy từ GET /api/listings (lọc loại cua / hạng / bảo quản, sắp xếp, phân trang) và GET /api/listings/{id}.
+   UC25: dữ liệu lấy từ GET /api/listings (lọc loại cua / hạng / bảo quản / lô nguồn / khoảng giá, sắp xếp, phân trang) và GET /api/listings/{id}.
    Giỏ hàng lưu trên máy (shared/cart); bấm "Thanh toán" sang /thanh-toan để đặt đơn thật (UC26). */
-import { useState, type ReactNode } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { ChevronLeft, ChevronRight, Flag, Plus, X } from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
@@ -58,6 +58,57 @@ const STORAGE_OPTIONS: { value: '' | StorageType; label: string }[] = [
   { value: 'Fresh', label: 'Tươi' },
   { value: 'Frozen', label: 'Cấp đông' },
 ]
+
+type RangeFilter = { batch: string; minPrice?: number; maxPrice?: number }
+const NO_RANGE: RangeFilter = { batch: '' }
+const MAX_PRICE = 100_000_000
+
+const toPrice = (raw: string) => (raw.trim() === '' ? undefined : Number(raw))
+
+/** Lọc theo lô nguồn và khoảng giá: gõ xong bấm Lọc (hoặc Enter) mới gọi API. */
+function BatchPriceFilter({ value, onApply }: { value: RangeFilter; onApply: (v: RangeFilter) => void }) {
+  const [batch, setBatch] = useState(value.batch)
+  const [min, setMin] = useState(value.minPrice?.toString() ?? '')
+  const [max, setMax] = useState(value.maxPrice?.toString() ?? '')
+  const [error, setError] = useState<string | null>(null)
+  const active = value.batch !== '' || value.minPrice !== undefined || value.maxPrice !== undefined
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    const minPrice = toPrice(min)
+    const maxPrice = toPrice(max)
+    const invalid = (p?: number) => p !== undefined && (!Number.isInteger(p) || p < 1 || p > MAX_PRICE)
+    if (invalid(minPrice) || invalid(maxPrice)) return setError('Giá phải là số nguyên từ 1 đến 100.000.000 đ/kg.')
+    if (minPrice !== undefined && maxPrice !== undefined && minPrice > maxPrice) return setError('Giá từ không được lớn hơn giá đến.')
+    setError(null)
+    onApply({ batch: batch.trim(), minPrice, maxPrice })
+  }
+
+  const clear = () => {
+    setBatch(''); setMin(''); setMax(''); setError(null)
+    onApply(NO_RANGE)
+  }
+
+  return (
+    <form className="s1-range" onSubmit={submit} noValidate>
+      <label className="s1-range__field">
+        <span>Mã lô</span>
+        <input value={batch} onChange={(e) => setBatch(e.target.value)} maxLength={20} placeholder="VD: L2701-01" autoComplete="off" />
+      </label>
+      <label className="s1-range__field">
+        <span>Giá từ</span>
+        <input type="number" inputMode="numeric" min={1} max={MAX_PRICE} step={1000} value={min} onChange={(e) => setMin(e.target.value)} placeholder="đ/kg" />
+      </label>
+      <label className="s1-range__field">
+        <span>đến</span>
+        <input type="number" inputMode="numeric" min={1} max={MAX_PRICE} step={1000} value={max} onChange={(e) => setMax(e.target.value)} placeholder="đ/kg" />
+      </label>
+      <button type="submit" className="rd-btn rd-btn--dark rd-btn--sm">Lọc</button>
+      {active && <button type="button" className="rd-btn rd-btn--ghost rd-btn--sm" onClick={clear}>Bỏ lọc lô và giá</button>}
+      {error && <p className="s1-range__error" role="alert">{error}</p>}
+    </form>
+  )
+}
 
 /** Khung chứa trang sản phẩm: toàn màn hình, tấm trượt từ dưới hoặc từ phải. */
 function Panel({ kind, onClose, children }: { kind: 'full' | 'sheet' | 'side'; onClose: () => void; children: ReactNode }) {
@@ -143,6 +194,7 @@ function StoreV1Inner() {
   const [kind, setKind] = useState<Kind>('Tất cả')
   const [grade, setGrade] = useState('')
   const [storage, setStorage] = useState<'' | StorageType>('')
+  const [range, setRange] = useState<RangeFilter>(NO_RANGE)
   const [sort, setSort] = useState<StoreSort>('Newest')
   const [page, setPage] = useState(1)
 
@@ -150,6 +202,9 @@ function StoreV1Inner() {
     crabType: KIND_TO_TYPE[kind],
     grade: grade || undefined,
     storage: storage || undefined,
+    batch: range.batch || undefined,
+    minPrice: range.minPrice,
+    maxPrice: range.maxPrice,
     sort,
     page,
     pageSize: PAGE_SIZE,
@@ -172,6 +227,7 @@ function StoreV1Inner() {
               <Select label="Sắp xếp" value={sort} onChange={filter(setSort)} options={SORTS} />
             </div>
           </div>
+          <BatchPriceFilter value={range} onApply={filter(setRange)} />
         </section>
 
         {isPending ? <p className="s1-state">Đang tải sản phẩm…</p>

@@ -63,13 +63,14 @@ public class ListingModerationDatabaseTests(OrderDatabaseFixture fixture) : ICla
         return user.UserId;
     });
 
-    private Task AddPriceAsync(long listingId, long changedBy, bool flagged, int minutesAgo) => fixture.WithDbAsync(async db =>
+    /// <summary>Một lần đổi giá sau bản ghi Initial mà fixture tạo cùng niêm yết.</summary>
+    private Task AddPriceAsync(long listingId, long changedBy, bool flagged, int minutesLater) => fixture.WithDbAsync(async db =>
     {
-        var at = DateTimeOffset.UtcNow.AddMinutes(-minutesAgo);
+        var at = DateTimeOffset.UtcNow.AddMinutes(minutesLater);
         db.PriceHistories.Add(new PriceHistory
         {
-            ListingId = listingId, PricePerKg = 400_000, EffectiveFrom = at, ChangedBy = changedBy,
-            FlaggedAbnormal = flagged, ReasonCode = "Initial", CreatedAt = at,
+            ListingId = listingId, PricePerKg = 400_000, PreviousPricePerKg = 400_000, EffectiveFrom = at, ChangedBy = changedBy,
+            FlaggedAbnormal = flagged, ReasonCode = "Market", CreatedAt = at,
         });
         return await db.SaveChangesAsync();
     });
@@ -139,10 +140,10 @@ public class ListingModerationDatabaseTests(OrderDatabaseFixture fixture) : ICla
         var adminId = await CreateAdminAsync();
         var flagged = await fixture.CreateListingAsync(stockKg: 10);
         var corrected = await fixture.CreateListingAsync(stockKg: 10);
-        await AddPriceAsync(flagged, adminId, flagged: false, minutesAgo: 10);
-        await AddPriceAsync(flagged, adminId, flagged: true, minutesAgo: 1);
-        await AddPriceAsync(corrected, adminId, flagged: true, minutesAgo: 10);
-        await AddPriceAsync(corrected, adminId, flagged: false, minutesAgo: 1);
+        await AddPriceAsync(flagged, adminId, flagged: false, minutesLater: 1);
+        await AddPriceAsync(flagged, adminId, flagged: true, minutesLater: 2);
+        await AddPriceAsync(corrected, adminId, flagged: true, minutesLater: 1);
+        await AddPriceAsync(corrected, adminId, flagged: false, minutesLater: 2);
         using var admin = Client(adminId, Roles.PlatformAdmin);
 
         var page = await admin.GetFromJsonAsync<PagedResult<AdminListingResponse>>("/api/admin/listings?flagged=true&hidden=false&pageSize=100");

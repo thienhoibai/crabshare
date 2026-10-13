@@ -58,6 +58,14 @@
 .s1-card__meta b small { font-weight: 400; }
 @media (max-width: 520px) { .s1-card__meta { flex-direction: column; gap: 2px; } }
 .s1-filters { display: flex; flex-wrap: wrap; gap: 10px; }
+.s1-range { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.s1-range__field { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.s1-range__field input { height: 42px; width: 150px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--input); color: var(--fg); font: inherit; font-size: 14px; font-variant-numeric: tabular-nums; }
+.s1-range__field input:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
+.s1-range__field input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.s1-range__field input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
+.s1-range__error { flex-basis: 100%; font-size: 13px; color: #c2410c; }
+@media (max-width: 640px) { .s1-range__field input { width: 120px; } }
 .s1-out { background: rgba(7, 9, 8, 0.72); color: #fff; border-color: transparent; }
 .s1-card.is-soldout .s1-card__media img { filter: grayscale(0.7); opacity: 0.75; }
 .s1-grid.is-loading { opacity: 0.55; transition: opacity 0.2s; }

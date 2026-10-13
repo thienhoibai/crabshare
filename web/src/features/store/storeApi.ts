@@ -55,6 +55,11 @@ export interface StoreQuery {
   crabType?: CrabType
   grade?: string
   storage?: StorageType
+  /** Mã lô nguồn, khớp đúng cả mã. */
+  batch?: string
+  /** VND/kg, tính cả hai đầu. */
+  minPrice?: number
+  maxPrice?: number
   sort: StoreSort
   page: number
   pageSize?: number

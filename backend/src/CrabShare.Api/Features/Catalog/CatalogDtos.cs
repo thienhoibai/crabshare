@@ -145,8 +145,8 @@ public sealed record AdminListingResponse(
 
 public enum StoreSort { Newest, PriceAsc, PriceDesc }
 
-/// <summary>?crabType=RoeCrab&amp;grade=L1&amp;storage=Fresh&amp;sort=PriceAsc&amp;page=1&amp;pageSize=20 — bỏ trống = không lọc.</summary>
-public sealed class StoreListingQuery
+/// <summary>?crabType=RoeCrab&amp;grade=L1&amp;storage=Fresh&amp;batch=L2701-01&amp;minPrice=300000&amp;maxPrice=500000&amp;sort=PriceAsc&amp;page=1&amp;pageSize=20 — bỏ trống = không lọc.</summary>
+public sealed class StoreListingQuery : IValidatableObject
 {
     /// <summary>FatteningMudCrab, RoeCrab, SoftShellCrab.</summary>
     [MaxLength(30)]
@@ -158,6 +158,17 @@ public sealed class StoreListingQuery
 
     public StorageType? Storage { get; set; }
 
+    /// <summary>Mã lô nguồn, khớp đúng cả mã.</summary>
+    [MaxLength(20)]
+    public string? Batch { get; set; }
+
+    /// <summary>Khoảng giá VND/kg, tính cả hai đầu, so với giá hiện tại.</summary>
+    [Range(1, 100_000_000)]
+    public long? MinPrice { get; set; }
+
+    [Range(1, 100_000_000)]
+    public long? MaxPrice { get; set; }
+
     public StoreSort Sort { get; set; } = StoreSort.Newest;
 
     [Range(1, int.MaxValue)]
@@ -165,6 +176,12 @@ public sealed class StoreListingQuery
 
     [Range(1, 100)]
     public int PageSize { get; set; } = 20;
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (MinPrice > MaxPrice)
+            yield return new ValidationResult("Giá từ không được lớn hơn giá đến.", [nameof(MinPrice), nameof(MaxPrice)]);
+    }
 }
 
 /// <summary>Thẻ sản phẩm ở cửa hàng. Không lộ phần đang giữ cho đơn hay người đổi giá.</summary>

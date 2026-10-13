@@ -92,6 +92,34 @@ public class CheckoutConcurrencyTests(OrderDatabaseFixture fixture) : IClassFixt
     }
 
     [Fact]
+    public async Task Dong_don_chup_phien_ban_gia_va_doi_gia_sau_khong_sua_don_cu()
+    {
+        var listingId = await fixture.CreateListingAsync(stockKg: 5, pricePerKg: 400_000);
+        var (customerId, addressId) = await fixture.CreateCustomerAsync();
+        using var client = fixture.Client(customerId);
+        var initialRevision = await fixture.WithDbAsync(db => db.PriceHistories.Where(h => h.ListingId == listingId).Select(h => h.PriceHistoryId).SingleAsync());
+
+        using var before = await client.PostAsJsonAsync("/api/orders/checkout", Cart(addressId, (listingId, 1m)));
+        var newRevision = await fixture.ChangePriceAsync(listingId, 450_000);
+        using var after = await client.PostAsJsonAsync("/api/orders/checkout", Cart(addressId, (listingId, 1m)));
+
+        Assert.Equal(HttpStatusCode.OK, before.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, after.StatusCode);
+        var firstNo = (await before.Content.ReadFromJsonAsync<CheckoutResponse>())!.Orders.Single().OrderNo;
+        var secondNo = (await after.Content.ReadFromJsonAsync<CheckoutResponse>())!.Orders.Single().OrderNo;
+        var lines = await fixture.WithDbAsync(db => db.OrderLines.AsNoTracking()
+            .Where(l => l.ListingId == listingId)
+            .Select(l => new { l.SalesOrder.OrderNo, l.UnitPrice, l.PriceHistoryId, RevisionPrice = db.PriceHistories.Single(h => h.PriceHistoryId == l.PriceHistoryId).PricePerKg })
+            .ToListAsync());
+
+        var first = lines.Single(l => l.OrderNo == firstNo);
+        var second = lines.Single(l => l.OrderNo == secondNo);
+        Assert.Equal((400_000m, initialRevision), (first.UnitPrice, first.PriceHistoryId));
+        Assert.Equal((450_000m, newRevision), (second.UnitPrice, second.PriceHistoryId));
+        Assert.All(lines, l => Assert.Equal(l.RevisionPrice, l.UnitPrice));
+    }
+
+    [Fact]
     public async Task Mot_dong_thieu_hang_thi_ca_gio_khong_duoc_giu_va_khong_tao_don()
     {
         var enough = await fixture.CreateListingAsync(stockKg: 5);

@@ -54,9 +54,9 @@ public class CheckoutRulesTests(WebApplicationFactory<Program> factory) : IClass
     public void Moi_lo_mot_don()
     {
         var groups = OrderService.SplitByBatch([
-            new(ListingId: 5, BatchId: 20, QuantityKg: 1, UnitPrice: 400_000),
-            new(ListingId: 2, BatchId: 10, QuantityKg: 2, UnitPrice: 300_000),
-            new(ListingId: 4, BatchId: 20, QuantityKg: 1, UnitPrice: 450_000),
+            new(ListingId: 5, BatchId: 20, QuantityKg: 1, UnitPrice: 400_000, PriceHistoryId: 51),
+            new(ListingId: 2, BatchId: 10, QuantityKg: 2, UnitPrice: 300_000, PriceHistoryId: 21),
+            new(ListingId: 4, BatchId: 20, QuantityKg: 1, UnitPrice: 450_000, PriceHistoryId: 41),
         ]);
 
         Assert.Equal(2, groups.Count);
