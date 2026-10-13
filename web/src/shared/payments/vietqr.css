@@ -27,6 +27,10 @@
 .vq-copy b { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .vq-copy .rd-iconbtn { width: 32px; height: 32px; }
 
+/* Nút giả lập chuyển khoản (chỉ dev) và dòng lỗi của nó */
+.vq-sim { display: inline-flex; align-items: center; gap: 6px; }
+.vq-sim__error { flex-basis: 100%; margin: 0; color: var(--bad); font-size: 14px; }
+
 /* Đã nhận tiền / đã huỷ / hết hạn */
 .vq--state { grid-template-columns: 1fr; justify-items: center; gap: 8px; padding: 24px 18px; text-align: center; }
 .vq-state__icon { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; }

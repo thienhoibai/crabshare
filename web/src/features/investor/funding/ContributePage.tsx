@@ -7,6 +7,7 @@ import { ArrowLeft, Check, Clock, FileSignature, Hourglass, QrCode, ShieldCheck,
 import { errorMessage } from '../../../shared/api/http'
 import { formatDate, formatDateTime, formatVnd } from '../../../shared/lib/format'
 import { usePaymentRequest } from '../../../shared/payments/paymentsApi'
+import { SimulatePaymentButton } from '../../../shared/payments/SimulatePaymentButton'
 import { VietQrBox } from '../../../shared/payments/VietQrBox'
 import { Shell, useCountdown } from '../../../shared/ui/kit/kit'
 import {
@@ -337,6 +338,8 @@ function PaymentStep({ reservation, payment, onCreated, onExpire, onBack, onTran
         ) : (
           <>
             <button type="button" className="rd-btn rd-btn--ghost" onClick={onBack}>Quay lại</button>
+            {/* Chỉ dev: giả lập ngân hàng báo có, trang tự sang màn Xong khi mã đổi sang Paid */}
+            {request.data?.status === 'Pending' && <SimulatePaymentButton payment={request.data} />}
             <button type="button" className="rd-btn rd-btn--primary rd-btn--lg" disabled={!payable} onClick={onTransferred}>Tôi đã chuyển khoản</button>
           </>
         )}
@@ -395,6 +398,8 @@ function DoneStep({ payment, onPaid, onShowQr, onReserveAgain }: {
         <p className="rd-note"><Clock size={14} /> Trang tự cập nhật khi tiền về. Khoản góp chỉ được tính khi tiền đã vào tài khoản của lô.</p>
         <footer className="cf-foot">
           <button type="button" className="rd-btn rd-btn--ghost" onClick={onShowQr}>Xem lại mã QR</button>
+          {/* Chỉ dev: giả lập ngân hàng báo có (đi đúng luồng webhook TH-06) */}
+          <SimulatePaymentButton payment={p} />
         </footer>
       </>
     )
