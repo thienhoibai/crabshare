@@ -110,7 +110,7 @@ export const router = createBrowserRouter([
           { path: '/operator/contract', element: page(OperatorContract) },
           { path: '/operator/harvest', element: page(OperatorHarvest) },
           { path: '/operator/settlement', element: page(OperatorSettlement) },
-          { path: '/operator/map', element: page(OperatorFarmMap) },
+          { path: '/operator/boxes', element: page(OperatorFarmMap) },
           { path: '/operator/log', element: page(OperatorDailyLog) },
           { path: '/operator/batch', element: page(OperatorBatchStatus) },
           { path: '/operator/batch/detail', element: page(OperatorBatchDetail) },

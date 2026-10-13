@@ -242,6 +242,14 @@
 .op-slot:hover { transform: translateY(-2px); box-shadow: 0 10px 24px -14px rgba(40, 30, 10, 0.5); }
 .op-slot b { font-size: 12px; font-weight: 700; }
 .op-slot small { font-size: 11px; opacity: 0.75; }
+.op-box { min-width: 0; padding: 6px; overflow-wrap: anywhere; color: var(--fg); }
+.op-box:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.op-box.is-available { background: var(--surface); border: 1px solid var(--line); }
+.op-box.is-maintenance { background: color-mix(in srgb, var(--warn) 12%, var(--surface)); border: 1px solid var(--warn); }
+.op-box-filters, .op-box-layout { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.op-box-filters { margin-bottom: 20px; }
+.op-box-form, .op-box-fields { display: grid; gap: 16px; min-width: 0; }
+.op-box-fields { border: 0; padding: 0; margin: 0; }
 .op-slot.is-occupied { background: color-mix(in srgb, var(--ok) 16%, var(--surface)); border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); }
 .op-slot.is-alert { background: color-mix(in srgb, var(--danger) 16%, var(--surface)); border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent); color: var(--danger-ink); }
 .op-slot.is-empty { border: 1px dashed color-mix(in srgb, var(--fg) 22%, transparent); color: var(--faint); background: repeating-linear-gradient(45deg, var(--surface), var(--surface) 5px, var(--input) 5px, var(--input) 10px); }
