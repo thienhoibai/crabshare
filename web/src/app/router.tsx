@@ -16,6 +16,8 @@ const StorePage = lazy(() => import('../features/store/StorePage'))
 const CommercePage = lazy(() => import('../features/orders/CommercePage'))
 const CheckoutPage = lazy(() => import('../features/orders/CheckoutPage'))
 const OrderConfirmationPage = lazy(() => import('../features/orders/OrderConfirmationPage'))
+const OrderHistoryPage = lazy(() => import('../features/orders/OrderHistoryPage'))
+const OrderTrackingPage = lazy(() => import('../features/orders/OrderTrackingPage'))
 const TracePage = lazy(() => import('../features/trace/TracePage'))
 const InvestorPortal = lazy(() => import('../features/investor/InvestorPortal'))
 const ContributePage = lazy(() => import('../features/investor/funding/ContributePage'))
@@ -85,9 +87,10 @@ export const router = createBrowserRouter([
           { path: '/gio-hang', element: <Navigate to="/thanh-toan" replace /> },
           { path: '/thanh-toan', element: page(CheckoutPage) },
           { path: '/xac-nhan-don-hang', element: page(OrderConfirmationPage) },
-          { path: '/theo-doi-don-hang', element: page(CommercePage) },
-          { path: '/lich-su-don-hang', element: page(CommercePage) },
-          { path: '/huy-tra-hang', element: page(CommercePage) },
+          { path: '/lich-su-don-hang', element: page(OrderHistoryPage) },
+          { path: '/theo-doi-don-hang', element: page(OrderTrackingPage) },
+          { path: '/theo-doi-don-hang/:orderNo', element: page(OrderTrackingPage) },
+          { path: '/huy-tra-hang', element: page(OrderHistoryPage) },
           { path: '/danh-gia-don-hang', element: page(CommercePage) },
         ],
       },

@@ -80,6 +80,7 @@ function OrderCard({ order }: { order: PlacedOrder }) {
       </ul>
       <dl className="rd-sum"><dt className="rd-sum__total">Tổng đơn</dt><dd className="rd-sum__total">{vnd(order.totalAmount)}</dd></dl>
       {order.status === 'PendingPayment' && <PaymentBox order={order} />}
+      <Link className="rd-btn rd-btn--ghost rd-btn--sm" to={`/theo-doi-don-hang/${order.orderNo}`}>Theo dõi đơn</Link>
     </article>
   )
 }
@@ -96,6 +97,7 @@ export default function OrderConfirmationPage() {
           <section className="co-card rd-empty">
             <p>Chưa có đơn nào vừa đặt.</p>
             <Link className="rd-btn rd-btn--primary" to="/cua-hang">Xem hàng đang bán</Link>
+            <Link className="rd-btn rd-btn--ghost" to="/lich-su-don-hang">Lịch sử đơn hàng</Link>
           </section>
         ) : (
           <>
