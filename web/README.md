@@ -65,10 +65,10 @@ src/
 | Customer, Investor | `/thanh-toan` (`/gio-hang` chuyển về đây), `/xac-nhan-don-hang` | `orders/CheckoutPage.tsx`, `orders/OrderConfirmationPage.tsx` |
 | Customer, Investor | `/theo-doi-don-hang`, `/lich-su-don-hang`, `/huy-tra-hang`, `/danh-gia-don-hang` | `orders/CommercePage.tsx` (bản mẫu) |
 | Investor | `/nha-dau-tu/*` | `investor/InvestorPortal.tsx` |
-| OperatorMember | `/operator`, `/operator/kyc`, `/operator/create-batch`, `/operator/contract`, `/operator/harvest`, `/operator/settlement`, `/operator/map`, `/operator/log`, `/operator/batch`, `/operator/batch/detail`, `/operator/alerts`, `/operator/listings` | `operator/*.tsx` |
+| OperatorMember | `/operator`, `/operator/kyc`, `/operator/create-batch`, `/operator/contract`, `/operator/harvest`, `/operator/settlement`, `/operator/boxes`, `/operator/log`, `/operator/batch`, `/operator/batch/detail`, `/operator/alerts`, `/operator/listings` | `operator/*.tsx` |
 | PlatformAdmin, EvidenceReviewer | `/admin`, `/admin/users`, `/admin/batches`, `/admin/storefront`, `/admin/finance`, `/admin/alerts`, `/admin/disputes`, `/admin/settings` (+ trang chi tiết) | `admin/*.tsx` |
 
-> `/operator/map` (sơ đồ trại) sẽ được thay bằng trang **Hộp nuôi** (đánh số hộp) — task của Viên.
+> `/operator/boxes` là trang **Hộp nuôi**: đánh số hộp, tạo hàng loạt, tìm kiếm, lọc trạng thái và quản lý bảo trì (VI-03).
 
 ## Xác minh danh tính (CS-27)
 

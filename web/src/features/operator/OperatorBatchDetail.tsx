@@ -90,7 +90,7 @@ export default function OperatorBatchDetail() {
             <span><b>Hợp đồng sản xuất</b><small>Ký giữa trại và CrabShare</small></span>
             <ExternalLink size={16} />
           </a>
-          <OpBtn variant="ink" full onClick={() => { window.location.href = '/operator/map' }}>Xem sơ đồ ô nuôi</OpBtn>
+          <OpBtn variant="ink" full onClick={() => { window.location.href = '/operator/boxes' }}>Xem hộp nuôi</OpBtn>
         </OpAside>
       </div>
     </OperatorLayout>

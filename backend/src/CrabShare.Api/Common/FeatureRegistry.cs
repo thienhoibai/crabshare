@@ -7,7 +7,7 @@ using CrabShare.Api.Features.Payments;
 
 // Viên
 using CrabShare.Api.Features.Operators;
-// using CrabShare.Api.Features.Boxes;
+using CrabShare.Api.Features.Boxes;
 // using CrabShare.Api.Features.Batches;
 // using CrabShare.Api.Features.Production;
 // using CrabShare.Api.Features.Harvest;
@@ -50,7 +50,7 @@ public static class FeatureRegistry
         // Viên
         services.AddScoped<OperatorService>();        // Features/Operators
         services.AddScoped<OperatorReviewService>();  // UC05
-        // services.AddScoped<BoxService>();          // Features/Boxes
+        services.AddScoped<BoxService>();            // Features/Boxes
         // services.AddScoped<BatchService>();        // Features/Batches
         // services.AddScoped<ProductionService>();   // Features/Production
         // services.AddScoped<HarvestService>();      // Features/Harvest

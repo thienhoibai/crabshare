@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  Bell, BellRing, ClipboardSignature, DollarSign, Home, LayoutGrid, LogOut, Map, Menu, Monitor, NotebookPen, Package, Smartphone, Store, Users, X,
+  Bell, BellRing, ClipboardSignature, DollarSign, Home, LayoutGrid, LogOut, Menu, Monitor, NotebookPen, Package, Smartphone, Store, Users, X,
 } from 'lucide-react'
 import { Logo, Shell } from '../../shared/ui/kit/kit'
 import { useAuthStore } from '../../shared/auth/authStore'
@@ -15,7 +15,7 @@ const navGroups = [
     items: [
       { id: 'dashboard', href: '/operator', icon: Home, label: 'Tổng quan' },
       { id: 'batch', href: '/operator/batch', icon: LayoutGrid, label: 'Quản lý lô nuôi' },
-      { id: 'map', href: '/operator/map', icon: Map, label: 'Sơ đồ trại' },
+      { id: 'boxes', href: '/operator/boxes', icon: Package, label: 'Hộp nuôi' },
       { id: 'members', href: '/operator/members', icon: Users, label: 'Nhân viên' },
     ],
   },
@@ -47,7 +47,7 @@ const navGroups = [
 const tabs = [
   { id: 'dashboard', href: '/operator', icon: Home, label: 'Tổng quan' },
   { id: 'batch', href: '/operator/batch', icon: LayoutGrid, label: 'Lô nuôi' },
-  { id: 'map', href: '/operator/map', icon: Map, label: 'Sơ đồ' },
+  { id: 'boxes', href: '/operator/boxes', icon: Package, label: 'Hộp nuôi' },
   { id: 'harvest', href: '/operator/harvest', icon: Package, label: 'Thu hoạch' },
 ]
 
