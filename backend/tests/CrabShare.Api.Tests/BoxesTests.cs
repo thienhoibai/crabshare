@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 namespace CrabShare.Api.Tests;
 
 [Trait("Category", "Database")]
-public class BoxesTests(OperatorDatabaseFixture fixture) : IClassFixture<OperatorDatabaseFixture>
+public class BoxesTests(OperatorDatabaseFixture fixture, Xunit.Abstractions.ITestOutputHelper output) : IClassFixture<OperatorDatabaseFixture>
 {
     private async Task<HttpClient> Owner(int capacity = 1200)
     {
@@ -38,6 +38,7 @@ public class BoxesTests(OperatorDatabaseFixture fixture) : IClassFixture<Operato
         var watch = Stopwatch.StartNew();
         var response = await client.PostAsJsonAsync("/api/boxes/range", new { from = 1, to = 1200, width = 4 });
         watch.Stop();
+        output.WriteLine($"POST /api/boxes/range: 1200 boxes in {watch.Elapsed.TotalMilliseconds:F0} ms");
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2), $"1200 boxes took {watch.Elapsed.TotalMilliseconds:F0} ms");
         var page = await client.GetFromJsonAsync<JsonElement>("/api/boxes?pageSize=100");
@@ -102,6 +103,115 @@ public class BoxesTests(OperatorDatabaseFixture fixture) : IClassFixture<Operato
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Equal("box.in_use", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
         Assert.Equal("Occupied", (await client.GetFromJsonAsync<JsonElement>("/api/boxes")).GetProperty("items")[0].GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Concurrent_ranges_and_single_create_share_the_capacity_limit()
+    {
+        using var client = await Owner(10);
+        var results = await Task.WhenAll(
+            client.PostAsJsonAsync("/api/boxes/range", new { from = 1, to = 10, width = 4 }),
+            client.PostAsJsonAsync("/api/boxes/range", new { from = 11, to = 20, width = 4 }),
+            client.PostAsJsonAsync("/api/boxes", new { slotCode = "single" }));
+        Assert.Contains(results, r => r.StatusCode == HttpStatusCode.Created);
+        foreach (var response in results)
+        {
+            Assert.True(response.StatusCode is HttpStatusCode.Created or HttpStatusCode.UnprocessableEntity,
+                await response.Content.ReadAsStringAsync());
+            if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
+                Assert.Equal("box.over_capacity", (await response.Content.ReadFromJsonAsync<JsonElement>())!.GetProperty("code").GetString());
+        }
+        var total = (await client.GetFromJsonAsync<JsonElement>("/api/boxes")).GetProperty("total").GetInt32();
+        Assert.True(total is 1 or 10);
+    }
+
+    [Fact]
+    public async Task Duplicate_at_end_of_range_leaves_no_earlier_boxes()
+    {
+        using var client = await Owner(10);
+        (await client.PostAsJsonAsync("/api/boxes", new { slotCode = "0005" })).EnsureSuccessStatusCode();
+        var response = await client.PostAsJsonAsync("/api/boxes/range", new { from = 1, to = 5, width = 4 });
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("box.duplicate", (await response.Content.ReadFromJsonAsync<JsonElement>())!.GetProperty("code").GetString());
+        var page = await client.GetFromJsonAsync<JsonElement>("/api/boxes");
+        Assert.Equal(1, page.GetProperty("total").GetInt32());
+        Assert.Equal("0005", page.GetProperty("items")[0].GetProperty("slotCode").GetString());
+    }
+
+    [Theory]
+    [InlineData(0, 1, 4)]
+    [InlineData(1, 0, 4)]
+    [InlineData(1, 1, 0)]
+    [InlineData(1, 1, 31)]
+    public async Task Invalid_range_boundaries_return_400_without_writes(int from, int to, int width)
+    {
+        using var client = await Owner(10);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await client.PostAsJsonAsync("/api/boxes/range", new { from, to, width })).StatusCode);
+        Assert.Equal(0, (await client.GetFromJsonAsync<JsonElement>("/api/boxes")).GetProperty("total").GetInt32());
+    }
+
+    [Theory]
+    [InlineData(1, "2147483647")]
+    [InlineData(30, "000000000000000000002147483647")]
+    public async Task Range_handles_maximum_integer_without_truncating_or_overflowing(int width, string expectedCode)
+    {
+        using var client = await Owner(1);
+        var response = await client.PostAsJsonAsync("/api/boxes/range", new { from = int.MaxValue, to = int.MaxValue, width });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var result = (await response.Content.ReadFromJsonAsync<JsonElement>())!;
+        Assert.Equal(1, result.GetProperty("created").GetInt32());
+        Assert.Equal(expectedCode, result.GetProperty("from").GetString());
+        Assert.Equal(expectedCode, result.GetProperty("to").GetString());
+        Assert.Equal(expectedCode, (await client.GetFromJsonAsync<JsonElement>("/api/boxes")).GetProperty("items")[0].GetProperty("slotCode").GetString());
+    }
+
+    [Theory]
+    [InlineData("Draft")]
+    [InlineData("Suspended")]
+    public async Task Unapproved_operator_cannot_create_or_change_boxes(string status)
+    {
+        using var client = await Owner(10);
+        (await client.PostAsJsonAsync("/api/boxes", new { slotCode = "A" })).EnsureSuccessStatusCode();
+        var token = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(client.DefaultRequestHeaders.Authorization!.Parameter);
+        var userId = long.Parse(token.Subject);
+        await using var db = fixture.OpenDb();
+        var operatorId = await db.OperatorMembers.Where(m => m.UserId == userId).Select(m => m.OperatorId).SingleAsync();
+        await db.Operators.Where(o => o.OperatorId == operatorId).ExecuteUpdateAsync(s => s.SetProperty(o => o.Status, status));
+        var results = new[] {
+            await client.PostAsJsonAsync("/api/boxes", new { slotCode = "B" }),
+            await client.PostAsJsonAsync("/api/boxes/range", new { from = 1, to = 2, width = 4 }),
+            await client.PatchAsJsonAsync("/api/boxes/A", new { status = "Maintenance" })
+        };
+        foreach (var response in results)
+        {
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            Assert.Equal("box.operator_not_approved", (await response.Content.ReadFromJsonAsync<JsonElement>())!.GetProperty("code").GetString());
+        }
+        var page = await client.GetFromJsonAsync<JsonElement>("/api/boxes");
+        Assert.Equal(1, page.GetProperty("total").GetInt32());
+        Assert.Equal("Available", page.GetProperty("items")[0].GetProperty("status").GetString());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Existing_token_cannot_bypass_locked_account_or_revoked_role(bool lockAccount)
+    {
+        using var client = await Owner(10);
+        var token = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(client.DefaultRequestHeaders.Authorization!.Parameter);
+        var userId = long.Parse(token.Subject);
+        await using var db = fixture.OpenDb();
+        if (lockAccount)
+            await db.AppUsers.Where(u => u.UserId == userId).ExecuteUpdateAsync(s => s.SetProperty(u => u.Status, "Locked"));
+        else
+            await db.AppUserRoles.Where(r => r.UserId == userId && r.RoleCode == "OperatorMember").ExecuteDeleteAsync();
+        // Locked accounts are rejected by JWT validation before reaching BoxService.
+        var expected = lockAccount ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden;
+        Assert.Equal(expected, (await client.GetAsync("/api/boxes")).StatusCode);
+        Assert.Equal(expected, (await client.PostAsJsonAsync("/api/boxes", new { slotCode = "A" })).StatusCode);
+        Assert.Equal(expected, (await client.PostAsJsonAsync("/api/boxes/range", new { from = 1, to = 2, width = 4 })).StatusCode);
+        Assert.Equal(expected, (await client.PatchAsJsonAsync("/api/boxes/A", new { status = "Maintenance" })).StatusCode);
     }
 
     [Fact]
