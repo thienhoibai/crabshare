@@ -52,3 +52,19 @@ Job nền: giữ tồn quá hạn chưa trả tiền → `Released`, đơn → `
 
 ## Tài liệu
 TL-28 Giữ chỗ tồn kho và chống bán vượt · TL-29 Tách đơn theo lô · TL-31 Giao hàng và xử lý khiếu nại.
+
+## NH-07 — Theo dõi đơn, lịch sử, huỷ đơn, job trả tồn (CS-46)
+
+Controller riêng `OrderTrackingController` (không sửa `OrdersController` checkout). Khách đăng nhập:
+
+| Method | Path | Việc |
+|---|---|---|
+| GET | `/api/orders?status=&page=&pageSize=` | Lịch sử đơn của tôi, mới nhất trước; `status` nhiều giá trị cách nhau bằng dấu phẩy |
+| GET | `/api/orders/{orderNo}` | Chi tiết + dòng thời gian + khoản thu. Đơn người khác → 403 `order.not_owner` |
+| POST | `/api/orders/{orderNo}/cancel` | Body `{ reason }`. `PendingPayment` / `Paid` được huỷ; `Packed` trở đi → 422 `order.cannot_cancel` |
+
+Huỷ chạy `InTransactionAsync` + `IAuditLog` (khoá chuỗi trước khi đọc đơn). `PendingPayment`: trả `reserved_qty_kg`, khoản thu Pending → Cancelled. `Paid`: giữ chỗ Committed → Released, cộng lại `stock_qty_kg`, lập lệnh hoàn `RefundService`. Mọi UPDATE có điều kiện trạng thái để không đua webhook.
+
+Job `ReservationExpiryJob` mỗi 1 phút (`ReservationExpiryService`, tắt bằng `Orders:ExpiryJob:Enabled = false` / `Orders__ExpiryJob__Enabled`). Đơn `PendingPayment` giữ chỗ `Active` đã quá `expires_at` → Cancelled, `cancel_reason = payment_timeout`, khoản thu Pending → Expired. Câu UPDATE đơn có điều kiện `status = PendingPayment`.
+
+Test: `OrderTrackingRulesTests` (CI), `OrderTrackingDatabaseTests` (LocalDB). Web: `OrderHistoryPage.tsx` (`/lich-su-don-hang`, `/huy-tra-hang`), `OrderTrackingPage.tsx` (`/theo-doi-don-hang`, `/theo-doi-don-hang/:orderNo`). `/danh-gia-don-hang` vẫn là bản mẫu.
