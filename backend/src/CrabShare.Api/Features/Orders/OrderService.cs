@@ -24,7 +24,7 @@ public sealed class OrderService(
     private const int MaxOrderNoAttempts = 3;
     private const int ShippingAddressMaxLength = 300;
 
-    public sealed record ReservedLine(long ListingId, long BatchId, decimal QuantityKg, long UnitPrice);
+    public sealed record ReservedLine(long ListingId, long BatchId, decimal QuantityKg, long UnitPrice, long PriceHistoryId);
 
     private sealed record ListingInfo(long ListingId, string Title, long BatchId, string BatchCode, string FarmName,
         long BatchAccountId, string BatchAccountNo);
@@ -139,15 +139,24 @@ public sealed class OrderService(
                         $"\"{listings[listingId].Title}\" không còn đủ {quantityKg:0.###} kg. Giỏ hàng chưa được đặt.");
             }
 
-            // Đọc giá khi dòng niêm yết đang bị khoá bởi câu UPDATE trên: giá chốt vào đơn không thể bị đổi giữa chừng.
-            var ids = lines.Select(l => l.ListingId).ToList();
-            var prices = await db.ProductListings.AsNoTracking()
-                .Where(l => ids.Contains(l.ListingId))
-                .ToDictionaryAsync(l => l.ListingId, l => (long)l.CurrentPricePerKg, ct);
+            // Chụp phiên bản giá đang hiệu lực (TL-27 §6.1) khi dòng niêm yết đang bị khoá bởi câu UPDATE trên:
+            // đổi giá phải sửa chính dòng này nên không chen được vào giữa, bản ghi mới nhất là giá đang bán.
+            var revisions = new Dictionary<long, (long Id, long Price)>();
+            foreach (var (listingId, _) in lines)
+            {
+                var revision = await db.PriceHistories.AsNoTracking()
+                    .Where(h => h.ListingId == listingId)
+                    .OrderByDescending(h => h.EffectiveFrom).ThenByDescending(h => h.PriceHistoryId)
+                    .Select(h => new { h.PriceHistoryId, h.PricePerKg })
+                    .FirstOrDefaultAsync(ct)
+                    ?? throw new InvalidOperationException($"Niêm yết {listingId} không có lịch sử giá.");
+                revisions[listingId] = (revision.PriceHistoryId, (long)revision.PricePerKg);
+            }
 
             var now = clock.GetUtcNow();
             var expiresAt = now.AddMinutes(options.Value.ReservationMinutes);
-            var reserved = lines.Select(l => new ReservedLine(l.ListingId, listings[l.ListingId].BatchId, l.QuantityKg, prices[l.ListingId]));
+            var reserved = lines.Select(l => new ReservedLine(l.ListingId, listings[l.ListingId].BatchId, l.QuantityKg,
+                revisions[l.ListingId].Price, revisions[l.ListingId].Id));
 
             var placed = new List<(SalesOrder Order, ListingInfo Batch, VietQrPayment Qr)>();
             foreach (var group in SplitByBatch(reserved))
@@ -194,6 +203,7 @@ public sealed class OrderService(
                 ListingId = line.ListingId,
                 QuantityKg = line.QuantityKg,
                 UnitPrice = line.UnitPrice,
+                PriceHistoryId = line.PriceHistoryId,
                 CreatedAt = now,
                 StockReservation = new StockReservation
                 {

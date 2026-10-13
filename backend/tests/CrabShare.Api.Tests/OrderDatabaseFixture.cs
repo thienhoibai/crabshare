@@ -119,11 +119,44 @@ public sealed class OrderDatabaseFixture : IAsyncLifetime
                 CurrentPricePerKg = pricePerKg, StockQtyKg = stockKg, ReservedQtyKg = 0, Status = status,
                 PublishedAt = status == "Draft" ? null : now, CreatedAt = now, UpdatedAt = now,
             };
+            // Như CatalogService.CreateAsync: mọi niêm yết có bản ghi giá Initial để checkout chụp phiên bản giá.
+            listing.PriceHistories.Add(new PriceHistory
+            {
+                PricePerKg = pricePerKg, EffectiveFrom = now, ReasonCode = "Initial", CreatedAt = now,
+                ChangedByNavigation = PriceSetter(n, now),
+            });
             db.ProductListings.Add(listing);
             await db.SaveChangesAsync();
             return listing.ListingId;
         });
     }
+
+    /// <summary>Đổi giá như PATCH /api/listings/{id}/price: thêm bản ghi lịch sử và cập nhật giá hiện tại cùng một lần lưu.</summary>
+    public async Task<long> ChangePriceAsync(long listingId, long pricePerKg)
+    {
+        var n = Next();
+        var now = DateTimeOffset.UtcNow;
+        return await WithDbAsync(async db =>
+        {
+            var listing = await db.ProductListings.SingleAsync(l => l.ListingId == listingId);
+            var revision = new PriceHistory
+            {
+                PricePerKg = pricePerKg, PreviousPricePerKg = listing.CurrentPricePerKg, EffectiveFrom = now,
+                ReasonCode = "Market", CreatedAt = now, ChangedByNavigation = PriceSetter(n, now),
+            };
+            listing.PriceHistories.Add(revision);
+            listing.CurrentPricePerKg = pricePerKg;
+            listing.UpdatedAt = now;
+            await db.SaveChangesAsync();
+            return revision.PriceHistoryId;
+        });
+    }
+
+    private static AppUser PriceSetter(int n, DateTimeOffset now) => new()
+    {
+        Email = $"seller-{n}-{Guid.NewGuid():N}@test.local", FullName = $"Người nuôi {n}", PasswordHash = "test-only",
+        Status = "Active", CreatedAt = now, UpdatedAt = now,
+    };
 
     public async Task DisposeAsync()
     {
