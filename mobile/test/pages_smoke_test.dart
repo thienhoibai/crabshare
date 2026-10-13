@@ -25,6 +25,8 @@ import 'package:dio/dio.dart';
 import 'package:crabshare_mobile/features/operator/harvest/harvest_page.dart';
 import 'package:crabshare_mobile/features/operator/logs/daily_log_form_page.dart';
 import 'package:crabshare_mobile/features/operator/logs/daily_logs_page.dart';
+import 'package:crabshare_mobile/features/operator/packing/pack_order_page.dart';
+import 'package:crabshare_mobile/features/operator/packing/pack_orders_page.dart';
 import 'package:crabshare_mobile/features/operator/today/operator_today_page.dart';
 import 'package:crabshare_mobile/features/trace/scan_page.dart';
 import 'package:crabshare_mobile/features/trace/trace_result_page.dart';
@@ -64,6 +66,8 @@ void main() {
     'Kết quả truy xuất': const TraceResultPage(tagCode: 'CSAB23CD45EF'),
     'Tài khoản': const AccountPage(),
     'Tài khoản nhận tiền': const PayoutAccountPage(),
+    'Hộ nuôi · Đóng gói đơn': const PackOrdersPage(),
+    'Hộ nuôi · Quét tem đóng gói': const PackOrderPage(orderNo: 'ODPACKDEMO01'),
   };
 
   for (final MapEntry(key: name, value: page) in pages.entries) {

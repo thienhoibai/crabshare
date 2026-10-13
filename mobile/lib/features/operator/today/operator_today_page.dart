@@ -84,6 +84,8 @@ class OperatorTodayPage extends ConsumerWidget {
               ),
               const SizedBox(height: 14),
               AddBar(label: 'Ghi nhật ký hôm nay', onTap: () => context.push(Routes.dailyLogNew)),
+              const SizedBox(height: 10),
+              AddBar(label: 'Đóng gói đơn — quét tem', onTap: () => context.push(Routes.operatorPack)),
               if (requests.isNotEmpty) ...[
                 SectionHeader(title: 'Yêu cầu chụp', actionLabel: 'Mở camera', onAction: () => context.push(Routes.capture)),
                 for (final r in requests) ...[

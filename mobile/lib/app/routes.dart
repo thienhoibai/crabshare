@@ -28,4 +28,6 @@ abstract final class Routes {
   static const capture = '/o/capture';
   static String captureBox(String slotCode) => '$capture?slot=$slotCode';
   static String harvest(String batchCode) => '/o/harvest/$batchCode';
+  static const operatorPack = '/o/pack';
+  static String operatorPackOrder(String orderNo) => '$operatorPack/$orderNo';
 }
