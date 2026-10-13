@@ -158,6 +158,15 @@ public sealed class OrderDatabaseFixture : IAsyncLifetime
         Status = "Active", CreatedAt = now, UpdatedAt = now,
     };
 
+    public HttpClient OperatorClient(long userId, long operatorId)
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Test-User", userId.ToString());
+        client.DefaultRequestHeaders.Add("X-Test-Role", Roles.OperatorMember);
+        client.DefaultRequestHeaders.Add("X-Test-Operator", operatorId.ToString());
+        return client;
+    }
+
     public async Task DisposeAsync()
     {
         if (Factory is not null) await Factory.DisposeAsync();

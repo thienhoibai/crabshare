@@ -25,7 +25,7 @@ public sealed class GlobalExceptionHandler(IProblemDetailsService problems, ILog
         if (status >= 500) logger.LogError(ex, "Unhandled exception");
 
         http.Response.StatusCode = status;
-        return await problems.TryWriteAsync(new ProblemDetailsContext
+        var context = new ProblemDetailsContext
         {
             HttpContext = http,
             Exception = ex,
@@ -36,7 +36,9 @@ public sealed class GlobalExceptionHandler(IProblemDetailsService problems, ILog
                 Detail = detail,
                 Extensions = { ["code"] = code },
             },
-        });
+        };
+        if (ex is AppException { Details: { } details }) context.ProblemDetails.Extensions["details"] = details;
+        return await problems.TryWriteAsync(context);
     }
 
     private static (int, string, string) MapSql(SqlException sql) => sql.Number switch

@@ -23,6 +23,8 @@ public sealed class KycTestAuthHandler(
             new Claim("sub", userId.ToString()),
             new Claim(AuthSetup.RoleClaim, Request.Headers["X-Test-Role"].ToString()),
         ], SchemeName, "name", AuthSetup.RoleClaim);
+        if (Request.Headers.TryGetValue("X-Test-Operator", out var operatorId) && !string.IsNullOrWhiteSpace(operatorId))
+            identity.AddClaim(new Claim(CurrentUser.OperatorIdClaim, operatorId.ToString()!));
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
     }
 }

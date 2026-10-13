@@ -69,6 +69,7 @@ public static class FeatureRegistry
         services.AddScoped<IAlertRaiser, AlertServiceRaiser>(); // chuyển tiếp sang AlertService (KH-05)
         services.AddScoped<OrderService>();           // Features/Orders
         services.AddOptions<OrderOptions>().BindConfiguration(OrderOptions.Section);
+        services.AddScoped<OrderPackingService>();    // UC29 đóng gói quét tem (NH-09)
         // services.AddScoped<OfftakeService>();      // Features/Offtake
 
         // Khôi
