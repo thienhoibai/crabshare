@@ -1,16 +1,35 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Data.Common;
 using CrabShare.Api.Common.Auth;
+using CrabShare.Api.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CrabShare.Api.Tests;
 
 public class EvidenceControllerTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
 {
+    private sealed class RejectDatabaseConnections : DbConnectionInterceptor
+    {
+        public override InterceptionResult ConnectionOpening(DbConnection connection, ConnectionEventData eventData, InterceptionResult result)
+            => throw new InvalidOperationException("Controller authorization and validation must not access the database.");
+
+        public override ValueTask<InterceptionResult> ConnectionOpeningAsync(DbConnection connection, ConnectionEventData eventData,
+            InterceptionResult result, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Controller authorization and validation must not access the database.");
+    }
+
     private HttpClient Client(string? role)
     {
-        var client = factory.WithWebHostBuilder(b => b.UseSetting("Seed:Enabled", "false").ConfigureTestServices(KycControllerTests.AddTestAuth)).CreateClient();
+        var client = factory.WithWebHostBuilder(b => b.UseSetting("Seed:Enabled", "false").ConfigureTestServices(services =>
+        {
+            KycControllerTests.AddTestAuth(services);
+            services.AddDbContext<AppDbContext>(options => options.AddInterceptors(new RejectDatabaseConnections()));
+        })).CreateClient();
         if (role is not null) { client.DefaultRequestHeaders.Add("X-Test-User", "1"); client.DefaultRequestHeaders.Add("X-Test-Role", role); }
         return client;
     }

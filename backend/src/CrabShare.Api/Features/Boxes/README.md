@@ -32,6 +32,7 @@ Gán hộp cho lô (`POST /api/batches/{code}/allocations`) thuộc Production, 
 
 ### Hợp đồng cho web/mobile
 - GET trả `{ items: [{ slotCode, status, rowCode, rackNo, tierNo, columnNo, batchCode, latestEvidence }], page, pageSize, total }`; mặc định `page=1`, `pageSize=20`, tối đa 100. `search` tìm một phần số hộp, thứ tự theo `slotCode`.
+- GET yêu cầu JWT có role `OperatorMember`, chặn role khác bằng 403 trước khi truy cập DB. Sau khi đăng ký hộ nuôi, cần đăng nhập lại để cập nhật role trong JWT; service tiếp tục kiểm tra membership và quyền hiện tại từ DB.
 - POST một hộp nhận `{ slotCode, rowCode?, rackNo?, tierNo?, columnNo? }`, trả 201 với hộp vừa tạo, trạng thái `Available`.
 - POST range trả 201 `{ created: 1200, from: "0001", to: "1200" }`. `from/to` là số nguyên dương, `to >= from`; `width` mặc định 4, từ 1 đến 30 và không cắt số có nhiều chữ số hơn.
 - PATCH nhận `{ status: "Available" | "Maintenance" }`, trả hộp đã cập nhật. Hộp `Occupied` hoặc có allocation đang mở trả 422 `box.in_use`.

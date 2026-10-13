@@ -26,6 +26,11 @@ public class BoxesTests(OperatorDatabaseFixture fixture, Xunit.Abstractions.ITes
         var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("operatorId").GetInt64();
         await using var db = fixture.OpenDb();
         await db.Operators.Where(o => o.OperatorId == id).ExecuteUpdateAsync(s => s.SetProperty(o => o.Status, "Approved").SetProperty(o => o.ApprovedSlotCapacity, capacity));
+        // Registering a farm grants OperatorMember in DB; refresh the original Customer JWT for GET.
+        var login = await client.PostAsJsonAsync("/api/auth/login", new { email = auth.User.Email, password = "Test-password-123" });
+        login.EnsureSuccessStatusCode();
+        auth = (await login.Content.ReadFromJsonAsync<AuthResponse>())!;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
         return client;
     }
 
