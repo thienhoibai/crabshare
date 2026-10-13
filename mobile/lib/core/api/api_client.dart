@@ -8,6 +8,10 @@ import '../auth/session.dart';
 /// Điện thoại thật: dùng IP LAN của máy chạy API, ví dụ http://192.168.1.10:5233
 const apiUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:5233');
 
+/// Địa chỉ web CrabShare: các luồng làm trên web (góp vốn, ký hợp đồng) mở bằng trình duyệt.
+/// Máy ảo Android: --dart-define=WEB_URL=http://10.0.2.2:5173
+const webUrl = String.fromEnvironment('WEB_URL', defaultValue: 'http://localhost:5173');
+
 /// Client HTTP dùng chung: tự gắn JWT của phiên đăng nhập; 401 thì tự đăng xuất.
 final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(BaseOptions(baseUrl: apiUrl, connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 30)));

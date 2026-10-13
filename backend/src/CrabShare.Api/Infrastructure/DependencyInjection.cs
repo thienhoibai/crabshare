@@ -1,3 +1,4 @@
+using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Infrastructure.Detection;
 using CrabShare.Api.Infrastructure.Ekyc;
 using CrabShare.Api.Infrastructure.Payments;
@@ -32,6 +33,10 @@ public static class DependencyInjection
 
         services.Configure<StorageOptions>(config.GetSection("Storage"));
         services.AddSingleton<IFileStorage, LocalFileStorage>();
+
+        // Nhật ký kiểm toán dùng chung (TH-02) + job kiểm tra chuỗi băm mỗi 6 giờ
+        services.AddScoped<IAuditLog, AuditLogService>();
+        services.AddHostedService<AuditChainCheckJob>();
 
         // Dịch vụ bên ngoài: hiện dùng bản giả lập (Fake*) để dev và demo.
         // Khi có tài khoản sandbox thật, viết class mới cài cùng interface rồi đổi dòng đăng ký ở đây.

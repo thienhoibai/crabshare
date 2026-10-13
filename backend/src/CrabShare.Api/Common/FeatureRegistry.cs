@@ -1,6 +1,6 @@
 // Thiện
 using CrabShare.Api.Features.Auth;
-// using CrabShare.Api.Features.Funding;
+using CrabShare.Api.Features.Funding;
 // using CrabShare.Api.Features.Contracts;
 using CrabShare.Api.Features.Payments;
 // using CrabShare.Api.Features.Settlement;
@@ -41,10 +41,16 @@ public static class FeatureRegistry
     {
         // Thiện
         services.AddScoped<AuthService>();
-        // services.AddScoped<FundingService>();      // Features/Funding
+        services.AddScoped<FundingService>();         // Features/Funding
+        services.AddSingleton<RiskDisclosureDocuments>();
+        services.AddOptions<FundingOptions>().BindConfiguration("Funding");
         // services.AddScoped<ContractService>();     // Features/Contracts
         // services.AddScoped<PaymentService>();      // Features/Payments
-        services.AddScoped<PaymentRequestService>();  // Features/Payments — bản tối thiểu cho CS-36, TH-05 mở rộng
+        services.AddScoped<PaymentRequestService>();  // Features/Payments — VietQR dùng chung (TH-05)
+        services.AddScoped<PaymentWebhookService>();  // Features/Payments — webhook báo có + giả lập (TH-06)
+        services.AddScoped<RefundService>();          // lệnh hoàn tiền dùng chung (TH-06, NH-07, NH-11, TH-07)
+        services.AddScoped<IPaymentPurposeHandler, ContributionPaymentHandler>(); // tiền góp vốn về → Confirmed
+        services.AddOptions<PaymentOptions>().BindConfiguration(PaymentOptions.Section);
         // services.AddScoped<SettlementService>();   // Features/Settlement
 
         // Viên

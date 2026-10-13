@@ -6,6 +6,7 @@ import { ArrowLeft, Bell, ChevronRight, Compass, House, Receipt, ShoppingBag, Us
 import { useAuthStore } from '../../shared/auth/authStore'
 import KycVerification, { KycStatusCard } from '../accounts/KycVerification'
 import PayoutAccountForm from '../accounts/PayoutAccountForm'
+import OpenBatches from './funding/OpenBatches'
 import {
   HOLDINGS, LOTS, NOTICES, STAGES, activeHoldings, activeTotal, closedPayout2610, lot, maxCapital, minContribution,
   pct, small, stage, tr, vnd, type Lot,
@@ -203,6 +204,7 @@ function InvV2Inner() {
 
         {nav.view === 'explore' && (
           <div className="i2-explore">
+            <OpenBatches />
             <Tabs items={FILTERS} value={filter} onChange={setFilter} />
             <div className="iv-card i2-list">
               {byFilter(filter).map((x) => (
