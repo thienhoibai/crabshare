@@ -47,6 +47,10 @@ public static class FeatureRegistry
         // services.AddScoped<ContractService>();     // Features/Contracts
         // services.AddScoped<PaymentService>();      // Features/Payments
         services.AddScoped<PaymentRequestService>();  // Features/Payments — VietQR dùng chung (TH-05)
+        services.AddScoped<PaymentWebhookService>();  // Features/Payments — webhook báo có + giả lập (TH-06)
+        services.AddScoped<RefundService>();          // lệnh hoàn tiền dùng chung (TH-06, NH-07, NH-11, TH-07)
+        services.AddScoped<IPaymentPurposeHandler, ContributionPaymentHandler>(); // tiền góp vốn về → Confirmed
+        services.AddOptions<PaymentOptions>().BindConfiguration(PaymentOptions.Section);
         // services.AddScoped<SettlementService>();   // Features/Settlement
 
         // Viên
