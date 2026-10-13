@@ -131,7 +131,29 @@ public class EvidenceDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<K
         using var client = Client(own.UserId);
         var page = (await client.GetFromJsonAsync<PagedResult<BoxResponse>>("/api/boxes?status=Occupied&search=0001&pageSize=1"))!;
         Assert.Equal(1, page.Total); Assert.Equal(own.BatchCode, Assert.Single(page.Items).BatchCode);
+        Assert.Null(Assert.Single(page.Items).LatestEvidence);
         Assert.Empty((await client.GetFromJsonAsync<PagedResult<BoxResponse>>("/api/boxes?page=2&pageSize=1"))!.Items);
+    }
+
+    [Fact]
+    public async Task Box_latest_evidence_is_persisted_scoped_and_reflects_duplicate_review_status()
+    {
+        var own = await Setup(); var other = await Setup(); await Upload(other, EvidenceImages.Noise(7722));
+        using var client = Client(own.UserId);
+        async Task<BoxResponse> Box() => Assert.Single((await client.GetFromJsonAsync<PagedResult<BoxResponse>>("/api/boxes?status=Occupied"))!.Items);
+        Assert.Null((await Box()).LatestEvidence);
+        var bytes = EvidenceImages.Noise(7712); var first = await Upload(own, bytes);
+        var box = await Box(); Assert.Equal(first.Id, box.LatestEvidence!.Id); Assert.Equal(first.ReceivedAt, box.LatestEvidence.ReceivedAt); Assert.Equal("Accepted", box.LatestEvidence.ReviewStatus);
+        var duplicate = await Upload(own, bytes);
+        var latest = (await Box()).LatestEvidence!; Assert.Equal(duplicate.Id, latest.Id); Assert.Equal("Flagged", latest.ReviewStatus);
+        // The same physical box can be reused: historical evidence must not mark a new allocation as captured.
+        await Db(async db => {
+            (await db.SlotAllocations.SingleAsync(a => a.SlotId == own.SlotId && a.ReleasedAt == null)).ReleasedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+            db.SlotAllocations.Add(new SlotAllocation { BatchId = own.BatchId, SlotId = own.SlotId, AllocatedAt = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync(); return true;
+        });
+        Assert.Null((await Box()).LatestEvidence);
     }
 
     [Fact]

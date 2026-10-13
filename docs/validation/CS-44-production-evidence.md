@@ -37,6 +37,11 @@
   `{ slotCode, status, batchCode }` scoped to the current farm. `batchCode`
   is populated only for a live allocation to a Stocked/InProduction batch.
   The rest of CS-29 box CRUD remains with the Boxes module owner.
+- Boxes also return nullable `latestEvidence` (id, server receipt time, review
+  status) for the latest in-app photo of the current batch/allocation. Photos
+  received before the current allocation do not mark a reused box. Mobile
+  refreshes boxes after upload and shows a persisted sent/review badge; a
+  flagged/rejected photo is not displayed as a successful completion.
 - Mobile capture reads all pages of real occupied boxes, uses the camera only,
   checks location permission, obtains a fresh GPS reading after camera return,
   and uploads bytes with UTC capture time and GPS. It displays server results,
@@ -69,6 +74,11 @@ build passed with zero warnings/errors and all 177 CI tests passed (173 API +
 4 settlement). All 46 Flutter tests passed, Flutter analysis reported no
 issues, the web production build passed, and the Android debug APK built.
 
+Sent-indicator follow-up: all 44 evidence tests and all 47 Flutter tests passed;
+Flutter analysis is clean and the updated Release build has zero warnings/errors.
+Tests cover reloading saved box status, duplicate flags, foreign-farm isolation,
+reallocated boxes, and persistence when reopening the capture page.
+
 Backend integration tests use a fresh LocalDB database and isolated storage.
 Coverage includes original byte integrity, capture/server timestamps and GPS,
 exact/perceptual duplicates, concurrent uploads, current role revocation,
@@ -85,8 +95,10 @@ Manual Android acceptance: connect to this backend via the configured
 `API_URL`, sign in as an operator with an allocated production box, allow
 camera/location, take a photo and send it. Confirm server metadata and private
 image storage. Re-upload the same bytes through the API and confirm Flagged.
-Test location denial and airplane mode, then retry. Hardware acceptance is
-pending; no Android emulator was used.
+Test location denial and airplane mode, then retry. Two actual Android uploads
+for demo box 0014 were confirmed as Accepted in the development database.
+Manual permission-denial/offline checks remain pending; no Android emulator
+was used.
 
 If the demo farm has no eligible boxes, run
 `powershell -ExecutionPolicy Bypass -File backend/scripts/seed-evidence-demo.ps1`.

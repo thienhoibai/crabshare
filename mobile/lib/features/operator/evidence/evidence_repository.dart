@@ -128,6 +128,11 @@ class ApiEvidenceRepository implements EvidenceRepository {
               slotCode: data['slotCode'] as String,
               status: SlotStatus.occupied,
               batchCode: batch,
+              latestEvidence: data['latestEvidence'] == null
+                  ? null
+                  : BoxEvidenceSummary.fromJson(
+                      Map<String, dynamic>.from(data['latestEvidence'] as Map),
+                    ),
             ),
           );
         }

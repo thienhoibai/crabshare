@@ -14,7 +14,8 @@ public sealed class BoxListQuery
     [RegularExpression("^(Available|Occupied|Maintenance)$")] public string? Status { get; set; }
     [StringLength(30)] public string? Search { get; set; }
 }
-public sealed record BoxResponse(string SlotCode, string Status, string? BatchCode);
+public sealed record BoxEvidenceResponse(long Id, DateTimeOffset ReceivedAt, string ReviewStatus);
+public sealed record BoxResponse(string SlotCode, string Status, string? BatchCode, BoxEvidenceResponse? LatestEvidence = null);
 
 /// <summary>Phần đọc cần cho CS-44. CRUD/đánh số hộp của CS-29 bổ sung vào module Boxes.</summary>
 [ApiController, Route("api/boxes"), Authorize(Policy = Policies.Operator)]
@@ -33,9 +34,20 @@ public sealed class BoxReadService(AppDbContext db, EvidenceAccess access)
         var query = db.PhysicalSlots.AsNoTracking().Where(s => s.OperatorId == operatorId);
         if (filter.Status is not null) query = query.Where(s => s.Status == filter.Status);
         if (!string.IsNullOrWhiteSpace(filter.Search)) query = query.Where(s => s.SlotCode.Contains(filter.Search.Trim()));
-        return await query.OrderBy(s => s.SlotCode).Select(s => new BoxResponse(s.SlotCode, s.Status,
-            db.SlotAllocations.Where(a => a.SlotId == s.SlotId && a.ReleasedAt == null
+        var assigned = query.Select(s => new
+        {
+            Slot = s,
+            Allocation = db.SlotAllocations.Where(a => a.SlotId == s.SlotId && a.ReleasedAt == null
                 && (a.Batch.Status == "InProduction" || a.Batch.Status == "Stocked"))
-                .OrderByDescending(a => a.AllocatedAt).Select(a => a.Batch.BatchCode).FirstOrDefault())).ToPagedAsync(paging, ct);
+                .OrderByDescending(a => a.AllocatedAt)
+                .Select(a => new { a.BatchId, a.Batch.BatchCode, a.AllocatedAt }).FirstOrDefault(),
+        });
+        return await assigned.OrderBy(s => s.Slot.SlotCode).Select(s => new BoxResponse(s.Slot.SlotCode, s.Slot.Status,
+            s.Allocation == null ? null : s.Allocation.BatchCode,
+            s.Allocation == null ? null : db.Evidences.Where(e => e.SlotId == s.Slot.SlotId
+                && e.BatchId == s.Allocation.BatchId && e.ReceivedAt >= s.Allocation.AllocatedAt
+                && e.MediaType == "Photo" && e.Source == "InAppCapture")
+                .OrderByDescending(e => e.ReceivedAt).ThenByDescending(e => e.EvidenceId)
+                .Select(e => new BoxEvidenceResponse(e.EvidenceId, e.ReceivedAt, e.ReviewStatus)).FirstOrDefault())).ToPagedAsync(paging, ct);
     }
 }

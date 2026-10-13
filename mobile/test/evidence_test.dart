@@ -66,9 +66,10 @@ class _Repository implements EvidenceRepository {
   bool failRead = false;
   bool failUpload = false;
   Completer<EvidenceResult>? pending;
-  final result = EvidenceResult.fromJson(
+  EvidenceResult result = EvidenceResult.fromJson(
     _response(status: 'Flagged', match: 'Exact'),
   );
+  BoxEvidenceSummary? latest;
   @override
   Future<List<BoxSlot>> boxes({CancelToken? cancelToken}) async {
     reads++;
@@ -82,7 +83,14 @@ class _Repository implements EvidenceRepository {
         ),
       );
     }
-    return [_box];
+    return [
+      BoxSlot(
+        slotCode: _box.slotCode,
+        status: _box.status,
+        batchCode: _box.batchCode,
+        latestEvidence: latest,
+      ),
+    ];
   }
 
   @override
@@ -106,7 +114,13 @@ class _Repository implements EvidenceRepository {
         ),
       );
     }
-    return pending == null ? result : await pending!.future;
+    final saved = pending == null ? result : await pending!.future;
+    latest = BoxEvidenceSummary(
+      id: saved.id,
+      receivedAt: saved.receivedAt,
+      reviewStatus: saved.reviewStatus,
+    );
+    return saved;
   }
 }
 
@@ -134,6 +148,11 @@ class _Adapter implements HttpClientAdapter {
                       'slotCode': '0014',
                       'status': 'Occupied',
                       'batchCode': 'TEST-CS44',
+                      'latestEvidence': {
+                        'id': 12,
+                        'receivedAt': '2026-10-13T03:00:00Z',
+                        'reviewStatus': 'Accepted',
+                      },
                     },
                   ]
                 : [
@@ -202,6 +221,9 @@ void main() {
     final repo = ApiEvidenceRepository(dio);
     final boxes = await repo.boxes();
     expect(boxes.map((b) => b.slotCode), ['0014', '0101']);
+    expect(boxes.first.latestEvidence!.id, 12);
+    expect(boxes.first.latestEvidence!.reviewStatus, 'Accepted');
+    expect(boxes.last.latestEvidence, isNull);
     expect(adapter.requests.take(2).map((r) => r.path), [
       '/api/boxes',
       '/api/boxes',
@@ -256,6 +278,9 @@ void main() {
       expect(find.text('Ảnh trùng với ảnh đã gửi trước đó.'), findsOneWidget);
       expect(find.text('Chưa có kết luận nhận diện cua.'), findsOneWidget);
       expect(find.text('Đã lưu bằng chứng'), findsNothing);
+      expect(find.text('Cần kiểm tra'), findsOneWidget);
+      expect(find.text('Đã gửi'), findsNothing);
+      expect(repo.reads, 2);
       expect(tester.takeException(), isNull);
     },
   );
@@ -293,6 +318,8 @@ void main() {
     expect(find.text('Hộp không còn được gán cho lô này.'), findsOneWidget);
     expect(find.text('Gửi ảnh'), findsOneWidget);
     expect(find.text('Chụp lại'), findsOneWidget);
+    expect(find.text('Đã gửi'), findsNothing);
+    expect(repo.reads, 1);
     repo.failUpload = false;
     await tester.tap(find.text('Gửi ảnh'));
     await tester.pumpAndSettle();
@@ -300,6 +327,29 @@ void main() {
     expect(find.text('Ảnh cần thẩm định'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'accepted upload marks the box from API and survives reopening the page',
+    (tester) async {
+      final repo = _Repository()..result = EvidenceResult.fromJson(_response());
+      final camera = _Camera();
+      await _mount(tester, repo, camera);
+      expect(find.text('Đã gửi'), findsNothing);
+      await tester.tap(find.text('Chụp'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Gửi ảnh'));
+      await tester.pumpAndSettle();
+      expect(find.text('Đã lưu bằng chứng'), findsOneWidget);
+      expect(find.text('Đã gửi'), findsOneWidget);
+      expect(repo.reads, 2);
+      await tester.pumpWidget(const SizedBox());
+      await _mount(tester, repo, camera);
+      expect(find.text('Đã gửi'), findsOneWidget);
+      expect(find.text('Đã lưu bằng chứng'), findsNothing);
+      expect(repo.reads, 3);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('box API failure displays a retry instead of fake boxes', (
     tester,

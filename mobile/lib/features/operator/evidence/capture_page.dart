@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/format/dates.dart';
 import '../../../shared/widgets/app_ui.dart';
 import '../data/operator_models.dart';
 import 'evidence_camera.dart';
@@ -92,6 +93,7 @@ class _CapturePageState extends ConsumerState<CapturePage> {
         _photo = null;
         _slot = null;
       });
+      ref.invalidate(captureBoxesProvider);
     } catch (error) {
       if (mounted && ref.read(sessionProvider).user?.userId == userId) {
         setState(() => _error = apiErrorMessage(error));
@@ -240,38 +242,106 @@ class _CapturePageState extends ConsumerState<CapturePage> {
                   delegate: SliverChildBuilderDelegate((context, index) {
                     final box = visible[index];
                     final selected = box.slotCode == _slot;
-                    return Material(
-                      color: selected ? AppColors.ink : AppColors.surface,
-                      borderRadius: BorderRadius.circular(14),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: _busy
-                            ? null
-                            : () => setState(() {
-                                _slot = box.slotCode;
-                                _photo = null;
-                                _error = null;
-                              }),
-                        child: Center(
-                          child: Text(
-                            box.slotCode,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: selected ? Colors.white : AppColors.ink,
-                            ),
-                          ),
-                        ),
-                      ),
+                    return _BoxTile(
+                      box: box,
+                      selected: selected,
+                      onTap: _busy
+                          ? null
+                          : () => setState(() {
+                              _slot = box.slotCode;
+                              _photo = null;
+                              _error = null;
+                            }),
                     );
                   }, childCount: visible.length),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 4,
                     mainAxisSpacing: 10,
                     crossAxisSpacing: 10,
-                    childAspectRatio: 1.15,
+                    childAspectRatio: 0.9,
                   ),
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _evidenceLabel(String status) => switch (status) {
+  'Flagged' => 'Cần kiểm tra',
+  'Rejected' => 'Chụp lại',
+  'Watch' => 'Theo dõi',
+  _ => 'Đã gửi',
+};
+
+class _BoxTile extends StatelessWidget {
+  const _BoxTile({
+    required this.box,
+    required this.selected,
+    required this.onTap,
+  });
+  final BoxSlot box;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final evidence = box.latestEvidence;
+    final needsAttention =
+        evidence?.reviewStatus == 'Flagged' ||
+        evidence?.reviewStatus == 'Rejected';
+    final color = needsAttention
+        ? AppColors.danger
+        : evidence?.reviewStatus == 'Watch'
+        ? AppColors.accentText
+        : AppColors.success;
+    return Material(
+      color: selected ? AppColors.ink : AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: evidence == null || selected
+            ? BorderSide.none
+            : BorderSide(color: color),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                box.slotCode,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : AppColors.ink,
+                ),
+              ),
+              if (evidence != null) ...[
+                const SizedBox(height: 4),
+                Icon(
+                  needsAttention
+                      ? Icons.flag_outlined
+                      : evidence.reviewStatus == 'Watch'
+                      ? Icons.visibility_outlined
+                      : Icons.check_circle_outline_rounded,
+                  size: 16,
+                  color: color,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _evidenceLabel(evidence.reviewStatus),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: selected ? Colors.white : color,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -377,6 +447,14 @@ class _CaptureSheet extends StatelessWidget {
                 child: const Text('Chụp lại'),
               ),
             ],
+          ),
+        if (photo == null && box.latestEvidence != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              '${_evidenceLabel(box.latestEvidence!.reviewStatus)} · ${formatTime(box.latestEvidence!.receivedAt)} ${formatDayMonth(box.latestEvidence!.receivedAt)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ),
       ],
     ),
