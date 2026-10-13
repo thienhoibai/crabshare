@@ -88,6 +88,11 @@ image storage. Re-upload the same bytes through the API and confirm Flagged.
 Test location denial and airplane mode, then retry. Hardware acceptance is
 pending; no Android emulator was used.
 
+If the demo farm has no eligible boxes, run
+`powershell -ExecutionPolicy Bypass -File backend/scripts/seed-evidence-demo.ps1`.
+This explicitly adds the local `CS44-DEMO-01` batch and boxes 0014–0016, without
+resetting other data. It is repeatable and restricted to LocalDB CrabShareDev.
+
 Random capture request generation/listing (CS-50), the reviewer UI/verdict
 (CS-54), and a validated crab model (TSK-13) remain separate tasks. Camera-only
 selection in the mobile app is not server-side proof of device capture or GPS

@@ -33,6 +33,21 @@ Hoặc đặt biến môi trường `CRABSHARE_DB` = chuỗi kết nối. DbUp g
 Tài khoản demo, hộ nuôi mẫu, 60 hộp do `backend/src/CrabShare.Api/Infrastructure/Persistence/DevDataSeeder.cs` tạo khi API chạy ở Development và CSDL chưa có người dùng.
 Thêm lô / góp vốn / nhật ký mẫu để mọi người làm song song: mở rộng `DevDataSeeder` (task của Thiện tuần 1).
 
+Để thử camera/GPS của CS-44 trên CSDL dev đã có tài khoản demo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File backend/scripts/seed-evidence-demo.ps1
+```
+
+Script thêm lô `[DEMO CS-44]` mã `CS44-DEMO-01` ở trạng thái `InProduction`
+và gán ba hộp `0014`, `0015`, `0016` thành `Occupied` cho hộ nuôi demo.
+Tài khoản `operator@crabshare.local` và `staff@crabshare.local` đều chọn được
+các hộp này trên màn Chụp bằng chứng. Chạy lại không nhân đôi dữ liệu; script
+không thay allocation của lô khác và không đặt lại lô đã đổi trạng thái.
+Chỉ chạy trên LocalDB `CrabShareDev`; đây là fixture để thử upload, không phải
+luồng gọi vốn/thả giống thật. Dữ liệu seed không tạo audit nghiệp vụ; các lần
+gửi ảnh sau đó vẫn dùng audit chuẩn của API.
+
 ## Dùng Docker thay LocalDB (máy macOS / không có LocalDB)
 
 ```bash
