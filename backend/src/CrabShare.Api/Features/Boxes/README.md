@@ -54,7 +54,14 @@ Gán hộp cho lô (`POST /api/batches/{code}/allocations`) thuộc Production, 
 `cd web && npx playwright test tests/boxes.spec.ts` kiểm tra giao diện với API giả lập; không thay thế phép đo DB thật.
 
 ### Kết quả kiểm tra 13/10/2026
-- Backend build: 0 lỗi, 0 cảnh báo. Test không cần DB: 152 API + 4 SettlementEngine đều qua.
-- Web production build qua; toàn bộ 33 Playwright test qua, gồm 4 test hộp nuôi.
-- Chạy toàn bộ backend: 98 test DB không chạy được do thiếu SQL Server LocalDB (SQL Network Interfaces error 52), gồm `BoxesTests`, `OperatorsControllerTests`, `OperatorReviewTests`, `CheckoutConcurrencyTests`, `ListingModerationDatabaseTests`, `AlertDatabaseTests`, `KycDatabaseTests`, `AdminAccountDatabaseTests`, `MixedAuditDatabaseTests`, `PaymentProfileDatabaseTests`.
-- Chưa xác minh các thao tác trên DB thật và tiêu chí 1.200 hộp dưới 2 giây; cần chạy lại test DB trước nghiệm thu.
+- Chạy lại trên SQL Server LocalDB thật, DB riêng do fixture tạo và xóa; không còn lỗi thiếu LocalDB của lần kiểm tra trước.
+- `dotnet test backend/CrabShare.sln --no-restore`: 262 API + 4 SettlementEngine đều qua, không có test bị bỏ qua.
+- Bộ VI-03: 22/22 ca qua, gồm 12 ca bổ sung kiểm tra dải và tạo lẻ đồng thời, trùng ở cuối dải không ghi một phần, biên from/to/width, int.MaxValue, hộ Draft/Suspended, khóa tài khoản và thu hồi role với token cũ. Tài khoản khóa trả 401 từ lớp JWT; thu hồi role trả 403.
+- Chạy lặp 5 lần test tạo 1.200 hộp và hai test đồng thời: 15/15 ca qua. Thời gian toàn request POST range lần lượt 123, 189, 226, 308, 307 ms sau GET làm nóng; tất cả dưới 2 giây. Vượt sức chứa trả 422 `box.over_capacity`.
+- `npm run build` qua. Sau `npm ci --include=dev` và `npx playwright install chromium`, chạy PowerShell `$env:CI='1'; npx playwright test --reporter=list`: 33/33 ca qua trên Chromium, gồm 4 ca hộp nuôi. CI=1 chọn Chromium đi kèm Playwright khi máy không có Chrome.
+- Route và liên kết web dùng `/operator/boxes`; không còn tham chiếu `/operator/map` trong source web.
+
+### Phạm vi và bàn giao KH-07
+- Playwright kiểm tra UI với API giả lập; chưa chạy trình duyệt nối API/DB thật xuyên suốt, tải production hoặc mô phỏng mất kết nối giữa bulk insert và commit. Test trùng dải kiểm tra không ghi một phần khi phát hiện mã trùng, chưa mô phỏng lỗi SQL ở giữa bulk insert.
+- Mobile hiện dùng `MockOperatorRepository` trong `mobile/lib/features/operator/data/operator_repository.dart`, chưa tích hợp GET thật. KH-07 cần đọc kết quả phân trang (mặc định 20, tối đa 100 hộp mỗi trang) và ánh xạ trạng thái.
+- Màn chụp bằng chứng yêu cầu `box.batchCode`, còn `BoxResponse` chỉ trả mã hộp, trạng thái và vị trí. KH-07 cần thống nhất nguồn lấy batch đang gán hộp trước khi thay dữ liệu giả bằng GET `/api/boxes`.
