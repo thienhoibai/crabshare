@@ -67,6 +67,11 @@ public class ListingsControllerTests(WebApplicationFactory<Program> factory) : I
     [InlineData("/api/listings?page=0")]
     [InlineData("/api/listings?sort=abc")]
     [InlineData("/api/listings?storage=abc")]
+    [InlineData("/api/listings?minPrice=500000&maxPrice=300000")]
+    [InlineData("/api/listings?minPrice=0")]
+    [InlineData("/api/listings?maxPrice=-1")]
+    [InlineData("/api/listings?minPrice=abc")]
+    [InlineData("/api/listings?batch=ABCDEFGHIJKLMNOPQRSTU")]
     public async Task Cua_hang_tham_so_khong_hop_le_tra_ve_400(string url)
     {
         var response = await Client().GetAsync(url);

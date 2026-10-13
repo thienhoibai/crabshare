@@ -6,7 +6,7 @@
 | Bảng | Cột / trạng thái cần nhớ |
 |---|---|
 | `sales_order` | `order_type`: `Retail`, `PreOrder` (bắt buộc `deposit_amount`), `Offtake` (bắt buộc `offtake_id`) · **một đơn một lô** (`batch_id`) · `status`: `PendingPayment` → `DepositPaid` / `Paid` → `Packed` → `Shipping` → `Delivered` → `Completed`; `Cancelled`, `Returned` · `return_window_ends_at` |
-| `order_line` | `listing_id`, `quantity_kg`, `unit_price` |
+| `order_line` | `listing_id`, `quantity_kg`, `unit_price`, `price_history_id` (V006, khóa ngoại kép với `listing_id`) |
 | `stock_reservation` | giữ tồn khi đặt: `Active` (có `expires_at`) → `Committed` / `Released` |
 | `complaint` | `complaint_type`: `LateDelivery`, `WrongGrade`, `Damaged`, `NotReceived`, `Other` · `Open` → `OperatorResponded` → `Escalated` → `Resolved` / `Rejected` · `resolution`, `refund_amount` |
 | `product_rating` | 1–5 sao |
@@ -36,7 +36,7 @@ Job nền: giữ tồn quá hạn chưa trả tiền → `Released`, đơn → `
 - **Cả giỏ là một transaction**: một dòng thiếu hàng → 409 `order.insufficient_stock`, không dòng nào được giữ, không đơn nào được tạo. Dòng khoá theo thứ tự `listingId` tăng dần để tránh deadlock.
 - **Hạn giữ chỗ 15 phút** (`Orders:ReservationMinutes`) theo BR-13, TL-28 và câu hỏi đã chốt trong PRD. Không dùng "6 giờ" ở TL-29 §6.5 vì mâu thuẫn với các tài liệu trên. `payment_request.expires_at` = `stock_reservation.expires_at`: mã QR không sống lâu hơn giữ chỗ (BR-59).
 - **Mã đơn** `OD` + 11 ký tự Crockford base32 = 13 ký tự (giới hạn `orderId` của VietQR); dùng luôn làm `payment_request.reference_code`. Không ghép `batch_code` vì dài tới 20 ký tự.
-- Đặt được khi: niêm yết `Published`, lô `Harvesting`, hàng cấp đông chưa quá trần (TL-23), `batch_account` của lô đang `Open`, địa chỉ thuộc chính khách. Giá chốt vào `order_line.unit_price` được đọc khi dòng niêm yết đang bị khoá.
+- Đặt được khi: niêm yết `Published`, lô `Harvesting`, hàng cấp đông chưa quá trần (TL-23), `batch_account` của lô đang `Open`, địa chỉ thuộc chính khách. Giá chốt vào đơn là phiên bản giá mới nhất trong `price_history`, đọc khi dòng niêm yết đang bị khoá: ghi cả `unit_price` lẫn `price_history_id` của chính bản ghi đó (TL-27 §6.1, §6.3). Đổi giá sau đó tạo bản ghi mới, không sửa dòng đơn cũ.
 - Doanh thu tính quyết toán = đơn `Completed` của lô (Settlement đọc).
 - Hoàn tiền tạo `payment_instruction` loại `Refund` (module Payments).
 

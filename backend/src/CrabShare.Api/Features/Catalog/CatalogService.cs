@@ -311,6 +311,15 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
             var storageName = storage.ToString();
             query = query.Where(l => l.StorageType == storageName);
         }
+        if (!string.IsNullOrWhiteSpace(q.Batch))
+        {
+            var batchCode = q.Batch.Trim();
+            query = query.Where(l => l.Batch.BatchCode == batchCode);
+        }
+        if (q.MinPrice is { } minPrice)
+            query = query.Where(l => l.CurrentPricePerKg >= minPrice);
+        if (q.MaxPrice is { } maxPrice)
+            query = query.Where(l => l.CurrentPricePerKg <= maxPrice);
         return query;
     }
 

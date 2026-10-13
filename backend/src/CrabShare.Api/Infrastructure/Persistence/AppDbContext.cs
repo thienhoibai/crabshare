@@ -1731,6 +1731,7 @@ public partial class AppDbContext : DbContext
                 .HasComment("Giá tại thời điểm đặt")
                 .HasColumnType("decimal(18, 0)")
                 .HasColumnName("unit_price");
+            entity.Property(e => e.PriceHistoryId).HasColumnName("price_history_id");
 
             entity.HasOne(d => d.Batch).WithMany(p => p.OrderLines)
                 .HasForeignKey(d => d.BatchId)
