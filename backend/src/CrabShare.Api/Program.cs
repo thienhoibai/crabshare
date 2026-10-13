@@ -30,9 +30,13 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 // 6. Tài liệu API (OpenAPI) — xem tại /scalar khi chạy Development
 builder.Services.AddOpenApi(o => o.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
 
-// 7. Cho phép web (Vite) và app Flutter chạy trên trình duyệt gọi API khi dev
+// 7. Cho phép web (Vite khi dev, Vercel khi deploy) và app Flutter chạy trên trình duyệt gọi API.
+//    Cors:Origins là địa chỉ cố định; Cors:OriginPatterns là mẫu có dấu * cho các bản Preview của Vercel.
+var allowOrigin = CorsOrigins.Matcher(
+    builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [],
+    builder.Configuration.GetSection("Cors:OriginPatterns").Get<string[]>() ?? []);
 builder.Services.AddCors(o => o.AddPolicy("frontends", p => p
-    .WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [])
+    .SetIsOriginAllowed(allowOrigin)
     .AllowAnyHeader()
     .AllowAnyMethod()));
 
