@@ -112,6 +112,8 @@ internal sealed class DemoLifecycleSeeder
         Release(b, tranches[2], Day(-57, 5));
         var harvested = Harvest(b, crabs, Day(-57), minWeight: 260, maxWeight: 640);
         var listings = Listings(b, harvested, "Cua gạch Năm Căn", RoeCrabPrices, Day(-57, 6), "Published");
+        // Dòng đơn phải trỏ phiên bản giá lúc đặt (V006), nên lưu trước để có price_history_id
+        await db.SaveChangesAsync();
         var orders = harvested.OrderBy(_ => rng.Next()).Chunk(16).ToList();
         for (var i = 0; i < orders.Count; i++)
             SellCompleted(b, orders[i], listings, p.Buyers[i % p.Buyers.Count], Day(-56 + i, 9));
@@ -602,7 +604,11 @@ internal sealed class DemoLifecycleSeeder
         {
             var listing = listings[group.Key];
             var quantityKg = group.Sum(c => (decimal)c.WeightG!.Value) / 1000m;
-            var line = new OrderLine { SalesOrder = order, Batch = b, ProductListing = listing, QuantityKg = quantityKg, UnitPrice = listing.CurrentPricePerKg, CreatedAt = placedAt };
+            var line = new OrderLine
+            {
+                SalesOrder = order, Batch = b, ProductListing = listing, QuantityKg = quantityKg, UnitPrice = listing.CurrentPricePerKg,
+                PriceHistoryId = listing.PriceHistories.Single().PriceHistoryId, CreatedAt = placedAt,
+            };
             order.OrderLines.Add(line);
             listing.StockQtyKg -= quantityKg;
             foreach (var crab in group)
