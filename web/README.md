@@ -117,7 +117,7 @@ Trong trang: `const { data, isLoading, error } = useFundingBatches()`; báo lỗ
 - Tiền hiển thị bằng `formatVnd()`; **không** hiển thị lợi suất kỳ vọng.
 - Thay dần dữ liệu trong `shared/ui/kit/mock-data.ts` bằng dữ liệu API; trang nào xong thì xoá phần mock tương ứng.
 - Giữ phong cách sẵn có của từng khu vực (CSS trong `store.css`, `investor.css`, `operator.css`).
-- Mã chuyển khoản dùng `<VietQrBox payment={...} status={...} />` (`shared/payments/VietQrBox.tsx`, thư viện `qrcode.react`): cạnh mã QR chỉ có số tiền, nội dung, đồng hồ hạn; số tài khoản nằm sau nút "chuyển khoản thủ công" kèm cảnh báo (TL-10 §6.1). Trạng thái mới nhất lấy bằng `usePaymentRequest(id)` (tự hỏi lại 5 giây/lần khi còn chờ).
+- Mã chuyển khoản dùng `<VietQrBox payment={...} status={...} />` (`shared/payments/VietQrBox.tsx`, thư viện `qrcode.react`): cạnh mã QR chỉ có số tiền, nội dung, đồng hồ hạn; số tài khoản nằm sau nút "chuyển khoản thủ công" kèm cảnh báo (TL-10 §6.1). Trạng thái mới nhất lấy bằng `usePaymentRequest(id)` (tự hỏi lại 3 giây/lần khi còn chờ). Khi chạy dev có thêm `<SimulatePaymentButton payment={...} />` ("Giả lập đã chuyển khoản", TH-06) gọi `POST /api/dev/payments/simulate`; bản build production không render nút này.
 
 ## VI-02 — Duyệt hộ nuôi và nhân viên
 

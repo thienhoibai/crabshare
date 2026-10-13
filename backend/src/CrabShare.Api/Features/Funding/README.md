@@ -46,7 +46,7 @@ Job nền:
 ## Màn hình
 - Web: luồng góp vốn trong `investor/` (Xác nhận rủi ro → Số tiền & giữ chỗ → Ký hợp đồng → VietQR → Hoàn tất).
   **Đã làm màn 1–2 (TH-04):** trang `/nha-dau-tu/gop-von/:code` (`web/src/features/investor/funding/ContributePage.tsx`); nút Xác nhận chỉ bật khi cuộn hết bản công bố; màn 2 hiện mức tối thiểu, phần còn lại trước trần, đồng hồ giữ chỗ. Danh sách lô đang mở gọi vốn (số liệu thật) ở đầu mục Khám phá lô (`OpenBatches.tsx`). Màn 3 chờ TH-08.
-  **Đã làm màn 4–5 (TH-05):** màn 4 lấy mã ngay khi vào và hiện bằng `<VietQrBox>` (`web/src/shared/payments/`); màn 5 "đang chờ tiền về" hỏi lại `GET /api/payment-requests/{id}` 5 giây một lần và chuyển sang "Đã nhận tiền" khi webhook (TH-06) đổi yêu cầu sang `Paid`. Nút "Tôi đã chuyển khoản" chỉ chuyển màn, không xác nhận gì.
+  **Đã làm màn 4–5 (TH-05):** màn 4 lấy mã ngay khi vào và hiện bằng `<VietQrBox>` (`web/src/shared/payments/`); màn 5 "đang chờ tiền về" hỏi lại `GET /api/payment-requests/{id}` 3 giây một lần và chuyển sang "Đã nhận tiền" khi webhook (TH-06) đổi yêu cầu sang `Paid`. Nút "Tôi đã chuyển khoản" chỉ chuyển màn, không xác nhận gì. **Đã làm (TH-06):** `ContributionPaymentHandler` nhận tin từ webhook → khoản góp `Reserved` → `Confirmed` (+ `confirmed_at`, audit `contribution/confirm`); khi chạy dev có nút "Giả lập đã chuyển khoản" ở màn 4 và 5.
 - Mobile: nút "Góp vốn" ở chi tiết lô (`investor/batches/batch_detail_page.dart`) mở trang web trên bằng `url_launcher` (`--dart-define=WEB_URL=...`, mặc định `http://localhost:5173`).
 
 ## Tài liệu
