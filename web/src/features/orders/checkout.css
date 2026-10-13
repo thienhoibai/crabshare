@@ -27,16 +27,7 @@
 .co-order__lines small { color: var(--muted); font-size: 13px; }
 .co-order__lines b { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-.co-pay { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; align-items: center; padding: 18px; border-radius: 20px; background: var(--surface-2); }
-.co-pay__qr { display: grid; place-items: center; }
-.co-pay__info { display: grid; gap: 14px; min-width: 0; }
-.co-pay__list { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; align-items: center; margin: 0; font-size: 14px; }
-.co-pay__list dt { color: var(--muted); }
-.co-pay__list dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.co-copy { display: flex; align-items: center; gap: 8px; }
-.co-copy .rd-iconbtn { width: 30px; height: 30px; }
-.co-timer { display: flex; gap: 8px; align-items: center; font-size: 14px; }
-.co-timer b { font-variant-numeric: tabular-nums; color: var(--accent); }
+.co-order__actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .co-foot { max-width: 680px; }
 
 @media (max-width: 900px) {
@@ -46,6 +37,4 @@
 @media (max-width: 560px) {
   .co { padding-top: 20px; }
   .co-card { padding: 18px; border-radius: 20px; }
-  .co-pay { grid-template-columns: 1fr; justify-items: center; }
-  .co-pay__info { justify-self: stretch; }
 }
