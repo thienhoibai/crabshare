@@ -70,6 +70,7 @@ public static class FeatureRegistry
         services.AddScoped<OrderService>();           // Features/Orders
         services.AddOptions<OrderOptions>().BindConfiguration(OrderOptions.Section);
         services.AddScoped<IPaymentPurposeHandler, OrderPaymentHandler>(); // tiền đơn hàng về → đơn Paid, trừ tồn (NH-06)
+        services.AddScoped<OrderPackingService>();    // UC29 đóng gói quét tem (NH-09)
         // services.AddScoped<OfftakeService>();      // Features/Offtake
         services.AddScoped<OrderQueryService>();        // NH-07 lịch sử + theo dõi đơn
         services.AddScoped<OrderCancellationService>(); // NH-07 huỷ đơn

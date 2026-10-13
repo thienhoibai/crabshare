@@ -22,12 +22,29 @@
 | POST | `/api/orders/{orderNo}/receive` | Customer | UC30 → `Completed` sau hạn đổi trả |
 | POST | `/api/orders/{orderNo}/complaints` | Customer | UC31 |
 | POST | `/api/orders/{orderNo}/rating` | Customer | UC34 |
-| GET | `/api/operators/me/orders?status=` | OperatorMember | Đơn cần xử lý |
-| POST | `/api/orders/{orderNo}/pack` | OperatorMember | UC29: `{ tagCodes: [...] }` quét tem từng con → `crab_item Packed`, kiểm tra đúng lô/hạng/đủ kg |
+| GET | `/api/operators/me/orders?status=` | OperatorMember | **Đã làm (CS-53).** `status=Paid` (mặc định) hoặc `Packed`. Sai giá trị → 400 `pack.invalid_status`. |
+| GET | `/api/operators/me/orders/{orderNo}` | OperatorMember | **Đã làm (CS-53).** Chi tiết dòng, kg đã gán, tem đã quét. Đơn hộ khác → 403 `pack.order_forbidden`. |
+| POST | `/api/orders/{orderNo}/pack` | OperatorMember | **Đã làm (CS-53, UC29).** `{ tagCodes: [...] }` — tem Active, cua InStock, cùng lô, đúng hạng, không trùng, đủ kg → cua `Packed` + `order_line_id`, event `Packed` + `tag_id`, đơn `Packed`, audit `sales_order/pack`. |
 | POST | `/api/orders/{orderNo}/ship` · `/deliver` | OperatorMember | Cập nhật giao hàng (nền tảng không tự giao) |
 | POST | `/api/complaints/{id}/respond` | OperatorMember | Hộ nuôi phản hồi |
 | GET | `/api/admin/complaints?status=Escalated` | PlatformAdmin | |
 | POST | `/api/admin/complaints/{id}/resolve` | PlatformAdmin | UC32 |
+
+Lỗi đóng gói (HTTP 422 trừ khi ghi chú khác; client đọc `code` + `details`):
+
+| Mã | Khi nào |
+|---|---|
+| `pack.order_not_found` | 404 — không có đơn |
+| `pack.order_forbidden` | 403 — đơn thuộc hộ nuôi khác |
+| `pack.invalid_status` | 400 — `status` không phải Paid/Packed |
+| `pack.order_not_paid` | Đơn chưa Paid (ví dụ còn `PendingPayment`) |
+| `pack.duplicate_tag` | Một mã tem xuất hiện hai lần trong cùng lần quét |
+| `pack.tag_not_active` | Tem không có hoặc không ở trạng thái Active |
+| `pack.crab_not_in_stock` | Tem hợp lệ nhưng cua đã Packed / không còn InStock |
+| `pack.wrong_batch` | Cua thuộc lô khác với đơn |
+| `pack.wrong_grade` | Hạng cua không có trong dòng đơn |
+| `pack.line_already_full` | Hạng đúng nhưng mọi dòng hạng đó đã đủ kg |
+| `pack.not_enough_weight` | Sau khi gán hết tem, một dòng vẫn thiếu kg |
 
 Job nền: giữ tồn quá hạn chưa trả tiền → `Released`, đơn → `Cancelled`.
 
@@ -49,8 +66,9 @@ Job nền: giữ tồn quá hạn chưa trả tiền → `Released`, đơn → `
   - `orders/OrderConfirmationPage.tsx` (`/xac-nhan-don-hang`): mỗi lô một đơn, số tài khoản lô, số tiền, nội dung chuyển khoản, đếm ngược tới `expiresAt`. Kết quả lưu ở `crabshare-last-checkout` để tải lại trang vẫn còn, cho tới khi có `GET /api/orders/{orderNo}` (NH-07).
   - CS-43: mã QR thật bằng `<VietQrBox>` dùng chung (TH-05); `usePaymentRequest(payment.paymentRequestId)` hỏi lại 3 giây/lần nên chip đổi "Chờ chuyển khoản" → "Đã thanh toán" / "Hết hạn" ngay khi webhook về; nút "Giả lập đã chuyển khoản" (`<SimulatePaymentButton>`, chỉ dev) để demo.
   - Test: `web/tests/checkout.spec.ts` (Playwright, mock API: đặt đơn → giả lập chuyển khoản → "Đã thanh toán").
-- Web, còn là bản mẫu: `orders/CommercePage.tsx` (theo dõi, lịch sử, huỷ/trả, đánh giá), `admin/AdminDisputes.tsx`, trang đơn hàng trong `operator/` (mới).
-- Mobile: màn **Đóng gói — quét tem** cho hộ nuôi (mới, UC29).
+- Web, đã nối API (CS-53): `operator/OperatorOrders.tsx` (`/operator/orders`, `/operator/orders/:orderNo`) — danh sách đơn Paid/Packed, nhập/quét mã tem, đóng gói. Nav hộ nuôi: Đơn hàng.
+- Web, còn là bản mẫu: `orders/CommercePage.tsx` (đánh giá đơn, NH-12), `admin/AdminDisputes.tsx`.
+- Mobile: màn **Đóng gói đơn** `/o/pack` và `/o/pack/:orderNo` (UC29, CS-53) — camera `mobile_scanner` chỉ mở khi bấm Quét; lối vào từ tab Hôm nay.
 
 ## Tài liệu
 TL-28 Giữ chỗ tồn kho và chống bán vượt · TL-29 Tách đơn theo lô · TL-31 Giao hàng và xử lý khiếu nại.

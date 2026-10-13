@@ -9,6 +9,9 @@ public class AppException(int statusCode, string code, string message) : Excepti
 {
     public int StatusCode { get; } = statusCode;
     public string Code { get; } = code;
+
+    /// <summary>Dữ liệu kèm theo cho client (ví dụ tagCode, orderLineId); xuất ra ProblemDetails dưới khoá "details".</summary>
+    public object? Details { get; init; }
 }
 
 public sealed class NotFoundException(string code, string message)

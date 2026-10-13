@@ -18,6 +18,8 @@ import '../features/operator/evidence/capture_page.dart';
 import '../features/operator/harvest/harvest_page.dart';
 import '../features/operator/logs/daily_log_form_page.dart';
 import '../features/operator/logs/daily_logs_page.dart';
+import '../features/operator/packing/pack_order_page.dart';
+import '../features/operator/packing/pack_orders_page.dart';
 import '../features/operator/today/operator_today_page.dart';
 import '../features/trace/scan_page.dart';
 import '../features/trace/trace_result_page.dart';
@@ -115,6 +117,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => CapturePage(initialSlot: state.uri.queryParameters['slot']),
       ),
       GoRoute(path: '/o/harvest/:batchCode', builder: (context, state) => HarvestPage(batchCode: state.pathParameters['batchCode']!)),
+      GoRoute(path: Routes.operatorPack, builder: (context, state) => const PackOrdersPage()),
+      GoRoute(path: '/o/pack/:orderNo', builder: (context, state) => PackOrderPage(orderNo: state.pathParameters['orderNo']!)),
     ],
   );
 });
