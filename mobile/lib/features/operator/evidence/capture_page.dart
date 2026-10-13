@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -10,11 +12,20 @@ import '../../../shared/widgets/app_ui.dart';
 import '../data/operator_models.dart';
 import 'evidence_camera.dart';
 import 'evidence_repository.dart';
+import 'capture_requests_repository.dart';
 
 class CapturePage extends ConsumerStatefulWidget {
-  const CapturePage({super.key, this.initialSlot, this.captureRequestId});
+  const CapturePage({
+    super.key,
+    this.initialSlot,
+    this.captureRequestId,
+    this.requestBatchCode,
+    this.requestDueAt,
+  });
   final String? initialSlot;
   final int? captureRequestId;
+  final String? requestBatchCode;
+  final DateTime? requestDueAt;
   @override
   ConsumerState<CapturePage> createState() => _CapturePageState();
 }
@@ -28,20 +39,34 @@ class _CapturePageState extends ConsumerState<CapturePage> {
   bool _capturing = false;
   bool _sending = false;
   bool get _busy => _capturing || _sending;
+  Timer? _requestTimer;
+  bool get _requestExpired =>
+      widget.requestDueAt != null &&
+      DateTime.now().isAfter(widget.requestDueAt!);
+  bool get _requestFinished =>
+      widget.captureRequestId != null &&
+      _result?.captureRequestStatus == 'Fulfilled';
   @override
   void initState() {
     super.initState();
     _slot = widget.initialSlot;
+    if (widget.captureRequestId != null) {
+      _requestTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   @override
   void dispose() {
     _search.dispose();
+    _requestTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _takePhoto() async {
     if (_busy) return;
+    if (_requestExpired || _requestFinished) return;
     final userId = ref.read(sessionProvider).user?.userId;
     setState(() {
       _capturing = true;
@@ -74,6 +99,7 @@ class _CapturePageState extends ConsumerState<CapturePage> {
 
   Future<void> _send(BoxSlot box) async {
     if (_busy || _photo == null) return;
+    if (_requestExpired || _requestFinished) return;
     final userId = ref.read(sessionProvider).user?.userId;
     setState(() {
       _sending = true;
@@ -94,6 +120,8 @@ class _CapturePageState extends ConsumerState<CapturePage> {
         _slot = null;
       });
       ref.invalidate(captureBoxesProvider);
+      ref.invalidate(captureRequestsProvider);
+      if (_requestFinished) _requestTimer?.cancel();
     } catch (error) {
       if (mounted && ref.read(sessionProvider).user?.userId == userId) {
         setState(() => _error = apiErrorMessage(error));
@@ -122,8 +150,26 @@ class _CapturePageState extends ConsumerState<CapturePage> {
     final list = boxes.isLoading || boxes.hasError
         ? const <BoxSlot>[]
         : boxes.value ?? const <BoxSlot>[];
-    final selected = list.where((box) => box.slotCode == _slot).firstOrNull;
-    final visible = list
+    final allowed = widget.captureRequestId == null
+        ? list
+        : list
+              .where(
+                (box) =>
+                    box.slotCode == widget.initialSlot &&
+                    box.batchCode == widget.requestBatchCode,
+              )
+              .map(
+                (box) => box.latestEvidence?.id != _result?.id
+                    ? BoxSlot(
+                        slotCode: box.slotCode,
+                        status: box.status,
+                        batchCode: box.batchCode,
+                      )
+                    : box,
+              )
+              .toList();
+    final selected = allowed.where((box) => box.slotCode == _slot).firstOrNull;
+    final visible = allowed
         .where((box) => box.slotCode.contains(_search.text.trim()))
         .toList();
     return Scaffold(
@@ -136,6 +182,7 @@ class _CapturePageState extends ConsumerState<CapturePage> {
                   box: selected,
                   photo: _photo,
                   busy: _busy,
+                  disabled: _requestExpired || _requestFinished,
                   capturing: _capturing,
                   onShoot: _takePhoto,
                   onSend: () => _send(selected),
@@ -156,6 +203,23 @@ class _CapturePageState extends ConsumerState<CapturePage> {
                     children: [
                       const SubPageHeader(title: 'Chụp bằng chứng'),
                       const SizedBox(height: 14),
+                      if (widget.captureRequestId != null) ...[
+                        Text(
+                          _requestFinished
+                              ? 'Yêu cầu chụp đã hoàn thành'
+                              : _requestExpired
+                              ? 'Yêu cầu chụp đã quá hạn. Vui lòng quay lại Hôm nay để cập nhật.'
+                              : 'Chụp hộp ${widget.initialSlot} · ${widget.requestDueAt == null ? '' : formatDueIn(widget.requestDueAt!)}',
+                          style: TextStyle(
+                            color: _requestFinished
+                                ? AppColors.success
+                                : _requestExpired
+                                ? AppColors.danger
+                                : AppColors.accentText,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       AppCard(
                         color: AppColors.ink,
                         child: Column(
@@ -245,7 +309,7 @@ class _CapturePageState extends ConsumerState<CapturePage> {
                     return _BoxTile(
                       box: box,
                       selected: selected,
-                      onTap: _busy
+                      onTap: _busy || _requestExpired || _requestFinished
                           ? null
                           : () => setState(() {
                               _slot = box.slotCode;
@@ -355,6 +419,7 @@ class _CaptureSheet extends StatelessWidget {
     required this.box,
     required this.photo,
     required this.busy,
+    this.disabled = false,
     required this.capturing,
     required this.onShoot,
     required this.onSend,
@@ -362,6 +427,7 @@ class _CaptureSheet extends StatelessWidget {
   final BoxSlot box;
   final EvidencePhoto? photo;
   final bool busy;
+  final bool disabled;
   final bool capturing;
   final VoidCallback onShoot;
   final VoidCallback onSend;
@@ -417,7 +483,9 @@ class _CaptureSheet extends StatelessWidget {
               width: 130,
               child: FilledButton(
                 style: FilledButton.styleFrom(minimumSize: const Size(90, 46)),
-                onPressed: busy ? null : (photo == null ? onShoot : onSend),
+                onPressed: busy || disabled
+                    ? null
+                    : (photo == null ? onShoot : onSend),
                 child: Text(
                   busy
                       ? capturing
@@ -443,7 +511,7 @@ class _CaptureSheet extends StatelessWidget {
                 ),
               ),
               TextButton(
-                onPressed: busy ? null : onShoot,
+                onPressed: busy || disabled ? null : onShoot,
                 child: const Text('Chụp lại'),
               ),
             ],

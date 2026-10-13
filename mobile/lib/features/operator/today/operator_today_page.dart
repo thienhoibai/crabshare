@@ -13,6 +13,7 @@ import '../../../shared/widgets/nav_shell.dart';
 import '../../../shared/widgets/segmented_gauge.dart';
 import '../data/operator_models.dart';
 import '../data/operator_repository.dart';
+import '../evidence/capture_requests_section.dart';
 
 /// Tab "Hôm nay" của hộ nuôi — bố cục theo dashboard của mẫu:
 /// đồng hồ việc trong ngày, thanh "+" ghi nhật ký, yêu cầu chụp, thẻ từng lô.
@@ -29,7 +30,6 @@ class OperatorTodayPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(sessionProvider).user;
     final summary = ref.watch(todaySummaryProvider).value;
-    final requests = ref.watch(captureRequestsProvider).value ?? const <CaptureRequest>[];
     final batches = ref.watch(activeBatchesProvider);
     final text = Theme.of(context).textTheme;
 
@@ -52,7 +52,9 @@ class OperatorTodayPage extends ConsumerWidget {
                 child: Column(
                   children: [
                     SegmentedGauge(
-                      value: summary == null || summary.total == 0 ? 0 : summary.done / summary.total,
+                      value: summary == null || summary.total == 0
+                          ? 0
+                          : summary.done / summary.total,
                       center: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -61,9 +63,15 @@ class OperatorTodayPage extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.baseline,
                             textBaseline: TextBaseline.alphabetic,
                             children: [
-                              Text('${summary?.done ?? '—'}', style: text.displaySmall),
+                              Text(
+                                '${summary?.done ?? '—'}',
+                                style: text.displaySmall,
+                              ),
                               const SizedBox(width: 4),
-                              Text('/ ${summary?.total ?? '—'} việc', style: text.titleMedium),
+                              Text(
+                                '/ ${summary?.total ?? '—'} việc',
+                                style: text.titleMedium,
+                              ),
                             ],
                           ),
                           Text('Việc cần làm hôm nay', style: text.bodySmall),
@@ -75,25 +83,29 @@ class OperatorTodayPage extends ConsumerWidget {
                       summary == null
                           ? ''
                           : summary.done >= summary.total
-                              ? 'Xong hết việc hôm nay 🎉'
-                              : 'Còn ${summary.total - summary.done} việc: nhật ký, yêu cầu chụp, cảnh báo',
+                          ? 'Xong hết việc hôm nay 🎉'
+                          : 'Còn ${summary.total - summary.done} việc: nhật ký, yêu cầu chụp, cảnh báo',
                       style: text.bodySmall,
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 14),
-              AddBar(label: 'Ghi nhật ký hôm nay', onTap: () => context.push(Routes.dailyLogNew)),
-              if (requests.isNotEmpty) ...[
-                SectionHeader(title: 'Yêu cầu chụp', actionLabel: 'Mở camera', onAction: () => context.push(Routes.capture)),
-                for (final r in requests) ...[
-                  _CaptureRequestTile(request: r, onTap: () => context.push(Routes.captureBox(r.slotCode))),
-                  const SizedBox(height: 10),
-                ],
-              ],
+              AddBar(
+                label: 'Ghi nhật ký hôm nay',
+                onTap: () => context.push(Routes.dailyLogNew),
+              ),
+              const CaptureRequestsSection(),
               const SectionHeader(title: 'Lô đang nuôi'),
               ...batches.when(
-                loading: () => [const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))],
+                loading: () => [
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                ],
                 error: (e, _) => [Text('$e')],
                 data: (list) => [
                   for (final b in list) ...[
@@ -110,44 +122,14 @@ class OperatorTodayPage extends ConsumerWidget {
   }
 }
 
-class _CaptureRequestTile extends StatelessWidget {
-  const _CaptureRequestTile({required this.request, required this.onTap});
-
-  final CaptureRequest request;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      onTap: onTap,
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          const IconTile(icon: Icons.photo_camera_outlined),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Hộp ${request.slotCode}', style: Theme.of(context).textTheme.titleMedium),
-                Text('${request.batchCode} · hạn ${formatTime(request.dueAt)}', style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
-          ),
-          Text(formatDueIn(request.dueAt), style: const TextStyle(color: AppColors.accentText, fontWeight: FontWeight.w700)),
-        ],
-      ),
-    );
-  }
-}
-
 /// Thẻ lô — theo thẻ bữa ăn của mẫu: ảnh, tên, ngày nuôi, số lớn, % cam, hàng chỉ số, nút sửa.
 class _BatchCard extends StatelessWidget {
   const _BatchCard({required this.batch});
 
   final OperatorBatch batch;
 
-  String _num(double? v, {int digits = 1}) => v == null ? '—' : v.toStringAsFixed(digits).replaceAll('.', ',');
+  String _num(double? v, {int digits = 1}) =>
+      v == null ? '—' : v.toStringAsFixed(digits).replaceAll('.', ',');
 
   @override
   Widget build(BuildContext context) {
@@ -166,7 +148,12 @@ class _BatchCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${b.code} · ${b.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      '${b.code} · ${b.title}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 2),
                     Text(
                       '${b.status.label} · ngày ${b.dayOfCycle ?? '—'}/${b.cycleDays}',
@@ -189,28 +176,54 @@ class _BatchCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text.rich(
-                  TextSpan(children: [
-                    TextSpan(text: formatCount(b.aliveCount), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
-                    const TextSpan(text: '  con', style: TextStyle(color: AppColors.inkMuted)),
-                  ]),
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: formatCount(b.aliveCount),
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const TextSpan(
+                        text: '  con',
+                        style: TextStyle(color: AppColors.inkMuted),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               Text(
                 '${(b.survivalRate * 100).toStringAsFixed(1).replaceAll('.', ',')}% còn nuôi',
-                style: const TextStyle(color: AppColors.accentText, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  color: AppColors.accentText,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          MetricRow(metrics: [
-            Metric('pH', _num(log?.ph)),
-            Metric('°C', _num(log?.waterTempC), color: AppColors.danger),
-            Metric('‰', _num(log?.salinityPpt, digits: 0), color: const Color(0xFF4C8DD6)),
-            Metric('kg ăn', _num(log?.feedKg), color: AppColors.success),
-          ]),
+          MetricRow(
+            metrics: [
+              Metric('pH', _num(log?.ph)),
+              Metric('°C', _num(log?.waterTempC), color: AppColors.danger),
+              Metric(
+                '‰',
+                _num(log?.salinityPpt, digits: 0),
+                color: const Color(0xFF4C8DD6),
+              ),
+              Metric('kg ăn', _num(log?.feedKg), color: AppColors.success),
+            ],
+          ),
           if (!b.loggedToday) ...[
             const SizedBox(height: 10),
-            const InfoChip(icon: Icons.error_outline_rounded, label: 'Chưa ghi nhật ký hôm nay', background: AppColors.accentSoft, foreground: AppColors.accentText),
+            const InfoChip(
+              icon: Icons.error_outline_rounded,
+              label: 'Chưa ghi nhật ký hôm nay',
+              background: AppColors.accentSoft,
+              foreground: AppColors.accentText,
+            ),
           ],
           if (harvesting) ...[
             const SizedBox(height: 12),

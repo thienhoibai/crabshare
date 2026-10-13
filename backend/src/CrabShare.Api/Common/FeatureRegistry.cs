@@ -70,6 +70,8 @@ public static class FeatureRegistry
         services.AddScoped<PaymentProfileService>();
         services.AddScoped<AdminAccountService>();
         services.AddScoped<EvidenceService>();      // CS-44
+        services.AddScoped<CaptureRequestService>();
+        services.AddScoped<CaptureRequestJob>();     // CS-50
         services.AddScoped<EvidenceAccess>();
         services.AddSingleton<EvidenceImageProcessor>();
         services.AddScoped<AlertService>();          // Features/Alerts

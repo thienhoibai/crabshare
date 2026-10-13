@@ -21,6 +21,7 @@ import 'package:crabshare_mobile/features/operator/data/operator_repository.dart
 import 'package:crabshare_mobile/features/operator/data/operator_models.dart';
 import 'package:crabshare_mobile/features/operator/evidence/capture_page.dart';
 import 'package:crabshare_mobile/features/operator/evidence/evidence_repository.dart';
+import 'package:crabshare_mobile/features/operator/evidence/capture_requests_repository.dart';
 import 'package:dio/dio.dart';
 import 'package:crabshare_mobile/features/operator/harvest/harvest_page.dart';
 import 'package:crabshare_mobile/features/operator/logs/daily_log_form_page.dart';
@@ -56,7 +57,9 @@ void main() {
     'NĐT · eKYC': const KycPage(),
     'Hộ nuôi · Hôm nay': const OperatorTodayPage(),
     'Hộ nuôi · Nhật ký': const DailyLogsPage(),
-    'Hộ nuôi · Form nhật ký': const DailyLogFormPage(initialBatchCode: 'CS-2610-01'),
+    'Hộ nuôi · Form nhật ký': const DailyLogFormPage(
+      initialBatchCode: 'CS-2610-01',
+    ),
     'Hộ nuôi · Chụp bằng chứng': const CapturePage(initialSlot: '0014'),
     'Hộ nuôi · Cảnh báo': const AlertsPage(),
     'Hộ nuôi · Thu hoạch': const HarvestPage(batchCode: 'CS-2609-04'),
@@ -72,16 +75,29 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
 
-      await tester.pumpWidget(ProviderScope(
-        overrides: [
-          sessionProvider.overrideWith(() => SessionController(const SessionState(token: 't', user: _user))),
-          kycRepositoryProvider.overrideWithValue(_SmokeKycRepository()),
-          payoutRepositoryProvider.overrideWithValue(_SmokePayoutRepository()),
-          alertRepositoryProvider.overrideWithValue(_SmokeAlertRepository()),
-          evidenceRepositoryProvider.overrideWithValue(_SmokeEvidenceRepository()),
-        ],
-        child: MaterialApp(theme: buildAppTheme(), home: page),
-      ));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sessionProvider.overrideWith(
+              () => SessionController(
+                const SessionState(token: 't', user: _user),
+              ),
+            ),
+            kycRepositoryProvider.overrideWithValue(_SmokeKycRepository()),
+            payoutRepositoryProvider.overrideWithValue(
+              _SmokePayoutRepository(),
+            ),
+            alertRepositoryProvider.overrideWithValue(_SmokeAlertRepository()),
+            evidenceRepositoryProvider.overrideWithValue(
+              _SmokeEvidenceRepository(),
+            ),
+            captureRequestsRepositoryProvider.overrideWithValue(
+              _SmokeCaptureRequests(),
+            ),
+          ],
+          child: MaterialApp(theme: buildAppTheme(), home: page),
+        ),
+      );
       // Dữ liệu mẫu trả về sau ~300 ms; chờ thêm cho animation đồng hồ chạy xong.
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump(const Duration(seconds: 1));
@@ -95,28 +111,52 @@ void main() {
 
 class _SmokeEvidenceRepository implements EvidenceRepository {
   @override
-  Future<List<BoxSlot>> boxes({CancelToken? cancelToken}) async => [const BoxSlot(slotCode: '0014', status: SlotStatus.occupied, batchCode: 'CS-2610-01')];
+  Future<List<BoxSlot>> boxes({CancelToken? cancelToken}) async => [
+    const BoxSlot(
+      slotCode: '0014',
+      status: SlotStatus.occupied,
+      batchCode: 'CS-2610-01',
+    ),
+  ];
   @override
-  Future<EvidenceResult> upload({required BoxSlot box, required EvidencePhoto photo, int? captureRequestId}) => throw UnimplementedError();
+  Future<EvidenceResult> upload({
+    required BoxSlot box,
+    required EvidencePhoto photo,
+    int? captureRequestId,
+  }) => throw UnimplementedError();
+}
+
+class _SmokeCaptureRequests implements CaptureRequestsRepository {
+  @override
+  Future<List<CaptureRequest>> list({CancelToken? cancelToken}) async => [];
 }
 
 class _SmokeAlertRepository implements AlertRepository {
   @override
   Future<List<AlertItem>> list() => MockOperatorRepository().alerts();
   @override
-  Future<AlertItem> acknowledge(int id, String note) => throw UnimplementedError();
+  Future<AlertItem> acknowledge(int id, String note) =>
+      throw UnimplementedError();
 }
 
 class _SmokeKycRepository implements KycRepository {
   @override
-  Future<KycVerification> status() async => const KycVerification(status: KycStatus.unverified);
+  Future<KycVerification> status() async =>
+      const KycVerification(status: KycStatus.unverified);
   @override
-  Future<KycVerification> verify({required List<KycImage> images, required bool consent}) => throw UnimplementedError();
+  Future<KycVerification> verify({
+    required List<KycImage> images,
+    required bool consent,
+  }) => throw UnimplementedError();
 }
 
 class _SmokePayoutRepository implements PayoutRepository {
   @override
-  Future<PayoutProfile> get(String ownerType) async => PayoutProfile(ownerType: ownerType, expectedHolderName: 'Nguyễn Văn Test');
+  Future<PayoutProfile> get(String ownerType) async => PayoutProfile(
+    ownerType: ownerType,
+    expectedHolderName: 'Nguyễn Văn Test',
+  );
   @override
-  Future<PayoutProfile> save(String ownerType, PayoutInput input) => throw UnimplementedError();
+  Future<PayoutProfile> save(String ownerType, PayoutInput input) =>
+      throw UnimplementedError();
 }
