@@ -86,6 +86,12 @@ public sealed class KycDatabaseFixture : IAsyncLifetime
             Environment.SetEnvironmentVariable("ASPNETCORE_TEMP", _originalTempRoot);
             // Chỉ xoá thư mục test rỗng, không xoá đệ quy bất kỳ file upload nào.
             if (Directory.Exists(UploadTempRoot)) Directory.Delete(UploadTempRoot, recursive: false);
+            // CS-44 tạo ảnh giả trong root riêng của fixture. Kiểm tra root tuyệt đối trước khi xoá.
+            var parent = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "CrabShareKycTests"));
+            var root = Path.GetFullPath(StorageRoot);
+            if (!string.Equals(Path.GetDirectoryName(root), parent, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
+                || !Guid.TryParseExact(Path.GetFileName(root), "N", out _)) throw new InvalidOperationException("Unexpected test storage root");
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
         }
     }
 }
