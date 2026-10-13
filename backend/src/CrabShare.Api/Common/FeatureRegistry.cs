@@ -7,7 +7,7 @@ using CrabShare.Api.Features.Payments;
 
 // Viên
 using CrabShare.Api.Features.Operators;
-// using CrabShare.Api.Features.Boxes;
+using CrabShare.Api.Features.Boxes;
 // using CrabShare.Api.Features.Batches;
 // using CrabShare.Api.Features.Production;
 // using CrabShare.Api.Features.Harvest;
@@ -20,7 +20,7 @@ using CrabShare.Api.Features.Orders;
 
 // Khôi
 using CrabShare.Api.Features.Accounts;
-// using CrabShare.Api.Features.Evidence;
+using CrabShare.Api.Features.Evidence;
 using CrabShare.Api.Features.Alerts;
 // using CrabShare.Api.Features.Portfolio;
 // using CrabShare.Api.Features.Admin;
@@ -51,6 +51,7 @@ public static class FeatureRegistry
         services.AddScoped<OperatorService>();        // Features/Operators
         services.AddScoped<OperatorReviewService>();  // UC05
         // services.AddScoped<BoxService>();          // Features/Boxes
+        services.AddScoped<BoxReadService>();         // CS-44: read assigned boxes
         // services.AddScoped<BatchService>();        // Features/Batches
         // services.AddScoped<ProductionService>();   // Features/Production
         // services.AddScoped<HarvestService>();      // Features/Harvest
@@ -69,7 +70,9 @@ public static class FeatureRegistry
         services.AddScoped<AccountService>();        // Features/Accounts
         services.AddScoped<PaymentProfileService>();
         services.AddScoped<AdminAccountService>();
-        // services.AddScoped<EvidenceService>();     // Features/Evidence
+        services.AddScoped<EvidenceService>();      // CS-44
+        services.AddScoped<EvidenceAccess>();
+        services.AddSingleton<EvidenceImageProcessor>();
         services.AddScoped<AlertService>();          // Features/Alerts
         services.AddScoped<AlertJob>();              // CS-40
         // services.AddScoped<PortfolioService>();    // Features/Portfolio

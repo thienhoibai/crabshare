@@ -212,11 +212,35 @@ enum SlotStatus { available, occupied, maintenance }
 
 /// Một hộp nuôi đã đánh số (bảng physical_slot). Không cần sơ đồ trại — chỉ cần số hộp.
 class BoxSlot {
-  const BoxSlot({required this.slotCode, required this.status, this.batchCode});
+  const BoxSlot({
+    required this.slotCode,
+    required this.status,
+    this.batchCode,
+    this.latestEvidence,
+  });
 
   final String slotCode;
   final SlotStatus status;
   final String? batchCode;
+  final BoxEvidenceSummary? latestEvidence;
+}
+
+class BoxEvidenceSummary {
+  const BoxEvidenceSummary({
+    required this.id,
+    required this.receivedAt,
+    required this.reviewStatus,
+  });
+  final int id;
+  final DateTime receivedAt;
+  final String reviewStatus;
+
+  factory BoxEvidenceSummary.fromJson(Map<String, dynamic> json) =>
+      BoxEvidenceSummary(
+        id: json['id'] as int,
+        receivedAt: DateTime.parse(json['receivedAt'] as String).toLocal(),
+        reviewStatus: json['reviewStatus'] as String,
+      );
 }
 
 class TodaySummary {

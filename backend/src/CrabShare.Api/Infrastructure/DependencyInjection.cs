@@ -5,6 +5,7 @@ using CrabShare.Api.Infrastructure.Persistence;
 using CrabShare.Api.Infrastructure.Signing;
 using CrabShare.Api.Infrastructure.Storage;
 using CrabShare.Api.Features.Alerts;
+using CrabShare.Api.Features.Evidence;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrabShare.Api.Infrastructure;
@@ -19,6 +20,9 @@ public static class DependencyInjection
 
         services.AddDbContext<AppDbContext>(o => o.UseSqlServer(conn, sql => sql.EnableRetryOnFailure(3)));
         services.AddSingleton(TimeProvider.System);
+        services.AddOptions<EvidenceOptions>().Bind(config.GetSection("Evidence"))
+            .Validate(o => o.SimilarityDistance is >= 0 and <= 16 && o.StaleCaptureHours is >= 1 and <= 720, "Invalid Evidence configuration")
+            .ValidateOnStart();
         services.Configure<AlertThresholds>(config.GetSection("Alerts:Thresholds"));
         services.AddOptions<AlertJobOptions>().Bind(config.GetSection("Alerts:Jobs"))
             .Validate(o => o.IntervalMinutes is >= 1 and <= 1440 && o.UtcOffsetHours is >= -12 and <= 14

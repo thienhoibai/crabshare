@@ -158,7 +158,7 @@ lib/
 | NĐT · Khám phá lô, Chi tiết lô | `investor/batches/` | Viên (dữ liệu lô), Thiện (nút Góp vốn) |
 | NĐT · eKYC | `investor/kyc/` | Khôi — đã nối API (CS-27) |
 | Hộ nuôi · Hôm nay, Nhật ký | `operator/today/`, `operator/logs/` | Viên |
-| Hộ nuôi · Chụp bằng chứng | `operator/evidence/` | Khôi |
+| Hộ nuôi · Chụp bằng chứng | `operator/evidence/` | Khôi — đã nối API (CS-44) |
 | Hộ nuôi · Cảnh báo | `operator/alerts/` | Khôi |
 | Hộ nuôi · Thu hoạch & in tem | `operator/harvest/` | Viên |
 | Quét tem, Truy xuất | `trace/` | Viên |
@@ -166,6 +166,12 @@ lib/
 | Tài khoản | `account/` | Khôi |
 
 ## Đổi dữ liệu mẫu sang API (việc chính của từng task)
+
+Chụp bằng chứng đã dùng `ApiEvidenceRepository`: tải hộp từ `GET /api/boxes`,
+chụp trực tiếp bằng camera, lấy GPS thật và gửi `POST /api/evidence`. Cần cấp
+quyền camera/vị trí và bật GPS. Kết quả Accepted/Watch/Flagged lấy từ máy chủ;
+chưa có mô hình nhận diện thì app không hiển thị kết luận về cua. Lỗi mạng giữ
+ảnh để thử lại. Xem [CS-44](../docs/validation/CS-44-production-evidence.md).
 
 eKYC đã dùng `ApiKycRepository` riêng: GET `/api/me/kyc`, POST multipart
 `/api/kyc/ekyc`. Màn Tài khoản → Xác minh danh tính yêu cầu đồng ý điều khoản,

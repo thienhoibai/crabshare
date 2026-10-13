@@ -12,6 +12,12 @@
 | `evidence_review` | phán quyết người thẩm định: `Pass`, `Fail`, `NeedMoreEvidence` |
 
 ## Endpoint dự kiến
+
+CS-44 đã triển khai `POST /api/evidence` và mobile chụp ảnh/GPS qua API.
+Chi tiết định dạng, migration V007, chính sách ảnh trùng và kiểm thử:
+[CS-44-production-evidence.md](../../../../../docs/validation/CS-44-production-evidence.md).
+Các endpoint thẩm định/yêu cầu ngẫu nhiên bên dưới vẫn thuộc task tiếp theo.
+
 | Method | Path | Ai gọi | Ghi chú |
 |---|---|---|---|
 | POST | `/api/evidence` | OperatorMember | multipart: `batchCode`, `slotCode`, `capturedAt`, `latitude`, `longitude`, `captureRequestId?`, ảnh → `IFileStorage.SaveAsync` (tính SHA-256) → so trùng (SHA-256 + perceptual hash) → `ICrabDetector.DetectAsync` → tính `risk_score` → `review_status` |

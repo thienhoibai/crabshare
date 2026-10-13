@@ -11,6 +11,16 @@ Mỗi con cua sống trong một hộp có **số**. Không vẽ sơ đồ trạ
 | `slot_allocation` | gán hộp cho lô: `batch_id`, `slot_id`, `allocated_at`, `released_at` (NULL = đang dùng) |
 
 ## Endpoint dự kiến
+
+CS-44 đã bổ sung phần đọc `GET /api/boxes` để mobile chọn hộp thật. Kết quả
+phân trang gồm `slotCode`, `status`, `batchCode` (null khi không có lô đang nuôi
+được gán). CRUD/đánh số hộp và gán hộp vẫn thuộc CS-29.
+
+`latestEvidence` (nullable) trả `{ id, receivedAt, reviewStatus }` của ảnh chụp
+trong app mới nhất thuộc lô và lượt gán hiện tại. Mobile dùng dữ liệu này để
+đánh dấu Đã gửi / Theo dõi / Cần kiểm tra / Chụp lại. Đây là trạng thái bằng
+chứng; `status` của hộp vẫn là `Occupied` trong lúc nuôi.
+
 | Method | Path | Ai gọi | Ghi chú |
 |---|---|---|---|
 | POST | `/api/boxes/range` | Operator Owner | Tạo hàng loạt: `{ from: 1, to: 1200, width: 4 }` → `0001`…`1200` |

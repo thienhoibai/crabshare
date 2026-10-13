@@ -20,6 +20,8 @@ import 'package:crabshare_mobile/features/operator/data/alert_repository.dart';
 import 'package:crabshare_mobile/features/operator/data/operator_repository.dart';
 import 'package:crabshare_mobile/features/operator/data/operator_models.dart';
 import 'package:crabshare_mobile/features/operator/evidence/capture_page.dart';
+import 'package:crabshare_mobile/features/operator/evidence/evidence_repository.dart';
+import 'package:dio/dio.dart';
 import 'package:crabshare_mobile/features/operator/harvest/harvest_page.dart';
 import 'package:crabshare_mobile/features/operator/logs/daily_log_form_page.dart';
 import 'package:crabshare_mobile/features/operator/logs/daily_logs_page.dart';
@@ -76,6 +78,7 @@ void main() {
           kycRepositoryProvider.overrideWithValue(_SmokeKycRepository()),
           payoutRepositoryProvider.overrideWithValue(_SmokePayoutRepository()),
           alertRepositoryProvider.overrideWithValue(_SmokeAlertRepository()),
+          evidenceRepositoryProvider.overrideWithValue(_SmokeEvidenceRepository()),
         ],
         child: MaterialApp(theme: buildAppTheme(), home: page),
       ));
@@ -88,6 +91,13 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
   }
+}
+
+class _SmokeEvidenceRepository implements EvidenceRepository {
+  @override
+  Future<List<BoxSlot>> boxes({CancelToken? cancelToken}) async => [const BoxSlot(slotCode: '0014', status: SlotStatus.occupied, batchCode: 'CS-2610-01')];
+  @override
+  Future<EvidenceResult> upload({required BoxSlot box, required EvidencePhoto photo, int? captureRequestId}) => throw UnimplementedError();
 }
 
 class _SmokeAlertRepository implements AlertRepository {

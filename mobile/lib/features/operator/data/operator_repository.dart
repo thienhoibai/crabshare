@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,9 +18,6 @@ abstract interface class OperatorRepository {
   Future<List<AlertItem>> alerts();
   Future<void> acknowledgeAlert(int alertId, String note);
   Future<List<BoxSlot>> boxes();
-
-  /// Ảnh chụp trực tiếp trong app. Server tự ghi giờ nhận, băm SHA-256, chạy nhận diện cua.
-  Future<void> uploadEvidence({required String batchCode, required String slotCode, required Uint8List bytes, required DateTime capturedAt});
 
   /// Ghi một con cua đã cân → backend xếp hạng, tạo crab_tag và gửi lệnh in. Trả về mã tem.
   Future<String> recordHarvestedCrab({required String batchCode, required int weightG});
@@ -166,10 +162,6 @@ class MockOperatorRepository implements OperatorRepository {
             batchCode: i % 97 == 0 ? null : (i <= 1200 ? 'CS-2610-01' : 'CS-2609-04'),
           ),
       ]);
-
-  @override
-  Future<void> uploadEvidence({required String batchCode, required String slotCode, required Uint8List bytes, required DateTime capturedAt}) =>
-      _delay(null);
 
   @override
   Future<String> recordHarvestedCrab({required String batchCode, required int weightG}) {
