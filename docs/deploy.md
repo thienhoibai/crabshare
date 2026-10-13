@@ -10,7 +10,7 @@ Tất cả nằm trong nhóm tài nguyên `crabshare-rg`, vùng **East Asia** (g
 
 ## Tự động deploy API (`.github/workflows/deploy-backend.yml`)
 1. Build + test (không gồm test CSDL).
-2. Đăng nhập Azure bằng **OIDC**: danh tính `crabshare-github-deploy` chỉ tin nhánh `develop`; repo chỉ lưu 3 biến định danh `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` (Settings → Secrets and variables → Variables), không có mật khẩu.
+2. Đăng nhập Azure bằng **OIDC**: danh tính `crabshare-github-deploy` chỉ tin nhánh `develop`; repo chỉ lưu 3 biến định danh `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` (Settings → Secrets and variables → Variables), không có mật khẩu. Repo này phát token OIDC dạng định danh bất biến, nên subject khai trên Azure phải là `repo:thienhoibai@190101556/crabshare@1415157593:ref:refs/heads/develop` (dạng `repo:thienhoibai/crabshare:...` sẽ bị từ chối).
 3. Chạy DbMigrator lên Azure SQL (chỉ chạy file `V*.sql` mới).
 4. Deploy lên App Service, rồi chờ `/api/health/ready` báo `database: connected`.
 
