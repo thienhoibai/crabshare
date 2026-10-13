@@ -85,6 +85,7 @@ public class CheckoutConcurrencyTests(OrderDatabaseFixture fixture) : IClassFixt
             Assert.Equal(13, o.OrderNo.Length);
             Assert.Equal(o.OrderNo, o.Payment.ReferenceCode);
             Assert.Equal(o.TotalAmount, o.Payment.Amount);
+            Assert.True(o.Payment.PaymentRequestId > 0);
             Assert.Single(o.Lines);
         });
         Assert.Equal(600_000, result.Orders.Single(o => o.Lines[0].ListingId == first).TotalAmount);
