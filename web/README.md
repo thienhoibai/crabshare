@@ -125,3 +125,9 @@ Trong trang: `const { data, isLoading, error } = useFundingBatches()`; báo lỗ
 - Operator: `/operator/members`, có trong sidebar và menu mobile. Owner thêm Staff bằng email tài khoản có sẵn và xóa Staff có xác nhận; Staff chỉ xem. Thành viên mới cần đăng nhập lại để cập nhật quyền giao diện.
 - Hook API ở `features/admin/adminOperatorsApi.ts` và `features/operator/operatorsApi.ts`; hộp thoại dùng `shared/ui/ActionDialog.tsx`. Không thêm dependency.
 - Chạy `npm run lint` và `npm run build`; API ở `http://localhost:5233`, web dev nên mở `http://localhost:5173` theo cấu hình CORS mặc định.
+
+## NH-07 — Theo dõi đơn, lịch sử, huỷ đơn (CS-46)
+
+- `/lich-su-don-hang` và `/huy-tra-hang` → `orders/OrderHistoryPage.tsx` (GET `/api/orders`).
+- `/theo-doi-don-hang` và `/theo-doi-don-hang/:orderNo` → `orders/OrderTrackingPage.tsx` (GET `/api/orders/{orderNo}`, POST `.../cancel`).
+- API client: `orders/orderTrackingApi.ts`. Giữ `/danh-gia-don-hang` bản mẫu trên `CommercePage.tsx`.
