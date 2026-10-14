@@ -15,10 +15,17 @@
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.17.14" />
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\CrabShare.SettlementEngine\CrabShare.SettlementEngine.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Toàn văn bản công bố rủi ro / mẫu hợp đồng; API đọc và so SHA-256 với content_hash trong CSDL (V002) -->
+    <Content Include="..\..\..\database\reference\*.md" Link="Reference\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

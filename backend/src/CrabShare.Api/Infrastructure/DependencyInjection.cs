@@ -1,3 +1,4 @@
+using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Infrastructure.Detection;
 using CrabShare.Api.Infrastructure.Ekyc;
 using CrabShare.Api.Infrastructure.Payments;
@@ -5,6 +6,7 @@ using CrabShare.Api.Infrastructure.Persistence;
 using CrabShare.Api.Infrastructure.Signing;
 using CrabShare.Api.Infrastructure.Storage;
 using CrabShare.Api.Features.Alerts;
+using CrabShare.Api.Features.Evidence;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrabShare.Api.Infrastructure;
@@ -19,6 +21,14 @@ public static class DependencyInjection
 
         services.AddDbContext<AppDbContext>(o => o.UseSqlServer(conn, sql => sql.EnableRetryOnFailure(3)));
         services.AddSingleton(TimeProvider.System);
+        services.AddOptions<CaptureRequestOptions>().Bind(config.GetSection(CaptureRequestOptions.Section))
+            .Validate(o => o.IntervalMinutes is >= 1 and <= 60 && o.UtcOffsetHours is >= -12 and <= 14
+                && o.DailyRequestHour is >= 0 and <= 23 && o.ResponseWindowMinutes is >= 1 and <= 1440
+                && o.AlertAckWithinHours is >= 1 and <= 720, "Invalid capture request configuration").ValidateOnStart();
+        services.AddHostedService<CaptureRequestWorker>();
+        services.AddOptions<EvidenceOptions>().Bind(config.GetSection("Evidence"))
+            .Validate(o => o.SimilarityDistance is >= 0 and <= 16 && o.StaleCaptureHours is >= 1 and <= 720, "Invalid Evidence configuration")
+            .ValidateOnStart();
         services.Configure<AlertThresholds>(config.GetSection("Alerts:Thresholds"));
         services.AddOptions<AlertJobOptions>().Bind(config.GetSection("Alerts:Jobs"))
             .Validate(o => o.IntervalMinutes is >= 1 and <= 1440 && o.UtcOffsetHours is >= -12 and <= 14
@@ -28,6 +38,10 @@ public static class DependencyInjection
 
         services.Configure<StorageOptions>(config.GetSection("Storage"));
         services.AddSingleton<IFileStorage, LocalFileStorage>();
+
+        // Nhật ký kiểm toán dùng chung (TH-02) + job kiểm tra chuỗi băm mỗi 6 giờ
+        services.AddScoped<IAuditLog, AuditLogService>();
+        services.AddHostedService<AuditChainCheckJob>();
 
         // Dịch vụ bên ngoài: hiện dùng bản giả lập (Fake*) để dev và demo.
         // Khi có tài khoản sandbox thật, viết class mới cài cùng interface rồi đổi dòng đăng ký ở đây.

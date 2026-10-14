@@ -100,12 +100,21 @@ class CaptureRequest {
     required this.batchCode,
     required this.slotCode,
     required this.dueAt,
+    this.status = 'Open',
   });
 
   final int id;
   final String batchCode;
   final String slotCode;
   final DateTime dueAt;
+  final String status;
+  factory CaptureRequest.fromJson(Map<String, dynamic> json) => CaptureRequest(
+    id: json['id'] as int,
+    batchCode: json['batchCode'] as String,
+    slotCode: json['slotCode'] as String,
+    dueAt: DateTime.parse(json['dueAt'] as String).toLocal(),
+    status: json['status'] as String,
+  );
 }
 
 /// Khớp CHECK ck_alert_alert_type.
@@ -212,11 +221,35 @@ enum SlotStatus { available, occupied, maintenance }
 
 /// Một hộp nuôi đã đánh số (bảng physical_slot). Không cần sơ đồ trại — chỉ cần số hộp.
 class BoxSlot {
-  const BoxSlot({required this.slotCode, required this.status, this.batchCode});
+  const BoxSlot({
+    required this.slotCode,
+    required this.status,
+    this.batchCode,
+    this.latestEvidence,
+  });
 
   final String slotCode;
   final SlotStatus status;
   final String? batchCode;
+  final BoxEvidenceSummary? latestEvidence;
+}
+
+class BoxEvidenceSummary {
+  const BoxEvidenceSummary({
+    required this.id,
+    required this.receivedAt,
+    required this.reviewStatus,
+  });
+  final int id;
+  final DateTime receivedAt;
+  final String reviewStatus;
+
+  factory BoxEvidenceSummary.fromJson(Map<String, dynamic> json) =>
+      BoxEvidenceSummary(
+        id: json['id'] as int,
+        receivedAt: DateTime.parse(json['receivedAt'] as String).toLocal(),
+        reviewStatus: json['reviewStatus'] as String,
+      );
 }
 
 class TodaySummary {

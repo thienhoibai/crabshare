@@ -18,6 +18,7 @@ public interface IFileStorage
     Task<StoredFile> SaveAsync(Stream content, string fileName, string contentType, string folder, CancellationToken ct);
 
     Task<Stream> OpenReadAsync(string uri, CancellationToken ct);
+    Task DeleteAsync(string uri, CancellationToken ct);
 }
 
 /// <summary>Lưu file trên ổ đĩa máy chủ. Đủ cho đồ án; muốn lên cloud thì viết class khác cài cùng interface.</summary>
@@ -29,23 +30,48 @@ public sealed class LocalFileStorage(IOptions<StorageOptions> options, IHostEnvi
     {
         var safeName = $"{Guid.NewGuid():N}{Path.GetExtension(fileName).ToLowerInvariant()}";
         var relative = Path.Combine(folder, safeName).Replace('\\', '/');
-        var full = Path.Combine(_root, relative);
+        var full = Resolve(relative);
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
 
         using var sha = SHA256.Create();
-        await using (var file = File.Create(full))
-        await using (var hashing = new CryptoStream(file, sha, CryptoStreamMode.Write))
+        try
         {
-            await content.CopyToAsync(hashing, ct);
-        }
+            await using (var file = File.Create(full))
+            await using (var hashing = new CryptoStream(file, sha, CryptoStreamMode.Write))
+            {
+                await content.CopyToAsync(hashing, ct);
+            }
 
-        return new StoredFile(relative, Convert.ToHexStringLower(sha.Hash!), new FileInfo(full).Length, contentType);
+            return new StoredFile(relative, Convert.ToHexStringLower(sha.Hash!), new FileInfo(full).Length, contentType);
+        }
+        catch
+        {
+            // File riêng của lần ghi đang thất bại, không để ảnh ghi dở lại trong storage.
+            File.Delete(full);
+            throw;
+        }
     }
 
     public Task<Stream> OpenReadAsync(string uri, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult<Stream>(File.OpenRead(Resolve(uri)));
+    }
+
+    public Task DeleteAsync(string uri, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        File.Delete(Resolve(uri));
+        return Task.CompletedTask;
+    }
+
+    private string Resolve(string uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri) || Path.IsPathRooted(uri)) throw new UnauthorizedAccessException("Đường dẫn file không hợp lệ.");
         var full = Path.GetFullPath(Path.Combine(_root, uri));
-        if (!full.StartsWith(_root, StringComparison.OrdinalIgnoreCase)) throw new UnauthorizedAccessException("Đường dẫn file không hợp lệ.");
-        return Task.FromResult<Stream>(File.OpenRead(full));
+        var relative = Path.GetRelativePath(_root, full);
+        if (relative == "." || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar) || Path.IsPathRooted(relative))
+            throw new UnauthorizedAccessException("Đường dẫn file không hợp lệ.");
+        return full;
     }
 }

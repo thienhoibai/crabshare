@@ -27,16 +27,7 @@
 .co-order__lines small { color: var(--muted); font-size: 13px; }
 .co-order__lines b { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-.co-pay { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; align-items: center; padding: 18px; border-radius: 20px; background: var(--surface-2); }
-.co-pay__qr { display: grid; place-items: center; }
-.co-pay__info { display: grid; gap: 14px; min-width: 0; }
-.co-pay__list { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; align-items: center; margin: 0; font-size: 14px; }
-.co-pay__list dt { color: var(--muted); }
-.co-pay__list dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.co-copy { display: flex; align-items: center; gap: 8px; }
-.co-copy .rd-iconbtn { width: 30px; height: 30px; }
-.co-timer { display: flex; gap: 8px; align-items: center; font-size: 14px; }
-.co-timer b { font-variant-numeric: tabular-nums; color: var(--accent); }
+.co-order__actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .co-foot { max-width: 680px; }
 
 @media (max-width: 900px) {
@@ -46,6 +37,43 @@
 @media (max-width: 560px) {
   .co { padding-top: 20px; }
   .co-card { padding: 18px; border-radius: 20px; }
-  .co-pay { grid-template-columns: 1fr; justify-items: center; }
-  .co-pay__info { justify-self: stretch; }
+}
+
+/* NH-07 — lịch sử + theo dõi đơn */
+.ot-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.ot-tabs button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 14px; font-size: 13px; color: var(--muted); }
+.ot-tabs button.is-on { background: var(--accent, #8b5023); color: #fff; border-color: transparent; }
+.ot-list { display: grid; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; overflow: hidden; }
+.ot-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+.ot-row:last-child { border-bottom: 0; }
+.ot-row__info { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-width: 0; }
+.ot-row__info > b { font-size: 15px; }
+.ot-row__info span { color: var(--muted); font-size: 13px; }
+.ot-row__action { display: grid; justify-items: end; gap: 8px; flex: none; }
+.ot-status { font-size: 12px; font-weight: 700; }
+.ot-status--wait { color: #9a6700; }
+.ot-status--progress { color: #8b5023; }
+.ot-status--done { color: #176b3a; }
+.ot-status--cancelled { color: #b42318; }
+.ot-pager { display: flex; align-items: center; justify-content: center; gap: 16px; color: var(--muted); font-size: 13px; }
+.ot-lookup { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin: 12px 0; }
+.ot-lookup input { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; font: inherit; }
+.ot-timeline { list-style: none; margin: 8px 0 20px; padding: 0; display: grid; gap: 8px; }
+.ot-timeline li { display: grid; justify-items: center; text-align: center; gap: 6px; color: var(--muted); font-size: 12px; opacity: .45; }
+.ot-timeline li.is-done, .ot-timeline li.is-current { opacity: 1; color: inherit; }
+.ot-timeline b { width: 14px; height: 14px; border-radius: 50%; background: var(--line); }
+.ot-timeline li.is-done b, .ot-timeline li.is-current b { background: var(--accent, #8b5023); }
+.ot-timeline strong { font-size: 13px; }
+.ot-meta { display: grid; gap: 12px; margin: 16px 0; font-size: 14px; }
+.ot-meta p { display: grid; grid-template-columns: 18px 88px minmax(0, 1fr); gap: 8px; align-items: start; margin: 0; }
+.ot-meta span { color: var(--muted); }
+.ot-meta b { font-weight: 600; }
+.ot-cancel { display: grid; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.ot-cancel textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; font: inherit; resize: vertical; }
+.ot-cancel__actions { display: flex; gap: 8px; justify-content: flex-end; }
+@media (max-width: 700px) {
+  .ot-row { flex-direction: column; align-items: stretch; }
+  .ot-row__action { justify-items: start; }
+  .ot-timeline { grid-template-columns: 1fr !important; }
+  .ot-lookup { grid-template-columns: 1fr; }
 }

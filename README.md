@@ -55,7 +55,7 @@ Tạo tự động khi API chạy lần đầu ở môi trường Development. M
 | `reviewer@crabshare.local` | Thẩm định bằng chứng |
 | `operator@crabshare.local` | Chủ hộ nuôi (HTX Nuôi cua Năm Căn) |
 | `staff@crabshare.local` | Nhân viên hộ nuôi |
-| `investor1@crabshare.local`, `investor2@crabshare.local` | Nhà đầu tư (kiêm khách hàng) |
+| `investor1@crabshare.local` … `investor4@crabshare.local` | Nhà đầu tư (kiêm khách hàng), đã xác minh danh tính |
 | `customer@crabshare.local` | Khách hàng |
 
 ## Làm việc nhóm

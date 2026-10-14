@@ -1,122 +1,106 @@
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import OperatorLayout from './OperatorLayout'
-import { OpBadge, OpBtn, OpFacts, OpHeading, OpModal, OpPanel } from './operatorUi'
+import { OpBadge, OpBtn, OpHeading, OpModal, OpPanel } from './operatorUi'
+import { useOperatorApplication } from './operatorsApi'
+import { useAuthStore } from '../../shared/auth/authStore'
+import { errorMessage } from '../../shared/api/http'
+import { boxLabels, createBox, createBoxRange, listBoxes, updateBox, type Box } from './boxesApi'
 
-type BoxStatus = 'occupied' | 'alert' | 'empty'
-type FarmBox = { id: string; status: BoxStatus; weight: string }
+function CreateBoxes({ mode, onClose, onCreated }: { mode: 'single' | 'range'; onClose: () => void; onCreated: (message: string) => void }) {
+  const [from, setFrom] = useState('1')
+  const [to, setTo] = useState('1200')
+  const [width, setWidth] = useState('4')
+  const [code, setCode] = useState('')
+  const [row, setRow] = useState('')
+  const [rack, setRack] = useState('')
+  const [tier, setTier] = useState('')
+  const [column, setColumn] = useState('')
+  const mutation = useMutation({
+    mutationFn: async () => {
+      if (mode === 'range') {
+        const result = await createBoxRange({ from: Number(from), to: Number(to), width: Number(width) })
+        return `Đã tạo ${result.created.toLocaleString('vi-VN')} hộp (${result.from}–${result.to}).`
+      }
+      const result = await createBox({ slotCode: code.trim(), rowCode: row.trim() || null, rackNo: rack ? Number(rack) : null, tierNo: tier ? Number(tier) : null, columnNo: column ? Number(column) : null })
+      return `Đã tạo hộp ${result.slotCode}.`
+    },
+    onSuccess: onCreated,
+  })
+  const validRange = Number(to) >= Number(from)
+  function submit(event: FormEvent) { event.preventDefault(); if (!mutation.isPending && (mode === 'single' || validRange)) mutation.mutate() }
+  return <OpModal title={mode === 'range' ? 'Tạo hàng loạt' : 'Thêm hộp'} onClose={() => { if (!mutation.isPending) onClose() }}>
+    <form onSubmit={submit} className="op-box-form">
+      <fieldset disabled={mutation.isPending} className="op-box-fields">
+        {mode === 'range' ? <>
+          <label className="op-field">Từ số<input className="op-input" type="number" min="1" max="2147483647" required value={from} onChange={e => setFrom(e.target.value)} /></label>
+          <label className="op-field">Đến số<input className="op-input" type="number" min={from || 1} max="2147483647" required value={to} onChange={e => setTo(e.target.value)} /></label>
+          <label className="op-field">Số chữ số<input className="op-input" type="number" min="1" max="30" required value={width} onChange={e => setWidth(e.target.value)} /></label>
+          <p className="op-muted">Ví dụ: 1 đến 1200, 4 chữ số → 0001…1200. Toàn bộ dãy phải chưa tồn tại và nằm trong sức chứa được duyệt.</p>
+        </> : <>
+          <label className="op-field">Số hộp<input className="op-input" maxLength={30} pattern="[A-Za-z0-9 _-]+" required value={code} onChange={e => setCode(e.target.value)} /></label>
+          <label className="op-field">Dãy (tuỳ chọn)<input className="op-input" maxLength={10} pattern="[A-Za-z0-9 _-]+" value={row} onChange={e => setRow(e.target.value)} /></label>
+          <div className="op-box-layout">
+            <label className="op-field">Kệ (tuỳ chọn)<input className="op-input" type="number" min="1" max="32767" value={rack} onChange={e => setRack(e.target.value)} /></label>
+            <label className="op-field">Tầng (tuỳ chọn)<input className="op-input" type="number" min="1" max="32767" value={tier} onChange={e => setTier(e.target.value)} /></label>
+            <label className="op-field">Cột (tuỳ chọn)<input className="op-input" type="number" min="1" max="32767" value={column} onChange={e => setColumn(e.target.value)} /></label>
+          </div>
+        </>}
+      </fieldset>
+      {mutation.isError && <p role="alert">{errorMessage(mutation.error)}</p>}
+      <OpBtn type="submit" disabled={mutation.isPending || (mode === 'range' ? !validRange : !code.trim())}>{mutation.isPending ? 'Đang tạo…' : 'Tạo hộp'}</OpBtn>
+    </form>
+  </OpModal>
+}
 
-const mockBatches = [
-  { id: 'BATCH-2026-11A', name: 'Lô cua lột 11A', totalBoxes: 125, ph: '7,5', temp: '28,5 °C' },
-  { id: 'BATCH-2026-10B', name: 'Lô cua gạch 10B', totalBoxes: 30, ph: '7,8', temp: '29,0 °C' },
-]
-
-const STATUS_LABEL: Record<BoxStatus, string> = { occupied: 'Đang nuôi', alert: 'Cảnh báo', empty: 'Ô trống' }
-const BOXES_PER_PAGE = 50
+function BoxDetail({ box, canManage, onClose, onUpdated }: { box: Box; canManage: boolean; onClose: () => void; onUpdated: () => void }) {
+  const mutation = useMutation({ mutationFn: () => updateBox(box.slotCode, box.status === 'Available' ? 'Maintenance' : 'Available'), onSuccess: onUpdated })
+  return <OpModal title={`Hộp ${box.slotCode}`} onClose={() => { if (!mutation.isPending) onClose() }}>
+    <OpBadge tone={box.status === 'Available' ? 'ok' : box.status === 'Maintenance' ? 'warn' : 'info'}>{boxLabels[box.status]}</OpBadge>
+    <dl className="op-facts">
+      <div><dt>Dãy</dt><dd>{box.rowCode || '—'}</dd></div>
+      <div><dt>Kệ</dt><dd>{box.rackNo ?? '—'}</dd></div>
+      <div><dt>Tầng</dt><dd>{box.tierNo ?? '—'}</dd></div>
+      <div><dt>Cột</dt><dd>{box.columnNo ?? '—'}</dd></div>
+    </dl>
+    {mutation.isError && <p role="alert">{errorMessage(mutation.error)}</p>}
+    {canManage && box.status !== 'Occupied' && <OpBtn disabled={mutation.isPending} onClick={() => mutation.mutate()}>{mutation.isPending ? 'Đang lưu…' : box.status === 'Available' ? 'Chuyển bảo trì' : 'Chuyển sẵn sàng'}</OpBtn>}
+    {box.status === 'Occupied' && <p className="op-muted">Hộp đang nuôi, cần giải phóng trước khi bảo trì.</p>}
+  </OpModal>
+}
 
 export default function OperatorFarmMap() {
-  const [selectedBatch, setSelectedBatch] = useState(mockBatches[0].id)
+  const application = useOperatorApplication()
+  const userId = useAuthStore(s => s.user?.userId)
+  const qc = useQueryClient()
+  const [status, setStatus] = useState('')
+  const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [selectedBox, setSelectedBox] = useState<FarmBox | null>(null)
-
-  const currentBatch = mockBatches.find((b) => b.id === selectedBatch)!
-  const totalPages = Math.ceil(currentBatch.totalBoxes / BOXES_PER_PAGE)
-
-  const allBoxes: FarmBox[] = Array.from({ length: currentBatch.totalBoxes }, (_, i) => {
-    let status: BoxStatus = 'occupied'
-    if (selectedBatch === 'BATCH-2026-11A' && (i % 12 === 0 || i === 44)) status = 'alert'
-    if (selectedBatch === 'BATCH-2026-11A' && i % 25 === 0) status = 'empty'
-    if (selectedBatch === 'BATCH-2026-10B' && i % 8 === 0) status = 'alert'
-    return { id: `S-${i + 1}`, status, weight: status === 'empty' ? '—' : `${200 + (i % 5) * 5} g` }
-  })
-
-  const displayedBoxes = allBoxes.slice((page - 1) * BOXES_PER_PAGE, page * BOXES_PER_PAGE)
-  const count = (s: BoxStatus) => allBoxes.filter((b) => b.status === s).length
-
-  return (
-    <OperatorLayout activeTab="map">
-      <OpHeading
-        eyebrow="Hộp RAS"
-        title="Sơ đồ trại"
-        description="Mỗi ô là một hộp nuôi. Chạm vào ô để xem nhật ký gần nhất."
-        action={
-          <select
-            className="op-select op-select--pill"
-            value={selectedBatch}
-            onChange={(e) => { setSelectedBatch(e.target.value); setPage(1) }}
-            aria-label="Chọn lô"
-          >
-            {mockBatches.map((b) => <option key={b.id} value={b.id}>{b.name} · {b.totalBoxes} ô</option>)}
-          </select>
-        }
-      />
-
-      <OpFacts
-        items={[
-          { label: 'Đang nuôi', value: count('occupied'), tone: 'ok' },
-          { label: 'Cảnh báo', value: count('alert'), tone: 'danger' },
-          { label: 'Ô trống', value: count('empty') },
-          { label: 'pH', value: currentBatch.ph, tone: 'info' },
-          { label: 'Nhiệt độ nước', value: currentBatch.temp },
-        ]}
-      />
-
-      <OpPanel
-        title={currentBatch.name}
-        action={
-          <span className="op-legend">
-            <OpBadge tone="ok">Đang nuôi</OpBadge>
-            <OpBadge tone="danger">Cảnh báo</OpBadge>
-            <OpBadge tone="mute">Ô trống</OpBadge>
-          </span>
-        }
-      >
-        <div className="op-slots">
-          {displayedBoxes.map((slot) => (
-            <button type="button" key={slot.id} className={`op-slot is-${slot.status}`} onClick={() => setSelectedBox(slot)} aria-label={`Ô ${slot.id}, ${STATUS_LABEL[slot.status]}`}>
-              <b>{slot.id}</b>
-              {slot.status !== 'empty' && <small>{slot.weight}</small>}
-            </button>
-          ))}
-        </div>
-        {totalPages > 1 && (
-          <div className="op-pager">
-            <span>Ô {(page - 1) * BOXES_PER_PAGE + 1}–{Math.min(page * BOXES_PER_PAGE, currentBatch.totalBoxes)} / {currentBatch.totalBoxes}</span>
-            <div>
-              <button type="button" className="rd-iconbtn" disabled={page === 1} onClick={() => setPage((p) => p - 1)} aria-label="Trang trước"><ChevronLeft size={18} /></button>
-              <span>{page} / {totalPages}</span>
-              <button type="button" className="rd-iconbtn" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)} aria-label="Trang sau"><ChevronRight size={18} /></button>
-            </div>
-          </div>
-        )}
-      </OpPanel>
-
-      {selectedBox && (
-        <OpModal title={`Ô nuôi ${selectedBox.id}`} sub={currentBatch.name} onClose={() => setSelectedBox(null)}>
-          <div className="flex items-center gap-4">
-            <span className={`op-slot is-${selectedBox.status}`} style={{ width: 72 }}><b>{selectedBox.weight}</b></span>
-            <div className="grid gap-1 justify-items-start">
-              <span className="op-muted text-sm">Trạng thái hiện tại</span>
-              <OpBadge tone={selectedBox.status === 'alert' ? 'danger' : selectedBox.status === 'empty' ? 'mute' : 'ok'}>
-                {selectedBox.status === 'alert' ? 'Cảnh báo bất thường' : selectedBox.status === 'empty' ? 'Ô trống' : 'Phát triển bình thường'}
-              </OpBadge>
-            </div>
-          </div>
-          <div className="grid gap-3">
-            <p className="rd-eyebrow">Nhật ký gần nhất</p>
-            <ul className="op-feed">
-              <li><b>Hôm nay 08:00</b><small>pH {currentBatch.ph} · {currentBatch.temp}</small></li>
-              <li><b>Hôm qua 17:30</b><small>Cho ăn cám viên 15 g</small></li>
-            </ul>
-          </div>
-          <div className="flex gap-2">
-            {selectedBox.status === 'alert' && (
-              <OpBtn onClick={() => { window.location.href = `/operator/log?box=${selectedBox.id}` }}>Ghi log xử lý</OpBtn>
-            )}
-            <OpBtn variant="ghost" onClick={() => setSelectedBox(null)}>Đóng</OpBtn>
-          </div>
-        </OpModal>
-      )}
-    </OperatorLayout>
-  )
+  const [mode, setMode] = useState<'range' | 'single' | null>(null)
+  const [selected, setSelected] = useState<Box | null>(null)
+  const [message, setMessage] = useState('')
+  const boxes = useQuery({ queryKey: ['boxes', userId, status, search.trim(), page], queryFn: ({ signal }) => listBoxes(status, search, page, signal), retry: false })
+  const canManage = application.data?.memberRole === 'Owner' && application.data.status === 'Approved'
+  const totalPages = Math.max(1, Math.ceil((boxes.data?.total ?? 0) / 50))
+  function refresh() { void qc.invalidateQueries({ queryKey: ['boxes', userId] }) }
+  return <OperatorLayout activeTab="boxes">
+    <OpHeading eyebrow="Vận hành" title="Hộp nuôi" description="Đánh số hộp theo nhãn tại trại. Dãy, kệ, tầng và cột là thông tin tuỳ chọn." action={canManage && <><OpBtn variant="ghost" onClick={() => setMode('single')}>Thêm hộp</OpBtn><OpBtn onClick={() => setMode('range')}>Tạo hàng loạt</OpBtn></>} />
+    {message && <p role="status">{message}</p>}
+    <OpPanel title="Danh sách hộp" subtitle={boxes.data ? `${boxes.data.total.toLocaleString('vi-VN')} hộp phù hợp` : undefined}>
+      <div className="op-box-filters">
+        <label className="op-field">Tìm số hộp<input className="op-input" type="search" maxLength={30} placeholder="Ví dụ: 0001" value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} /></label>
+        <label className="op-field">Trạng thái hộp<select className="op-select" value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}><option value="">Tất cả</option>{Object.entries(boxLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      </div>
+      {boxes.isPending && <p role="status">Đang tải hộp nuôi…</p>}
+      {boxes.isError && <div role="alert"><p>{errorMessage(boxes.error)}</p><OpBtn variant="ghost" onClick={() => void boxes.refetch()}>Thử lại</OpBtn></div>}
+      {boxes.isSuccess && <>
+        {!boxes.data.items.length && <p>Không có hộp phù hợp.</p>}
+        <div className="op-slots" aria-label="Lưới hộp nuôi">{boxes.data.items.map(box => <button type="button" key={box.slotCode} className={`op-slot op-box is-${box.status.toLowerCase()}`} onClick={() => setSelected(box)} aria-label={`Hộp ${box.slotCode}, ${boxLabels[box.status]}`}><b>{box.slotCode}</b><small>{boxLabels[box.status]}</small></button>)}</div>
+        {totalPages > 1 && <div className="op-pager"><span>Trang {page} / {totalPages}</span><div><button className="rd-iconbtn" aria-label="Trang trước" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={18} /></button><button className="rd-iconbtn" aria-label="Trang sau" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight size={18} /></button></div></div>}
+      </>}
+    </OpPanel>
+    {mode && <CreateBoxes mode={mode} onClose={() => setMode(null)} onCreated={result => { setMode(null); setMessage(result); setPage(1); refresh() }} />}
+    {selected && <BoxDetail box={selected} canManage={canManage} onClose={() => setSelected(null)} onUpdated={() => { setSelected(null); setMessage('Đã cập nhật trạng thái hộp.'); refresh() }} />}
+  </OperatorLayout>
 }

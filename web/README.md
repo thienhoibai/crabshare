@@ -45,6 +45,7 @@ src/
 │   ├── auth/               ← authStore (zustand), RequireRole, homePathFor
 │   ├── lib/format.ts       ← formatVnd, formatDate, formatDateTime
 │   ├── layout/SiteChrome.tsx
+│   ├── payments/           ← <VietQrBox> + usePaymentRequest: chuyển khoản VietQR cho góp vốn, đơn hàng, cọc
 │   └── ui/kit/             ← bộ khối giao diện dùng chung + mock-data (sẽ bỏ dần)
 └── features/
     ├── landing/            ← trang chủ 3D
@@ -65,10 +66,10 @@ src/
 | Customer, Investor | `/thanh-toan` (`/gio-hang` chuyển về đây), `/xac-nhan-don-hang` | `orders/CheckoutPage.tsx`, `orders/OrderConfirmationPage.tsx` |
 | Customer, Investor | `/theo-doi-don-hang`, `/lich-su-don-hang`, `/huy-tra-hang`, `/danh-gia-don-hang` | `orders/CommercePage.tsx` (bản mẫu) |
 | Investor | `/nha-dau-tu/*` | `investor/InvestorPortal.tsx` |
-| OperatorMember | `/operator`, `/operator/kyc`, `/operator/create-batch`, `/operator/contract`, `/operator/harvest`, `/operator/settlement`, `/operator/map`, `/operator/log`, `/operator/batch`, `/operator/batch/detail`, `/operator/alerts`, `/operator/listings` | `operator/*.tsx` |
+| OperatorMember | `/operator`, `/operator/kyc`, `/operator/create-batch`, `/operator/contract`, `/operator/harvest`, `/operator/settlement`, `/operator/boxes`, `/operator/log`, `/operator/batch`, `/operator/batch/detail`, `/operator/alerts`, `/operator/listings` | `operator/*.tsx` |
 | PlatformAdmin, EvidenceReviewer | `/admin`, `/admin/users`, `/admin/batches`, `/admin/storefront`, `/admin/finance`, `/admin/alerts`, `/admin/disputes`, `/admin/settings` (+ trang chi tiết) | `admin/*.tsx` |
 
-> `/operator/map` (sơ đồ trại) sẽ được thay bằng trang **Hộp nuôi** (đánh số hộp) — task của Viên.
+> `/operator/boxes` là trang **Hộp nuôi**: đánh số hộp, tạo hàng loạt, tìm kiếm, lọc trạng thái và quản lý bảo trì (VI-03).
 
 ## Xác minh danh tính (CS-27)
 
@@ -116,6 +117,7 @@ Trong trang: `const { data, isLoading, error } = useFundingBatches()`; báo lỗ
 - Tiền hiển thị bằng `formatVnd()`; **không** hiển thị lợi suất kỳ vọng.
 - Thay dần dữ liệu trong `shared/ui/kit/mock-data.ts` bằng dữ liệu API; trang nào xong thì xoá phần mock tương ứng.
 - Giữ phong cách sẵn có của từng khu vực (CSS trong `store.css`, `investor.css`, `operator.css`).
+- Mã chuyển khoản dùng `<VietQrBox payment={...} status={...} />` (`shared/payments/VietQrBox.tsx`, thư viện `qrcode.react`): cạnh mã QR chỉ có số tiền, nội dung, đồng hồ hạn; số tài khoản nằm sau nút "chuyển khoản thủ công" kèm cảnh báo (TL-10 §6.1). Trạng thái mới nhất lấy bằng `usePaymentRequest(id)` (tự hỏi lại 3 giây/lần khi còn chờ). Khi chạy dev có thêm `<SimulatePaymentButton payment={...} />` ("Giả lập đã chuyển khoản", TH-06) gọi `POST /api/dev/payments/simulate`; bản build production không render nút này.
 
 ## VI-02 — Duyệt hộ nuôi và nhân viên
 
@@ -123,3 +125,9 @@ Trong trang: `const { data, isLoading, error } = useFundingBatches()`; báo lỗ
 - Operator: `/operator/members`, có trong sidebar và menu mobile. Owner thêm Staff bằng email tài khoản có sẵn và xóa Staff có xác nhận; Staff chỉ xem. Thành viên mới cần đăng nhập lại để cập nhật quyền giao diện.
 - Hook API ở `features/admin/adminOperatorsApi.ts` và `features/operator/operatorsApi.ts`; hộp thoại dùng `shared/ui/ActionDialog.tsx`. Không thêm dependency.
 - Chạy `npm run lint` và `npm run build`; API ở `http://localhost:5233`, web dev nên mở `http://localhost:5173` theo cấu hình CORS mặc định.
+
+## NH-07 — Theo dõi đơn, lịch sử, huỷ đơn (CS-46)
+
+- `/lich-su-don-hang` và `/huy-tra-hang` → `orders/OrderHistoryPage.tsx` (GET `/api/orders`).
+- `/theo-doi-don-hang` và `/theo-doi-don-hang/:orderNo` → `orders/OrderTrackingPage.tsx` (GET `/api/orders/{orderNo}`, POST `.../cancel`).
+- API client: `orders/orderTrackingApi.ts`. Giữ `/danh-gia-don-hang` bản mẫu trên `CommercePage.tsx`.

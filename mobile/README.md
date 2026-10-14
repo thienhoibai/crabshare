@@ -19,6 +19,7 @@ flutter run --dart-define=API_URL=http://192.168.1.10:5233                   # �
 
 - API phải đang chạy (`backend/README.md`). Cổng web của Flutter phải nằm trong `Cors:Origins` của API (mặc định có `http://localhost:8080`).
 - Bản debug có nút **đăng nhập nhanh** tài khoản demo. Bản build demo muốn có nút này: thêm `--dart-define=DEMO_ACCOUNTS=true`.
+- Luồng làm trên web (góp vốn) mở bằng trình duyệt tại `WEB_URL` (mặc định `http://localhost:5173`). Máy ảo Android: thêm `--dart-define=WEB_URL=http://10.0.2.2:5173`; điện thoại thật: IP LAN của máy chạy web.
 
 ## Android: chuẩn bị và kết nối API
 
@@ -158,7 +159,7 @@ lib/
 | NĐT · Khám phá lô, Chi tiết lô | `investor/batches/` | Viên (dữ liệu lô), Thiện (nút Góp vốn) |
 | NĐT · eKYC | `investor/kyc/` | Khôi — đã nối API (CS-27) |
 | Hộ nuôi · Hôm nay, Nhật ký | `operator/today/`, `operator/logs/` | Viên |
-| Hộ nuôi · Chụp bằng chứng | `operator/evidence/` | Khôi |
+| Hộ nuôi · Chụp bằng chứng | `operator/evidence/` | Khôi — đã nối API (CS-44) |
 | Hộ nuôi · Cảnh báo | `operator/alerts/` | Khôi |
 | Hộ nuôi · Thu hoạch & in tem | `operator/harvest/` | Viên |
 | Quét tem, Truy xuất | `trace/` | Viên |
@@ -166,6 +167,17 @@ lib/
 | Tài khoản | `account/` | Khôi |
 
 ## Đổi dữ liệu mẫu sang API (việc chính của từng task)
+
+Chụp bằng chứng đã dùng `ApiEvidenceRepository`: tải hộp từ `GET /api/boxes`,
+chụp trực tiếp bằng camera, lấy GPS thật và gửi `POST /api/evidence`. Cần cấp
+quyền camera/vị trí và bật GPS. Kết quả Accepted/Watch/Flagged lấy từ máy chủ;
+chưa có mô hình nhận diện thì app không hiển thị kết luận về cua. Lỗi mạng giữ
+ảnh để thử lại. Xem [CS-44](../docs/validation/CS-44-production-evidence.md).
+
+CS-50: mục Yêu cầu chụp ở Hôm nay lấy danh sách từ API, hiển thị hạn chụp,
+mở đúng hộp/lô và gửi `captureRequestId` cùng ảnh. Khi hoàn thành, yêu cầu
+được tải lại và biến mất khỏi danh sách đang chờ. Xem
+[CS-50](../docs/validation/CS-50-random-capture-requests.md).
 
 eKYC đã dùng `ApiKycRepository` riêng: GET `/api/me/kyc`, POST multipart
 `/api/kyc/ekyc`. Màn Tài khoản → Xác minh danh tính yêu cầu đồng ý điều khoản,
