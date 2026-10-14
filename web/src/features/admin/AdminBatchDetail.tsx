@@ -1,86 +1,98 @@
-import { ArrowLeft, CheckCircle, FileText, AlertCircle } from 'lucide-react';
-import AdminLayout from './AdminLayout';
+import { useRef, useState, type FormEvent } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useSearchParams } from 'react-router'
+import { ArrowLeft, CheckCircle, FileText } from 'lucide-react'
+import AdminLayout from './AdminLayout'
+import { approveBatch, getAdminBatch, rejectBatch } from './adminBatchesApi'
+import { batchStatuses, costCategories, crabTypes } from '../operator/batchesApi'
+import { useAuthStore } from '../../shared/auth/authStore'
+import { errorMessage } from '../../shared/api/http'
+import { formatDateTime, formatVnd } from '../../shared/lib/format'
 
 export default function AdminBatchDetail() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const batchId = urlParams.get('id') || 'BATCH-2026-12C';
-
-  return (
-    <AdminLayout activeTab="batches">
-      <div className="mb-6">
-        <a href="/admin/batches" className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors mb-4">
-          <ArrowLeft className="w-4 h-4" /> Quay lại danh sách Lô
-        </a>
-        <div className="flex justify-between items-end">
-          <div>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Hồ sơ Dự án: {batchId}</h1>
-            <p className="text-sm text-slate-500 mt-1">Trại đề xuất: <strong className="text-slate-900">Trại Cà Mau 01 (Lê Văn C)</strong></p>
-          </div>
-          <div className="flex gap-3">
-            <button className="flex items-center gap-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm">
-              Yêu cầu bổ sung
-            </button>
-            <button onClick={() => { alert('Dự án đã được duyệt và mở gọi vốn trên nền tảng!'); window.location.href='/admin/batches'; }} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm">
-              <CheckCircle className="w-4 h-4" /> Duyệt & Mở Gọi Vốn
-            </button>
-          </div>
-        </div>
-      </div>
-
+  const [params] = useSearchParams()
+  const code = params.get('id') ?? params.get('code') ?? ''
+  const userId = useAuthStore(s => s.user?.userId)
+  const qc = useQueryClient()
+  const key = ['admin-batch', userId, code]
+  const query = useQuery({ queryKey: key, queryFn: ({ signal }) => getAdminBatch(code, signal), enabled: !!code, retry: false })
+  const [open, setOpen] = useState('')
+  const [deadline, setDeadline] = useState('')
+  const [reason, setReason] = useState('')
+  const [message, setMessage] = useState('')
+  const [problem, setProblem] = useState('')
+  const busy = useRef(false)
+  const mutation = useMutation({ mutationFn: (action: 'approve' | 'reject') => action === 'approve'
+    ? approveBatch(code, `${open}:00+07:00`, `${deadline}:00+07:00`) : rejectBatch(code, reason.trim()),
+    onSuccess: async (result, action) => {
+      qc.setQueryData(key, result)
+      setMessage(action === 'approve' ? 'Đã duyệt lô, mở gọi vốn và khóa chi phí chuẩn.' : 'Đã từ chối lô và lưu lý do.')
+      await Promise.all([qc.invalidateQueries({ queryKey: ['admin-batches'] }), qc.invalidateQueries({ queryKey: ['operator-batches'] }), qc.invalidateQueries({ queryKey: ['operator-batch'] })])
+    },
+    onError: async error => { setProblem(errorMessage(error)); await query.refetch() },
+  })
+  const decide = async (event: FormEvent, action: 'approve' | 'reject') => {
+    event.preventDefault()
+    if (busy.current || query.isFetching || query.data?.batch.status !== 'PendingApproval') return
+    setProblem(''); setMessage('')
+    if (action === 'reject' && !reason.trim()) { setProblem('Nhập lý do từ chối.'); return }
+    if (action === 'approve' && (!open || !deadline || open >= deadline)) { setProblem('Thời gian mở phải trước hạn gọi vốn.'); return }
+    busy.current = true
+    try { await mutation.mutateAsync(action) } catch { /* preserve inputs and show server error */ }
+    finally { busy.current = false }
+  }
+  const detail = query.data
+  const b = detail?.batch
+  const cost = b?.standardCost
+  const disabled = mutation.isPending || query.isFetching
+  const inputClass = 'w-full border border-slate-300 rounded-lg p-2 text-sm'
+  return <AdminLayout activeTab="batches">
+    <Link to="/admin/batches" className="inline-flex items-center gap-2 text-sm text-slate-500 mb-4"><ArrowLeft size={16} /> Quay lại danh sách lô</Link>
+    {!code && <p role="alert">Thiếu mã lô trên đường dẫn.</p>}
+    {query.isPending && code && <p role="status">Đang tải hồ sơ…</p>}
+    {query.isError && <div role="alert">{errorMessage(query.error)} <button className="underline" onClick={() => void query.refetch()}>Thử lại</button></div>}
+    {message && <p className="p-4 mb-4 rounded-lg bg-emerald-50 text-emerald-800" role="status">{message}</p>}
+    {problem && <p className="p-4 mb-4 rounded-lg bg-red-50 text-red-800" role="alert">{problem}</p>}
+    {b && detail && <>
+      <header className="mb-6"><h1 className="text-2xl font-extrabold text-slate-900">Hồ sơ dự án: {b.batchCode}</h1><p className="text-sm text-slate-500 mt-1">{b.title} · <strong>{detail.operator.legalName}</strong> · {batchStatuses[b.status]}</p></header>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="text-base font-bold text-slate-900 mb-4 border-b border-slate-100 pb-2">Kế hoạch Tài chính</h3>
-            <div className="grid grid-cols-2 gap-y-4 gap-x-8 text-sm">
-              <div><span className="block text-slate-500 mb-1">Tổng Vốn Cần Gọi</span><strong className="text-2xl text-slate-900">250.000.000 ₫</strong></div>
-              <div><span className="block text-slate-500 mb-1">Thời gian nuôi dự kiến</span><strong className="text-slate-900">3.5 tháng</strong></div>
-              <div><span className="block text-slate-500 mb-1">Sản lượng dự kiến</span><strong className="text-slate-900">1,200 kg Cua Thịt</strong></div>
-              <div><span className="block text-slate-500 mb-1">Tỷ suất lợi nhuận (ROI) ước tính</span><strong className="text-emerald-600 text-lg">15% - 20% / vụ</strong></div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="text-base font-bold text-slate-900 mb-4 border-b border-slate-100 pb-2 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-slate-400" /> Hồ sơ năng lực Trại
-            </h3>
-            <div className="space-y-4 text-sm text-slate-700 leading-relaxed">
-              <p><strong>Cơ sở vật chất:</strong> 2.000 hộp nuôi đơn, công suất ô đã duyệt 2.000.</p>
-              <p><strong>Lịch sử tín nhiệm:</strong> Đã thực hiện thành công 2 vụ nuôi trên nền tảng CrabShare, tỷ lệ cua sống (survival rate) đạt 82%. Không có lịch sử vi phạm hợp đồng.</p>
-              <p><strong>Bao tiêu (Offtake):</strong> Có 1 đối tác nhà hàng (CrabHouse) đã ký cam kết mua 50% sản lượng lô này với giá cố định 350.000đ/kg.</p>
-            </div>
-          </div>
+        <div className="lg:col-span-2 min-w-0 space-y-6">
+          <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><h2 className="font-bold mb-4">Kế hoạch tài chính</h2><dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <div><dt>Vốn mục tiêu</dt><dd className="text-xl font-bold">{formatVnd(b.targetCapital)}</dd></div><div><dt>Dải vốn khả thi</dt><dd>{formatVnd(b.minViableCapital)} – {formatVnd(b.maxCapital)}</dd></div>
+            <div><dt>Quy mô và chu kỳ</dt><dd>{b.seedQuantity} con · {b.cycleDays} ngày · {crabTypes[b.crabType]}</dd></div><div><dt>Sản lượng dự kiến</dt><dd>{b.expectedOutputKg} kg</dd></div>
+            <div><dt>Thù lao người nuôi</dt><dd>{b.operatorSharePct}%</dd></div><div><dt>Địa chỉ hộ nuôi</dt><dd>{detail.operator.farmAddress} · {detail.operator.status}</dd></div>
+            {detail.platformFeeAmount !== null && <div><dt>Phí nền tảng · {detail.feeTierCode}</dt><dd>{formatVnd(detail.platformFeeAmount)} · hộ nuôi trả ngoài vốn lô</dd></div>}
+          </dl></section>
+          <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm min-w-0"><h2 className="font-bold mb-4 flex gap-2"><FileText size={18} /> Chi phí chuẩn</h2>
+            {!cost ? <p>Chưa có bảng chi phí chuẩn.</p> : <>
+              <p className="mb-3">Phiên bản {cost.versionNo} · <strong>{cost.status}</strong>{cost.lockedAt && ` · Khóa lúc ${formatDateTime(cost.lockedAt)}`}</p>
+              <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{['Hạng mục', 'Mô tả', 'Số lượng', 'Đơn giá', 'Đợt', 'Thành tiền'].map(h => <th scope="col" key={h} className="p-2 whitespace-nowrap">{h}</th>)}</tr></thead><tbody>{cost.items.map((i, n) => <tr key={n} className="border-t border-slate-100"><td className="p-2">{costCategories[i.category]}</td><td className="p-2">{i.description}</td><td className="p-2 whitespace-nowrap">{i.quantity} {i.unit}</td><td className="p-2 whitespace-nowrap">{formatVnd(i.unitPrice)}</td><td className="p-2">{i.category === 'MortalityReserve' ? 'Giữ lại' : i.category === 'Depreciation' ? 'Quyết toán' : i.trancheNo}</td><td className="p-2 whitespace-nowrap">{formatVnd(i.amount)}</td></tr>)}</tbody></table></div>
+              <p className="font-bold mt-4">Tổng chi phí chuẩn: {formatVnd(cost.total)}</p>
+            </>}
+          </section>
+          <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><h2 className="font-bold mb-4">Lịch giải ngân do hộ nuôi đề xuất</h2>
+            {(cost?.tranches ?? []).length === 0 && <p>Chưa có lịch đợt. Nếu có khoản chi theo đợt, hộ nuôi cần bổ sung trước khi duyệt.</p>}
+            {(cost?.tranches ?? []).map(p => <div className="border-t py-3 text-sm" key={p.trancheNo}><p className="font-bold">Đợt {p.trancheNo} · {p.plannedDate} · {formatVnd(p.amount)}</p><p className="whitespace-pre-wrap break-words">{p.unlockCondition}</p><p>{detail.tranches.find(t => t.trancheNo === p.trancheNo)?.status}</p></div>)}
+            <p className="text-sm text-slate-500 mt-3">Dự phòng hao hụt giữ lại theo sự kiện; khấu hao trả khi quyết toán. Ngày dự kiến phải từ ngày kết thúc gọi vốn trở đi.</p>
+          </section>
         </div>
-
-        <div className="space-y-6">
-          <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="font-bold text-slate-900 mb-4">Quy trình Phê duyệt</h3>
-            <div className="space-y-4 relative before:absolute before:inset-0 before:ml-2.5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-300 before:to-transparent">
-              <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                <div className="flex items-center justify-center w-6 h-6 rounded-full border border-white bg-emerald-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
-                  <CheckCircle className="w-3 h-3" />
-                </div>
-                <div className="w-[calc(100%-2.5rem)] md:w-[calc(50%-1.5rem)] p-3 rounded border border-slate-200 bg-white shadow-sm">
-                  <div className="flex items-center justify-between space-x-2 mb-1">
-                    <div className="font-bold text-slate-900 text-xs">Operator nộp hồ sơ</div>
-                  </div>
-                  <div className="text-[10px] text-slate-500">Hoàn tất ngày 05/10/2026</div>
-                </div>
-              </div>
-              <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                <div className="flex items-center justify-center w-6 h-6 rounded-full border border-white bg-amber-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
-                  <AlertCircle className="w-3 h-3" />
-                </div>
-                <div className="w-[calc(100%-2.5rem)] md:w-[calc(50%-1.5rem)] p-3 rounded border border-amber-200 bg-amber-50 shadow-sm">
-                  <div className="flex items-center justify-between space-x-2 mb-1">
-                    <div className="font-bold text-amber-900 text-xs">Admin Thẩm định</div>
-                  </div>
-                  <div className="text-[10px] text-amber-700">Đang chờ bạn phê duyệt</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit space-y-4">
+          <h2 className="font-bold">Xét duyệt</h2>
+          {b.status === 'PendingApproval' ? <>
+            <form className="space-y-3" onSubmit={e => void decide(e, 'approve')}>
+              <label className="block text-sm">Mở gọi vốn (giờ Việt Nam)<input className={inputClass} type="datetime-local" required value={open} onChange={e => setOpen(e.target.value)} disabled={disabled} /></label>
+              <label className="block text-sm">Hạn gọi vốn (giờ Việt Nam)<input className={inputClass} type="datetime-local" required value={deadline} onChange={e => setDeadline(e.target.value)} disabled={disabled} /></label>
+              <button disabled={disabled} className="w-full flex items-center justify-center gap-2 bg-red-600 text-white p-3 rounded-lg font-bold disabled:opacity-50"><CheckCircle size={16} />{mutation.isPending ? 'Đang xử lý…' : 'Duyệt & Mở gọi vốn'}</button>
+            </form>
+            <form className="space-y-3 border-t pt-4" onSubmit={e => void decide(e, 'reject')}><label className="block text-sm">Lý do từ chối<textarea className={inputClass} required maxLength={300} value={reason} onChange={e => setReason(e.target.value)} disabled={disabled} /></label><button disabled={disabled} className="w-full border border-slate-300 p-3 rounded-lg font-bold disabled:opacity-50">Từ chối lô</button></form>
+          </> : <>
+            <p>Lô đã được xử lý: {batchStatuses[b.status]}.</p>
+            {detail.rejectionReason && <p className="whitespace-pre-wrap break-words">{detail.rejectionReason}</p>}
+            {detail.fundingOpenAt && <p className="text-sm">Mở gọi vốn: {formatDateTime(detail.fundingOpenAt)}</p>}
+            {detail.fundingDeadline && <p className="text-sm">Hạn gọi vốn: {formatDateTime(detail.fundingDeadline)}</p>}
+          </>}
+        </section>
       </div>
-    </AdminLayout>
-  );
+    </>}
+  </AdminLayout>
 }

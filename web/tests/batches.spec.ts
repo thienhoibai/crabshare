@@ -1,4 +1,8 @@
 import { test, expect, type Page } from '@playwright/test'
+async function fillSchedule(page: Page) {
+  await page.getByLabel('Ngày dự kiến đợt 1').fill('2099-12-01')
+  await page.getByLabel('Điều kiện đợt 1').fill('Đủ vốn và hợp đồng hai bên đầy đủ chữ ký')
+}
 
 const profile = { operatorId: 1, legalName: 'HTX VI04', taxCode: '1234567890', businessRegNo: 'VI04', farmAddress: 'Cà Mau', status: 'Approved', memberRole: 'Owner', canEdit: false, canSubmit: false, submittedAt: null }
 const batch = { batchCode: 'B-TEST', operatorId: 1, title: 'Lô thử', crabType: 'SoftShellCrab', seedQuantity: 1500, expectedOutputKg: 300, cycleDays: 45, restockCutoffDays: 10, minViableCapital: 60000000, targetCapital: 75000000, maxCapital: 90000000, minContribution: 1000000, operatorSharePct: 7, status: 'Draft', standardCost: null, canEdit: true, canSubmit: true }
@@ -23,11 +27,13 @@ test('cost save failure keeps form and code; retry updates same batch before sub
   await page.route('**/api/batches/B-TEST/submit', async route => { sequence.push('submit'); await route.fulfill({ json: { ...batch, status: 'PendingApproval', canEdit: false, canSubmit: false } }) })
   await page.goto('/operator/create-batch')
   await page.getByLabel('Tên lô (tiêu đề gọi vốn)').fill('Lô giữ khi lỗi')
+  await fillSchedule(page)
   await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('Lỗi lưu chi phí thử nghiệm')
   await expect(page.getByLabel('Tên lô (tiêu đề gọi vốn)')).toHaveValue('Lô giữ khi lỗi')
   await expect(page).toHaveURL(/code=B-TEST/)
   expect(sequence).toEqual(['create', 'cost'])
+  await fillSchedule(page)
   await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click()
   await expect(page).toHaveURL(/\/operator\/batch$/)
   await expect(page.getByText('Chờ duyệt', { exact: true }).last()).toBeVisible()
@@ -44,6 +50,15 @@ test('capital field validation prevents API calls and mortality reserve is requi
   await page.getByRole('button', { name: 'Lưu nháp', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('tối thiểu khả thi ≤ mục tiêu ≤ tối đa')
   expect(requests).toBe(0)
+})
+
+test('cost and tranche display decimal midpoint amounts exactly', async ({ page }) => {
+  await setup(page)
+  await page.goto('/operator/create-batch')
+  await page.getByLabel('Số lượng 1', { exact: true }).fill('1.005')
+  await page.getByLabel('Đơn giá 1', { exact: true }).fill('100')
+  await expect(page.getByRole('heading', { name: 'Đợt 1 — 101 đ', exact: true })).toBeVisible()
+  await expect(page.getByText('Tổng chi phí: 5.000.101 đ', { exact: true })).toBeVisible()
 })
 
 test('list shows API errors, retry, empty state and server status filter', async ({ page }) => {
@@ -72,6 +87,7 @@ test('back after submission shows current status and disables editing cached dra
     await route.fulfill({ json: current })
   })
   await page.goto('/operator/create-batch?code=B-TEST')
+  await fillSchedule(page)
   await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click()
   await expect(page).toHaveURL(/\/operator\/batch$/)
   await page.goBack()
@@ -107,6 +123,7 @@ test('real API creates, saves, reloads and submits from the browser', async ({ p
   await expect(page.getByRole('button', { name: 'Gửi duyệt', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
   await page.screenshot({ path: testInfo.outputPath('batch-mobile.png'), fullPage: true })
+  await fillSchedule(page)
   await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click()
   await expect(page).toHaveURL(/\/operator\/batch$/)
   await expect(page.getByText(code, { exact: false })).toBeVisible()

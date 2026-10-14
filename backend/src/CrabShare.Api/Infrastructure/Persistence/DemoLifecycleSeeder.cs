@@ -82,6 +82,16 @@ internal sealed class DemoLifecycleSeeder
         await PendingApprovalBatchAsync();
     }
 
+    // Insert the complete cost graph before locking: SQL triggers must reject later inserts.
+    private async Task SaveAndLockCostsAsync()
+    {
+        var pending = db.ChangeTracker.Entries<StandardCostVersion>()
+            .Where(e => e.Entity.Status == "Approved" && e.Entity.LockedAt != null)
+            .Select(e => e.Entity).ToList();
+        await db.SaveChangesAsync();
+        foreach (var cost in pending) cost.Status = "Locked";
+        if (pending.Count > 0) await db.SaveChangesAsync();
+    }
     // ---------- 6 lô ----------
 
     private async Task SettlementBatchAsync()
@@ -113,14 +123,14 @@ internal sealed class DemoLifecycleSeeder
         var harvested = Harvest(b, crabs, Day(-57), minWeight: 260, maxWeight: 640);
         var listings = Listings(b, harvested, "Cua gạch Năm Căn", RoeCrabPrices, Day(-57, 6), "Published");
         // Dòng đơn phải trỏ phiên bản giá lúc đặt (V006), nên lưu trước để có price_history_id
-        await db.SaveChangesAsync();
+        await SaveAndLockCostsAsync();
         var orders = harvested.OrderBy(_ => rng.Next()).Chunk(16).ToList();
         for (var i = 0; i < orders.Count; i++)
             SellCompleted(b, orders[i], listings, p.Buyers[i % p.Buyers.Count], Day(-56 + i, 9));
         foreach (var listing in listings.Values.Where(l => l.StockQtyKg == 0)) listing.Status = "SoldOut";
 
         b.Status = "Settlement";
-        await db.SaveChangesAsync();
+        await SaveAndLockCostsAsync();
     }
 
     private async Task HarvestingBatchAsync()
@@ -155,7 +165,7 @@ internal sealed class DemoLifecycleSeeder
         Listings(b, harvested, "Cua thịt Năm Căn", MudCrabPrices, Day(-2, 5), "Published");
 
         b.Status = "Harvesting";
-        await db.SaveChangesAsync();
+        await SaveAndLockCostsAsync();
     }
 
     private async Task InProductionBatchAsync()
@@ -187,7 +197,7 @@ internal sealed class DemoLifecycleSeeder
         EvidencePhotos(b, crabs);
 
         b.Status = "InProduction";
-        await db.SaveChangesAsync();
+        await SaveAndLockCostsAsync();
     }
 
     private async Task FundingBatchAsync()
@@ -209,7 +219,7 @@ internal sealed class DemoLifecycleSeeder
         Tranches(b, costs, DateOf(15), DateOf(45), DateOf(75));
 
         b.Status = "Funding";
-        await db.SaveChangesAsync();
+        await SaveAndLockCostsAsync();
     }
 
     private async Task RoeFundingBatchAsync()
@@ -231,14 +241,14 @@ internal sealed class DemoLifecycleSeeder
         Tranches(b, costs, DateOf(14), DateOf(44), DateOf(100));
 
         b.Status = "Funding";
-        await db.SaveChangesAsync();
+        await SaveAndLockCostsAsync();
     }
 
     private async Task PendingApprovalBatchAsync()
     {
         var b = NewBatch("CS-2611-01", "RoeCrab", "Cua gạch Năm Căn — đợt tháng 11", 250, 100m, 90,
             45_000_000, 60_000_000, 75_000_000, Day(-2));
-        Costs(b, "Submitted", Day(-1), null,
+        var costs = Costs(b, "Submitted", Day(-1), null,
             new("Seed", "Cua gạch giống 180–200 g/con", 250, "con", 56_000, 1),
             new("Feed", "Thức ăn tháng 1–2", 250, "kg", 25_000, 1),
             new("Feed", "Thức ăn tháng 3", 250, "kg", 25_000, 2),
@@ -249,7 +259,11 @@ internal sealed class DemoLifecycleSeeder
             new("Other", "Đóng gói, vận chuyển khi bán", 1, "gói", 1_200_000, 3));
 
         b.Status = "PendingApproval";
-        await db.SaveChangesAsync();
+        // Demo operator-authored proposal. Live code never supplies these dates or conditions.
+        costs.TranchePlans.Add(new StandardCostTranchePlan { TrancheNo=1, PlannedDate=DateOf(20), UnlockCondition="Đủ vốn và hợp đồng hai bên đầy đủ chữ ký" });
+        costs.TranchePlans.Add(new StandardCostTranchePlan { TrancheNo=2, PlannedDate=DateOf(50), UnlockCondition="Có hóa đơn giống, bằng chứng thả giống và nhật ký đạt yêu cầu" });
+        costs.TranchePlans.Add(new StandardCostTranchePlan { TrancheNo=3, PlannedDate=DateOf(100), UnlockCondition="Bằng chứng đạt yêu cầu và đã khai báo kế hoạch thu hoạch" });
+        await SaveAndLockCostsAsync();
     }
 
     // ---------- Gọi vốn ----------
@@ -290,7 +304,7 @@ internal sealed class DemoLifecycleSeeder
     {
         var version = new StandardCostVersion
         {
-            VersionNo = 1, Status = status, SubmittedAt = submittedAt,
+            VersionNo = 1, Status = status == "Locked" ? "Approved" : status, SubmittedAt = submittedAt,
             ApprovedBy = lockedAt is null ? null : p.Admin.UserId, ApprovedAt = lockedAt, LockedAt = lockedAt,
             CreatedAt = submittedAt.AddHours(-3), UpdatedAt = now,
         };
@@ -307,7 +321,7 @@ internal sealed class DemoLifecycleSeeder
 
     private List<DisbursementTranche> Tranches(Batch b, StandardCostVersion costs, params DateOnly[] plannedDates)
     {
-        var tranches = costs.StandardCostItems.Where(i => i.TrancheNo is not null)
+        var tranches = costs.StandardCostItems.Where(i => i.TrancheNo is not null && i.Category != "MortalityReserve")
             .GroupBy(i => i.TrancheNo!.Value).OrderBy(g => g.Key)
             .Select(g => new DisbursementTranche
             {
@@ -315,7 +329,11 @@ internal sealed class DemoLifecycleSeeder
                 UnlockCondition = UnlockConditions[g.Key - 1], Status = "Planned", CreatedAt = costs.LockedAt ?? now, UpdatedAt = now,
             })
             .ToList();
-        foreach (var t in tranches) b.DisbursementTranches.Add(t);
+        foreach (var t in tranches)
+        {
+            b.DisbursementTranches.Add(t);
+            costs.TranchePlans.Add(new StandardCostTranchePlan { TrancheNo=t.TrancheNo,PlannedDate=t.PlannedDate,UnlockCondition=t.UnlockCondition });
+        }
         return tranches;
     }
 

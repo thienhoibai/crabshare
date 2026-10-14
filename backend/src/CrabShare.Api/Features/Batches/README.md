@@ -60,3 +60,13 @@
 
 ## Tài liệu
 TL-11 Ngân sách chuẩn và cơ chế khoá · TL-03 Giải ngân theo mốc · TL-15 Thù lao Operator và phí nền tảng · TL-17 Hạn mức góp, dải vốn khả thi.
+
+## UC08 đã triển khai — VI-05
+
+Các endpoint Admin ở bảng trên nay đã chạy API thật; có thêm GET `/api/admin/batches/{code}`. Chi tiết triển khai, migration, quy tắc phí/tranche và cách thử nằm ở [vi05-batch-review.md](../../../../../docs/validation/vi05-batch-review.md).
+
+PUT standard-cost nhận thêm `tranches: [{trancheNo,plannedDate,unlockCondition}]`. Hộ nuôi tự lập lịch, Admin duyệt đúng phiên bản Submitted mới nhất; không tự tính ngày hoặc tỷ lệ đợt. Draft có thể lưu thiếu lịch, submit cần đủ lịch cho các khoản chi thường, tranche 1–255 và tổng đợt dương. MortalityReserve không đi theo lịch; Depreciation trả khi quyết toán. Tổng Standard Cost phải dương khi submit/approve và không vượt DECIMAL(18,0).
+
+V008 tạo standard_cost_tranche_plan, rejection_reason, cờ biên bậc phí và trigger khóa version/items/lịch. Service chặn mọi version Locked/Approved của lô. Admin cấu hình phí cố định qua GET/POST `/api/admin/fee-tiers`, PUT `/{id}`. UC08 chọn đúng một tier có hiệu lực, không thu phí theo %, không khấu trừ vào vốn. Sandbox tạo account Open và audit trong cùng transaction; gateway thật cần triển khai provisioning idempotent. Chưa xác nhận thanh toán phí khởi tạo.
+
+Các ghi chú UC07 phía trên về giới hạn tổng long, tranche 0 và UC08 chưa triển khai được thay bằng quy tắc này. Tranche 0 chỉ còn có thể lưu nháp theo schema cũ; không được submit nếu là khoản chi theo lịch. Dữ liệu legacy MortalityReserve.tranche_no được giữ và bỏ qua khi sinh tranche.

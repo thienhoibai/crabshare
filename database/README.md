@@ -21,6 +21,8 @@ Hoặc đặt biến môi trường `CRABSHARE_DB` = chuỗi kết nối. DbUp g
 
 ## Quy tắc
 
+VI-05 thêm `V008__batch_approval_and_cost_lock.sql`: lịch đợt theo cost version, lý do từ chối, cờ biên fee_tier, trigger bất biến cho cost/version/lịch. Rollback thủ công ở `rollback/V008__batch_approval_and_cost_lock.sql`; không được DbUp tự chạy. Xem [báo cáo VI-05](../docs/validation/vi05-batch-review.md). Chạy migrator trước API mới; không chỉ copy code khi DB còn schema cũ.
+
 1. **Không sửa** file migration đã có trên `main`. Muốn đổi → file mới `V003__...sql`, `V004__...`.
 2. Tên file: `V` + 3 chữ số + `__` + mô tả không dấu.
 3. Không viết `CREATE DATABASE` / `USE` trong migration (DbMigrator tự tạo CSDL).

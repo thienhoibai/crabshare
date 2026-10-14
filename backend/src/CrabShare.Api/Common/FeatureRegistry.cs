@@ -58,6 +58,8 @@ public static class FeatureRegistry
         services.AddScoped<OperatorReviewService>();  // UC05
         services.AddScoped<BoxService>();            // Features/Boxes
         services.AddScoped<BatchService>();           // Features/Batches — UC07
+        services.AddScoped<BatchReviewService>();     // UC08
+        services.AddScoped<FeeTierService>();         // Configurable fixed fees used by UC08
         // services.AddScoped<ProductionService>();   // Features/Production
         // services.AddScoped<HarvestService>();      // Features/Harvest
 
