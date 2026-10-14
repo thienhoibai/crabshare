@@ -25,5 +25,13 @@ public partial class AppDbContext
         modelBuilder.Entity<Entities.Customer>().Ignore(c => c.CustomerAddress);
         addresses.HasOne(a => a.Customer).WithMany()
             .HasForeignKey(a => a.CustomerId).HasConstraintName("fk_customer_address_customer_id");
+
+        // Chỉ phiên bản Locked là unique theo batch_id; một lô có nhiều phiên bản chi phí.
+        var costs = modelBuilder.Entity<Entities.StandardCostVersion>();
+        var costRelation = costs.Metadata.FindNavigation(nameof(Entities.StandardCostVersion.Batch))!.ForeignKey;
+        costs.Metadata.RemoveForeignKey(costRelation);
+        modelBuilder.Entity<Entities.Batch>().Ignore(b => b.StandardCostVersion);
+        costs.HasOne(c => c.Batch).WithMany().HasForeignKey(c => c.BatchId)
+            .HasConstraintName("fk_standard_cost_version_batch_id");
     }
 }

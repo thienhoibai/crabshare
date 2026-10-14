@@ -1,97 +1,159 @@
-import { useState } from 'react'
-import { ArrowLeft, Calendar, DollarSign, Package, Send } from 'lucide-react'
+import { useRef, useState, type FormEvent } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate, useSearchParams } from 'react-router'
+import axios from 'axios'
+import { ArrowLeft, Plus, Save, Send, Trash2 } from 'lucide-react'
+import { errorMessage, type ApiProblem } from '../../shared/api/http'
+import { useAuthStore } from '../../shared/auth/authStore'
 import { formatVnd } from '../../shared/lib/format'
 import OperatorLayout from './OperatorLayout'
 import { OpAside, OpBack, OpBtn, OpHeading, OpNote, OpPanel, crabImg } from './operatorUi'
+import { useOperatorApplication } from './operatorsApi'
+import { batchStatuses, costCategories, crabTypes, getBatch, saveBatch, saveStandardCost, submitBatch, type Batch, type BatchRequest, type CostItem } from './batchesApi'
 
-const CRAB_TYPES = ['Cua lột', 'Cua gạch', 'Cua thịt']
+const initial: BatchRequest = { title: 'Lô cua lột tháng 11', crabType: 'SoftShellCrab', seedQuantity: 1500, expectedOutputKg: 300, cycleDays: 45,
+  restockCutoffDays: 10, minViableCapital: 60_000_000, targetCapital: 75_000_000, maxCapital: 90_000_000, minContribution: 1_000_000, operatorSharePct: 7 }
+const initialItems: CostItem[] = [
+  { category: 'Seed', description: 'Con giống', quantity: 1500, unit: 'con', unitPrice: 20000, trancheNo: 1 },
+  { category: 'MortalityReserve', description: 'Dự phòng hao hụt', quantity: 1, unit: 'khoản', unitPrice: 5_000_000, trancheNo: 1 },
+]
+const numericFields: { key: Exclude<keyof BatchRequest, 'title' | 'crabType'>; label: string; min: number; max?: number; step?: number }[] = [
+  { key: 'seedQuantity', label: 'Số con giống', min: 1, max: 2147483647 },
+  { key: 'expectedOutputKg', label: 'Sản lượng dự kiến (kg)', min: 0.001, max: 999999999.999, step: 0.001 },
+  { key: 'cycleDays', label: 'Chu kỳ (ngày)', min: 1, max: 32767 },
+  { key: 'restockCutoffDays', label: 'Hạn bổ sung giống (ngày)', min: 1, max: 32767 },
+  { key: 'minViableCapital', label: 'Vốn tối thiểu khả thi (đồng)', min: 1 },
+  { key: 'targetCapital', label: 'Vốn mục tiêu (đồng)', min: 1 },
+  { key: 'maxCapital', label: 'Vốn tối đa (đồng)', min: 1 },
+  { key: 'minContribution', label: 'Góp tối thiểu (đồng)', min: 1 },
+  { key: 'operatorSharePct', label: 'Thù lao người nuôi (%)', min: 5, max: 10, step: 0.01 },
+]
+
+function BatchEditor({ existing }: { existing?: Batch }) {
+  const navigate = useNavigate()
+  const [, setParams] = useSearchParams()
+  const qc = useQueryClient()
+  const userId = useAuthStore(s => s.user?.userId)
+  const profile = useOperatorApplication()
+  const [form, setForm] = useState<BatchRequest>(existing ?? initial)
+  const [items, setItems] = useState<(CostItem & { key: number })[]>(() => (existing?.standardCost?.items ?? initialItems).map((i, key) => ({ ...i, key })))
+  const nextKey = useRef(items.length)
+  const [code, setCode] = useState(existing?.batchCode ?? null)
+  const [status, setStatus] = useState(existing?.status ?? 'Draft')
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [notice, setNotice] = useState('')
+  const busy = useRef(false)
+  const canWrite = profile.data?.status === 'Approved' && profile.data.memberRole === 'Owner'
+    && (status === 'Draft' || status === 'Rejected') && (!existing || existing.canEdit)
+  const total = items.reduce((sum, i) => sum + Math.round(i.quantity * i.unitPrice), 0)
+  const mutation = useMutation({
+    mutationFn: async (submit: boolean) => {
+      const saved = await saveBatch(code, form)
+      // Remember the code before cost/submit: retry must update the same batch after any later failure.
+      setCode(saved.batchCode)
+      setParams({ code: saved.batchCode }, { replace: true })
+      qc.setQueryData(['operator-batch', userId, saved.batchCode], saved)
+      void qc.invalidateQueries({ queryKey: ['operator-batches'] })
+      const costs: CostItem[] = items.map(i => ({ category: i.category, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, trancheNo: i.trancheNo }))
+      const costSaved = await saveStandardCost(saved.batchCode, costs)
+      qc.setQueryData(['operator-batch', userId, saved.batchCode], costSaved)
+      return submit ? await submitBatch(saved.batchCode) : costSaved
+    },
+    onSuccess: (saved, submit) => {
+      setStatus(saved.status)
+      qc.setQueryData(['operator-batch', userId, saved.batchCode], saved)
+      void qc.invalidateQueries({ queryKey: ['operator-batches'] })
+      if (submit) navigate('/operator/batch')
+      else setNotice(`Đã lưu nháp ${saved.batchCode}.`)
+    },
+    onError: error => {
+      if (axios.isAxiosError<ApiProblem>(error) && error.response?.data.errors)
+        setErrors(Object.fromEntries(Object.entries(error.response.data.errors).map(([key, messages]) => [key.charAt(0).toLowerCase() + key.slice(1), messages.join(' ')])))
+    },
+  })
+
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (busy.current || !canWrite) return
+    const submit = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'submit'
+    const problems: Record<string, string> = {}
+    if (form.minViableCapital > form.targetCapital || form.targetCapital > form.maxCapital)
+      for (const key of ['minViableCapital', 'targetCapital', 'maxCapital']) problems[key] = 'Vốn phải thỏa tối thiểu khả thi ≤ mục tiêu ≤ tối đa.'
+    for (const { key } of numericFields)
+      if (!['expectedOutputKg', 'operatorSharePct'].includes(key) && !Number.isSafeInteger(form[key])) problems[key] = 'Nhập số nguyên trong giới hạn chính xác.'
+    if (!form.title.trim()) problems.title = 'Nhập tên lô.'
+    if (!items.some(i => i.category === 'MortalityReserve')) problems.items = 'Chi phí chuẩn bắt buộc có dự phòng hao hụt (MortalityReserve).'
+    if (items.some(i => !Number.isSafeInteger(i.unitPrice)) || !Number.isSafeInteger(total)) problems.items = 'Tiền và tổng chi phí phải là số nguyên trong giới hạn chính xác.'
+    setErrors(problems); setNotice(''); mutation.reset()
+    if (Object.keys(problems).length) return
+    busy.current = true
+    try { await mutation.mutateAsync(submit) } catch { /* Keep form and show API error. */ }
+    finally { busy.current = false }
+  }
+  const updateItem = (key: number, values: Partial<CostItem>) => setItems(current => current.map(i => i.key === key ? { ...i, ...values } : i))
+  const disabled = mutation.isPending || !canWrite
+
+  return <>
+    <OpHeading crumb={<OpBack href="/operator/batch"><ArrowLeft size={16} /> Quay lại danh sách lô</OpBack>} eyebrow="Standard Cost"
+      title={code ? `Lô ${code}` : 'Đề xuất lô nuôi mới'} description={code ? `Trạng thái: ${batchStatuses[status]}` : 'Lên kế hoạch ngân sách trước khi mở gọi vốn.'} />
+    <form className="op-split" onSubmit={save}>
+      <div className="min-w-0 space-y-4">
+        {profile.isPending && <p role="status">Đang kiểm tra hồ sơ hộ nuôi…</p>}
+        {profile.isError && <div role="alert"><OpNote tone="danger">{errorMessage(profile.error)}</OpNote><OpBtn type="button" onClick={() => void profile.refetch()}>Thử lại</OpBtn></div>}
+        {profile.isSuccess && !canWrite && <OpNote tone="info">Chỉ chủ hộ nuôi Approved được sửa lô Draft hoặc Rejected. <a className="underline" href="/operator/register">Xem hồ sơ hộ nuôi</a></OpNote>}
+        {notice && <div role="status"><OpNote tone="ok">{notice}</OpNote></div>}
+        {(Object.keys(errors).length > 0 || mutation.isError) && <div role="alert"><OpNote tone="danger">{mutation.isError ? errorMessage(mutation.error) : [...new Set(Object.values(errors))].join(' ')}</OpNote></div>}
+        <OpPanel>
+          <fieldset className="op-form border-0 p-0 m-0 min-w-0" disabled={disabled}>
+            <div className="op-form__group"><h2 className="rd-h3">Thông tin lô</h2><div className="op-form__row">
+              <div className="op-field"><label htmlFor="cb-title">Tên lô (tiêu đề gọi vốn)</label><input id="cb-title" className="op-input" required maxLength={200} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} aria-invalid={!!errors.title} />{errors.title && <small>{errors.title}</small>}</div>
+              <div className="op-field"><label htmlFor="cb-type">Loại cua</label><select id="cb-type" className="op-select" value={form.crabType} onChange={e => setForm({ ...form, crabType: e.target.value as BatchRequest['crabType'] })}>{Object.entries(crabTypes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+            </div></div>
+            <div className="op-form__group"><h2 className="rd-h3">Quy mô & vốn</h2><div className="grid gap-4 sm:grid-cols-2">
+              {numericFields.map(({ key, label, min, max, step }) => <div className="op-field" key={key}><label htmlFor={`cb-${key}`}>{label}</label><input id={`cb-${key}`} className="op-input" type="number" required min={min} max={max ?? Number.MAX_SAFE_INTEGER} step={step ?? 1} value={Number.isNaN(form[key]) ? '' : form[key]} onChange={e => setForm({ ...form, [key]: e.target.valueAsNumber })} aria-invalid={!!errors[key]} aria-describedby={errors[key] ? `err-${key}` : undefined} />{errors[key] && <small id={`err-${key}`}>{errors[key]}</small>}</div>)}
+            </div></div>
+          </fieldset>
+        </OpPanel>
+        <OpPanel title="Chi phí chuẩn" subtitle="Bắt buộc có dự phòng hao hụt. Khấu hao không có đợt giải ngân.">
+          <fieldset disabled={disabled} className="border-0 p-0 m-0 min-w-0">
+            <div className="overflow-x-auto"><table className="w-full text-sm" style={{ minWidth: 850 }}><caption className="sr-only">Các khoản chi phí chuẩn</caption><thead><tr>{['Hạng mục', 'Mô tả', 'Số lượng', 'Đơn vị', 'Đơn giá (đồng)', 'Đợt', 'Thành tiền', ''].map((h, n) => <th className="p-2 text-left" scope="col" key={n}>{h}</th>)}</tr></thead>
+              <tbody>{items.map((item, index) => <tr key={item.key}>
+                <td className="p-1"><select aria-label={`Hạng mục ${index + 1}`} className="op-select" value={item.category} onChange={e => updateItem(item.key, { category: e.target.value as CostItem['category'], trancheNo: e.target.value === 'Depreciation' ? null : item.trancheNo ?? 1 })}>{Object.entries(costCategories).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></td>
+                <td className="p-1"><input aria-label={`Mô tả ${index + 1}`} className="op-input" required maxLength={200} value={item.description} onChange={e => updateItem(item.key, { description: e.target.value })} /></td>
+                <td className="p-1"><input aria-label={`Số lượng ${index + 1}`} className="op-input" type="number" required min={0.001} max={999999999.999} step={0.001} value={Number.isNaN(item.quantity) ? '' : item.quantity} onChange={e => updateItem(item.key, { quantity: e.target.valueAsNumber })} /></td>
+                <td className="p-1"><input aria-label={`Đơn vị ${index + 1}`} className="op-input" required maxLength={20} value={item.unit} onChange={e => updateItem(item.key, { unit: e.target.value })} /></td>
+                <td className="p-1"><input aria-label={`Đơn giá ${index + 1}`} className="op-input" type="number" required min={0} max={Number.MAX_SAFE_INTEGER} step={1} value={Number.isNaN(item.unitPrice) ? '' : item.unitPrice} onChange={e => updateItem(item.key, { unitPrice: e.target.valueAsNumber })} /></td>
+                <td className="p-1">{item.category === 'Depreciation' ? '—' : <input aria-label={`Đợt ${index + 1}`} className="op-input" type="number" required min={0} max={255} step={1} value={item.trancheNo ?? ''} onChange={e => updateItem(item.key, { trancheNo: e.target.valueAsNumber })} />}</td>
+                <td className="p-2 whitespace-nowrap">{formatVnd(Math.round(item.quantity * item.unitPrice) || 0)}</td>
+                <td><OpBtn type="button" variant="ghost" aria-label={`Xóa khoản chi ${index + 1}`} onClick={() => setItems(items.filter(i => i.key !== item.key))}><Trash2 size={16} /></OpBtn></td>
+              </tr>)}</tbody></table></div>
+            <OpBtn className="mt-4" type="button" variant="outline" onClick={() => setItems([...items, { key: nextKey.current++, category: 'Other', description: '', quantity: 1, unit: 'khoản', unitPrice: 0, trancheNo: 1 }])}><Plus size={16} /> Thêm khoản chi</OpBtn>
+          </fieldset>
+          <p className="mt-4 font-bold">Tổng chi phí: {formatVnd(Number.isFinite(total) ? total : 0)}</p>
+          <OpNote>Thành tiền được làm tròn đến đồng cho từng khoản chi trước khi cộng tổng.</OpNote>
+        </OpPanel>
+      </div>
+      <OpAside>
+        <div className="op-cover" style={{ aspectRatio: '16 / 9' }}><img src={crabImg(form.crabType, 720)} alt="" /></div>
+        <p className="rd-eyebrow">Vốn mục tiêu</p><p className="op-big">{formatVnd(form.targetCapital || 0)}</p>
+        <dl className="op-dl"><dt>Vốn tối thiểu khả thi</dt><dd>{formatVnd(form.minViableCapital || 0)}</dd><dt>Vốn tối đa</dt><dd>{formatVnd(form.maxCapital || 0)}</dd><dt>Tổng chi phí chuẩn</dt><dd>{formatVnd(Number.isFinite(total) ? total : 0)}</dd><dt>Thù lao người nuôi</dt><dd>{form.operatorSharePct || 0}%</dd></dl>
+        <div className="space-y-3"><OpBtn full variant="outline" type="submit" value="draft" disabled={disabled}><Save size={16} /> Lưu nháp</OpBtn><OpBtn full type="submit" value="submit" disabled={disabled || status !== 'Draft'}><Send size={16} /> Gửi duyệt</OpBtn></div>
+        {mutation.isPending && <p role="status">Đang lưu dữ liệu…</p>}
+        <p className="rd-note">Sau khi gửi duyệt, lô và chi phí chuẩn chờ Admin xét duyệt.</p>
+      </OpAside>
+    </form>
+  </>
+}
 
 export default function OperatorCreateBatch() {
-  const [type, setType] = useState(CRAB_TYPES[0])
-  const [seed, setSeed] = useState('1500')
-  const [days, setDays] = useState('45')
-  const [cap, setCap] = useState('75000000')
-  const target = Math.max(0, Number(cap) || 0)
-  const minContribution = Math.max(1_000_000, Math.round(target / 100))
-
-  return (
-    <OperatorLayout activeTab="batch">
-      <OpHeading
-        crumb={<OpBack href="/operator/batch"><ArrowLeft size={16} /> Quay lại danh sách lô</OpBack>}
-        eyebrow="Standard Cost"
-        title="Đề xuất lô nuôi mới"
-        description="Lên kế hoạch ngân sách (giống, cám, điện) trước khi mở gọi vốn."
-      />
-
-      <div className="op-split">
-        <div>
-          <OpPanel>
-            <form className="op-form" onSubmit={(e) => e.preventDefault()}>
-              <div className="op-form__group">
-                <h2 className="rd-h3">Thông tin lô</h2>
-                <div className="op-form__row">
-                  <div className="op-field">
-                    <label htmlFor="cb-title">Tên lô (tiêu đề gọi vốn)</label>
-                    <input id="cb-title" className="op-input" placeholder="VD: Lô cua lột tháng 11" defaultValue="Lô cua lột tháng 11" />
-                  </div>
-                  <div className="op-field">
-                    <label htmlFor="cb-type">Loại cua</label>
-                    <select id="cb-type" className="op-select" value={type} onChange={(e) => setType(e.target.value)}>
-                      {CRAB_TYPES.map((t) => <option key={t}>{t}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="op-form__group">
-                <h2 className="rd-h3">Quy mô & vốn</h2>
-                <div className="op-form__row">
-                  <div className="op-field">
-                    <label htmlFor="cb-seed"><Package size={14} /> Số con giống</label>
-                    <input id="cb-seed" className="op-input" type="number" value={seed} onChange={(e) => setSeed(e.target.value)} />
-                  </div>
-                  <div className="op-field">
-                    <label htmlFor="cb-days"><Calendar size={14} /> Chu kỳ (ngày)</label>
-                    <input id="cb-days" className="op-input" type="number" value={days} onChange={(e) => setDays(e.target.value)} />
-                  </div>
-                  <div className="op-field">
-                    <label htmlFor="cb-cap"><DollarSign size={14} /> Vốn mục tiêu (đồng)</label>
-                    <input id="cb-cap" className="op-input" type="number" step={1_000_000} value={cap} onChange={(e) => setCap(e.target.value)} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="op-form__group">
-                <h2 className="rd-h3">Định mức chi phí sơ bộ</h2>
-                <textarea className="op-textarea" rows={4} aria-label="Định mức chi phí" placeholder="Chi phí giống, thức ăn, điện nước, nhân công..." defaultValue="Giống 28tr · Cám 22tr · Điện RAS 12tr · Nhân công 8tr · Dự phòng 5tr" />
-                <OpNote>Sau khi gửi, Admin chốt bảng Standard Cost và hợp đồng trước khi mở gọi vốn công khai.</OpNote>
-              </div>
-            </form>
-          </OpPanel>
-        </div>
-
-        <OpAside>
-          <div className="op-cover" style={{ aspectRatio: '16 / 9' }}><img src={crabImg(type, 720)} alt="" /></div>
-          <p className="rd-eyebrow">Vốn mục tiêu</p>
-          <p className="op-big">{formatVnd(target)}</p>
-          <dl className="op-dl">
-            <dt>Lô chạy khi đạt (80%)</dt><dd>{formatVnd(target * 0.8)}</dd>
-            <dt>Dừng nhận vốn ở (120%)</dt><dd>{formatVnd(target * 1.2)}</dd>
-            <dt>Góp tối thiểu</dt><dd>{formatVnd(minContribution)}</dd>
-            <dt>Quy mô</dt><dd>{Number(seed || 0).toLocaleString('vi-VN')} con · {days || 0} ngày</dd>
-          </dl>
-          <OpBtn
-            full
-            onClick={() => {
-              window.alert('Đã gửi đề xuất mở lô nuôi mới!')
-              window.location.href = '/operator/batch'
-            }}
-          >
-            <Send size={16} /> Gửi đề xuất
-          </OpBtn>
-          <p className="rd-note">Chưa đủ 80% vốn đúng hạn thì lô không chạy và tiền hoàn lại nhà đầu tư.</p>
-        </OpAside>
-      </div>
-    </OperatorLayout>
-  )
+  const [params] = useSearchParams()
+  // Replacing the URL after creation must not remount or clear the active form.
+  const [initialCode] = useState(() => params.get('code'))
+  const userId = useAuthStore(s => s.user?.userId)
+  const query = useQuery({ queryKey: ['operator-batch', userId, initialCode], enabled: !!initialCode, retry: false,
+    queryFn: ({ signal }) => getBatch(initialCode!, signal) })
+  return <OperatorLayout activeTab="batch">
+    {initialCode && query.isPending ? <p role="status">Đang tải lô…</p> : initialCode && query.isError ?
+      <div role="alert"><OpNote tone="danger">{errorMessage(query.error)}</OpNote><OpBtn disabled={query.isFetching} onClick={() => void query.refetch()}>Thử lại</OpBtn></div> : <BatchEditor existing={query.data} />}
+  </OperatorLayout>
 }

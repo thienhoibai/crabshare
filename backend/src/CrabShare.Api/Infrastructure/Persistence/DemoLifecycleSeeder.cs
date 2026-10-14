@@ -300,7 +300,8 @@ internal sealed class DemoLifecycleSeeder
                 Category = c.Category, Description = c.Description, Quantity = c.Quantity, Unit = c.Unit,
                 UnitPrice = c.UnitPrice, TrancheNo = c.Tranche, CreatedAt = version.CreatedAt,
             });
-        b.StandardCostVersion = version;
+        version.Batch = b;
+        db.StandardCostVersions.Add(version);
         return version;
     }
 
