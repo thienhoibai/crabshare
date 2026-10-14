@@ -80,3 +80,19 @@ still uses its existing repository until the production tasks supply those APIs.
 GitHub Actions checks and Vercel deploy status must be reported separately:
 the existing Vercel team membership block is an account issue, not resolved by
 this feature.
+
+## PR #25 integration with current develop
+
+Merged `develop` at `bc76567` into the CS-50 feature branch and resolved all six
+conflicting files. Keep the CS-50 request service/job alongside CS-54 review;
+disable capture, alert and reservation-expiry workers in tests. On mobile,
+keep the API-backed capture request provider and request metadata routes,
+preserve CS-53 packing methods/routes and the Today packing entry point, and
+register the harvest route once.
+
+Validation after integration: **427 API tests + four settlement tests** passed
+with isolated LocalDB; **52 Flutter tests** passed and analysis found no issues.
+The strengthened real-router test additionally opens the packing list and order
+detail, returns to Today, opens the exact capture request and submits a photo
+through fulfillment. Web source is unchanged from develop; GitHub's web job
+checks the integrated commit. Vercel deployment permission remains separate.

@@ -9,7 +9,15 @@ export interface CheckoutLineInput { listingId: number; quantityKg: number }
 export interface CheckoutRequest { lines: CheckoutLineInput[]; addressId: number }
 
 export interface PlacedOrderLine { listingId: number; title: string; quantityKg: number; unitPrice: number; amount: number }
-export interface OrderPayment { referenceCode: string; accountNo: string; amount: number; qrContent: string; expiresAt: string }
+export interface OrderPayment {
+  referenceCode: string
+  accountNo: string
+  amount: number
+  qrContent: string
+  expiresAt: string
+  /** Id yêu cầu thu tiền: hỏi GET /api/payment-requests/{id} (usePaymentRequest) để biết tiền đã về (TH-06). Bản lưu trước CS-43 có thể thiếu. */
+  paymentRequestId?: number
+}
 export interface PlacedOrder {
   orderNo: string
   batchCode: string

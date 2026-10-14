@@ -6,7 +6,10 @@ namespace CrabShare.Api.Infrastructure.Payments;
 /// </summary>
 public interface IPaymentGateway
 {
-    /// <summary>Tạo yêu cầu thu tiền VietQR động cho một nghĩa vụ (khoản góp, đơn hàng, cọc bao tiêu).</summary>
+    /// <summary>
+    /// Tạo yêu cầu thu tiền VietQR động cho một nghĩa vụ (khoản góp, đơn hàng, cọc bao tiêu). Gọi lại với cùng tham số
+    /// phải trả cùng nội dung QR: màn hình tải lại sẽ hỏi lại thay vì lưu chuỗi QR trong CSDL.
+    /// </summary>
     Task<VietQrPayment> CreateVietQrAsync(VietQrRequest request, CancellationToken ct);
 
     /// <summary>Gửi lệnh chi từ tài khoản của lô (giải ngân, chi trả quyết toán, hoàn tiền).</summary>

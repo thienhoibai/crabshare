@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:crabshare_mobile/app/router.dart';
+import 'package:crabshare_mobile/app/routes.dart';
 import 'package:crabshare_mobile/app/theme/app_theme.dart';
 import 'package:crabshare_mobile/core/auth/session.dart';
 import 'package:crabshare_mobile/features/operator/data/operator_models.dart';
@@ -157,7 +158,7 @@ void main() {
     },
   );
   testWidgets(
-    'real request opens the exact box and fulfillment removes the request from Today',
+    'Today preserves packing routes and opens the exact capture request through fulfillment',
     (tester) async {
       final requests = _Requests();
       final evidence = _Evidence(requests);
@@ -198,6 +199,18 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
+      // CS-50 and CS-53 both add entry points on Today: keep both flows usable.
+      await tester.ensureVisible(find.text('Đóng gói đơn — quét tem'));
+      await tester.tap(find.text('Đóng gói đơn — quét tem'));
+      await tester.pumpAndSettle();
+      expect(router.state.uri.path, Routes.operatorPack);
+      await tester.tap(find.text('ODPACKDEMO01'));
+      await tester.pumpAndSettle();
+      expect(router.state.uri.path, Routes.operatorPackOrder('ODPACKDEMO01'));
+      router.pop();
+      await tester.pumpAndSettle();
+      router.pop();
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Hộp 0014'));
       await tester.tap(find.text('Hộp 0014'));

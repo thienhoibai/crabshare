@@ -40,12 +40,14 @@ public sealed record CheckoutLineResponse(
     long Amount);
 
 /// <param name="QrContent">Chuỗi nội dung QR; web và app tự vẽ ảnh QR từ chuỗi này.</param>
+/// <param name="PaymentRequestId">Id yêu cầu thu tiền, để web hỏi <c>GET /api/payment-requests/{id}</c> biết tiền đã về (TH-06).</param>
 public sealed record OrderPaymentResponse(
     string ReferenceCode,
     string AccountNo,
     long Amount,
     string QrContent,
-    DateTimeOffset ExpiresAt);
+    DateTimeOffset ExpiresAt,
+    long PaymentRequestId);
 
 public sealed record CheckoutOrderResponse(
     string OrderNo,

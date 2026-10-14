@@ -16,8 +16,11 @@ const StorePage = lazy(() => import('../features/store/StorePage'))
 const CommercePage = lazy(() => import('../features/orders/CommercePage'))
 const CheckoutPage = lazy(() => import('../features/orders/CheckoutPage'))
 const OrderConfirmationPage = lazy(() => import('../features/orders/OrderConfirmationPage'))
+const OrderHistoryPage = lazy(() => import('../features/orders/OrderHistoryPage'))
+const OrderTrackingPage = lazy(() => import('../features/orders/OrderTrackingPage'))
 const TracePage = lazy(() => import('../features/trace/TracePage'))
 const InvestorPortal = lazy(() => import('../features/investor/InvestorPortal'))
+const ContributePage = lazy(() => import('../features/investor/funding/ContributePage'))
 const CustomerAddresses = lazy(() => import('../features/accounts/CustomerAddresses'))
 const OperatorPayoutAccount = lazy(() => import('../features/operator/OperatorPayoutAccount'))
 
@@ -35,6 +38,7 @@ const OperatorBatchDetail = lazy(() => import('../features/operator/OperatorBatc
 const OperatorAlerts = lazy(() => import('../features/operator/OperatorAlerts'))
 const OperatorListings = lazy(() => import('../features/operator/OperatorListings'))
 const OperatorMembers = lazy(() => import('../features/operator/OperatorMembers'))
+const OperatorOrders = lazy(() => import('../features/operator/OperatorOrders'))
 
 const AdminDashboard = lazy(() => import('../features/admin/AdminDashboard'))
 const AdminUsers = lazy(() => import('../features/admin/AdminUsers'))
@@ -45,6 +49,8 @@ const AdminStorefront = lazy(() => import('../features/admin/AdminStorefront'))
 const AdminFinance = lazy(() => import('../features/admin/AdminFinance'))
 const AdminSettlementDetail = lazy(() => import('../features/admin/AdminSettlementDetail'))
 const AdminAlerts = lazy(() => import('../features/admin/AdminAlerts'))
+const AdminEvidence = lazy(() => import('../features/admin/AdminEvidence'))
+const AdminEvidenceDetail = lazy(() => import('../features/admin/AdminEvidenceDetail'))
 const AdminDisputes = lazy(() => import('../features/admin/AdminDisputes'))
 const AdminSettings = lazy(() => import('../features/admin/AdminSettings'))
 
@@ -84,9 +90,10 @@ export const router = createBrowserRouter([
           { path: '/gio-hang', element: <Navigate to="/thanh-toan" replace /> },
           { path: '/thanh-toan', element: page(CheckoutPage) },
           { path: '/xac-nhan-don-hang', element: page(OrderConfirmationPage) },
-          { path: '/theo-doi-don-hang', element: page(CommercePage) },
-          { path: '/lich-su-don-hang', element: page(CommercePage) },
-          { path: '/huy-tra-hang', element: page(CommercePage) },
+          { path: '/lich-su-don-hang', element: page(OrderHistoryPage) },
+          { path: '/theo-doi-don-hang', element: page(OrderTrackingPage) },
+          { path: '/theo-doi-don-hang/:orderNo', element: page(OrderTrackingPage) },
+          { path: '/huy-tra-hang', element: page(OrderHistoryPage) },
           { path: '/danh-gia-don-hang', element: page(CommercePage) },
         ],
       },
@@ -94,7 +101,13 @@ export const router = createBrowserRouter([
       { element: guarded(['Customer']), children: [{ path: '/tai-khoan/dia-chi', element: page(CustomerAddresses) }] },
 
       // ----- Nhà đầu tư -----
-      { element: guarded(['Investor']), children: [{ path: '/nha-dau-tu/*', element: page(InvestorPortal) }] },
+      {
+        element: guarded(['Investor']),
+        children: [
+          { path: '/nha-dau-tu/gop-von/:code', element: page(ContributePage) },
+          { path: '/nha-dau-tu/*', element: page(InvestorPortal) },
+        ],
+      },
 
       // UC04: mọi tài khoản đã đăng nhập đều được đăng ký hộ nuôi.
       { path: '/operator/register', element: <RequireRole>{page(OperatorRegistration)}</RequireRole> },
@@ -117,6 +130,8 @@ export const router = createBrowserRouter([
           { path: '/operator/alerts', element: page(OperatorAlerts) },
           { path: '/operator/listings', element: page(OperatorListings) },
           { path: '/operator/members', element: page(OperatorMembers) },
+          { path: '/operator/orders', element: page(OperatorOrders) },
+          { path: '/operator/orders/:orderNo', element: page(OperatorOrders) },
         ],
       },
 
@@ -125,6 +140,8 @@ export const router = createBrowserRouter([
         element: guarded(['PlatformAdmin', 'EvidenceReviewer']),
         children: [
           { path: '/admin', element: page(AdminDashboard) },
+          { path: '/admin/evidence', element: <RequireRole roles={['EvidenceReviewer']}>{page(AdminEvidence)}</RequireRole> },
+          { path: '/admin/evidence/:id', element: <RequireRole roles={['EvidenceReviewer']}>{page(AdminEvidenceDetail)}</RequireRole> },
           { path: '/admin/users', element: <RequireRole roles={['PlatformAdmin']}>{page(AdminUsers)}</RequireRole> },
           { path: '/admin/users/detail', element: <RequireRole roles={['PlatformAdmin']}>{page(AdminUserDetail)}</RequireRole> },
           { path: '/admin/batches', element: page(AdminBatches) },

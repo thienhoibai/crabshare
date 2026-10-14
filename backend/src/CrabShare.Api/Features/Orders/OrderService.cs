@@ -2,7 +2,6 @@ using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Errors;
 using CrabShare.Api.Features.Catalog;
 using CrabShare.Api.Features.Payments;
-using CrabShare.Api.Infrastructure.Payments;
 using CrabShare.Api.Infrastructure.Persistence;
 using CrabShare.Api.Infrastructure.Persistence.Entities;
 using Microsoft.Data.SqlClient;
@@ -122,11 +121,8 @@ public sealed class OrderService(
 
     private Task<CheckoutResponse> PlaceAsync(long customerId, CustomerAddress address,
         IReadOnlyList<(long ListingId, decimal QuantityKg)> lines, IReadOnlyDictionary<long, ListingInfo> listings, CancellationToken ct)
-        => db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        => db.InTransactionAsync(async () =>
         {
-            db.ChangeTracker.Clear();
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
-
             // Không đổi updated_at: đó là concurrency token của việc đổi giá, đổi ở đây thì người nuôi bị báo xung đột oan.
             foreach (var (listingId, quantityKg) in lines)
             {
@@ -158,7 +154,7 @@ public sealed class OrderService(
             var reserved = lines.Select(l => new ReservedLine(l.ListingId, listings[l.ListingId].BatchId, l.QuantityKg,
                 revisions[l.ListingId].Price, revisions[l.ListingId].Id));
 
-            var placed = new List<(SalesOrder Order, ListingInfo Batch, VietQrPayment Qr)>();
+            var placed = new List<(SalesOrder Order, ListingInfo Batch, CreatedPaymentRequest Payment)>();
             foreach (var group in SplitByBatch(reserved))
             {
                 var batch = listings[group[0].ListingId];
@@ -166,15 +162,16 @@ public sealed class OrderService(
                 if (order.TotalAmount <= 0)
                     throw new BusinessRuleException("order.amount_too_small", $"Giá trị đơn của lô {batch.BatchCode} phải lớn hơn 0 đồng.");
                 db.SalesOrders.Add(order);
-                var qr = await payments.CreateForOrderAsync(order, batch.BatchAccountId, batch.BatchAccountNo,
-                    order.TotalAmount, order.OrderNo, expiresAt, ct);
-                placed.Add((order, batch, qr));
+                // Mã đối chiếu = mã đơn; giữ cả bản ghi payment_request để trả id cho web hỏi trạng thái (TH-06)
+                var payment = await payments.CreateAsync(PaymentPurposes.OrderPayment, order.TotalAmount, batch.BatchAccountId,
+                    batch.BatchAccountNo, expiresAt, PaymentTarget.ForOrder(order), order.OrderNo, ct);
+                placed.Add((order, batch, payment));
             }
 
             await db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
-            return new CheckoutResponse(placed.Select(p => ToResponse(p.Order, p.Batch, p.Qr, listings, expiresAt)).ToList());
-        });
+            // Sau SaveChanges, payment_request đã có id; InTransactionAsync lưu lần nữa (không đổi) rồi commit.
+            return new CheckoutResponse(placed.Select(p => ToResponse(p.Order, p.Batch, p.Payment, listings, expiresAt)).ToList());
+        }, ct);
 
     private static SalesOrder NewOrder(long customerId, long batchId, CustomerAddress address,
         IReadOnlyList<ReservedLine> lines, DateTimeOffset now, DateTimeOffset expiresAt)
@@ -219,12 +216,13 @@ public sealed class OrderService(
         return order;
     }
 
-    private static CheckoutOrderResponse ToResponse(SalesOrder order, ListingInfo batch, VietQrPayment qr,
+    private static CheckoutOrderResponse ToResponse(SalesOrder order, ListingInfo batch, CreatedPaymentRequest payment,
         IReadOnlyDictionary<long, ListingInfo> listings, DateTimeOffset expiresAt) => new(
         order.OrderNo, batch.BatchCode, batch.FarmName, order.Status, (long)order.TotalAmount, expiresAt,
         order.OrderLines.Select(l => new CheckoutLineResponse(
             l.ListingId, listings[l.ListingId].Title, l.QuantityKg, (long)l.UnitPrice, LineAmount(l.QuantityKg, (long)l.UnitPrice))).ToList(),
-        new OrderPaymentResponse(qr.ReferenceCode, batch.BatchAccountNo, (long)qr.Amount, qr.QrContent, qr.ExpiresAt));
+        new OrderPaymentResponse(payment.Qr.ReferenceCode, batch.BatchAccountNo, (long)payment.Qr.Amount, payment.Qr.QrContent,
+            payment.Qr.ExpiresAt, payment.Request.PaymentRequestId));
 
     private static bool IsDuplicateOrderNo(DbUpdateException ex) =>
         ex.InnerException is SqlException { Number: 2627 or 2601 } sql

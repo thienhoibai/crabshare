@@ -11,4 +11,8 @@ internal static class TestBackgroundJobs
         Environment.SetEnvironmentVariable("Alerts__Jobs__Enabled", "false");
         Environment.SetEnvironmentVariable("Evidence__CaptureRequests__Enabled", "false");
     }
+
+    // NH-07: job trả tồn chạy mỗi phút; test gọi ReservationExpiryService trực tiếp nên tắt lịch nền.
+    [ModuleInitializer]
+    internal static void DisableReservationExpiryJob() => Environment.SetEnvironmentVariable("Orders__ExpiryJob__Enabled", "false");
 }

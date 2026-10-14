@@ -95,6 +95,11 @@ class OperatorTodayPage extends ConsumerWidget {
                 label: 'Ghi nhật ký hôm nay',
                 onTap: () => context.push(Routes.dailyLogNew),
               ),
+              const SizedBox(height: 10),
+              AddBar(
+                label: 'Đóng gói đơn — quét tem',
+                onTap: () => context.push(Routes.operatorPack),
+              ),
               const CaptureRequestsSection(),
               const SectionHeader(title: 'Lô đang nuôi'),
               ...batches.when(

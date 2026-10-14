@@ -41,7 +41,7 @@ export const useAuthStore = create<AuthState>()(
 /** Trang mặc định sau khi đăng nhập, theo vai trò quan trọng nhất của người dùng. */
 export function homePathFor(user: Me): string {
   if (user.roles.includes('PlatformAdmin')) return '/admin'
-  if (user.roles.includes('EvidenceReviewer')) return '/admin'
+  if (user.roles.includes('EvidenceReviewer')) return '/admin/evidence'
   if (user.roles.includes('OperatorMember')) return '/operator'
   if (user.roles.includes('Investor')) return '/nha-dau-tu'
   return '/cua-hang'

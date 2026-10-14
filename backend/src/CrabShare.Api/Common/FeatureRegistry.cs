@@ -1,6 +1,6 @@
 // Thiện
 using CrabShare.Api.Features.Auth;
-// using CrabShare.Api.Features.Funding;
+using CrabShare.Api.Features.Funding;
 // using CrabShare.Api.Features.Contracts;
 using CrabShare.Api.Features.Payments;
 // using CrabShare.Api.Features.Settlement;
@@ -41,10 +41,16 @@ public static class FeatureRegistry
     {
         // Thiện
         services.AddScoped<AuthService>();
-        // services.AddScoped<FundingService>();      // Features/Funding
+        services.AddScoped<FundingService>();         // Features/Funding
+        services.AddSingleton<RiskDisclosureDocuments>();
+        services.AddOptions<FundingOptions>().BindConfiguration("Funding");
         // services.AddScoped<ContractService>();     // Features/Contracts
         // services.AddScoped<PaymentService>();      // Features/Payments
-        services.AddScoped<PaymentRequestService>();  // Features/Payments — bản tối thiểu cho CS-36, TH-05 mở rộng
+        services.AddScoped<PaymentRequestService>();  // Features/Payments — VietQR dùng chung (TH-05)
+        services.AddScoped<PaymentWebhookService>();  // Features/Payments — webhook báo có + giả lập (TH-06)
+        services.AddScoped<RefundService>();          // lệnh hoàn tiền dùng chung (TH-06, NH-07, NH-11, TH-07)
+        services.AddScoped<IPaymentPurposeHandler, ContributionPaymentHandler>(); // tiền góp vốn về → Confirmed
+        services.AddOptions<PaymentOptions>().BindConfiguration(PaymentOptions.Section);
         // services.AddScoped<SettlementService>();   // Features/Settlement
 
         // Viên
@@ -63,7 +69,13 @@ public static class FeatureRegistry
         services.AddScoped<IAlertRaiser, AlertServiceRaiser>(); // chuyển tiếp sang AlertService (KH-05)
         services.AddScoped<OrderService>();           // Features/Orders
         services.AddOptions<OrderOptions>().BindConfiguration(OrderOptions.Section);
+        services.AddScoped<IPaymentPurposeHandler, OrderPaymentHandler>(); // tiền đơn hàng về → đơn Paid, trừ tồn (NH-06)
+        services.AddScoped<OrderPackingService>();    // UC29 đóng gói quét tem (NH-09)
         // services.AddScoped<OfftakeService>();      // Features/Offtake
+        services.AddScoped<OrderQueryService>();        // NH-07 lịch sử + theo dõi đơn
+        services.AddScoped<OrderCancellationService>(); // NH-07 huỷ đơn
+        services.AddScoped<ReservationExpiryService>(); // NH-07 trả tồn khi quá hạn thanh toán
+        services.AddHostedService<ReservationExpiryJob>(); // chạy mỗi phút; tắt bằng Orders:ExpiryJob:Enabled = false
 
         // Khôi
         services.AddScoped<AccountService>();        // Features/Accounts
@@ -72,6 +84,7 @@ public static class FeatureRegistry
         services.AddScoped<EvidenceService>();      // CS-44
         services.AddScoped<CaptureRequestService>();
         services.AddScoped<CaptureRequestJob>();     // CS-50
+        services.AddScoped<EvidenceReviewService>(); // CS-54
         services.AddScoped<EvidenceAccess>();
         services.AddSingleton<EvidenceImageProcessor>();
         services.AddScoped<AlertService>();          // Features/Alerts

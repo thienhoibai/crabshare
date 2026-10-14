@@ -18,6 +18,8 @@ import '../features/operator/evidence/capture_page.dart';
 import '../features/operator/harvest/harvest_page.dart';
 import '../features/operator/logs/daily_log_form_page.dart';
 import '../features/operator/logs/daily_logs_page.dart';
+import '../features/operator/packing/pack_order_page.dart';
+import '../features/operator/packing/pack_orders_page.dart';
 import '../features/operator/today/operator_today_page.dart';
 import '../features/trace/scan_page.dart';
 import '../features/trace/trace_result_page.dart';
@@ -47,7 +49,9 @@ String? redirectFor(SessionState session, String location) {
   }
   if (location.startsWith('/o/') && !user.isOperator) return homeFor(user);
   if (location.startsWith('/i/') && !user.isInvestor) return homeFor(user);
-  if (location == Routes.payoutAccount && !user.isInvestor && !user.isOperator) {
+  if (location == Routes.payoutAccount &&
+      !user.isInvestor &&
+      !user.isOperator) {
     return homeFor(user);
   }
   return null;
@@ -216,6 +220,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/o/harvest/:batchCode',
         builder: (context, state) =>
             HarvestPage(batchCode: state.pathParameters['batchCode']!),
+      ),
+      GoRoute(
+        path: Routes.operatorPack,
+        builder: (context, state) => const PackOrdersPage(),
+      ),
+      GoRoute(
+        path: '/o/pack/:orderNo',
+        builder: (context, state) =>
+            PackOrderPage(orderNo: state.pathParameters['orderNo']!),
       ),
     ],
   );

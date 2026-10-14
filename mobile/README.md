@@ -19,6 +19,7 @@ flutter run --dart-define=API_URL=http://192.168.1.10:5233                   # �
 
 - API phải đang chạy (`backend/README.md`). Cổng web của Flutter phải nằm trong `Cors:Origins` của API (mặc định có `http://localhost:8080`).
 - Bản debug có nút **đăng nhập nhanh** tài khoản demo. Bản build demo muốn có nút này: thêm `--dart-define=DEMO_ACCOUNTS=true`.
+- Luồng làm trên web (góp vốn) mở bằng trình duyệt tại `WEB_URL` (mặc định `http://localhost:5173`). Máy ảo Android: thêm `--dart-define=WEB_URL=http://10.0.2.2:5173`; điện thoại thật: IP LAN của máy chạy web.
 
 ## Android: chuẩn bị và kết nối API
 

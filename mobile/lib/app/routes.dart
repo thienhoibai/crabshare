@@ -43,4 +43,6 @@ abstract final class Routes {
     },
   ).toString();
   static String harvest(String batchCode) => '/o/harvest/$batchCode';
+  static const operatorPack = '/o/pack';
+  static String operatorPackOrder(String orderNo) => '$operatorPack/$orderNo';
 }

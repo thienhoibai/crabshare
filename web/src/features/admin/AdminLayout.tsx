@@ -1,14 +1,18 @@
 import { useState } from 'react';
 import { useAuthStore } from '../../shared/auth/authStore';
-import { LayoutDashboard, Users, FolderKanban, Wallet, LogOut, Menu, X, ShieldAlert, AlertTriangle, MessageSquareWarning, Settings, Store } from 'lucide-react';
+import { LayoutDashboard, Users, FolderKanban, Wallet, LogOut, Menu, X, ShieldAlert, AlertTriangle, MessageSquareWarning, Settings, Store, ScanEye } from 'lucide-react';
 
 export default function AdminLayout({ children, activeTab }: { children: React.ReactNode, activeTab: string }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const logout = useAuthStore(s => s.logout);
+  const user = useAuthStore(s => s.user);
+  const isAdmin = !!user?.roles.includes('PlatformAdmin');
+  const isReviewer = !!user?.roles.includes('EvidenceReviewer');
   const signOut = () => { logout(); window.location.href = '/'; };
 
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Tổng quan', path: '/admin' },
+    { id: 'evidence', icon: ScanEye, label: 'Thẩm định bằng chứng', path: '/admin/evidence' },
     { id: 'users', icon: Users, label: 'Quản lý Người dùng', path: '/admin/users' },
     { id: 'batches', icon: FolderKanban, label: 'Kiểm duyệt Dự án', path: '/admin/batches' },
     { id: 'storefront', icon: Store, label: 'Kiểm duyệt niêm yết', path: '/admin/storefront' },
@@ -16,7 +20,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
     { id: 'alerts', icon: AlertTriangle, label: 'Cảnh báo', path: '/admin/alerts' },
     { id: 'disputes', icon: MessageSquareWarning, label: 'Xử lý Khiếu nại', path: '/admin/disputes' },
     { id: 'settings', icon: Settings, label: 'Cài đặt Hệ thống', path: '/admin/settings' },
-  ];
+  ].filter(item => item.id === 'evidence' ? isReviewer : isAdmin);
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -28,7 +32,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
           </div>
           <div>
             <h1 className="font-extrabold text-white text-lg tracking-wider">CRABSHARE</h1>
-            <p className="text-[10px] text-red-400 font-bold tracking-widest uppercase">Platform Admin</p>
+            <p className="text-[10px] text-red-400 font-bold tracking-widest uppercase">{isAdmin ? 'Platform Admin' : 'Kiểm định viên'}</p>
           </div>
         </div>
         
@@ -56,7 +60,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
       <div className="md:hidden fixed top-0 left-0 w-full h-16 bg-[#0f172a] border-b border-slate-800 flex items-center justify-between px-4 z-30">
         <div className="flex items-center gap-2">
           <ShieldAlert className="w-6 h-6 text-red-500" />
-          <span className="font-extrabold text-white text-lg tracking-wider">ADMIN</span>
+          <span className="font-extrabold text-white text-lg tracking-wider">{isAdmin ? 'ADMIN' : 'KIỂM ĐỊNH'}</span>
         </div>
         <button onClick={() => setMobileMenuOpen(true)} className="text-slate-300">
           <Menu className="w-6 h-6" />
@@ -69,7 +73,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
           <div className="fixed inset-0 bg-black/60" onClick={() => setMobileMenuOpen(false)}></div>
           <div className="w-64 bg-[#0f172a] h-full relative flex flex-col animate-in slide-in-from-left duration-200">
             <div className="p-4 flex justify-between items-center border-b border-slate-800">
-              <span className="font-extrabold text-white tracking-wider">MENU ADMIN</span>
+              <span className="font-extrabold text-white tracking-wider">{isAdmin ? 'MENU ADMIN' : 'MENU KIỂM ĐỊNH'}</span>
               <button onClick={() => setMobileMenuOpen(false)} className="text-slate-400 hover:text-white"><X className="w-6 h-6"/></button>
             </div>
             <nav className="flex-1 py-4 px-3 space-y-2">
