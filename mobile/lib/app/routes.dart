@@ -13,6 +13,8 @@ abstract final class Routes {
 
   // Nhà đầu tư — 4 tab dưới + màn con
   static const investorHome = '/i/home';
+  static String portfolioBatch(String code) =>
+      '/i/portfolio/${Uri.encodeComponent(code)}';
   static const investorBatches = '/i/batches';
   static const investorNotifications = '/i/notifications';
   static const investorAccount = '/i/account';

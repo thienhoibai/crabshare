@@ -1,14 +1,15 @@
-/* Cổng nhà đầu tư (bản 2, nền sáng kiểu ứng dụng): menu trái 3 mục, thẻ số liệu gọn, thẻ góp vốn dính bên phải trang lô.
-   Dữ liệu đang lấy từ shared/ui/kit/mock-data.ts — các task Funding/Batches/Settlement sẽ thay bằng API. */
+/* Cổng nhà đầu tư bản 2: Tổng quan/Danh mục và hồ sơ dùng API.
+   Các trang khám phá/quyết toán mẫu còn lại thuộc task Funding/Batches/Settlement. */
 import { useEffect, useState, type CSSProperties } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { ArrowLeft, Bell, ChevronRight, Compass, House, Receipt, ShoppingBag, UserRound } from 'lucide-react'
+import { ArrowLeft, Bell, Compass, House, Receipt, Wallet, ShoppingBag, UserRound } from 'lucide-react'
 import { useAuthStore } from '../../shared/auth/authStore'
 import KycVerification, { KycStatusCard } from '../accounts/KycVerification'
 import PayoutAccountForm from '../accounts/PayoutAccountForm'
 import OpenBatches from './funding/OpenBatches'
+import InvestorPortfolio, { PortfolioOverview, PortfolioPosition } from './portfolio/InvestorPortfolio'
 import {
-  HOLDINGS, LOTS, NOTICES, STAGES, activeHoldings, activeTotal, closedPayout2610, lot, maxCapital, minContribution,
+  HOLDINGS, LOTS, STAGES, closedPayout2610, lot, maxCapital, minContribution,
   pct, small, stage, tr, vnd, type Lot,
 } from '../../shared/ui/kit/mock-data'
 import {
@@ -17,13 +18,22 @@ import {
 import './investor.css'
 
 /* ---------- điều hướng trong một bản ---------- */
-type View = 'home' | 'explore' | 'lot' | 'settle' | 'profile'
+type View = 'home' | 'explore' | 'lot' | 'settle' | 'profile' | 'portfolio' | 'position'
+function pathView(path: string): View | null {
+  if (path.startsWith('/nha-dau-tu/danh-muc/')) return 'position'
+  if (path === '/nha-dau-tu/danh-muc') return 'portfolio'
+  if (path.endsWith('/ho-so')) return 'profile'
+  return null
+}
+function portfolioCode(path: string) {
+  try { return decodeURIComponent(path.split('/danh-muc/')[1] ?? '') } catch { return '' }
+}
 function useNav() {
   const location = useLocation()
   const navigate = useNavigate()
-  const [view, setView] = useState<View>(location.pathname.endsWith('/ho-so') ? 'profile' : 'home')
+  const [view, setView] = useState<View>(pathView(location.pathname) ?? 'home')
   useEffect(() => {
-    setView((current) => location.pathname.endsWith('/ho-so') ? 'profile' : current === 'profile' ? 'home' : current)
+    setView((current) => pathView(location.pathname) ?? (['profile', 'portfolio', 'position'].includes(current) ? 'home' : current))
   }, [location.pathname])
   const [code, setCode] = useState('L2612-01')
   const [prev, setPrev] = useState<View>('home')
@@ -31,9 +41,11 @@ function useNav() {
   return {
     view,
     code,
+    portfolioCode: portfolioCode(location.pathname),
     /** Trang đang được coi là mục menu hiện tại (lô mở từ đâu thì giữ mục đó). */
-    section: view === 'lot' ? prev : view,
-    go: (v: View) => { setView(v); navigate(v === 'profile' ? '/nha-dau-tu/ho-so' : '/nha-dau-tu'); top() },
+    section: view === 'position' ? 'portfolio' : view === 'lot' ? prev : view,
+    go: (v: View) => { setView(v); navigate(v === 'profile' ? '/nha-dau-tu/ho-so' : v === 'portfolio' ? '/nha-dau-tu/danh-muc' : '/nha-dau-tu'); top() },
+    openPosition: (c: string) => { navigate(`/nha-dau-tu/danh-muc/${encodeURIComponent(c)}`); top() },
     open: (c: string) => { setPrev(view === 'lot' ? prev : view); setCode(c); setView('lot'); top() },
     back: () => { setView(prev); top() },
   }
@@ -125,16 +137,15 @@ function InvV2Inner() {
   const [filter, setFilter] = useState<Filter>('Tất cả')
   const [investing, setInvesting] = useState<{ l: Lot; amount: number } | null>(null)
   const l = lot(nav.code)
-  const bySt = (s: string) => activeHoldings.filter((h) => lot(h.code).stage === s).reduce((a, h) => a + h.amount, 0)
-  const alloc = STAGES.map((s) => ({ ...s, v: bySt(s.key) })).filter((s) => s.v > 0)
   const items: { v: View; label: string; icon: typeof House }[] = [
     { v: 'home', label: 'Tổng quan', icon: House },
+    { v: 'portfolio', label: 'Danh mục', icon: Wallet },
     { v: 'explore', label: 'Khám phá lô', icon: Compass },
     { v: 'settle', label: 'Quyết toán', icon: Receipt },
     { v: 'profile', label: 'Hồ sơ & eKYC', icon: UserRound },
   ]
   const active = nav.section
-  const titles: Record<View, string> = { home: `Chào ${fullName}`, explore: 'Khám phá lô', lot: l.code, settle: 'Quyết toán', profile: 'Hồ sơ & eKYC' }
+  const titles: Record<View, string> = { home: `Chào ${fullName}`, explore: 'Khám phá lô', lot: l.code, settle: 'Quyết toán', profile: 'Hồ sơ & eKYC', portfolio: 'Danh mục', position: 'Chi tiết danh mục' }
   return (
     <div className="i2">
       <aside className="i2-side">
@@ -151,48 +162,16 @@ function InvV2Inner() {
       <main className="i2-main">
         <header className="i2-head">
           <div>
+            {nav.view === 'position' && <button type="button" className="iv-back" onClick={() => nav.go('portfolio')}><ArrowLeft size={16} /> Danh mục</button>}
             {nav.view === 'lot' && <button type="button" className="iv-back" onClick={nav.back}><ArrowLeft size={16} /> Quay lại</button>}
             <h1 className="rd-h2">{titles[nav.view]}</h1>
           </div>
           <Bell0 />
         </header>
 
-        {nav.view === 'home' && (
-          <div className="i2-grid">
-            <KycStatusCard />
-            <section className="i2-balance">
-              <small>Vốn đang tham gia</small>
-              <b>{vnd(activeTotal)}</b>
-              <span className="i2-alloc">{alloc.map((a) => <i key={a.key} style={{ flex: a.v, background: a.tone }} title={a.label} />)}</span>
-              <ul className="i2-legend">{alloc.map((a) => <li key={a.key}><i style={{ background: a.tone }} />{a.label}<b>{tr(a.v, 0)}</b></li>)}</ul>
-            </section>
-            <section className="iv-card i2-todo">
-              <h3 className="rd-h3">Việc cần làm</h3>
-              <button type="button" onClick={() => nav.open('L2611-01')}><span className="i2-todo__dot" /><span><b>Soát quyết toán L2611-01</b><small>còn 5 ngày</small></span><ChevronRight size={18} /></button>
-              <button type="button" onClick={() => nav.open('L2612-01')}><span className="i2-todo__dot is-green" /><span><b>L2612-01 sắp đủ vốn</b><small>84% · còn 5 ngày</small></span><ChevronRight size={18} /></button>
-            </section>
-            <section className="iv-card i2-table">
-              <h3 className="rd-h3">Lô của bạn</h3>
-              {activeHoldings.map((h) => {
-                const x = lot(h.code)
-                return (
-                  <button type="button" key={h.code} className="i2-row" onClick={() => nav.open(h.code)}>
-                    <img src={small(x.img, 200)} alt="" />
-                    <span className="i2-row__name"><b>{x.code}</b><small>{x.crab}</small></span>
-                    <StageChip s={x.stage} />
-                    <span className="i2-row__life"><Lifeline s={x.stage} compact /></span>
-                    <b className="i2-row__amt">{vnd(h.amount)}</b>
-                    <ChevronRight size={18} />
-                  </button>
-                )
-              })}
-            </section>
-            <section className="iv-card i2-notes">
-              <h3 className="rd-h3">Mới nhất</h3>
-              <ul>{NOTICES.map((n) => <li key={n.t}><b>{n.t}</b><small>{n.s}</small></li>)}</ul>
-            </section>
-          </div>
-        )}
+        {nav.view === 'home' && <><KycStatusCard /><PortfolioOverview open={nav.openPosition} all={() => nav.go('portfolio')} /></>}
+        {nav.view === 'portfolio' && <InvestorPortfolio open={nav.openPosition} />}
+        {nav.view === 'position' && <PortfolioPosition code={nav.portfolioCode} />}
 
         {nav.view === 'profile' && <div className="account-profile"><section className="iv-card">
           <h3 className="rd-h3">Thông tin nhà đầu tư</h3>

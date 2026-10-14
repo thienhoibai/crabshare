@@ -1,30 +1,31 @@
-# Portfolio — Danh mục nhà đầu tư và thông báo
+# Portfolio — CS-61 / KH-11
 
-**Người làm:** Khôi · **Use case:** UC16 Track Investment Portfolio (+ dòng thông báo trong app)
+Read-only investor portfolio. No migration, funding writes, audit writes or projected yield fields.
 
-Module **chỉ đọc**: gom dữ liệu từ Funding, Batches, Production, Alerts, Settlement để hiển thị cho nhà đầu tư. Không ghi vào bảng của module khác.
+| Method | Path | Behavior |
+|---|---|---|
+| GET | `/api/investor/portfolio?page=1&pageSize=10&q=&status=` | Own positions, paged metadata, global summary. `pageSize` 1–100; `q` up to 100 characters. |
+| GET | `/api/investor/portfolio/{batchCode}` | Own position, contribution/contract metadata, latest received production log, recent actual timeline and approved settlement amounts. Foreign/absent positions return 404. |
 
-## Endpoint dự kiến
-| Method | Path | Ai gọi | Ghi chú |
-|---|---|---|---|
-| GET | `/api/investor/portfolio` | Investor | Danh sách khoản góp: lô, số tiền, % vốn lô, trạng thái lô, ngày nuôi / chu kỳ, số cua đang nuôi, số cảnh báo mở |
-| GET | `/api/investor/portfolio/{batchCode}` | Investor | Chi tiết một lô mình góp: timeline rút gọn, hợp đồng, sao kê (nếu có) |
-| GET | `/api/me/notifications?after=` | Đã đăng nhập | Dòng thông báo tính từ sự kiện: tiền đã xác nhận, hợp đồng đủ chữ ký, nhật ký mới, cảnh báo, quyết toán được công bố, đã chi trả |
+Both require an Investor JWT, an active user with the current Investor database role and an investor profile. Reading historical holdings does not require passing eKYC again. Responses set `Cache-Control: no-store`.
 
-## Quy tắc phải giữ
-- **Không** hiển thị lợi suất kỳ vọng (BR-49). Chỉ số liệu thật.
-- Chỉ trả dữ liệu các lô mà người gọi đã góp vốn.
+## Capital and settlement
 
-## View có sẵn trong CSDL
-| View | Dùng cho |
-|---|---|
-| `v_investor_portfolio` | danh mục góp vốn theo nhà đầu tư |
+- Frozen positions read `v_investor_portfolio`: `capital_share.confirmed_amount` and the view's decimal(9,6) ratio. Later contribution changes never replace frozen amounts. A missing denominator stays unknown.
+- Before a batch has any capital shares or `capital_closed_at`, confirmed contributions aggregate into `LiveConfirmed` positions. Ratio = own confirmed / all confirmed, rounded to six decimals. Clients label it provisional. Reserved, expired and refunded money is excluded.
+- After freezing, a confirmed contribution without a capital share does not synthesize a position. The TH-07 freeze job remains owned by Funding.
+- Money is integer VND (`long` DTO fields); ratios are capital fractions, not returns. Summary is global even when the page has filters. Active capital excludes Closed/Cancelled batches.
+- Settlement amounts are exposed only for Approved/PaidOut/Closed settlements with actual approval at or before now. Draft/Proposed/Disputed amounts are hidden. Approved net payout does not imply payment has occurred.
+- The configured SQL execution strategy wraps each read in a serializable read transaction, keeping snapshot/confirmation totals consistent during concurrent writes. No global audit lock is taken.
 
-Đã có entity tương ứng trong `Infrastructure/Persistence/Entities` (chỉ đọc).
+## Operational metadata
 
-## Màn hình
-- Mobile: `investor/home/` (đồng hồ chu kỳ + thẻ khoản góp), `investor/notifications/` — đổi `MockInvestorRepository` sang API.
-- Web: tab Danh mục trong `investor/InvestorPortal.tsx` (bản 2).
+Cycle uses Vietnam calendar dates, starting at day 1 on the actual stocking date and stopping at closure. Clients clamp gauge progress while showing the actual day. Alive count comes from Growing registry items, or is null without a registry. Alerts count Open/Escalated. Expected harvest date comes from the batch.
 
-## Tài liệu
-TL-05 Cơ sở pháp lý huy động vốn (mục không hiển thị lợi suất).
+Timeline includes actual batch milestones, own confirmations/signed contract timestamps, received logs and Accepted evidence only. Future events, other investor identities and private file paths are not returned. It is limited to 30 recent events. Notifications are a separate CS-65 task.
+
+## Clients and verification
+
+Web: overview `/nha-dau-tu`, list `/nha-dau-tu/danh-muc`, detail `/nha-dau-tu/danh-muc/{code}`. Mobile: Investor Tổng quan and `/i/portfolio/{code}`. Existing design components handle loading, error/retry, empty portfolios and account changes.
+
+See [validation notes](../../../../../docs/validation/CS-61-investor-portfolio.md). SQL integration tests compare view amounts; browser/mobile tests cover API and layout. Unrelated exploration and notification mock repositories remain outside this task.

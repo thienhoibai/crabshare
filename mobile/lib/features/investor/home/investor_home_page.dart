@@ -25,11 +25,16 @@ class InvestorHomePage extends ConsumerStatefulWidget {
 }
 
 class _InvestorHomePageState extends ConsumerState<InvestorHomePage> {
-  int _selected = 0;
+  String? _selectedCode;
+  int? _selectedUser;
 
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(sessionProvider).user;
+    if (_selectedUser != user?.userId) {
+      _selectedCode = null;
+      _selectedUser = user?.userId;
+    }
     final contributions = ref.watch(myContributionsProvider);
 
     return Scaffold(
@@ -37,15 +42,31 @@ class _InvestorHomePageState extends ConsumerState<InvestorHomePage> {
         bottom: false,
         child: contributions.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => ErrorView(message: apiErrorMessage(e), onRetry: () => ref.invalidate(myContributionsProvider)),
+          error: (e, _) => ErrorView(
+            message: apiErrorMessage(e),
+            onRetry: () => ref.invalidate(myContributionsProvider),
+          ),
           data: (items) {
-            final selected = items.isEmpty ? null : items[_selected.clamp(0, items.length - 1)];
+            final index = items.indexWhere(
+              (c) => c.batch.code == _selectedCode,
+            );
+            final selectedIndex = index < 0 ? 0 : index;
+            final selected = items.isEmpty ? null : items[selectedIndex];
             return RefreshIndicator(
               onRefresh: () async {
-                await Future.wait([ref.refresh(myContributionsProvider.future), ref.refresh(kycDetailsProvider.future)]);
+                await Future.wait([
+                  ref.refresh(myContributionsProvider.future),
+                  ref.refresh(kycDetailsProvider.future),
+                ]);
               },
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, kNavBarClearance),
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(
+                  20,
+                  12,
+                  20,
+                  kNavBarClearance,
+                ),
                 children: [
                   GreetingHeader(
                     name: user?.fullName ?? '',
@@ -61,15 +82,30 @@ class _InvestorHomePageState extends ConsumerState<InvestorHomePage> {
                       message: 'Chọn một lô đang gọi vốn để bắt đầu.',
                     )
                   else ...[
-                    _BatchSwitcher(items: items, selected: _selected, onSelect: (i) => setState(() => _selected = i)),
+                    _BatchSwitcher(
+                      items: items,
+                      selected: selectedIndex,
+                      onSelect: (i) =>
+                          setState(() => _selectedCode = items[i].batch.code),
+                    ),
                     const SizedBox(height: 12),
                     _CycleGaugeCard(contribution: selected),
                   ],
                   const SizedBox(height: 14),
-                  AddBar(label: 'Góp vốn lô mới', onTap: () => context.go(Routes.investorBatches)),
-                  SectionHeader(title: 'Khoản góp của tôi', actionLabel: '${items.length} lô'),
+                  AddBar(
+                    label: 'Góp vốn lô mới',
+                    onTap: () => context.go(Routes.investorBatches),
+                  ),
+                  SectionHeader(
+                    title: 'Khoản góp của tôi',
+                    actionLabel: '${items.length} lô',
+                  ),
                   for (final c in items) ...[
-                    _ContributionCard(contribution: c, onTap: () => context.push(Routes.batch(c.batch.code))),
+                    _ContributionCard(
+                      contribution: c,
+                      onTap: () =>
+                          context.push(Routes.portfolioBatch(c.batch.code)),
+                    ),
                     const SizedBox(height: 12),
                   ],
                 ],
@@ -89,8 +125,13 @@ class _KycBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final verification = ref.watch(kycStatusProvider);
     if (verification.hasError) {
-      return Padding(padding: const EdgeInsets.only(bottom: 14),
-          child: ErrorView(message: apiErrorMessage(verification.error!), onRetry: () => ref.invalidate(kycDetailsProvider)));
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: ErrorView(
+          message: apiErrorMessage(verification.error!),
+          onRetry: () => ref.invalidate(kycDetailsProvider),
+        ),
+      );
     }
     final status = verification.value;
     if (status == KycStatus.verified) return const SizedBox.shrink();
@@ -101,19 +142,32 @@ class _KycBanner extends ConsumerWidget {
         onTap: () => context.push(Routes.kyc),
         child: Row(
           children: [
-            const IconTile(icon: Icons.verified_user_outlined, background: AppColors.accent, foreground: AppColors.ink),
+            const IconTile(
+              icon: Icons.verified_user_outlined,
+              background: AppColors.accent,
+              foreground: AppColors.ink,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    status == null ? 'Đang kiểm tra danh tính…'
-                        : status == KycStatus.rejected ? 'Xác minh chưa đạt — hãy thử lại' : 'Xác minh danh tính để góp vốn',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                    status == null
+                        ? 'Đang kiểm tra danh tính…'
+                        : status == KycStatus.rejected
+                        ? 'Xác minh chưa đạt — hãy thử lại'
+                        : 'Xác minh danh tính để góp vốn',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 2),
-                  const Text('Chụp CCCD và ảnh khuôn mặt', style: TextStyle(color: Color(0xFFBDB7B1), fontSize: 13)),
+                  const Text(
+                    'Chụp CCCD và ảnh khuôn mặt',
+                    style: TextStyle(color: Color(0xFFBDB7B1), fontSize: 13),
+                  ),
                 ],
               ),
             ),
@@ -126,7 +180,11 @@ class _KycBanner extends ConsumerWidget {
 }
 
 class _BatchSwitcher extends StatelessWidget {
-  const _BatchSwitcher({required this.items, required this.selected, required this.onSelect});
+  const _BatchSwitcher({
+    required this.items,
+    required this.selected,
+    required this.onSelect,
+  });
 
   final List<Contribution> items;
   final int selected;
@@ -149,9 +207,14 @@ class _BatchSwitcher extends StatelessWidget {
             showCheckmark: false,
             backgroundColor: AppColors.surface,
             selectedColor: AppColors.ink,
-            labelStyle: TextStyle(color: isSelected ? Colors.white : AppColors.ink, fontWeight: FontWeight.w600),
+            labelStyle: TextStyle(
+              color: isSelected ? Colors.white : AppColors.ink,
+              fontWeight: FontWeight.w600,
+            ),
             side: BorderSide.none,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.pill)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+            ),
           );
         },
       ),
@@ -195,12 +258,23 @@ class _CycleGaugeCard extends StatelessWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(child: _GaugeFact(label: 'Trạng thái', value: b.status.label)),
-              Expanded(child: _GaugeFact(label: 'Cua đang nuôi', value: b.aliveCount == null ? '—' : '${formatCount(b.aliveCount!)} con')),
+              Expanded(
+                child: _GaugeFact(label: 'Trạng thái', value: b.status.label),
+              ),
+              Expanded(
+                child: _GaugeFact(
+                  label: 'Cua đang nuôi',
+                  value: b.aliveCount == null
+                      ? '—'
+                      : '${formatCount(b.aliveCount!)} con',
+                ),
+              ),
               Expanded(
                 child: _GaugeFact(
                   label: 'Dự kiến thu',
-                  value: b.expectedHarvestDate == null ? '—' : formatDayMonth(b.expectedHarvestDate!),
+                  value: b.expectedHarvestDate == null
+                      ? '—'
+                      : formatDayMonth(b.expectedHarvestDate!),
                 ),
               ),
             ],
@@ -221,7 +295,10 @@ class _GaugeFact extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+        ),
         const SizedBox(height: 2),
         Text(label, style: Theme.of(context).textTheme.bodySmall),
       ],
@@ -252,34 +329,71 @@ class _ContributionCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(b.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      b.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 2),
-                    Text('${b.code} · góp ${formatDate(contribution.paidAt)}', style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      contribution.paidAt == null
+                          ? b.code
+                          : '${b.code} · góp ${formatDate(contribution.paidAt!)}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ],
                 ),
               ),
-              InfoChip(label: b.status.label, background: AppColors.accentSoft, foreground: AppColors.accentText),
+              InfoChip(
+                label: b.status.label,
+                background: AppColors.accentSoft,
+                foreground: AppColors.accentText,
+              ),
             ],
           ),
           const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Expanded(
-                child: Text(formatVnd(contribution.amount), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
+              Text(
+                formatVnd(contribution.amount),
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
+                ),
               ),
               Text(
-                '${contribution.sharePct.toStringAsFixed(2).replaceAll('.', ',')}% vốn lô',
-                style: const TextStyle(color: AppColors.accentText, fontWeight: FontWeight.w700),
+                contribution.ratioLabel,
+                style: const TextStyle(
+                  color: AppColors.accentText,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          MetricRow(metrics: [
-            Metric('ngày nuôi', b.dayOfCycle == null ? '—' : '${b.dayOfCycle}/${b.cycleDays}'),
-            Metric('con', b.aliveCount == null ? '—' : formatCount(b.aliveCount!), color: AppColors.ink),
-            Metric('cảnh báo', '${b.openAlerts}', color: b.openAlerts > 0 ? AppColors.danger : AppColors.success),
-          ]),
+          MetricRow(
+            metrics: [
+              Metric(
+                'ngày nuôi',
+                b.dayOfCycle == null ? '—' : '${b.dayOfCycle}/${b.cycleDays}',
+              ),
+              Metric(
+                'con',
+                b.aliveCount == null ? '—' : formatCount(b.aliveCount!),
+                color: AppColors.ink,
+              ),
+              Metric(
+                'cảnh báo',
+                '${b.openAlerts}',
+                color: b.openAlerts > 0 ? AppColors.danger : AppColors.success,
+              ),
+            ],
+          ),
         ],
       ),
     );

@@ -1,5 +1,10 @@
 # Mobile — Flutter
 
+CS-61: Tổng quan nhà đầu tư và chi tiết danh mục dùng `/api/investor/portfolio`.
+Vốn đã chốt lấy từ view; vốn mới xác nhận hiển thị tỷ lệ tạm tính. Không dùng khoản
+góp mock hay lợi suất. Chạm thẻ khoản góp để xem hợp đồng, nhật ký và hành trình
+thật; tài khoản chưa góp vốn có danh mục trống. Test: `flutter test test/portfolio_test.dart`.
+
 KH-03: Tài khoản → Tài khoản nhận tiền đã dùng `GET/PUT /api/me/payout-account`.
 Hai vai có thể chọn Cá nhân/Hộ nuôi; quyền chủ hộ kiểm tra trên backend. Form dùng
 AppCard, AppColors, AppRadius và theme chung. Test luồng: `flutter test test/payout_test.dart`.
