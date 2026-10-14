@@ -1,0 +1,72 @@
+name: Deploy backend
+
+# Mỗi lần develop có thay đổi backend/database: chạy migration lên Azure SQL rồi deploy API lên App Service.
+# Đăng nhập Azure bằng OIDC (danh tính crabshare-github-deploy, chỉ tin nhánh develop) — không có mật khẩu/khoá nào trong repo.
+# Hạ tầng và cách làm tay: docs/deploy.md
+on:
+  push:
+    branches: [develop]
+    paths:
+      - backend/**
+      - database/**
+      - .github/workflows/deploy-backend.yml
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+env:
+  APP_NAME: crabshare-api
+  API_URL: https://crabshare-api.azurewebsites.net
+
+jobs:
+  deploy:
+    name: Migrate + deploy to Azure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build + test (không gồm test CSDL)
+        run: |
+          dotnet build backend/CrabShare.sln -c Release
+          dotnet test backend/CrabShare.sln -c Release --no-build --filter "Category!=Database"
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Không bao giờ thêm --reset ở đây: DbUp sẽ tạo lại CSDL theo gói mặc định rất đắt của Azure
+      - name: Migration (database/migrations)
+        env:
+          AZURE_TOKEN_CREDENTIALS: AzureCliCredential
+          CRABSHARE_DB: Server=tcp:crabshare-sql.database.windows.net,1433;Database=crabshare;Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;Connection Timeout=60
+        run: dotnet run --project backend/tools/CrabShare.DbMigrator -c Release --no-build
+
+      - name: Publish
+        run: |
+          dotnet publish backend/src/CrabShare.Api/CrabShare.Api.csproj -c Release -o publish --no-build
+          rm -f publish/appsettings.Development.json
+
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.APP_NAME }}
+          package: publish
+
+      - name: Kiểm tra API đã kết nối CSDL
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "$API_URL/api/health/ready"; then echo; exit 0; fi
+            sleep 10
+          done
+          echo "API chưa sẵn sàng sau 5 phút" >&2
+          exit 1
