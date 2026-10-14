@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { ImagePlus, Plus, RefreshCw, Store, X } from 'lucide-react'
+import { ArrowRight, ImagePlus, Plus, RefreshCw, Store, X } from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
-import { formatDate, formatDateTime, formatVnd } from '../../shared/lib/format'
+import { formatDate, formatDateTime, formatVnd, moneyToWords } from '../../shared/lib/format'
+import { Breadcrumbs } from '../../shared/ui/Breadcrumbs'
 import OperatorLayout from './OperatorLayout'
 import { OpBadge, OpBtn, OpFacts, OpHeading, OpNote, OpPanel } from './operatorUi'
 import {
@@ -59,7 +60,8 @@ function CreateListingForm({ onDone }: { onDone: () => void }) {
   const [storage, setStorage] = useState<StorageType>('Fresh')
   const [frozenAt, setFrozenAt] = useState('')
   const [title, setTitle] = useState('')
-  const [price, setPrice] = useState('')
+  const [displayPrice, setDisplayPrice] = useState('')
+  const numericPrice = Number(displayPrice.replace(/\D/g, ''))
 
   useEffect(() => {
     if (!choice && free.length > 0) setChoice(`${free[0].batchCode}|${free[0].gradeCode}`)
@@ -67,6 +69,7 @@ function CreateListingForm({ onDone }: { onDone: () => void }) {
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    if (numericPrice < 1000) return
     const [batchCode, gradeCode] = choice.split('|')
     create.mutate(
       {
@@ -75,7 +78,7 @@ function CreateListingForm({ onDone }: { onDone: () => void }) {
         storageType: storage,
         frozenAt: storage === 'Frozen' && frozenAt ? new Date(`${frozenAt}T00:00:00+07:00`).toISOString() : undefined,
         title: title.trim() || undefined,
-        pricePerKg: Number(price),
+        pricePerKg: numericPrice,
       },
       { onSuccess: onDone },
     )
@@ -118,7 +121,28 @@ function CreateListingForm({ onDone }: { onDone: () => void }) {
             )}
             <div className="op-field">
               <label htmlFor="ls-price">Giá bán (đồng/kg)</label>
-              <input id="ls-price" type="number" min={1000} step={1000} required className="op-input" value={price} onChange={(e) => setPrice(e.target.value)} />
+              <input
+                id="ls-price"
+                type="text"
+                inputMode="numeric"
+                required
+                className="op-input"
+                placeholder="Ví dụ: 520.000"
+                value={displayPrice}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/\D/g, '')
+                  if (!raw) {
+                    setDisplayPrice('')
+                    return
+                  }
+                  setDisplayPrice(new Intl.NumberFormat('vi-VN').format(Number(raw)))
+                }}
+              />
+              {numericPrice > 0 && (
+                <p className="text-xs text-orange-600 font-medium mt-1">
+                  Bằng chữ: {moneyToWords(numericPrice)} / kg
+                </p>
+              )}
             </div>
           </div>
           <div className="op-field">
@@ -127,7 +151,7 @@ function CreateListingForm({ onDone }: { onDone: () => void }) {
           </div>
           {create.error && <OpNote tone="danger">{errorMessage(create.error)}</OpNote>}
           <div className="flex flex-wrap gap-2">
-            <OpBtn type="submit" disabled={create.isPending || !choice || !price}>Lưu bản nháp</OpBtn>
+            <OpBtn type="submit" disabled={create.isPending || !choice || numericPrice < 1000}>Lưu bản nháp</OpBtn>
             <OpBtn type="button" variant="ghost" onClick={onDone}>Huỷ</OpBtn>
           </div>
         </form>
@@ -138,12 +162,14 @@ function CreateListingForm({ onDone }: { onDone: () => void }) {
 
 function ChangePriceForm({ listing, onDone }: { listing: Listing; onDone: () => void }) {
   const change = useChangePrice()
-  const [price, setPrice] = useState(String(listing.pricePerKg))
+  const [displayPrice, setDisplayPrice] = useState(
+    new Intl.NumberFormat('vi-VN').format(listing.pricePerKg),
+  )
   const [reason, setReason] = useState<PriceChangeReason>('Market')
   const [note, setNote] = useState('')
   const [preview, setPreview] = useState<PriceCheck | null>(null)
 
-  const value = Number(price)
+  const value = Number(displayPrice.replace(/\D/g, ''))
   useEffect(() => {
     setPreview(null)
     if (!value || value === listing.pricePerKg) return
@@ -155,6 +181,7 @@ function ChangePriceForm({ listing, onDone }: { listing: Listing; onDone: () => 
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    if (value < 1000) return
     change.mutate({ id: listing.listingId, pricePerKg: value, reason, note: note.trim() || undefined }, { onSuccess: onDone })
   }
 
@@ -162,7 +189,28 @@ function ChangePriceForm({ listing, onDone }: { listing: Listing; onDone: () => 
     <form onSubmit={submit} className="op-subform">
       <div className="op-field">
         <label htmlFor={`pr-${listing.listingId}`}>Giá mới (đồng/kg)</label>
-        <input id={`pr-${listing.listingId}`} type="number" min={1000} step={1000} required className="op-input" value={price} onChange={(e) => setPrice(e.target.value)} />
+        <input
+          id={`pr-${listing.listingId}`}
+          type="text"
+          inputMode="numeric"
+          required
+          className="op-input"
+          placeholder="Ví dụ: 520.000"
+          value={displayPrice}
+          onChange={(e) => {
+            const raw = e.target.value.replace(/\D/g, '')
+            if (!raw) {
+              setDisplayPrice('')
+              return
+            }
+            setDisplayPrice(new Intl.NumberFormat('vi-VN').format(Number(raw)))
+          }}
+        />
+        {value > 0 && (
+          <p className="text-xs text-orange-600 font-medium mt-1">
+            Bằng chữ: {moneyToWords(value)} / kg
+          </p>
+        )}
       </div>
       <div className="op-field">
         <label htmlFor={`rs-${listing.listingId}`}>Lý do</label>
@@ -306,44 +354,251 @@ function ListingCard({ listing }: { listing: Listing }) {
   )
 }
 
+interface BatchGroup {
+  batchCode: string
+  batchTitle: string
+  crabType: string
+  harvestedAt: string | null
+  farmName: string
+  listings: Listing[]
+  availableKg: number
+  stockKg: number
+}
+
+function BatchCard({
+  batch,
+  onSelect,
+}: {
+  batch: BatchGroup
+  onSelect: () => void
+}) {
+  return (
+    <OpPanel accent>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <OpBadge tone="gold">Lô {batch.batchCode}</OpBadge>
+            <OpBadge tone="info">{CRAB_TYPE_LABELS[batch.crabType] ?? batch.crabType}</OpBadge>
+            {batch.harvestedAt && (
+              <span className="text-xs op-muted">Thu hoạch {formatDate(batch.harvestedAt)}</span>
+            )}
+          </div>
+          <h3 className="rd-h3">{batch.batchTitle}</h3>
+          <p className="text-sm op-muted mt-1">{batch.farmName}</p>
+        </div>
+
+        <div className="flex items-center gap-5 flex-wrap">
+          <div className="text-right">
+            <p className="text-xs op-muted">Các hạng đang bán</p>
+            <p className="text-lg font-bold text-slate-900">{batch.listings.length} hạng</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs op-muted">Còn bán được</p>
+            <p className="text-lg font-bold text-emerald-600">{kg(batch.availableKg)}</p>
+          </div>
+          <OpBtn sm onClick={onSelect} className="whitespace-nowrap">
+            Xem các hạng <ArrowRight size={14} className="ml-1" />
+          </OpBtn>
+        </div>
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-slate-200 flex flex-wrap gap-2">
+        {batch.listings.map((l) => (
+          <span
+            key={l.listingId}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 text-xs font-medium text-slate-700"
+          >
+            <span>{l.gradeName}</span>
+            <b className="text-slate-900">{formatVnd(l.pricePerKg)}</b>
+            <small className="op-muted">({kg(l.availableQtyKg)})</small>
+          </span>
+        ))}
+      </div>
+    </OpPanel>
+  )
+}
+
+function BatchListingRow({
+  listing,
+  onOpenDetail,
+}: {
+  listing: Listing
+  onOpenDetail: () => void
+}) {
+  const img = listingImageSrc(listing)
+  const isFlagged = listing.priceHistory[0]?.flaggedAbnormal
+
+  return (
+    <OpPanel>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden flex-shrink-0 border border-slate-200">
+            {img ? <img src={img} alt={listing.title} className="w-full h-full object-cover" /> : <Store size={24} className="text-slate-400" />}
+          </div>
+          <div>
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <OpBadge tone={STATUS_TONE[listing.status]}>{STATUS_LABELS[listing.status]}</OpBadge>
+              <OpBadge>{listing.gradeName}</OpBadge>
+              <OpBadge tone="info">{listing.storageType === 'Frozen' ? 'Cấp đông' : 'Tươi sống'}</OpBadge>
+              {isFlagged && <OpBadge tone="danger">Lệch bất thường</OpBadge>}
+            </div>
+            <h4 className="font-bold text-slate-900">{listing.title}</h4>
+            <p className="text-lg font-bold text-orange-600 mt-0.5">
+              {formatVnd(listing.pricePerKg)} <small className="text-xs text-slate-500 font-normal">/ kg</small>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <p className="text-xs op-muted">Còn bán</p>
+            <p className="font-bold text-emerald-600">{kg(listing.availableQtyKg)}</p>
+          </div>
+          <OpBtn sm onClick={onOpenDetail}>
+            Chi tiết & Đổi giá <ArrowRight size={14} className="ml-1" />
+          </OpBtn>
+        </div>
+      </div>
+    </OpPanel>
+  )
+}
+
 export default function OperatorListings() {
   const { data: listings = [], isLoading, error } = useMyListings()
   const [creating, setCreating] = useState(false)
+  const [selectedBatchCode, setSelectedBatchCode] = useState<string | null>(null)
+  const [selectedListingId, setSelectedListingId] = useState<number | null>(null)
+
   const selling = listings.filter((l) => l.status === 'Published')
+
+  // Gom nhóm danh sách niêm yết theo Lô
+  const batches = listings.reduce<BatchGroup[]>((acc, l) => {
+    let b = acc.find((item) => item.batchCode === l.batchCode)
+    if (!b) {
+      b = {
+        batchCode: l.batchCode,
+        batchTitle: l.batchTitle,
+        crabType: l.crabType,
+        harvestedAt: l.harvestedAt,
+        farmName: l.farmName,
+        listings: [],
+        availableKg: 0,
+        stockKg: 0,
+      }
+      acc.push(b)
+    }
+    b.listings.push(l)
+    b.availableKg += l.availableQtyKg
+    b.stockKg += l.stockQtyKg
+    return acc
+  }, [])
+
+  const currentBatch = selectedBatchCode ? batches.find((b) => b.batchCode === selectedBatchCode) : null
+  const currentListing = selectedListingId ? listings.find((l) => l.listingId === selectedListingId) : null
+
+  // Điều hướng Breadcrumbs theo cấp độ
+  const breadcrumbItems = !selectedBatchCode
+    ? [{ label: 'Quản lý lô' }]
+    : !selectedListingId
+      ? [
+          { label: 'Quản lý lô', onClick: () => { setSelectedBatchCode(null); setSelectedListingId(null) } },
+          { label: `Lô ${selectedBatchCode}` },
+        ]
+      : [
+          { label: 'Quản lý lô', onClick: () => { setSelectedBatchCode(null); setSelectedListingId(null) } },
+          { label: `Lô ${selectedBatchCode}`, onClick: () => setSelectedListingId(null) },
+          { label: currentListing?.title ?? 'Chi tiết' },
+        ]
+
+  const handleBack = () => {
+    if (selectedListingId !== null) {
+      setSelectedListingId(null)
+    } else if (selectedBatchCode !== null) {
+      setSelectedBatchCode(null)
+    } else {
+      window.location.href = '/operator'
+    }
+  }
 
   return (
     <OperatorLayout activeTab="listings">
-      <OpHeading
-        eyebrow="Cửa hàng"
-        title="Niêm yết sản phẩm"
-        description="Bạn tự đặt và đổi giá. Mọi lần đổi giá được lưu công khai cho nhà đầu tư của lô; giá lệch nhiều so với giao dịch tương đồng chỉ bị gắn cờ, không bị chặn."
-        action={!creating && <OpBtn onClick={() => setCreating(true)}><Plus size={16} /> Tạo niêm yết</OpBtn>}
-      />
+      <Breadcrumbs items={breadcrumbItems} onBack={handleBack} fallbackHref="/operator" />
 
-      {listings.length > 0 && (
-        <OpFacts
-          items={[
-            { label: 'Đang bán', value: selling.length, tone: 'ok' },
-            { label: 'Bản nháp', value: listings.filter((l) => l.status === 'Draft').length },
-            { label: 'Hết hàng', value: listings.filter((l) => l.status === 'SoldOut').length, tone: 'warn' },
-            { label: 'Còn bán được', value: kg(selling.reduce((s, l) => s + l.availableQtyKg, 0)) },
-          ]}
-        />
+      {/* Cấp 1: Tổng quan tất cả các lô */}
+      {!selectedBatchCode && (
+        <>
+          <OpHeading
+            eyebrow="Cửa hàng"
+            title="Quản lý niêm yết theo Lô"
+            description="Quản lý giá và sản lượng theo từng lô thu hoạch. Chọn một lô bên dưới để xem và điều chỉnh các hạng cua của lô đó."
+            action={!creating && <OpBtn onClick={() => setCreating(true)}><Plus size={16} /> Tạo niêm yết mới</OpBtn>}
+          />
+
+          {listings.length > 0 && (
+            <OpFacts
+              items={[
+                { label: 'Số lô đang bán', value: batches.length, tone: 'ok' },
+                { label: 'Tổng mặt hàng', value: selling.length },
+                { label: 'Bản nháp', value: listings.filter((l) => l.status === 'Draft').length },
+                { label: 'Còn bán được', value: kg(selling.reduce((s, l) => s + l.availableQtyKg, 0)) },
+              ]}
+            />
+          )}
+
+          <div className="op-stack">
+            {creating && <CreateListingForm onDone={() => setCreating(false)} />}
+            {isLoading && <p className="op-muted">Đang tải…</p>}
+            {error && <OpNote tone="danger">{errorMessage(error)}</OpNote>}
+            {!isLoading && !error && batches.length === 0 && !creating && (
+              <div className="op-panel op-empty">
+                <Store size={44} />
+                <b>Chưa có niêm yết nào</b>
+                <span>Sau khi cân và xếp hạng cua thu hoạch, tạo niêm yết để đưa lên cửa hàng.</span>
+              </div>
+            )}
+            {batches.map((b) => (
+              <BatchCard key={b.batchCode} batch={b} onSelect={() => setSelectedBatchCode(b.batchCode)} />
+            ))}
+          </div>
+        </>
       )}
 
-      <div className="op-stack">
-        {creating && <CreateListingForm onDone={() => setCreating(false)} />}
-        {isLoading && <p className="op-muted">Đang tải…</p>}
-        {error && <OpNote tone="danger">{errorMessage(error)}</OpNote>}
-        {!isLoading && !error && listings.length === 0 && !creating && (
-          <div className="op-panel op-empty">
-            <Store size={44} />
-            <b>Chưa có niêm yết</b>
-            <span>Sau khi cân và xếp hạng cua thu hoạch, tạo niêm yết để đưa lên cửa hàng.</span>
+      {/* Cấp 2: Danh sách các hạng cua trong Lô được chọn */}
+      {selectedBatchCode && !selectedListingId && (
+        <>
+          <OpHeading
+            eyebrow={`Lô ${selectedBatchCode}`}
+            title={`Danh sách các hạng của Lô ${selectedBatchCode}`}
+            description={currentBatch?.batchTitle ?? 'Các sản phẩm niêm yết thuộc lô thu hoạch này.'}
+            action={!creating && <OpBtn onClick={() => setCreating(true)}><Plus size={16} /> Thêm hạng niêm yết</OpBtn>}
+          />
+
+          {currentBatch && (
+            <OpFacts
+              items={[
+                { label: 'Số hạng cua', value: currentBatch.listings.length, tone: 'ok' },
+                { label: 'Tổng tồn kho', value: kg(currentBatch.stockKg) },
+                { label: 'Còn bán được', value: kg(currentBatch.availableKg), tone: currentBatch.availableKg > 0 ? 'ok' : 'warn' },
+                { label: 'Loại cua', value: CRAB_TYPE_LABELS[currentBatch.crabType] ?? currentBatch.crabType },
+              ]}
+            />
+          )}
+
+          <div className="op-stack">
+            {creating && <CreateListingForm onDone={() => setCreating(false)} />}
+            {currentBatch?.listings.map((l) => (
+              <BatchListingRow key={l.listingId} listing={l} onOpenDetail={() => setSelectedListingId(l.listingId)} />
+            ))}
           </div>
-        )}
-        {listings.map((l) => <ListingCard key={l.listingId} listing={l} />)}
-      </div>
+        </>
+      )}
+
+      {/* Cấp 3: Chi tiết & Đổi giá của 1 Hạng cụ thể */}
+      {selectedListingId && currentListing && (
+        <div className="op-stack">
+          <ListingCard listing={currentListing} />
+        </div>
+      )}
     </OperatorLayout>
   )
 }

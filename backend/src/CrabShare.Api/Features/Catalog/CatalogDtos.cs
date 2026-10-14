@@ -141,6 +141,36 @@ public sealed record AdminListingResponse(
     string? HiddenBy,
     string? HiddenReason);
 
+public sealed record ListingAuditRiskMetrics(
+    int TotalPriceChanges,
+    int FlaggedChangesCount,
+    long MinPricePerKg,
+    long MaxPricePerKg,
+    decimal PriceFluctuationRatio,
+    int TotalOrdersCount,
+    decimal TotalSoldKg,
+    decimal TotalRevenue,
+    int SuspiciousOrdersCount);
+
+public sealed record ListingAuditOrderLineResponse(
+    long OrderId,
+    string OrderNo,
+    string CustomerName,
+    string CustomerPhone,
+    decimal QuantityKg,
+    long UnitPrice,
+    long LineTotal,
+    long PriceHistoryId,
+    bool WasPriceFlagged,
+    string OrderStatus,
+    DateTimeOffset PlacedAt);
+
+public sealed record ListingAuditDetailResponse(
+    AdminListingResponse Listing,
+    ListingAuditRiskMetrics RiskMetrics,
+    IReadOnlyList<PriceRevisionResponse> PriceTimeline,
+    IReadOnlyList<ListingAuditOrderLineResponse> Orders);
+
 // ---------- Cửa hàng (UC25, công khai) ----------
 
 public enum StoreSort { Newest, PriceAsc, PriceDesc }

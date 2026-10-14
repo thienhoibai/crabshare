@@ -53,6 +53,91 @@ public sealed class ListingModerationService(AppDbContext db, ICurrentUser me, T
         return ToResponse(listing);
     }
 
+    public async Task<ListingAuditDetailResponse> GetAuditDetailAsync(long listingId, CancellationToken ct)
+    {
+        await RequireAdminAsync(ct);
+
+        var listing = await db.ProductListings.AsNoTracking()
+            .Include(l => l.Batch).ThenInclude(b => b.Operator)
+            .Include(l => l.Grade)
+            .Include(l => l.HiddenByNavigation)
+            .Include(l => l.PriceHistories)
+                .ThenInclude(h => h.ChangedByNavigation)
+            .Include(l => l.PriceHistories)
+                .ThenInclude(h => h.PriceCheck)
+            .Include(l => l.OrderLines)
+                .ThenInclude(ol => ol.SalesOrder)
+                .ThenInclude(o => o.Customer)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(l => l.ListingId == listingId, ct)
+            ?? throw new NotFoundException("listing.not_found", "Không tìm thấy niêm yết.");
+
+        // Danh sách toàn bộ dòng thời gian giá
+        var priceTimeline = listing.PriceHistories
+            .OrderByDescending(h => h.EffectiveFrom)
+            .ThenByDescending(h => h.PriceHistoryId)
+            .Select(h => new PriceRevisionResponse(
+                h.PriceHistoryId,
+                (long)h.PricePerKg,
+                (long?)h.PreviousPricePerKg,
+                h.ReasonCode,
+                h.Note,
+                h.EffectiveFrom,
+                h.ChangedByNavigation.FullName,
+                h.FlaggedAbnormal,
+                h.PriceCheck is null ? null : CatalogService.ToCheckResponse(h.PriceCheck)))
+            .ToList();
+
+        // Tập hợp các ID lịch sử giá bị gắn cờ
+        var flaggedHistoryIds = listing.PriceHistories
+            .Where(h => h.FlaggedAbnormal)
+            .Select(h => h.PriceHistoryId)
+            .ToHashSet();
+
+        // Danh sách các đơn hàng đã đặt cho niêm yết này
+        var orders = listing.OrderLines
+            .OrderByDescending(ol => ol.SalesOrder.PlacedAt)
+            .Select(ol => new ListingAuditOrderLineResponse(
+                ol.SalesOrder.OrderId,
+                ol.SalesOrder.OrderNo,
+                ol.SalesOrder.Customer.FullName,
+                ol.SalesOrder.RecipientPhone ?? ol.SalesOrder.Customer.Phone ?? "",
+                ol.QuantityKg,
+                (long)ol.UnitPrice,
+                (long)Math.Round(ol.QuantityKg * ol.UnitPrice, 0, MidpointRounding.AwayFromZero),
+                ol.PriceHistoryId,
+                flaggedHistoryIds.Contains(ol.PriceHistoryId),
+                ol.SalesOrder.Status,
+                ol.SalesOrder.PlacedAt))
+            .ToList();
+
+        // Tính toán các chỉ số rủi ro (Risk Metrics)
+        var totalRevisions = listing.PriceHistories.Count;
+        var flaggedRevisions = listing.PriceHistories.Count(h => h.FlaggedAbnormal);
+        var minPrice = listing.PriceHistories.Count > 0 ? (long)listing.PriceHistories.Min(h => h.PricePerKg) : (long)listing.CurrentPricePerKg;
+        var maxPrice = listing.PriceHistories.Count > 0 ? (long)listing.PriceHistories.Max(h => h.PricePerKg) : (long)listing.CurrentPricePerKg;
+        var ratio = minPrice > 0 ? Math.Round((decimal)maxPrice / minPrice, 2) : 1m;
+        var totalOrders = orders.Count;
+        var totalSoldKg = orders.Where(o => o.OrderStatus != "Cancelled").Sum(o => o.QuantityKg);
+        var totalRevenue = orders.Where(o => o.OrderStatus != "Cancelled").Sum(o => o.LineTotal);
+        var suspiciousOrders = orders.Count(o => o.WasPriceFlagged);
+
+        var metrics = new ListingAuditRiskMetrics(
+            totalRevisions,
+            flaggedRevisions,
+            minPrice,
+            maxPrice,
+            ratio,
+            totalOrders,
+            totalSoldKg,
+            totalRevenue,
+            suspiciousOrders);
+
+        var listingResponse = ToResponse(listing);
+
+        return new ListingAuditDetailResponse(listingResponse, metrics, priceTimeline, orders);
+    }
+
     public static IQueryable<ProductListing> Filter(IQueryable<ProductListing> source, AdminListingQuery filter)
     {
         var query = source;

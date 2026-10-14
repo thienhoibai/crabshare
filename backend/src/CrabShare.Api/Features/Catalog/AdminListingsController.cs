@@ -20,4 +20,9 @@ public sealed class AdminListingsController(ListingModerationService moderation)
     [EndpointSummary("UC24 — Ẩn niêm yết vi phạm khỏi cửa hàng")]
     public async Task<ActionResult<AdminListingResponse>> Hide(long id, HideListingRequest req, CancellationToken ct)
         => Ok(await moderation.HideAsync(id, req, ct));
+
+    [HttpGet("{id:long}/audit")]
+    [EndpointSummary("UC24 — Xem hồ sơ kiểm toán, dòng thời gian đổi giá và danh sách đơn hàng đã bán")]
+    public async Task<ActionResult<ListingAuditDetailResponse>> GetAudit(long id, CancellationToken ct)
+        => Ok(await moderation.GetAuditDetailAsync(id, ct));
 }
