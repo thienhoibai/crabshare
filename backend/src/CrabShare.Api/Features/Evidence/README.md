@@ -19,13 +19,18 @@ Chi tiết định dạng, migration V007, chính sách ảnh trùng và kiểm 
 CS-50 đã triển khai job yêu cầu ngẫu nhiên, API danh sách và mobile Hôm nay:
 [CS-50-random-capture-requests.md](../../../../../docs/validation/CS-50-random-capture-requests.md).
 CS-54 triển khai hàng đợi, chi tiết,
-ảnh riêng tư và phán quyết. Giải trình (CS-57) và timeline nhà đầu tư vẫn là task tiếp theo.
+ảnh riêng tư và phán quyết. CS-57 đã nối giải trình trên backend, web và mobile.
+Timeline nhà đầu tư vẫn thuộc task tiếp theo.
 Xem [CS-54-evidence-review.md](../../../../../docs/validation/CS-54-evidence-review.md).
+Giải trình: [CS-57-evidence-explanation.md](../../../../../docs/validation/CS-57-evidence-explanation.md).
 
 | Method | Path | Ai gọi | Ghi chú |
 |---|---|---|---|
 | POST | `/api/evidence` | OperatorMember | multipart: `batchCode`, `slotCode`, `capturedAt`, `latitude`, `longitude`, `captureRequestId?`, ảnh → `IFileStorage.SaveAsync` (tính SHA-256) → so trùng (SHA-256 + perceptual hash) → `ICrabDetector.DetectAsync` → tính `risk_score` → `review_status` |
 | GET | `/api/operators/me/capture-requests?status=Open` | OperatorMember | Yêu cầu chụp đang chờ |
+| GET | `/api/operators/me/evidence?status=Flagged` | OperatorMember | Danh sách phân trang, theo hộ nuôi; có giải trình và phản hồi thẩm định gần nhất |
+| GET | `/api/operators/me/evidence/{id}` | OperatorMember | Chi tiết để giải trình, kiểm tra quyền hiện tại |
+| GET | `/api/operators/me/evidence/{id}/image` | OperatorMember | Ảnh gốc riêng tư qua JWT, `no-store`; cùng quy tắc định dạng/path với CS-54 |
 | POST | `/api/evidence/{id}/explanation` | OperatorMember | UC48: giải trình khi bị gắn cờ |
 | GET | `/api/review/evidence?status=Flagged` | EvidenceReviewer | Hàng đợi thẩm định |
 | GET | `/api/review/evidence/{id}` | EvidenceReviewer | Ảnh + metadata + kết quả mô hình + giải trình |
@@ -42,6 +47,7 @@ Job nền: sinh yêu cầu chụp **ngẫu nhiên** mỗi ngày cho các lô đa
 - `Pass → Accepted`, `Fail → Rejected`, `NeedMoreEvidence → Flagged`. Ghi chú bắt buộc, tối đa 500 ký tự.
 - Một phán quyết mỗi kiểm định viên/bằng chứng. Sau `NeedMoreEvidence`, cùng người chỉ sửa phán quyết khi có `explained_at` mới; audit giữ quyết định cũ.
 - Kiểm tra quyền đang có trong CSDL, không chỉ JWT. Ghi phán quyết, trạng thái và audit trong cùng transaction; hash chữ thường theo `AuditChain`.
+- Chủ hộ/nhân viên chỉ giải trình bằng chứng `Flagged` của hộ nuôi mình. Nội dung 1–1000 ký tự, trim; giữ `Flagged` chờ phán quyết. Nội dung không đổi không tạo thêm audit hoặc đổi `explained_at`.
 - Mô hình chưa đạt precision ≥ 0,85 và recall ≥ 0,80 thì chỉ dùng như tín hiệu yếu (giảm trọng số trong `risk_score`).
 
 ## Màn hình

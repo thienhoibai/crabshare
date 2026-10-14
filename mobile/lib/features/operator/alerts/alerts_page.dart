@@ -1,7 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_theme.dart';
+import '../../../app/routes.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/format/dates.dart';
 import '../../../shared/widgets/app_ui.dart';
@@ -35,58 +37,78 @@ class AlertsPage extends ConsumerWidget {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: alerts.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => ErrorView(
-            message: apiErrorMessage(e),
-            onRetry: () => ref.invalidate(alertsProvider),
-          ),
-          data: (list) {
-            final open = list
-                .where(
-                  (a) =>
-                      a.status == AlertStatus.open ||
-                      a.status == AlertStatus.escalated,
-                )
-                .toList();
-            final done = list.where((a) => !open.contains(a)).toList();
-            return RefreshIndicator(
-              onRefresh: () => ref.refresh(alertsProvider.future),
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(
-                  20,
-                  12,
-                  20,
-                  kNavBarClearance,
-                ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
                     'Cảnh báo',
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
-                  SectionHeader(
-                    title: 'Cần phản hồi',
-                    actionLabel: '${open.length}',
+                  const SizedBox(height: 12),
+                  AddBar(
+                    label: 'Bằng chứng bị gắn cờ',
+                    onTap: () => context.push(Routes.flaggedEvidence),
                   ),
-                  if (open.isEmpty)
-                    const EmptyState(
-                      icon: Icons.check_circle_outline_rounded,
-                      title: 'Không có cảnh báo mở',
-                    ),
-                  for (final a in open) ...[
-                    _AlertCard(alert: a),
-                    const SizedBox(height: 10),
-                  ],
-                  if (done.isNotEmpty) const SectionHeader(title: 'Đã xử lý'),
-                  for (final a in done) ...[
-                    _AlertCard(alert: a),
-                    const SizedBox(height: 10),
-                  ],
                 ],
               ),
-            );
-          },
+            ),
+            Expanded(
+              child: alerts.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => ErrorView(
+                  message: apiErrorMessage(e),
+                  onRetry: () => ref.invalidate(alertsProvider),
+                ),
+                data: (list) {
+                  final open = list
+                      .where(
+                        (a) =>
+                            a.status == AlertStatus.open ||
+                            a.status == AlertStatus.escalated,
+                      )
+                      .toList();
+                  final done = list.where((a) => !open.contains(a)).toList();
+                  return RefreshIndicator(
+                    onRefresh: () => ref.refresh(alertsProvider.future),
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(
+                        20,
+                        12,
+                        20,
+                        kNavBarClearance,
+                      ),
+                      children: [
+                        SectionHeader(
+                          title: 'Cần phản hồi',
+                          actionLabel: '${open.length}',
+                        ),
+                        if (open.isEmpty)
+                          const EmptyState(
+                            icon: Icons.check_circle_outline_rounded,
+                            title: 'Không có cảnh báo mở',
+                          ),
+                        for (final a in open) ...[
+                          _AlertCard(alert: a),
+                          const SizedBox(height: 10),
+                        ],
+                        if (done.isNotEmpty)
+                          const SectionHeader(title: 'Đã xử lý'),
+                        for (final a in done) ...[
+                          _AlertCard(alert: a),
+                          const SizedBox(height: 10),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

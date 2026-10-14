@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router'
 import { AlertTriangle, CheckCircle2, Clock, Droplets, RefreshCw } from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
 import { useAuthStore } from '../../shared/auth/authStore'
@@ -35,6 +36,7 @@ export default function OperatorAlerts() {
   const high = open.filter(a => a.severity === 'High' || a.severity === 'Critical').length
   return <OperatorLayout activeTab="alerts">
     <OpHeading eyebrow="Cảnh báo" title="Trung tâm cảnh báo" description="Theo dõi cảnh báo vận hành và ghi cách xử lý trước hạn phản hồi." />
+    <Link to="/operator/evidence" className="rd-btn rd-btn--ghost mb-4">Bằng chứng bị gắn cờ → Giải trình</Link>
     <OpFacts items={[{ label: 'Cần theo dõi', value: open.length, tone: open.length ? 'danger' : 'ok' }, { label: 'Mức cao / nghiêm trọng', value: high, tone: high ? 'danger' : undefined }, { label: 'Đã xác nhận / xử lý', value: list.length - open.length }]} />
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><label className="flex items-center gap-2 font-bold">Trạng thái<select aria-label="Trạng thái" className="rd-input" value={status} onChange={event => setStatus(event.target.value)}><option value="">Tất cả</option>{Object.entries(alertStatuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><OpBtn variant="outline" disabled={query.isFetching} onClick={() => { void query.refetch() }}><RefreshCw size={16} /> Làm mới</OpBtn></div>
     {notice && <p role="status" className="mb-4 text-green-700">{notice}</p>}

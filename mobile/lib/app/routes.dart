@@ -22,6 +22,8 @@ abstract final class Routes {
   static const operatorToday = '/o/today';
   static const operatorLogs = '/o/logs';
   static const operatorAlerts = '/o/alerts';
+  static const flaggedEvidence = '/o/evidence';
+  static String evidenceExplanation(int id) => '$flaggedEvidence/$id';
   static const operatorAccount = '/o/account';
   static const dailyLogNew = '/o/log/new';
   static String dailyLogFor(String batchCode) =>
