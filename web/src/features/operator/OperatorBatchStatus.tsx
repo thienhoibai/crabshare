@@ -1,68 +1,42 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router'
 import { Plus } from 'lucide-react'
-import { Tabs } from '../../shared/ui/kit/kit'
+import { errorMessage } from '../../shared/api/http'
+import { useAuthStore } from '../../shared/auth/authStore'
+import { formatVnd } from '../../shared/lib/format'
 import OperatorLayout from './OperatorLayout'
-import { OpBadge, OpBtn, OpFacts, OpHeading, OpRow, OpSteps, crabImg, type Tone } from './operatorUi'
+import { OpBadge, OpBtn, OpHeading, OpNote, OpRow, crabImg, type Tone } from './operatorUi'
+import { useOperatorApplication } from './operatorsApi'
+import { batchStatuses, crabTypes, listBatches } from './batchesApi'
 
-const STEPS = ['Gọi vốn', 'Thả giống', 'Đang nuôi', 'Thu hoạch', 'Tất toán']
-
-const batches: { id: string; type: string; status: string; tone: Tone; step: number; total: number; cap: string; investor: string; alerts: number }[] = [
-  { id: 'BATCH-2026-11A', type: 'Cua lột', status: 'Đang sản xuất', tone: 'info', step: 3, total: 1500, cap: '75.000.000 ₫', investor: '12 nhà đầu tư · đủ 100%', alerts: 2 },
-  { id: 'BATCH-2026-12C', type: 'Cua thịt', status: 'Đang gọi vốn', tone: 'warn', step: 1, total: 2000, cap: '100.000.000 ₫', investor: 'Đã góp 45%', alerts: 0 },
-  { id: 'BATCH-2026-10B', type: 'Cua gạch', status: 'Đang thu hoạch', tone: 'ok', step: 4, total: 800, cap: '40.000.000 ₫', investor: 'Hải sản Biển Đông bao tiêu', alerts: 0 },
-  { id: 'BATCH-2026-09A', type: 'Cua lột', status: 'Đã tất toán', tone: 'mute', step: 5, total: 1000, cap: '50.000.000 ₫', investor: '8 nhà đầu tư · đã chia xong', alerts: 0 },
-]
-
-const FILTERS = ['Tất cả', 'Đang gọi vốn', 'Đang sản xuất', 'Đang thu hoạch', 'Đã tất toán'] as const
-type Filter = (typeof FILTERS)[number]
-
+const tones: Partial<Record<keyof typeof batchStatuses, Tone>> = { Draft: 'mute', PendingApproval: 'warn', Rejected: 'danger', Funding: 'gold', Closed: 'ok', Cancelled: 'danger' }
 export default function OperatorBatchStatus() {
-  const [filter, setFilter] = useState<Filter>('Tất cả')
-  const list = batches.filter((b) => filter === 'Tất cả' || b.status === filter)
-
-  return (
-    <OperatorLayout activeTab="batch">
-      <OpHeading
-        eyebrow="Lô nuôi"
-        title="Quản lý lô nuôi"
-        description="Các lô đang gọi vốn, đang nuôi hoặc đã thu hoạch của trại."
-        action={<OpBtn onClick={() => { window.location.href = '/operator/create-batch' }}><Plus size={16} /> Mở lô nuôi mới</OpBtn>}
-      />
-
-      <OpFacts
-        items={[
-          { label: 'Lô đang chạy', value: batches.filter((b) => b.step < 5).length },
-          { label: 'Con giống đang nuôi', value: batches.filter((b) => b.step > 1 && b.step < 5).reduce((s, b) => s + b.total, 0).toLocaleString('vi-VN') },
-          { label: 'Cảnh báo mở', value: batches.reduce((s, b) => s + b.alerts, 0), tone: 'danger' },
-          { label: 'Đã tất toán', value: batches.filter((b) => b.step === 5).length },
-        ]}
-      />
-
-      <div className="grid gap-4 justify-items-start">
-        <Tabs items={FILTERS} value={filter} onChange={setFilter} />
-        <div className="op-panel op-list w-full">
-          {list.map((b) => (
-            <OpRow
-              key={b.id}
-              href="/operator/batch/detail"
-              media={crabImg(b.type)}
-              title={b.id}
-              sub={`${b.type} · ${b.total.toLocaleString('vi-VN')} con giống`}
-              mid={<><OpSteps step={b.step} /><small>{STEPS[b.step - 1]} · {b.investor}</small></>}
-              end={
-                <>
-                  <span className="flex gap-2 flex-wrap justify-end">
-                    {b.alerts > 0 && <OpBadge tone="danger">{b.alerts} cảnh báo</OpBadge>}
-                    <OpBadge tone={b.tone}>{b.status}</OpBadge>
-                  </span>
-                  <small>Vốn {b.cap}</small>
-                </>
-              }
-            />
-          ))}
-          {list.length === 0 && <p className="op-empty">Không có lô nào ở trạng thái này.</p>}
-        </div>
+  const [status, setStatus] = useState('')
+  const [page, setPage] = useState(1)
+  const navigate = useNavigate()
+  const userId = useAuthStore(s => s.user?.userId)
+  const profile = useOperatorApplication()
+  const query = useQuery({ queryKey: ['operator-batches', userId, status, page], retry: false,
+    queryFn: ({ signal }) => listBatches(status, page, signal) })
+  return <OperatorLayout activeTab="batch">
+    <OpHeading eyebrow="Lô nuôi" title="Quản lý lô nuôi" description="Danh sách lô của hộ nuôi, bao gồm bản nháp và lô đang chờ duyệt."
+      action={profile.data?.memberRole === 'Owner' && profile.data.status === 'Approved' ? <OpBtn onClick={() => navigate('/operator/create-batch')}><Plus size={16} /> Mở lô nuôi mới</OpBtn> : undefined} />
+    <div className="grid gap-4">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Lọc trạng thái lô">
+        {Object.entries({ '': 'Tất cả', ...batchStatuses }).map(([value, label]) => <OpBtn key={value} sm variant={status === value ? 'ink' : 'outline'} aria-pressed={status === value} onClick={() => { setStatus(value); setPage(1) }}>{label}</OpBtn>)}
       </div>
-    </OperatorLayout>
-  )
+      {query.isPending ? <p role="status">Đang tải danh sách lô…</p> : query.isError ?
+        <div><div role="alert"><OpNote tone="danger">{errorMessage(query.error)}</OpNote></div><OpBtn disabled={query.isFetching} onClick={() => void query.refetch()}>Thử lại</OpBtn></div> : <>
+          <div className="op-panel op-list w-full">
+            {query.data.items.map(batch => <OpRow key={batch.batchCode} href={`/operator/create-batch?code=${encodeURIComponent(batch.batchCode)}`}
+              media={crabImg(batch.crabType)} title={batch.title} sub={`${batch.batchCode} · ${crabTypes[batch.crabType]} · ${batch.seedQuantity.toLocaleString('vi-VN')} con giống`}
+              mid={<small>Chu kỳ {batch.cycleDays} ngày · Thù lao {batch.operatorSharePct}%</small>}
+              end={<><OpBadge tone={tones[batch.status] ?? 'info'}>{batchStatuses[batch.status] ?? batch.status}</OpBadge><small>Vốn {formatVnd(batch.targetCapital)}</small></>} />)}
+            {!query.data.items.length && <p className="op-empty">Không có lô nào ở trạng thái này.</p>}
+          </div>
+          <div className="flex flex-wrap justify-between items-center gap-3"><span className="text-sm">{query.data.total} lô · Trang {page}</span><div className="flex gap-2"><OpBtn sm variant="outline" disabled={page === 1} onClick={() => setPage(page - 1)}>Trước</OpBtn><OpBtn sm variant="outline" disabled={page * query.data.pageSize >= query.data.total} onClick={() => setPage(page + 1)}>Sau</OpBtn></div></div>
+        </>}
+    </div>
+  </OperatorLayout>
 }

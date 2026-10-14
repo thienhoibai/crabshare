@@ -53,6 +53,14 @@ public sealed class DemoSeedFixture : IAsyncLifetime
 public class DemoSeedDatabaseTests(DemoSeedFixture fixture) : IClassFixture<DemoSeedFixture>
 {
     [Fact]
+    public async Task Every_demo_batch_retains_its_standard_cost_and_items()
+    {
+        await using var db = fixture.OpenDb();
+        Assert.Equal(6, await db.StandardCostVersions.CountAsync());
+        Assert.False(await db.StandardCostVersions.AnyAsync(v => !v.StandardCostItems.Any(i => i.Category == "MortalityReserve")));
+    }
+
+    [Fact]
     public async Task Co_du_6_lo_o_5_giai_doan()
     {
         await using var db = fixture.OpenDb();

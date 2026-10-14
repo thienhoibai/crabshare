@@ -11,7 +11,23 @@
 | `disbursement_tranche` | kế hoạch giải ngân theo đợt (`planned_amount`, `planned_date`, `unlock_condition`) |
 | `fee_tier` | phí nền tảng theo quy mô vốn (đọc khi duyệt lô) |
 
-## Endpoint dự kiến
+## Endpoint UC07 đã triển khai
+
+- `POST /api/batches`, `GET/PUT /api/batches/{code}`, `PUT /api/batches/{code}/standard-cost`, `POST /api/batches/{code}/submit`, `GET /api/operators/me/batches?status=&page=&pageSize=`.
+- GET trong UC07 dành cho Owner/Staff của chính hộ nuôi; endpoint công khai UC09 và xét duyệt UC08 bên dưới là kế hoạch tiếp theo.
+- Quyền lấy từ tài khoản Active, vai trò OperatorMember và membership hiện hành trong DB. Token có claim hộ nuôi khác bị từ chối. Chỉ Owner của hộ nuôi Approved được ghi; Staff chỉ xem.
+- Sửa thông tin/chi phí khi Draft hoặc Rejected theo quy tắc module. Gửi duyệt chỉ từ Draft; Rejected chưa có luồng gửi lại theo state machine hiện tại.
+- Dùng `InTransactionAsync` Serializable và `IAuditLog`: khóa audit trước hộ nuôi/lô, cùng thứ tự VI-02; mọi thay đổi dữ liệu/chi phí/trạng thái và audit cùng commit hoặc rollback.
+- Chi phí Draft được thay items trong cùng phiên bản. Khi sửa Rejected với bản Submitted, giữ items cũ, đánh dấu Superseded và tạo bản Draft kế tiếp. Locked/Approved không được sửa. Cấu hình EF viết tay sửa quan hệ nhiều phiên bản cho đúng index unique có filter, không đổi schema.
+- Body thông tin: `title`, `crabType`, `seedQuantity`, `expectedOutputKg`, `cycleDays`, `restockCutoffDays`, `minViableCapital`, `targetCapital`, `maxCapital`, `minContribution`, `operatorSharePct`. Không nhận quyền sở hữu/trạng thái từ client. Phần trăm dùng 5–10, mặc định 7.
+- Body chi phí: `{ "items": [{ "category": "MortalityReserve", "description": "Dự phòng hao hụt", "quantity": 1, "unit": "khoản", "unitPrice": 5000000, "trancheNo": 1 }] }`. Giá nguyên đồng ≥ 0; quantity > 0 và tối đa 3 chữ số thập phân; giới hạn theo DECIMAL của schema. Khấu hao có trancheNo null, khoản khác 0–255 theo TINYINT hiện có (schema không yêu cầu > 0).
+- Thiếu MortalityReserve trả 422 `batch.mortality_reserve_required`, cả lưu và gửi duyệt. Dữ liệu sai định dạng/range trả 400 kèm field errors; chuyển trạng thái sai trả 422 `batch.invalid_transition`.
+- Tổng do server tính, bỏ qua tổng từ client. Quy ước làm tròn: quantity × unitPrice làm tròn từng dòng đến đồng, midpoint away from zero, rồi cộng tổng; schema hiện tại chưa quy định làm tròn cho tích có phần lẻ.
+- Response có thông tin lô, `standardCost` (phiên bản, status, total, items có amount), `canEdit`, `canSubmit`. Danh sách trả `PagedResult`, không tải chi tiết khoản chi; GET theo code tải bản mới nhất.
+- Web `/operator/create-batch?code=...` xem/sửa lô đã lưu, `/operator/batch` tải danh sách và lọc/phân trang từ server. Luồng gửi chờ lưu thông tin → chi phí → submit; giữ form/mã lô và URL khi bước sau thất bại; cập nhật cache chi tiết sau lưu/gửi.
+- Không migration, dependency mới hoặc trường lợi suất kỳ vọng.
+
+## Endpoint và kế hoạch các UC liên quan
 | Method | Path | Ai gọi | Ghi chú |
 |---|---|---|---|
 | POST | `/api/batches` | Operator Owner | Tạo lô `Draft` (hộ nuôi phải `Approved`) |
@@ -23,7 +39,7 @@
 | POST | `/api/admin/batches/{code}/approve` | PlatformAdmin | Nhận `fundingOpenAt`, `fundingDeadline` → `Funding`; **khoá** chi phí chuẩn (`Locked`, `locked_at`); chọn `fee_tier`, ghi `platform_fee_amount`; sinh `disbursement_tranche` theo `tranche_no` |
 | POST | `/api/admin/batches/{code}/reject` | PlatformAdmin | Kèm lý do → `Rejected` |
 | GET | `/api/batches?status=Funding&crabType=&page=` | Ai cũng xem | UC09 — điều khoản đã công bố |
-| GET | `/api/batches/{code}` | Ai cũng xem | Chi tiết + tóm tắt chi phí chuẩn đã khoá |
+| GET | `/api/batches/{code}` | Owner/Staff của hộ nuôi (UC07) | Bản nháp và chi phí; quyền công khai UC09 chưa triển khai ở task này |
 
 ## Quy tắc phải giữ
 - Chi phí chuẩn **khoá khi mở gọi vốn**; sau khi khoá không sửa được (TL-11). Trigger CSDL cũng chặn.
