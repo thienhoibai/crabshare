@@ -2,7 +2,7 @@
    Đặt thành công thì hàng được giữ 15 phút và sang trang xác nhận để chuyển khoản. */
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { ArrowLeft, Clock, Landmark, MapPin, ShoppingBag, Trash2, Truck } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, Clock, Landmark, MapPin, ShoppingBag, Trash2, Truck } from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
 import { useAuthStore } from '../../shared/auth/authStore'
 import { useCartStore } from '../../shared/cart/cartStore'
@@ -139,7 +139,15 @@ export default function CheckoutPage() {
               <p className="rd-note"><Landmark size={14} /> Chuyển khoản VietQR vào tài khoản riêng của từng lô. Không thu tiền khi nhận hàng.</p>
               <p className="rd-note"><Clock size={14} /> Đặt xong, hàng được giữ 15 phút để bạn chuyển khoản.</p>
               {totals.groups.length > 1 && <p className="rd-note"><Truck size={14} /> Hàng từ {totals.groups.length} lô sẽ tạo {totals.groups.length} đơn, mỗi đơn một mã QR.</p>}
-              {checkout.isError && <p className="co-error" role="alert">{errorMessage(checkout.error)}</p>}
+              {checkout.isError && (
+                <div className="p-3.5 my-3 rounded-xl border border-rose-300 bg-rose-50 text-rose-800 text-xs sm:text-sm font-medium flex items-start gap-2.5">
+                  <AlertTriangle size={18} className="text-rose-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold">Không thể hoàn tất đặt hàng</p>
+                    <p className="mt-0.5 text-rose-700">{errorMessage(checkout.error)}</p>
+                  </div>
+                </div>
+              )}
               <button type="button" className="rd-btn rd-btn--primary rd-btn--block rd-btn--lg" disabled={!addressId || checkout.isPending} onClick={place}>
                 {checkout.isPending ? 'Đang đặt hàng…' : `Đặt hàng · ${vnd(totals.subtotal)}`}
               </button>

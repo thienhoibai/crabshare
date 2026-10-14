@@ -55,3 +55,47 @@ export function useHideListing() {
     },
   })
 }
+
+export interface ListingAuditRiskMetrics {
+  totalPriceChanges: number
+  flaggedChangesCount: number
+  minPricePerKg: number
+  maxPricePerKg: number
+  priceFluctuationRatio: number
+  totalOrdersCount: number
+  totalSoldKg: number
+  totalRevenue: number
+  suspiciousOrdersCount: number
+}
+
+export interface ListingAuditOrderLine {
+  orderId: number
+  orderNo: string
+  customerName: string
+  customerPhone: string
+  quantityKg: number
+  unitPrice: number
+  lineTotal: number
+  priceHistoryId: number
+  wasPriceFlagged: boolean
+  orderStatus: string
+  placedAt: string
+}
+
+export interface ListingAuditDetail {
+  listing: AdminListing
+  riskMetrics: ListingAuditRiskMetrics
+  priceTimeline: PriceRevision[]
+  orders: ListingAuditOrderLine[]
+}
+
+export function useListingAudit(listingId: number | null) {
+  const userId = useAuthStore(s => s.user?.userId)
+  return useQuery({
+    queryKey: ['admin', 'listings', 'audit', userId, listingId],
+    enabled: listingId !== null && listingId > 0,
+    retry: false,
+    queryFn: async () => (await http.get<ListingAuditDetail>(`/api/admin/listings/${listingId}/audit`)).data,
+  })
+}
+

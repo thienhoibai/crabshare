@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router'
-import { AlertTriangle, EyeOff, RefreshCw, Store } from 'lucide-react'
+import { AlertTriangle, EyeOff, History, RefreshCw, Store } from 'lucide-react'
 import axios from 'axios'
 import AdminLayout from './AdminLayout'
 import { errorMessage } from '../../shared/api/http'
@@ -8,6 +8,7 @@ import { formatDateTime, formatVnd } from '../../shared/lib/format'
 import { ActionDialog } from '../../shared/ui/ActionDialog'
 import { CRAB_TYPE_LABELS, REASON_LABELS, STATUS_LABELS } from '../operator/listingsApi'
 import { ADMIN_LISTINGS_PAGE_SIZE, useAdminListings, useHideListing, type AdminListing } from './adminListingsApi'
+import { ListingAuditModal } from './ListingAuditModal'
 
 const button = 'relative inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50'
 const field = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm'
@@ -28,6 +29,7 @@ export default function AdminStorefront() {
   const mutation = useHideListing()
   const lock = useRef(false)
   const [selection, setSelection] = useState<AdminListing | null>(null)
+  const [auditListingId, setAuditListingId] = useState<number | null>(null)
   const [notice, setNotice] = useState('')
   const [localError, setLocalError] = useState('')
 
@@ -92,7 +94,7 @@ export default function AdminStorefront() {
             <div className="relative overflow-x-auto" aria-busy={query.isFetching}>
               <table className="w-full min-w-[900px] text-left text-sm"><caption className="sr-only">Niêm yết và kết quả so giá của lần đổi giá gần nhất</caption>
                 <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr>{['Niêm yết', 'Lô / Hộ nuôi', 'Giá hiện tại', 'So giá lần gần nhất', 'Trạng thái', 'Thao tác'].map(title => <th scope="col" className="p-4 font-bold" key={title}>{title}</th>)}</tr></thead>
-                <tbody className="divide-y divide-slate-100">{query.data.items.map(l => <ListingRow key={l.listingId} listing={l} onHide={() => open(l)} />)}</tbody>
+                <tbody className="divide-y divide-slate-100">{query.data.items.map(l => <ListingRow key={l.listingId} listing={l} onHide={() => open(l)} onAudit={() => setAuditListingId(l.listingId)} />)}</tbody>
               </table>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 p-4 text-sm text-slate-600"><span>Trang {page} / {Math.max(1, Math.ceil(query.data.total / ADMIN_LISTINGS_PAGE_SIZE))}</span><div className="flex gap-2"><button className={button} disabled={page === 1 || query.isFetching} onClick={() => navigate({ page: page - 1 })}>Trước</button><button className={button} disabled={page * ADMIN_LISTINGS_PAGE_SIZE >= query.data.total || query.isFetching} onClick={() => navigate({ page: page + 1 })}>Sau</button></div></div>
@@ -108,27 +110,116 @@ export default function AdminStorefront() {
             <div className="flex flex-wrap justify-end gap-3"><button className={button} type="button" disabled={mutation.isPending} onClick={() => setSelection(null)}>Hủy</button><button className={button + ' border-red-600! bg-red-600! text-white hover:bg-red-700!'} disabled={mutation.isPending}>{mutation.isPending ? 'Đang xử lý…' : 'Ẩn niêm yết'}</button></div>
           </form>
         </ActionDialog>}
+
+        <ListingAuditModal
+          listingId={auditListingId}
+          onClose={() => setAuditListingId(null)}
+          onOpenHide={(l) => open(l)}
+        />
       </section>
     </AdminLayout>
   )
 }
 
-function ListingRow({ listing: l, onHide }: { listing: AdminListing; onHide: () => void }) {
+function ListingRow({
+  listing: l,
+  onHide,
+  onAudit,
+}: {
+  listing: AdminListing
+  onHide: () => void
+  onAudit: () => void
+}) {
   const price = l.latestPrice
   const check = price?.check
-  return <tr className="align-top hover:bg-slate-50/60">
-    <td className="max-w-64 p-4"><span className="text-xs font-medium text-slate-500">NY-{l.listingId}</span><p className="mt-1 break-words font-bold text-slate-900">{l.title}</p><p className="mt-1 text-xs text-slate-500">{CRAB_TYPE_LABELS[l.crabType] ?? l.crabType} · {l.gradeName} · {l.storageType === 'Frozen' ? 'Cấp đông' : 'Tươi sống'}</p></td>
-    <td className="p-4 text-slate-600"><p className="font-semibold text-slate-800">{l.batchCode}</p><p className="mt-1 text-xs">{l.farmName}</p></td>
-    <td className="whitespace-nowrap p-4"><p className="font-mono font-bold text-slate-900">{formatVnd(l.pricePerKg)}</p>{price?.previousPricePerKg != null && <p className="mt-1 text-xs text-slate-500">Trước: {formatVnd(price.previousPricePerKg)}</p>}<p className="mt-1 text-xs text-slate-500">Còn {kg(l.availableQtyKg)}</p></td>
-    <td className="max-w-72 p-4 text-xs text-slate-600">{!price ? 'Chưa có lịch sử giá' : <>
-      {price.flaggedAbnormal && <span className="mb-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 font-bold text-amber-800"><AlertTriangle size={13} />Giá bất thường</span>}
-      <p>{REASON_LABELS[price.reason]}{price.note ? `: ${price.note}` : ''}</p>
-      <p className="mt-1">{price.changedBy} · {formatDateTime(price.effectiveFrom)}</p>
-      {check && (check.hasEnoughData
-        ? <p className="mt-1">Trung vị {check.medianPricePerKg != null ? formatVnd(check.medianPricePerKg) : '—'} · điểm {check.score ?? '—'} / ngưỡng {check.threshold ?? '—'} ({check.sampleCount} giao dịch, {check.operatorCount} hộ, {check.windowDays} ngày)</p>
-        : <p className="mt-1">Chưa đủ dữ liệu so giá ({check.sampleCount} giao dịch, {check.operatorCount} hộ)</p>)}
-    </>}</td>
-    <td className="p-4"><span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{STATUS_LABELS[l.status]}</span>{l.hiddenAt && <p className="mt-2 text-xs text-red-700">Đã ẩn {formatDateTime(l.hiddenAt)}{l.hiddenBy ? ` bởi ${l.hiddenBy}` : ''}: {l.hiddenReason}</p>}</td>
-    <td className="p-4">{l.hiddenAt ? <span className="text-xs text-slate-500">Không có thao tác</span> : <button className={button + ' text-red-700'} onClick={onHide}><EyeOff size={15} />Ẩn<span className="sr-only"> {l.title}</span></button>}</td>
-  </tr>
+  return (
+    <tr
+      className="align-top hover:bg-slate-50/80 cursor-pointer transition-colors"
+      onClick={onAudit}
+      title="Bấm để xem hồ sơ kiểm toán và đơn hàng"
+    >
+      <td className="max-w-64 p-4">
+        <span className="text-xs font-mono font-medium text-slate-500">NY-{l.listingId}</span>
+        <p className="mt-1 break-words font-bold text-slate-900 hover:text-orange-600 transition-colors">{l.title}</p>
+        <p className="mt-1 text-xs text-slate-500">
+          {CRAB_TYPE_LABELS[l.crabType] ?? l.crabType} · {l.gradeName} · {l.storageType === 'Frozen' ? 'Cấp đông' : 'Tươi sống'}
+        </p>
+      </td>
+      <td className="p-4 text-slate-600">
+        <p className="font-semibold text-slate-800">{l.batchCode}</p>
+        <p className="mt-1 text-xs">{l.farmName}</p>
+      </td>
+      <td className="whitespace-nowrap p-4">
+        <p className="font-mono font-bold text-slate-900">{formatVnd(l.pricePerKg)}</p>
+        {price?.previousPricePerKg != null && (
+          <p className="mt-1 text-xs text-slate-500 font-mono">Trước: {formatVnd(price.previousPricePerKg)}</p>
+        )}
+        <p className="mt-1 text-xs text-slate-500">Còn {kg(l.availableQtyKg)}</p>
+      </td>
+      <td className="max-w-72 p-4 text-xs text-slate-600">
+        {!price ? (
+          'Chưa có lịch sử giá'
+        ) : (
+          <>
+            {price.flaggedAbnormal && (
+              <span className="mb-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 font-bold text-amber-800">
+                <AlertTriangle size={13} />
+                Giá bất thường
+              </span>
+            )}
+            <p>
+              {REASON_LABELS[price.reason]}
+              {price.note ? `: ${price.note}` : ''}
+            </p>
+            <p className="mt-1">
+              {price.changedBy} · {formatDateTime(price.effectiveFrom)}
+            </p>
+            {check &&
+              (check.hasEnoughData ? (
+                <p className="mt-1">
+                  Trung vị {check.medianPricePerKg != null ? formatVnd(check.medianPricePerKg) : '—'} · điểm{' '}
+                  {check.score ?? '—'} / ngưỡng {check.threshold ?? '—'} ({check.sampleCount} giao dịch,{' '}
+                  {check.operatorCount} hộ, {check.windowDays} ngày)
+                </p>
+              ) : (
+                <p className="mt-1">
+                  Chưa đủ dữ liệu so giá ({check.sampleCount} giao dịch, {check.operatorCount} hộ)
+                </p>
+              ))}
+          </>
+        )}
+      </td>
+      <td className="p-4">
+        <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
+          {STATUS_LABELS[l.status]}
+        </span>
+        {l.hiddenAt && (
+          <p className="mt-2 text-xs text-red-700 font-semibold">
+            Đã ẩn {formatDateTime(l.hiddenAt)}
+            {l.hiddenBy ? ` bởi ${l.hiddenBy}` : ''}: {l.hiddenReason}
+          </p>
+        )}
+      </td>
+      <td className="p-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className={button + ' text-slate-700 hover:text-orange-600'}
+            onClick={onAudit}
+            title="Xem hồ sơ kiểm toán, timeline đổi giá và đơn hàng"
+          >
+            <History size={14} />
+            Rà soát
+          </button>
+          {!l.hiddenAt && (
+            <button className={button + ' text-red-700'} onClick={onHide}>
+              <EyeOff size={14} />
+              Ẩn
+              <span className="sr-only"> {l.title}</span>
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  )
 }

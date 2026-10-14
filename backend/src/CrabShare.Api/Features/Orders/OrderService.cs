@@ -107,7 +107,7 @@ public sealed class OrderService(
             var l = rows.FirstOrDefault(r => r.ListingId == id)
                     ?? throw new NotFoundException("listing.not_found", "Không tìm thấy niêm yết.");
             if (l.Status != "Published" || l.Hidden)
-                throw new BusinessRuleException("order.listing_not_on_sale", $"\"{l.Title}\" không còn đăng bán.");
+                throw new BusinessRuleException("order.listing_not_on_sale", $"Mặt hàng \"{l.Title}\" đã bị ẩn khỏi cửa hàng hoặc ngừng bán. Vui lòng bấm bỏ sản phẩm này khỏi giỏ để tiếp tục.");
             if (l.BatchStatus != "Harvesting")
                 throw new BusinessRuleException("order.batch_not_harvesting", $"Lô {l.BatchCode} không còn ở giai đoạn bán hàng.");
             if (CatalogService.SellUntil(l.StorageType, l.FrozenAt, l.FrozenStockCapMonths) is { } until && until <= now)
