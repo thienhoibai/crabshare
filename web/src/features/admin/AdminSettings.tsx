@@ -1,5 +1,6 @@
 import { Save, Settings2, FileSignature } from 'lucide-react';
 import AdminLayout from './AdminLayout';
+import FeeTierEditor from './FeeTierEditor';
 
 export default function AdminSettings() {
   return (
@@ -9,6 +10,7 @@ export default function AdminSettings() {
         <p className="text-sm text-slate-500 mt-1">Cấu hình các tham số cốt lõi và quản lý phôi Hợp đồng điện tử.</p>
       </header>
 
+      <FeeTierEditor />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Platform Config */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
@@ -17,14 +19,6 @@ export default function AdminSettings() {
           </h2>
           
           <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Phí Nền Tảng (Platform Fee %)</label>
-              <div className="flex items-center gap-3">
-                <input type="number" defaultValue={5} className="w-24 px-3 py-2 border border-slate-300 rounded-lg text-slate-900 font-mono text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-                <span className="text-sm text-slate-500">% áp dụng cho các Lô nuôi duyệt sau ngày hôm nay</span>
-              </div>
-            </div>
-
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-2">Số ngày tối đa xử lý cảnh báo</label>
               <div className="flex items-center gap-3">

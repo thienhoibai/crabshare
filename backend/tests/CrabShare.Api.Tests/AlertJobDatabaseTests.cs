@@ -13,6 +13,23 @@ namespace CrabShare.Api.Tests;
 
 public partial class AlertDatabaseTests
 {
+    [Fact]
+    public async Task Funding_ready_tranche_overdue_before_stocking_alerts_but_unresolved_schedule_does_not()
+    {
+        var ready=await SetupFarm(); var waiting=await SetupFarm(); var now=TodayAt(12);
+        await Db(async db=> {
+            var b=await db.Batches.SingleAsync(b=>b.BatchId==ready.BatchId); b.Status="Funding"; b.CapitalClosedAt=now.AddDays(-2);
+            (await db.Batches.SingleAsync(b=>b.BatchId==waiting.BatchId)).Status="Funding";
+            db.DisbursementTranches.Add(new DisbursementTranche { BatchId=ready.BatchId,TrancheNo=1,PlannedAmount=1000000,
+                PlannedDate=DateOnly.FromDateTime(now.DateTime).AddDays(-1),AnchorCode="FundingReady",OffsetDays=0,UnlockCondition="Đủ vốn và hợp đồng",Status="Planned" });
+            db.DisbursementTranches.Add(new DisbursementTranche { BatchId=waiting.BatchId,TrancheNo=1,PlannedAmount=1000000,
+                AnchorCode="FundingReady",OffsetDays=0,UnlockCondition="Đủ vốn và hợp đồng",Status="Planned" });
+            await db.SaveChangesAsync(); return true;
+        });
+        await RunJob(now); await RunJob(now);
+        Assert.Equal(1,await Db(db=>db.Alerts.CountAsync(a=>a.BatchId==ready.BatchId && a.AlertType=="MilestoneDelay")));
+        Assert.False(await Db(db=>db.Alerts.AnyAsync(a=>a.BatchId==waiting.BatchId && a.AlertType=="MilestoneDelay")));
+    }
     private sealed class FixedClock(DateTimeOffset value) : TimeProvider { public override DateTimeOffset GetUtcNow() => value; }
     private static DateTimeOffset TodayAt(int hour) => new(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).Date.AddHours(hour), TimeSpan.FromHours(7));
     private async Task<int> RunJob(DateTimeOffset now)

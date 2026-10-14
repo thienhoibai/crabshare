@@ -208,20 +208,19 @@ public class BatchesTests(OperatorDatabaseFixture fixture) : IClassFixture<Opera
     }
 
     [Fact]
-    public async Task Rejected_edit_creates_new_cost_version_and_preserves_previous_items()
+    public async Task Definitively_rejected_batch_preserves_history_and_cannot_be_edited()
     {
         var (client, _, _) = await Owner(); var code = await Create(client);
         (await client.PutAsJsonAsync($"/api/batches/{code}/standard-cost", Costs())).EnsureSuccessStatusCode();
         (await client.PostAsync($"/api/batches/{code}/submit", null)).EnsureSuccessStatusCode();
         await using var db = fixture.OpenDb();
         await db.Batches.Where(b => b.BatchCode == code).ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, "Rejected"));
-        (await client.PutAsJsonAsync($"/api/batches/{code}", Batch())).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await client.PutAsJsonAsync($"/api/batches/{code}", Batch())).StatusCode);
         var costs = await client.PutAsJsonAsync($"/api/batches/{code}/standard-cost", Costs());
-        costs.EnsureSuccessStatusCode();
-        Assert.Equal(2, (await costs.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("standardCost").GetProperty("versionNo").GetInt32());
-        Assert.Equal(2, await db.StandardCostVersions.CountAsync(v => v.Batch.BatchCode == code));
-        Assert.Equal(2, await db.StandardCostItems.CountAsync(i => i.CostVersion.Batch.BatchCode == code));
-        Assert.Equal("Superseded", await db.StandardCostVersions.Where(v => v.Batch.BatchCode == code && v.VersionNo == 1).Select(v => v.Status).SingleAsync());
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,costs.StatusCode);
+        Assert.Equal(1, await db.StandardCostVersions.CountAsync(v => v.Batch.BatchCode == code));
+        Assert.Equal(1, await db.StandardCostItems.CountAsync(i => i.CostVersion.Batch.BatchCode == code));
+        Assert.Equal("Submitted", await db.StandardCostVersions.Where(v => v.Batch.BatchCode == code && v.VersionNo == 1).Select(v => v.Status).SingleAsync());
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.PostAsync($"/api/batches/{code}/submit", null)).StatusCode);
     }
 

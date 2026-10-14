@@ -6,10 +6,12 @@ import { ArrowLeft, Plus, Save, Send, Trash2 } from 'lucide-react'
 import { errorMessage, type ApiProblem } from '../../shared/api/http'
 import { useAuthStore } from '../../shared/auth/authStore'
 import { formatVnd } from '../../shared/lib/format'
+import { costAmount } from '../../shared/lib/money'
 import OperatorLayout from './OperatorLayout'
 import { OpAside, OpBack, OpBtn, OpHeading, OpNote, OpPanel, crabImg } from './operatorUi'
+import CostScheduleEditor, { scheduleNumbers, hasTiming } from './CostScheduleEditor'
 import { useOperatorApplication } from './operatorsApi'
-import { batchStatuses, costCategories, crabTypes, getBatch, saveBatch, saveStandardCost, submitBatch, type Batch, type BatchRequest, type CostItem } from './batchesApi'
+import { batchStatuses, costCategories, crabTypes, getBatch, saveBatch, saveStandardCost, submitBatch, type Batch, type BatchRequest, type CostItem, type CostTranche } from './batchesApi'
 
 const initial: BatchRequest = { title: 'Lô cua lột tháng 11', crabType: 'SoftShellCrab', seedQuantity: 1500, expectedOutputKg: 300, cycleDays: 45,
   restockCutoffDays: 10, minViableCapital: 60_000_000, targetCapital: 75_000_000, maxCapital: 90_000_000, minContribution: 1_000_000, operatorSharePct: 7 }
@@ -38,14 +40,15 @@ function BatchEditor({ existing }: { existing?: Batch }) {
   const [form, setForm] = useState<BatchRequest>(existing ?? initial)
   const [items, setItems] = useState<(CostItem & { key: number })[]>(() => (existing?.standardCost?.items ?? initialItems).map((i, key) => ({ ...i, key })))
   const nextKey = useRef(items.length)
+  const [plans, setPlans] = useState<CostTranche[]>(existing?.standardCost?.tranches ?? [])
   const [code, setCode] = useState(existing?.batchCode ?? null)
   const [status, setStatus] = useState(existing?.status ?? 'Draft')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [notice, setNotice] = useState('')
   const busy = useRef(false)
   const canWrite = profile.data?.status === 'Approved' && profile.data.memberRole === 'Owner'
-    && (status === 'Draft' || status === 'Rejected') && (!existing || existing.canEdit)
-  const total = items.reduce((sum, i) => sum + Math.round(i.quantity * i.unitPrice), 0)
+    && status === 'Draft' && (!existing || existing.canEdit)
+  const total = items.reduce((sum, i) => sum + costAmount(i.quantity, i.unitPrice), 0)
   const mutation = useMutation({
     mutationFn: async (submit: boolean) => {
       const saved = await saveBatch(code, form)
@@ -55,7 +58,7 @@ function BatchEditor({ existing }: { existing?: Batch }) {
       qc.setQueryData(['operator-batch', userId, saved.batchCode], saved)
       void qc.invalidateQueries({ queryKey: ['operator-batches'] })
       const costs: CostItem[] = items.map(i => ({ category: i.category, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, trancheNo: i.trancheNo }))
-      const costSaved = await saveStandardCost(saved.batchCode, costs)
+      const costSaved = await saveStandardCost(saved.batchCode, costs, plans.filter(p => scheduleNumbers(items).includes(p.trancheNo) && hasTiming(p) && p.unlockCondition.trim()))
       qc.setQueryData(['operator-batch', userId, saved.batchCode], costSaved)
       return submit ? await submitBatch(saved.batchCode) : costSaved
     },
@@ -82,6 +85,10 @@ function BatchEditor({ existing }: { existing?: Batch }) {
     for (const { key } of numericFields)
       if (!['expectedOutputKg', 'operatorSharePct'].includes(key) && !Number.isSafeInteger(form[key])) problems[key] = 'Nhập số nguyên trong giới hạn chính xác.'
     if (!form.title.trim()) problems.title = 'Nhập tên lô.'
+    if (submit && scheduleNumbers(items).some(n => !plans.some(p => p.trancheNo === n && hasTiming(p) && p.unlockCondition.trim())))
+      problems.schedule = 'Chọn mốc, số ngày sau mốc và điều kiện cho từng đợt trước khi gửi duyệt.'
+    if (plans.some(p => scheduleNumbers(items).includes(p.trancheNo) && (p.anchorCode || p.offsetDays != null || p.plannedDate || p.unlockCondition.trim()) && (!hasTiming(p) || !p.unlockCondition.trim())))
+      problems.schedule = 'Hoàn thành mốc, số ngày và điều kiện của lịch đang nhập; hoặc để trống lịch để lưu nháp.'
     if (!items.some(i => i.category === 'MortalityReserve')) problems.items = 'Chi phí chuẩn bắt buộc có dự phòng hao hụt (MortalityReserve).'
     if (items.some(i => !Number.isSafeInteger(i.unitPrice)) || !Number.isSafeInteger(total)) problems.items = 'Tiền và tổng chi phí phải là số nguyên trong giới hạn chính xác.'
     setErrors(problems); setNotice(''); mutation.reset()
@@ -100,8 +107,9 @@ function BatchEditor({ existing }: { existing?: Batch }) {
       <div className="min-w-0 space-y-4">
         {profile.isPending && <p role="status">Đang kiểm tra hồ sơ hộ nuôi…</p>}
         {profile.isError && <div role="alert"><OpNote tone="danger">{errorMessage(profile.error)}</OpNote><OpBtn type="button" onClick={() => void profile.refetch()}>Thử lại</OpBtn></div>}
-        {profile.isSuccess && !canWrite && <OpNote tone="info">Chỉ chủ hộ nuôi Approved được sửa lô Draft hoặc Rejected. <a className="underline" href="/operator/register">Xem hồ sơ hộ nuôi</a></OpNote>}
+        {profile.isSuccess && !canWrite && <OpNote tone="info">Chỉ chủ hộ nuôi Approved được sửa lô Draft. Rejected là từ chối dứt điểm. <a className="underline" href="/operator/register">Xem hồ sơ hộ nuôi</a></OpNote>}
         {notice && <div role="status"><OpNote tone="ok">{notice}</OpNote></div>}
+        {existing?.rejectionReason && <OpNote tone="danger">{status === 'Draft' ? 'Yêu cầu bổ sung' : 'Lý do từ chối'}: {existing.rejectionReason}</OpNote>}
         {(Object.keys(errors).length > 0 || mutation.isError) && <div role="alert"><OpNote tone="danger">{mutation.isError ? errorMessage(mutation.error) : [...new Set(Object.values(errors))].join(' ')}</OpNote></div>}
         <OpPanel>
           <fieldset className="op-form border-0 p-0 m-0 min-w-0" disabled={disabled}>
@@ -114,7 +122,7 @@ function BatchEditor({ existing }: { existing?: Batch }) {
             </div></div>
           </fieldset>
         </OpPanel>
-        <OpPanel title="Chi phí chuẩn" subtitle="Bắt buộc có dự phòng hao hụt. Khấu hao không có đợt giải ngân.">
+        <OpPanel title="Chi phí chuẩn" subtitle="Khấu hao và dự phòng hao hụt không giải ngân theo lịch.">
           <fieldset disabled={disabled} className="border-0 p-0 m-0 min-w-0">
             <div className="overflow-x-auto"><table className="w-full text-sm" style={{ minWidth: 850 }}><caption className="sr-only">Các khoản chi phí chuẩn</caption><thead><tr>{['Hạng mục', 'Mô tả', 'Số lượng', 'Đơn vị', 'Đơn giá (đồng)', 'Đợt', 'Thành tiền', ''].map((h, n) => <th className="p-2 text-left" scope="col" key={n}>{h}</th>)}</tr></thead>
               <tbody>{items.map((item, index) => <tr key={item.key}>
@@ -123,8 +131,8 @@ function BatchEditor({ existing }: { existing?: Batch }) {
                 <td className="p-1"><input aria-label={`Số lượng ${index + 1}`} className="op-input" type="number" required min={0.001} max={999999999.999} step={0.001} value={Number.isNaN(item.quantity) ? '' : item.quantity} onChange={e => updateItem(item.key, { quantity: e.target.valueAsNumber })} /></td>
                 <td className="p-1"><input aria-label={`Đơn vị ${index + 1}`} className="op-input" required maxLength={20} value={item.unit} onChange={e => updateItem(item.key, { unit: e.target.value })} /></td>
                 <td className="p-1"><input aria-label={`Đơn giá ${index + 1}`} className="op-input" type="number" required min={0} max={Number.MAX_SAFE_INTEGER} step={1} value={Number.isNaN(item.unitPrice) ? '' : item.unitPrice} onChange={e => updateItem(item.key, { unitPrice: e.target.valueAsNumber })} /></td>
-                <td className="p-1">{item.category === 'Depreciation' ? '—' : <input aria-label={`Đợt ${index + 1}`} className="op-input" type="number" required min={0} max={255} step={1} value={item.trancheNo ?? ''} onChange={e => updateItem(item.key, { trancheNo: e.target.valueAsNumber })} />}</td>
-                <td className="p-2 whitespace-nowrap">{formatVnd(Math.round(item.quantity * item.unitPrice) || 0)}</td>
+                <td className="p-1">{item.category === 'Depreciation' ? 'Quyết toán' : item.category === 'MortalityReserve' ? 'Giữ lại' : <input aria-label={`Đợt ${index + 1}`} className="op-input" type="number" required min={1} max={255} step={1} value={item.trancheNo ?? ''} onChange={e => updateItem(item.key, { trancheNo: e.target.valueAsNumber })} />}</td>
+                <td className="p-2 whitespace-nowrap">{formatVnd(costAmount(item.quantity, item.unitPrice))}</td>
                 <td><OpBtn type="button" variant="ghost" aria-label={`Xóa khoản chi ${index + 1}`} onClick={() => setItems(items.filter(i => i.key !== item.key))}><Trash2 size={16} /></OpBtn></td>
               </tr>)}</tbody></table></div>
             <OpBtn className="mt-4" type="button" variant="outline" onClick={() => setItems([...items, { key: nextKey.current++, category: 'Other', description: '', quantity: 1, unit: 'khoản', unitPrice: 0, trancheNo: 1 }])}><Plus size={16} /> Thêm khoản chi</OpBtn>
@@ -132,6 +140,7 @@ function BatchEditor({ existing }: { existing?: Batch }) {
           <p className="mt-4 font-bold">Tổng chi phí: {formatVnd(Number.isFinite(total) ? total : 0)}</p>
           <OpNote>Thành tiền được làm tròn đến đồng cho từng khoản chi trước khi cộng tổng.</OpNote>
         </OpPanel>
+        <OpPanel title="Lịch giải ngân dự kiến"><CostScheduleEditor items={items} plans={plans} onChange={setPlans} disabled={disabled} /></OpPanel>
       </div>
       <OpAside>
         <div className="op-cover" style={{ aspectRatio: '16 / 9' }}><img src={crabImg(form.crabType, 720)} alt="" /></div>

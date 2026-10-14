@@ -26,12 +26,20 @@ public sealed record PayoutRequest(string FromBatchAccountNo, string ToBankCode,
 
 public sealed record PayoutResult(bool Accepted, string ProviderTransactionId, string? Error);
 
+public interface IBatchAccountProvisioner
+{
+    // Providers must be idempotent by batch code. The current sandbox has no external side effects.
+    Task<(string ProviderName,string AccountNo)> OpenBatchAccountAsync(string batchCode,CancellationToken ct);
+}
+
 /// <summary>
 /// Bản giả lập để dev và demo: không gọi ra ngoài. Tiền "về" khi gọi endpoint giả lập webhook
 /// (sẽ làm trong Features/Payments). Thay bằng class gọi sandbox thật khi có tài khoản.
 /// </summary>
-public sealed class FakePaymentGateway : IPaymentGateway
+public sealed class FakePaymentGateway : IPaymentGateway, IBatchAccountProvisioner
 {
+    public Task<(string ProviderName,string AccountNo)> OpenBatchAccountAsync(string batchCode,CancellationToken ct)
+        => Task.FromResult(("Trung gian thanh toán (sandbox)","SBX"+batchCode.Replace("-","")));
     public Task<VietQrPayment> CreateVietQrAsync(VietQrRequest r, CancellationToken ct)
     {
         var content = $"VIETQR|SANDBOX|{r.BatchAccountNo}|{r.Amount:0}|{r.ReferenceCode}";
