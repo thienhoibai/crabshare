@@ -140,7 +140,7 @@ export default function CheckoutPage() {
               <p className="rd-note"><Clock size={14} /> Đặt xong, hàng được giữ 15 phút để bạn chuyển khoản.</p>
               {totals.groups.length > 1 && <p className="rd-note"><Truck size={14} /> Hàng từ {totals.groups.length} lô sẽ tạo {totals.groups.length} đơn, mỗi đơn một mã QR.</p>}
               {checkout.isError && (
-                <div className="p-3.5 my-3 rounded-xl border border-rose-300 bg-rose-50 text-rose-800 text-xs sm:text-sm font-medium flex items-start gap-2.5">
+                <div role="alert" className="p-3.5 my-3 rounded-xl border border-rose-300 bg-rose-50 text-rose-800 text-xs sm:text-sm font-medium flex items-start gap-2.5">
                   <AlertTriangle size={18} className="text-rose-600 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="font-bold">Không thể hoàn tất đặt hàng</p>
