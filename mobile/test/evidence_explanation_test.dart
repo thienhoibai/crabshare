@@ -279,6 +279,9 @@ void main() {
       'HTTP $code keeps the draft and refreshes current eligibility',
       (tester) async {
         final repo = _Repo()..failure = code;
+        tester.view.physicalSize = const Size(360, 780);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
         addTearDown(() => tester.pumpWidget(const SizedBox()));
         await tester.pumpWidget(
           ProviderScope(
@@ -297,6 +300,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.enterText(find.byType(TextFormField), 'Nội dung cần giữ');
         await tester.ensureVisible(find.text('Gửi giải trình'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Gửi giải trình'));
         await tester.pumpAndSettle();
         expect(find.text('Bằng chứng đã thay đổi.'), findsOneWidget);
