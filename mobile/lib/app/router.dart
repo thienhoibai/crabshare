@@ -10,6 +10,7 @@ import '../features/common/unsupported_role_page.dart';
 import '../features/investor/batches/batch_detail_page.dart';
 import '../features/investor/batches/batch_explore_page.dart';
 import '../features/investor/home/investor_home_page.dart';
+import '../features/investor/portfolio/portfolio_detail_page.dart';
 import '../features/investor/kyc/kyc_page.dart';
 import '../features/investor/notifications/notifications_page.dart';
 import '../features/onboarding/onboarding_page.dart';
@@ -148,6 +149,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(path: Routes.kyc, builder: (context, state) => const KycPage()),
+      GoRoute(
+        path: '/i/portfolio/:code',
+        builder: (context, state) =>
+            InvestorPortfolioDetailPage(code: state.pathParameters['code']!),
+      ),
 
       // ---------- Hộ nuôi ----------
       StatefulShellRoute.indexedStack(

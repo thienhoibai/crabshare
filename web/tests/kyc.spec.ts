@@ -6,6 +6,10 @@ const unverified = { verificationStatus: 'Unverified', verifiedAt: null, lastChe
 const verified = { verificationStatus: 'Verified', verifiedAt: '2026-10-12T08:00:00Z', lastCheck: { id: 1, result: 'Passed', failureReason: null } }
 
 async function signIn(page: Page) {
+  await page.route('**/api/investor/portfolio**', (route) => route.fulfill({ json: {
+    items: [], page: 1, pageSize: 5, total: 0,
+    summary: { totalConfirmedAmount: 0, activeConfirmedAmount: 0, totalBatches: 0, activeBatches: 0, approvedNetPayout: 0 },
+  } }))
   await page.addInitScript((user) => localStorage.setItem('crabshare-auth', JSON.stringify({
     state: { token: 'test-token', user, expiresAt: '2099-01-01T00:00:00Z' }, version: 0,
   })), account())

@@ -1,3 +1,5 @@
+import 'package:crabshare_mobile/features/investor/data/portfolio_repository.dart';
+
 import 'dart:convert';
 
 import 'package:crabshare_mobile/app/theme/app_theme.dart';
@@ -183,13 +185,11 @@ void main() {
       ProviderScope(
         overrides: [
           sessionProvider.overrideWith(_Session.new),
+          myContributionsProvider.overrideWith((ref) async => []),
           kycRepositoryProvider.overrideWithValue(repository),
           kycCameraProvider.overrideWithValue(camera),
         ],
-        child: MaterialApp(
-          theme: buildAppTheme(),
-          home: const KycPage(),
-        ),
+        child: MaterialApp(theme: buildAppTheme(), home: const KycPage()),
       ),
     );
     await tester.pumpAndSettle();
@@ -218,14 +218,14 @@ void main() {
       for (var i = 0; i < 3; i++) {
         final button = find.byKey(ValueKey('kyc-capture-$i'));
         await tester.ensureVisible(button);
-      await tester.pumpAndSettle();
+        await tester.pumpAndSettle();
         await tester.tap(button);
         await tester.pumpAndSettle();
       }
       expect(camera.selfieRequests, [false, false, true]);
       final submit = find.byKey(const ValueKey('kyc-submit'));
       await tester.ensureVisible(submit);
-    await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
       await tester.tap(submit);
       await tester.pumpAndSettle();
       expect(repository.submissions, 1);
@@ -262,6 +262,7 @@ void main() {
       ProviderScope(
         overrides: [
           sessionProvider.overrideWith(_Session.new),
+          myContributionsProvider.overrideWith((ref) async => []),
           kycRepositoryProvider.overrideWithValue(repository),
         ],
         child: MaterialApp(

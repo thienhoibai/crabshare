@@ -1,0 +1,23 @@
+.i2-grid > .pf-wide { grid-column: 1 / -1; }
+.pf-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.pf-dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 16px; margin: 0; }
+.pf-dl dt { color: var(--muted); font-size: 14px; }
+.pf-dl dd { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pf-rows { display: grid; }
+.pf-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto auto 18px; align-items: center; gap: 14px; padding: 14px 6px; text-align: left; border-radius: 16px; }
+.pf-row:hover { background: var(--input); }
+.pf-row + .pf-row { border-top: 1px solid var(--line); }
+.pf-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: var(--input); color: var(--accent); }
+.pf-name, .pf-money, .pf-entry { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+.pf-name small, .pf-money small, .pf-entry small { font-size: 13px; color: var(--muted); }
+.pf-money { text-align: right; font-variant-numeric: tabular-nums; }
+.pf-money small { color: var(--accent); }
+.pf-state { padding: 6px 10px; border-radius: 999px; font-size: 12px; background: var(--input); }
+.pf-filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+.pf-filters label { display: grid; gap: 6px; flex: 1 1 200px; font-size: 13px; color: var(--muted); }
+.pf-filters input, .pf-filters select { width: 100%; color: var(--fg); background: var(--input); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.pf-filters input:focus-visible, .pf-filters select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pf-entry + .pf-entry { padding-top: 12px; border-top: 1px solid var(--line); }
+.pf-progress { height: 12px; background: var(--input); border-radius: 999px; overflow: hidden; }
+.pf-progress i { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+@media (max-width: 640px) { .pf-row { grid-template-columns: 40px minmax(0, 1fr); gap: 10px; } .pf-icon { width: 40px; height: 40px; } .pf-state { grid-column: 2; justify-self: start; } .pf-money { grid-column: 2; text-align: left; } .pf-row > svg { display: none; } .i2-balance > b { font-size: clamp(28px, 8vw, 38px); overflow-wrap: anywhere; } }
