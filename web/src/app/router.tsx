@@ -49,6 +49,8 @@ const AdminStorefront = lazy(() => import('../features/admin/AdminStorefront'))
 const AdminFinance = lazy(() => import('../features/admin/AdminFinance'))
 const AdminSettlementDetail = lazy(() => import('../features/admin/AdminSettlementDetail'))
 const AdminAlerts = lazy(() => import('../features/admin/AdminAlerts'))
+const AdminEvidence = lazy(() => import('../features/admin/AdminEvidence'))
+const AdminEvidenceDetail = lazy(() => import('../features/admin/AdminEvidenceDetail'))
 const AdminDisputes = lazy(() => import('../features/admin/AdminDisputes'))
 const AdminSettings = lazy(() => import('../features/admin/AdminSettings'))
 
@@ -138,6 +140,8 @@ export const router = createBrowserRouter([
         element: guarded(['PlatformAdmin', 'EvidenceReviewer']),
         children: [
           { path: '/admin', element: page(AdminDashboard) },
+          { path: '/admin/evidence', element: <RequireRole roles={['EvidenceReviewer']}>{page(AdminEvidence)}</RequireRole> },
+          { path: '/admin/evidence/:id', element: <RequireRole roles={['EvidenceReviewer']}>{page(AdminEvidenceDetail)}</RequireRole> },
           { path: '/admin/users', element: <RequireRole roles={['PlatformAdmin']}>{page(AdminUsers)}</RequireRole> },
           { path: '/admin/users/detail', element: <RequireRole roles={['PlatformAdmin']}>{page(AdminUserDetail)}</RequireRole> },
           { path: '/admin/batches', element: page(AdminBatches) },
