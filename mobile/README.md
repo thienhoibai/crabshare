@@ -174,6 +174,11 @@ quyền camera/vị trí và bật GPS. Kết quả Accepted/Watch/Flagged lấy
 chưa có mô hình nhận diện thì app không hiển thị kết luận về cua. Lỗi mạng giữ
 ảnh để thử lại. Xem [CS-44](../docs/validation/CS-44-production-evidence.md).
 
+CS-50: mục Yêu cầu chụp ở Hôm nay lấy danh sách từ API, hiển thị hạn chụp,
+mở đúng hộp/lô và gửi `captureRequestId` cùng ảnh. Khi hoàn thành, yêu cầu
+được tải lại và biến mất khỏi danh sách đang chờ. Xem
+[CS-50](../docs/validation/CS-50-random-capture-requests.md).
+
 eKYC đã dùng `ApiKycRepository` riêng: GET `/api/me/kyc`, POST multipart
 `/api/kyc/ekyc`. Màn Tài khoản → Xác minh danh tính yêu cầu đồng ý điều khoản,
 chụp CCCD trước/sau bằng camera sau, selfie bằng camera trước, rồi gửi cả 3 ảnh.

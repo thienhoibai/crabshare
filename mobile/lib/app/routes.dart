@@ -24,9 +24,24 @@ abstract final class Routes {
   static const operatorAlerts = '/o/alerts';
   static const operatorAccount = '/o/account';
   static const dailyLogNew = '/o/log/new';
-  static String dailyLogFor(String batchCode) => '$dailyLogNew?batch=$batchCode';
+  static String dailyLogFor(String batchCode) =>
+      '$dailyLogNew?batch=$batchCode';
   static const capture = '/o/capture';
   static String captureBox(String slotCode) => '$capture?slot=$slotCode';
+  static String captureRequest({
+    required int id,
+    required String slotCode,
+    required String batchCode,
+    required DateTime dueAt,
+  }) => Uri(
+    path: capture,
+    queryParameters: {
+      'slot': slotCode,
+      'batch': batchCode,
+      'requestId': '$id',
+      'dueAt': dueAt.toUtc().toIso8601String(),
+    },
+  ).toString();
   static String harvest(String batchCode) => '/o/harvest/$batchCode';
   static const operatorPack = '/o/pack';
   static String operatorPackOrder(String orderNo) => '$operatorPack/$orderNo';

@@ -100,12 +100,21 @@ class CaptureRequest {
     required this.batchCode,
     required this.slotCode,
     required this.dueAt,
+    this.status = 'Open',
   });
 
   final int id;
   final String batchCode;
   final String slotCode;
   final DateTime dueAt;
+  final String status;
+  factory CaptureRequest.fromJson(Map<String, dynamic> json) => CaptureRequest(
+    id: json['id'] as int,
+    batchCode: json['batchCode'] as String,
+    slotCode: json['slotCode'] as String,
+    dueAt: DateTime.parse(json['dueAt'] as String).toLocal(),
+    status: json['status'] as String,
+  );
 }
 
 /// Khớp CHECK ck_alert_alert_type.

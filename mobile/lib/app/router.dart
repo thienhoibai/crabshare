@@ -35,13 +35,25 @@ String homeFor(AppUser user) {
 
 /// Quy tắc chuyển trang — tách riêng để viết unit test (test/router_redirect_test.dart).
 String? redirectFor(SessionState session, String location) {
-  final isPublic = location == Routes.onboarding || location == Routes.login || location == Routes.scan || location.startsWith('/trace/');
+  final isPublic =
+      location == Routes.onboarding ||
+      location == Routes.login ||
+      location == Routes.scan ||
+      location.startsWith('/trace/');
   final user = session.user;
-  if (!session.isSignedIn || user == null) return isPublic ? null : Routes.onboarding;
-  if (location == Routes.onboarding || location == Routes.login) return homeFor(user);
+  if (!session.isSignedIn || user == null) {
+    return isPublic ? null : Routes.onboarding;
+  }
+  if (location == Routes.onboarding || location == Routes.login) {
+    return homeFor(user);
+  }
   if (location.startsWith('/o/') && !user.isOperator) return homeFor(user);
   if (location.startsWith('/i/') && !user.isInvestor) return homeFor(user);
-  if (location == Routes.payoutAccount && !user.isInvestor && !user.isOperator) return homeFor(user);
+  if (location == Routes.payoutAccount &&
+      !user.isInvestor &&
+      !user.isOperator) {
+    return homeFor(user);
+  }
   return null;
 }
 
@@ -54,15 +66,36 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: Routes.onboarding,
     refreshListenable: refresh,
-    redirect: (context, state) => redirectFor(ref.read(sessionProvider), state.matchedLocation),
+    redirect: (context, state) =>
+        redirectFor(ref.read(sessionProvider), state.matchedLocation),
     routes: [
-      GoRoute(path: Routes.onboarding, builder: (context, state) => const OnboardingPage()),
-      GoRoute(path: Routes.login, builder: (context, state) => const LoginPage()),
+      GoRoute(
+        path: Routes.onboarding,
+        builder: (context, state) => const OnboardingPage(),
+      ),
+      GoRoute(
+        path: Routes.login,
+        builder: (context, state) => const LoginPage(),
+      ),
       GoRoute(path: Routes.scan, builder: (context, state) => const ScanPage()),
-      GoRoute(path: '/trace/:tagCode', builder: (context, state) => TraceResultPage(tagCode: state.pathParameters['tagCode']!)),
-      GoRoute(path: Routes.unsupported, builder: (context, state) => const UnsupportedRolePage()),
-      GoRoute(path: Routes.payoutAccount, builder: (context, state) => const PayoutAccountPage()),
-      GoRoute(path: '/batches/:code', builder: (context, state) => BatchDetailPage(code: state.pathParameters['code']!)),
+      GoRoute(
+        path: '/trace/:tagCode',
+        builder: (context, state) =>
+            TraceResultPage(tagCode: state.pathParameters['tagCode']!),
+      ),
+      GoRoute(
+        path: Routes.unsupported,
+        builder: (context, state) => const UnsupportedRolePage(),
+      ),
+      GoRoute(
+        path: Routes.payoutAccount,
+        builder: (context, state) => const PayoutAccountPage(),
+      ),
+      GoRoute(
+        path: '/batches/:code',
+        builder: (context, state) =>
+            BatchDetailPage(code: state.pathParameters['code']!),
+      ),
 
       // ---------- Nhà đầu tư ----------
       StatefulShellRoute.indexedStack(
@@ -79,10 +112,38 @@ final routerProvider = Provider<GoRouter>((ref) {
           onCenter: () => context.push(Routes.scan),
         ),
         branches: [
-          StatefulShellBranch(routes: [GoRoute(path: Routes.investorHome, builder: (context, state) => const InvestorHomePage())]),
-          StatefulShellBranch(routes: [GoRoute(path: Routes.investorBatches, builder: (context, state) => const BatchExplorePage())]),
-          StatefulShellBranch(routes: [GoRoute(path: Routes.investorNotifications, builder: (context, state) => const NotificationsPage())]),
-          StatefulShellBranch(routes: [GoRoute(path: Routes.investorAccount, builder: (context, state) => const AccountPage())]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: Routes.investorHome,
+                builder: (context, state) => const InvestorHomePage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: Routes.investorBatches,
+                builder: (context, state) => const BatchExplorePage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: Routes.investorNotifications,
+                builder: (context, state) => const NotificationsPage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: Routes.investorAccount,
+                builder: (context, state) => const AccountPage(),
+              ),
+            ],
+          ),
         ],
       ),
       GoRoute(path: Routes.kyc, builder: (context, state) => const KycPage()),
@@ -102,23 +163,73 @@ final routerProvider = Provider<GoRouter>((ref) {
           onCenter: () => context.push(Routes.capture),
         ),
         branches: [
-          StatefulShellBranch(routes: [GoRoute(path: Routes.operatorToday, builder: (context, state) => const OperatorTodayPage())]),
-          StatefulShellBranch(routes: [GoRoute(path: Routes.operatorLogs, builder: (context, state) => const DailyLogsPage())]),
-          StatefulShellBranch(routes: [GoRoute(path: Routes.operatorAlerts, builder: (context, state) => const AlertsPage())]),
-          StatefulShellBranch(routes: [GoRoute(path: Routes.operatorAccount, builder: (context, state) => const AccountPage())]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: Routes.operatorToday,
+                builder: (context, state) => const OperatorTodayPage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: Routes.operatorLogs,
+                builder: (context, state) => const DailyLogsPage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: Routes.operatorAlerts,
+                builder: (context, state) => const AlertsPage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: Routes.operatorAccount,
+                builder: (context, state) => const AccountPage(),
+              ),
+            ],
+          ),
         ],
       ),
       GoRoute(
         path: Routes.dailyLogNew,
-        builder: (context, state) => DailyLogFormPage(initialBatchCode: state.uri.queryParameters['batch']),
+        builder: (context, state) => DailyLogFormPage(
+          initialBatchCode: state.uri.queryParameters['batch'],
+        ),
       ),
       GoRoute(
         path: Routes.capture,
-        builder: (context, state) => CapturePage(initialSlot: state.uri.queryParameters['slot']),
+        builder: (context, state) => CapturePage(
+          initialSlot: state.uri.queryParameters['slot'],
+          captureRequestId: state.uri.queryParameters.containsKey('requestId')
+              ? int.tryParse(state.uri.queryParameters['requestId']!) ?? -1
+              : null,
+          requestBatchCode: state.uri.queryParameters['batch'],
+          requestDueAt: DateTime.tryParse(
+            state.uri.queryParameters['dueAt'] ?? '',
+          ),
+        ),
       ),
-      GoRoute(path: '/o/harvest/:batchCode', builder: (context, state) => HarvestPage(batchCode: state.pathParameters['batchCode']!)),
-      GoRoute(path: Routes.operatorPack, builder: (context, state) => const PackOrdersPage()),
-      GoRoute(path: '/o/pack/:orderNo', builder: (context, state) => PackOrderPage(orderNo: state.pathParameters['orderNo']!)),
+      GoRoute(
+        path: '/o/harvest/:batchCode',
+        builder: (context, state) =>
+            HarvestPage(batchCode: state.pathParameters['batchCode']!),
+      ),
+      GoRoute(
+        path: Routes.operatorPack,
+        builder: (context, state) => const PackOrdersPage(),
+      ),
+      GoRoute(
+        path: '/o/pack/:orderNo',
+        builder: (context, state) =>
+            PackOrderPage(orderNo: state.pathParameters['orderNo']!),
+      ),
     ],
   );
 });

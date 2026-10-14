@@ -16,7 +16,9 @@
 CS-44 đã triển khai `POST /api/evidence` và mobile chụp ảnh/GPS qua API.
 Chi tiết định dạng, migration V007, chính sách ảnh trùng và kiểm thử:
 [CS-44-production-evidence.md](../../../../../docs/validation/CS-44-production-evidence.md).
-CS-50 đã triển khai yêu cầu chụp ngẫu nhiên; CS-54 triển khai hàng đợi, chi tiết,
+CS-50 đã triển khai job yêu cầu ngẫu nhiên, API danh sách và mobile Hôm nay:
+[CS-50-random-capture-requests.md](../../../../../docs/validation/CS-50-random-capture-requests.md).
+CS-54 triển khai hàng đợi, chi tiết,
 ảnh riêng tư và phán quyết. Giải trình (CS-57) và timeline nhà đầu tư vẫn là task tiếp theo.
 Xem [CS-54-evidence-review.md](../../../../../docs/validation/CS-54-evidence-review.md).
 

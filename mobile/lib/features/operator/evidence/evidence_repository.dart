@@ -74,6 +74,7 @@ class EvidenceResult {
     required this.modelVersion,
     this.crabDetected,
     this.confidence,
+    this.captureRequestStatus,
   });
   final int id;
   final String reviewStatus;
@@ -82,6 +83,7 @@ class EvidenceResult {
   final String modelVersion;
   final bool? crabDetected;
   final double? confidence;
+  final String? captureRequestStatus;
   factory EvidenceResult.fromJson(Map<String, dynamic> json) {
     final detection = Map<String, dynamic>.from(json['detection'] as Map);
     return EvidenceResult(
@@ -92,6 +94,7 @@ class EvidenceResult {
       modelVersion: detection['modelVersion'] as String,
       crabDetected: detection['crabDetected'] as bool?,
       confidence: (detection['confidence'] as num?)?.toDouble(),
+      captureRequestStatus: json['captureRequestStatus'] as String?,
     );
   }
 }
