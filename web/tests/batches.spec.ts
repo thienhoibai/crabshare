@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 async function fillSchedule(page: Page) {
-  await page.getByLabel('Ngày dự kiến đợt 1').fill('2099-12-01')
+  await page.getByLabel('Mốc tính lịch đợt 1').selectOption('FundingReady')
+  await page.getByLabel('Số ngày sau mốc đợt 1').fill('0')
   await page.getByLabel('Điều kiện đợt 1').fill('Đủ vốn và hợp đồng hai bên đầy đủ chữ ký')
 }
 

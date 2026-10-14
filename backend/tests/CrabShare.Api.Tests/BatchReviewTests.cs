@@ -50,6 +50,86 @@ public class BatchReviewTests(OperatorDatabaseFixture fixture) : IClassFixture<O
         tranches = complete ? new[] { Schedule(1), Schedule(2, 40) } : []
     };
     private static object Approval() => new { fundingOpenAt = DateTimeOffset.UtcNow.AddHours(1), fundingDeadline = DateTimeOffset.UtcNow.AddDays(10) };
+    [Fact]
+    public async Task Approval_racing_revision_returns_only_one_success_and_one_audit_transition()
+    {
+        var (_, code) = await Draft(); var (admin, _) = await User(true);
+        var replies = await Task.WhenAll(admin.PostAsJsonAsync($"/api/admin/batches/{code}/approve", Approval()),
+            admin.PostAsJsonAsync($"/api/admin/batches/{code}/request-revision", new { reason = "Bổ sung" }));
+        Assert.Single(replies, r => r.StatusCode == HttpStatusCode.OK); Assert.Single(replies, r => r.StatusCode == HttpStatusCode.UnprocessableEntity);
+        await using var db = fixture.OpenDb(); var b = await db.Batches.SingleAsync(b => b.BatchCode == code);
+        Assert.Contains(b.Status, new[] { "Draft", "Funding" });
+        Assert.Equal(b.Status == "Funding", await db.StandardCostVersions.AnyAsync(v => v.BatchId == b.BatchId && v.Status == "Locked"));
+        Assert.Equal(b.Status == "Funding", await db.DisbursementTranches.AnyAsync(t => t.BatchId == b.BatchId));
+        Assert.Equal(1, await db.AuditLogs.CountAsync(a => a.EntityType == "batch" && a.EntityId == b.BatchId && (a.ActionType == "approve" || a.ActionType == "request_revision")));
+    }
+    [Fact]
+    public async Task Request_revision_returns_draft_then_new_version_can_be_submitted_without_losing_review_history()
+    {
+        var (owner, code) = await Draft(); var (admin, _) = await User(true);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync($"/api/admin/batches/{code}/request-revision", new { reason = "   " })).StatusCode);
+        (await admin.PostAsJsonAsync($"/api/admin/batches/{code}/request-revision", new { reason = "Bổ sung lịch đợt 2" })).EnsureSuccessStatusCode();
+        var returned = await owner.GetFromJsonAsync<JsonElement>($"/api/batches/{code}");
+        Assert.Equal("Draft", returned.GetProperty("status").GetString()); Assert.True(returned.GetProperty("canEdit").GetBoolean());
+        Assert.Equal("Bổ sung lịch đợt 2", returned.GetProperty("rejectionReason").GetString());
+        Assert.Equal("Submitted", returned.GetProperty("standardCost").GetProperty("status").GetString());
+        (await owner.PutAsJsonAsync($"/api/batches/{code}/standard-cost", Costs())).EnsureSuccessStatusCode();
+        (await owner.PostAsync($"/api/batches/{code}/submit", null)).EnsureSuccessStatusCode();
+        var submitted = await owner.GetFromJsonAsync<JsonElement>($"/api/batches/{code}");
+        Assert.Equal("PendingApproval", submitted.GetProperty("status").GetString());
+        Assert.Equal(2, submitted.GetProperty("standardCost").GetProperty("versionNo").GetInt32());
+        Assert.Equal(JsonValueKind.Null, submitted.GetProperty("rejectionReason").ValueKind);
+        await using var db = fixture.OpenDb(); var id = await db.Batches.Where(b => b.BatchCode == code).Select(b => b.BatchId).SingleAsync();
+        Assert.Equal("Superseded", await db.StandardCostVersions.Where(v => v.BatchId == id && v.VersionNo == 1).Select(v => v.Status).SingleAsync());
+        Assert.Equal(10, await db.StandardCostItems.CountAsync(i => i.CostVersion.BatchId == id));
+        Assert.True(await db.AuditLogs.AnyAsync(a => a.EntityType == "batch" && a.EntityId == id && a.ActionType == "request_revision"));
+        Assert.False(await db.DisbursementTranches.AnyAsync(t => t.BatchId == id));
+        Assert.Equal(HttpStatusCode.Forbidden, (await owner.PostAsJsonAsync($"/api/admin/batches/{code}/request-revision", new { reason = "No" })).StatusCode);
+    }
+    [Fact]
+    public async Task Definitive_rejection_is_terminal_for_operator_edits_and_resubmission()
+    {
+        var (owner, code) = await Draft(); var (admin, _) = await User(true);
+        (await admin.PostAsJsonAsync($"/api/admin/batches/{code}/reject", new { reason = "Không đáp ứng điều kiện mở lô" })).EnsureSuccessStatusCode();
+        var response = await owner.GetFromJsonAsync<JsonElement>($"/api/batches/{code}");
+        Assert.False(response.GetProperty("canEdit").GetBoolean()); Assert.False(response.GetProperty("canSubmit").GetBoolean());
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await owner.PutAsJsonAsync($"/api/batches/{code}/standard-cost", Costs())).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await owner.PostAsync($"/api/batches/{code}/submit", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await admin.PostAsJsonAsync($"/api/admin/batches/{code}/request-revision", new { reason = "No" })).StatusCode);
+    }
+    [Fact]
+    public async Task Relative_schedule_waits_for_real_capital_contract_and_stocking_events_and_resolves_once()
+    {
+        var (owner, code) = await Draft(submit: false); var (admin, _) = await User(true);
+        var res = await owner.PutAsJsonAsync($"/api/batches/{code}/standard-cost", new
+        {
+            items = new[] { Item("Seed", 1), Item("Feed", 2), Item("MortalityReserve", 1) },
+            tranches = new[] { new { trancheNo = 1, anchorCode = "FundingReady", offsetDays = 0, unlockCondition = "Đủ vốn và hợp đồng" }, new { trancheNo = 2, anchorCode = "Stocked", offsetDays = 15, unlockCondition = "Đủ bằng chứng" } }
+        });
+        res.EnsureSuccessStatusCode();
+        (await owner.PostAsync($"/api/batches/{code}/submit", null)).EnsureSuccessStatusCode();
+        (await admin.PostAsJsonAsync($"/api/admin/batches/{code}/approve", Approval())).EnsureSuccessStatusCode();
+        var detail = await admin.GetFromJsonAsync<JsonElement>($"/api/admin/batches/{code}");
+        Assert.All(detail.GetProperty("tranches").EnumerateArray(), t => Assert.Equal(JsonValueKind.Null, t.GetProperty("plannedDate").ValueKind));
+        var job = fixture.Factory.Services.GetServices<Microsoft.Extensions.Hosting.IHostedService>().OfType<CrabShare.Api.Common.Jobs.RecurringJob>().Single(j => j.GetType().Name == "TrancheScheduleJob");
+        await job.RunOnceAsync(default);
+        var (_, investor) = await User(role: "Investor");
+        await using var db = fixture.OpenDb(); var b = await db.Batches.SingleAsync(b => b.BatchCode == code);
+        var closed = DateTimeOffset.UtcNow.AddDays(-3); var signed = DateTimeOffset.UtcNow.AddDays(-2); var stocked = DateTimeOffset.UtcNow.AddDays(-1);
+        b.CapitalClosedAt = closed; b.TotalConfirmedCapital = b.TargetCapital;
+        var contribution = new Contribution { BatchId = b.BatchId, InvestorId = investor.User.UserId, Status = "Confirmed", Amount = b.TargetCapital, ReservedAt = closed.AddDays(-1), ExpiresAt = closed, ConfirmedAt = closed };
+        contribution.InvestmentContract = new InvestmentContract { ContractNo = "REV-" + Guid.NewGuid().ToString("N")[..15], TemplateId = await db.ContractTemplates.Select(t => t.TemplateId).FirstAsync(), Status = "OperatorSigned", SigningMethod = "OfflineUpload", DraftHash = new string('a', 64) };
+        db.Contributions.Add(contribution); await db.SaveChangesAsync(); await job.RunOnceAsync(default);
+        Assert.False(await db.DisbursementTranches.AnyAsync(t => t.BatchId == b.BatchId && t.PlannedDate != null));
+        contribution.InvestmentContract.Status = "FullySigned"; contribution.InvestmentContract.FullySignedAt = signed; contribution.InvestmentContract.FinalHash = new string('b', 64);
+        await db.SaveChangesAsync(); await job.RunOnceAsync(default);
+        var first = await db.DisbursementTranches.AsNoTracking().SingleAsync(t => t.BatchId == b.BatchId && t.TrancheNo == 1);
+        Assert.Equal(DateOnly.FromDateTime(signed.ToOffset(TimeSpan.FromHours(7)).DateTime), first.PlannedDate);
+        Assert.Null((await db.DisbursementTranches.AsNoTracking().SingleAsync(t => t.BatchId == b.BatchId && t.TrancheNo == 2)).PlannedDate);
+        b.StockedAt = stocked; await db.SaveChangesAsync(); await job.RunOnceAsync(default); await job.RunOnceAsync(default);
+        Assert.Equal(DateOnly.FromDateTime(stocked.ToOffset(TimeSpan.FromHours(7)).DateTime).AddDays(15), (await db.DisbursementTranches.AsNoTracking().SingleAsync(t => t.BatchId == b.BatchId && t.TrancheNo == 2)).PlannedDate);
+        Assert.Equal(2, await db.AuditLogs.CountAsync(a => a.EntityType == "disbursement_tranche" && a.ActionType == "schedule_resolved" && db.DisbursementTranches.Any(t => t.TrancheId == a.EntityId && t.BatchId == b.BatchId)));
+    }
     private async Task<(HttpClient Owner, string Code)> Draft(long target = 75_000_000, bool submit = true)
     {
         var (owner, _) = await User();
@@ -98,8 +178,8 @@ public class BatchReviewTests(OperatorDatabaseFixture fixture) : IClassFixture<O
         Assert.Equal(request.fundingDeadline.ToUnixTimeSeconds(), batch.FundingDeadline!.Value.ToUnixTimeSeconds());
         Assert.Equal(1_000_000, batch.PlatformFeeAmount);
         Assert.Equal("Open", (await db.BatchAccounts.SingleAsync(a => a.BatchId == batch.BatchId)).Status);
-        var accountId=await db.BatchAccounts.Where(a=>a.BatchId==batch.BatchId).Select(a=>a.BatchAccountId).SingleAsync();
-        Assert.Single(await db.AuditLogs.Where(a=>a.EntityType=="batch_account" && a.EntityId==accountId && a.ActionType=="create").ToListAsync());
+        var accountId = await db.BatchAccounts.Where(a => a.BatchId == batch.BatchId).Select(a => a.BatchAccountId).SingleAsync();
+        Assert.Single(await db.AuditLogs.Where(a => a.EntityType == "batch_account" && a.EntityId == accountId && a.ActionType == "create").ToListAsync());
         var cost = await db.StandardCostVersions.SingleAsync(v => v.BatchId == batch.BatchId);
         Assert.Equal(auth.User.UserId, cost.ApprovedBy); Assert.NotNull(cost.LockedAt); Assert.Equal(cost.LockedAt, cost.ApprovedAt);
         var tranches = await db.DisbursementTranches.Where(t => t.BatchId == batch.BatchId).OrderBy(t => t.TrancheNo).ToListAsync();
@@ -131,15 +211,15 @@ public class BatchReviewTests(OperatorDatabaseFixture fixture) : IClassFixture<O
         (await admin.PostAsJsonAsync($"/api/admin/batches/{code}/reject", new { reason = "  Cần sửa lịch  " })).EnsureSuccessStatusCode();
         var detail = await admin.GetFromJsonAsync<JsonElement>($"/api/admin/batches/{code}");
         Assert.Equal("Cần sửa lịch", detail.GetProperty("rejectionReason").GetString());
-        Assert.Equal("Cần sửa lịch",(await owner.GetFromJsonAsync<JsonElement>($"/api/batches/{code}")).GetProperty("rejectionReason").GetString());
+        Assert.Equal("Cần sửa lịch", (await owner.GetFromJsonAsync<JsonElement>($"/api/batches/{code}")).GetProperty("rejectionReason").GetString());
         await using var db = fixture.OpenDb(); var batch = await db.Batches.SingleAsync(b => b.BatchCode == code);
         Assert.Equal("Rejected", batch.Status); Assert.Null(batch.FeeTierId); Assert.Null(batch.PlatformFeeAmount);
         Assert.False(await db.DisbursementTranches.AnyAsync(t => t.BatchId == batch.BatchId));
         Assert.Null((await db.StandardCostVersions.SingleAsync(v => v.BatchId == batch.BatchId)).LockedAt);
         var audit = await db.AuditLogs.SingleAsync(a => a.EntityType == "batch" && a.EntityId == batch.BatchId && a.ActionType == "reject");
         Assert.Equal("Cần sửa lịch", JsonDocument.Parse(audit.NewValue!).RootElement.GetProperty("rejectionReason").GetString());
-        (await owner.PutAsJsonAsync($"/api/batches/{code}/standard-cost", Costs())).EnsureSuccessStatusCode();
-        Assert.Equal(2, await db.StandardCostVersions.CountAsync(v => v.BatchId == batch.BatchId));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await owner.PutAsJsonAsync($"/api/batches/{code}/standard-cost", Costs())).StatusCode);
+        Assert.Equal(1, await db.StandardCostVersions.CountAsync(v => v.BatchId == batch.BatchId));
     }
     [Fact]
     public async Task Invalid_time_state_reserve_and_missing_schedule_never_partially_approve()
@@ -175,12 +255,12 @@ public class BatchReviewTests(OperatorDatabaseFixture fixture) : IClassFixture<O
     {
         var (_, code) = await Draft(); var (admin, auth) = await User(true);
         foreach (var interceptor in new SaveChangesInterceptor[] { new FailAfterSave(), new FailAfterAccountAudit() })
-        await using (var failing = fixture.Factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
-            s.AddDbContext<AppDbContext>(o => o.AddInterceptors(interceptor)))))
-        {
-            using var client = failing.CreateClient(); client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
-            Assert.Equal(HttpStatusCode.InternalServerError, (await client.PostAsJsonAsync($"/api/admin/batches/{code}/approve", Approval())).StatusCode);
-        }
+            await using (var failing = fixture.Factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
+                s.AddDbContext<AppDbContext>(o => o.AddInterceptors(interceptor)))))
+            {
+                using var client = failing.CreateClient(); client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
+                Assert.Equal(HttpStatusCode.InternalServerError, (await client.PostAsJsonAsync($"/api/admin/batches/{code}/approve", Approval())).StatusCode);
+            }
         await using var db = fixture.OpenDb(); var id = await db.Batches.Where(b => b.BatchCode == code).Select(b => b.BatchId).SingleAsync();
         Assert.Equal("PendingApproval", await db.Batches.Where(b => b.BatchId == id).Select(b => b.Status).SingleAsync());
         Assert.Null(await db.Batches.Where(b => b.BatchId == id).Select(b => b.PlatformFeeAmount).SingleAsync());
@@ -200,9 +280,9 @@ public class BatchReviewTests(OperatorDatabaseFixture fixture) : IClassFixture<O
     }
     private sealed class FailAfterAccountAudit : SaveChangesInterceptor
     {
-        public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData e,int result,CancellationToken ct=default)
+        public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData e, int result, CancellationToken ct = default)
         {
-            if (e.Context!.ChangeTracker.Entries<AuditLog>().Any(a=>a.Entity.EntityType=="batch_account"))
+            if (e.Context!.ChangeTracker.Entries<AuditLog>().Any(a => a.Entity.EntityType == "batch_account"))
                 throw new InvalidOperationException("VI05 failure after account and approval audits were saved");
             return ValueTask.FromResult(result);
         }
@@ -342,9 +422,9 @@ public class BatchReviewTests(OperatorDatabaseFixture fixture) : IClassFixture<O
         Assert.DoesNotContain(await db.StandardCostItems.Where(i => i.CostVersionId == draft).Select(i => i.Description).ToListAsync(), s => s == "mixed");
         Assert.Equal(5, await db.StandardCostItems.CountAsync(i => i.CostVersionId == locked));
         Assert.True(await new SqlCommand($"UPDATE dbo.standard_cost_item SET description=N'draft editable' WHERE cost_version_id={draft}", connection).ExecuteNonQueryAsync() > 0);
-        await new SqlCommand($"UPDATE dbo.batch SET status='Draft' WHERE batch_id={batch}",connection).ExecuteNonQueryAsync();
-        var bypass=await owner.PutAsJsonAsync($"/api/batches/{code}/standard-cost",Costs());
-        Assert.Equal(HttpStatusCode.UnprocessableEntity,bypass.StatusCode);
-        Assert.Equal("batch.cost_locked",(await bypass.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        await new SqlCommand($"UPDATE dbo.batch SET status='Draft' WHERE batch_id={batch}", connection).ExecuteNonQueryAsync();
+        var bypass = await owner.PutAsJsonAsync($"/api/batches/{code}/standard-cost", Costs());
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, bypass.StatusCode);
+        Assert.Equal("batch.cost_locked", (await bypass.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
     }
 }

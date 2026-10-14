@@ -8,7 +8,7 @@ export type BatchRequest = {
   restockCutoffDays: number; minViableCapital: number; targetCapital: number; maxCapital: number; minContribution: number; operatorSharePct: number
 }
 export type CostItem = { category: keyof typeof costCategories; description: string; quantity: number; unit: string; unitPrice: number; trancheNo: number | null }
-export type CostTranche = { trancheNo: number; plannedDate: string; unlockCondition: string }
+export type CostTranche = { trancheNo: number; plannedDate?: string | null; anchorCode?: 'FundingReady' | 'Stocked' | null; offsetDays?: number | null; unlockCondition: string }
 export type Batch = BatchRequest & {
   batchCode: string; operatorId: number; status: keyof typeof batchStatuses; canEdit: boolean; canSubmit: boolean; rejectionReason?: string | null;
   standardCost: { versionNo: number; status: string; total: number; items: (CostItem & { amount: number })[]; tranches?: (CostTranche & { amount: number })[]; lockedAt?: string | null } | null

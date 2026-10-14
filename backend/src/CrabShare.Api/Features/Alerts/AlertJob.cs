@@ -35,7 +35,8 @@ public sealed class AlertJob(AlertService alerts, Infrastructure.Persistence.App
         }
 
         var delayed = await db.DisbursementTranches.Where(t => t.PlannedDate < today && t.Status == "Planned"
-            && (t.Batch.Status == "InProduction" || t.Batch.Status == "Stocked"))
+            && (t.Batch.Status == "InProduction" || t.Batch.Status == "Stocked"
+                || (t.Batch.Status == "Funding" && t.AnchorCode == "FundingReady" && t.Batch.CapitalClosedAt != null)))
             .Select(t => t.BatchId).Distinct().ToListAsync(ct);
         foreach (var batchId in delayed)
             changed += await RaiseDailyAsync(batchId, AlertType.MilestoneDelay, "Đợt giải ngân đã quá ngày dự kiến nhưng chưa được yêu cầu.", dayStart, settings, ct);

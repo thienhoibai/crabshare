@@ -1,5 +1,7 @@
 # VI-05 UC08 duyệt lô và khóa chi phí
 
+**Bản sửa tiếp theo:** [lịch theo mốc thực tế và bổ sung/gửi lại](vi05-relative-schedule-and-revision.md) thay quy tắc ngày bắt buộc và Rejected sửa được trong báo cáo bản đầu bên dưới. Áp thêm V009 trước khi dùng bản mới.
+
 Ngày: 14/10/2026. Bắt đầu trên `develop`; nhánh hiện tại khi bàn giao là `feature/CS-34-duyet-lo` sau thay đổi bên ngoài phiên triển khai. Agent không tạo/checkout nhánh hoặc worktree, không commit/push/PR, không dependency mới. Đã đọc Phiếu v1.2 và TL-11/TL-03/TL-15 trong thư mục Chuan_hoa ngoài repo. Thiết kế bổ sung lịch đợt do hộ nuôi nhập đã được người dùng chấp thuận.
 
 ## Thay đổi và endpoint

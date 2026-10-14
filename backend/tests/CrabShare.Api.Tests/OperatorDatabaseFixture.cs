@@ -34,6 +34,7 @@ public sealed class OperatorDatabaseFixture : IAsyncLifetime
                 await new SqlCommand(batch, connection) { CommandTimeout = 60 }.ExecuteNonQueryAsync();
         Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
             .UseSetting("Seed:Enabled", "false")
+            .UseSetting("Jobs:Enabled", "false")
             .UseSetting("ConnectionStrings:Default", ConnectionString));
     }
 

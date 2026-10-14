@@ -59,6 +59,10 @@ public static class FeatureRegistry
         services.AddScoped<BoxService>();            // Features/Boxes
         services.AddScoped<BatchService>();           // Features/Batches — UC07
         services.AddScoped<BatchReviewService>();     // UC08
+        services.AddScoped<TrancheScheduleResolver>();
+        services.AddOptions<TrancheScheduleOptions>().BindConfiguration("Batches:Schedules")
+            .Validate(o=>o.IntervalSeconds>0,"Schedule refresh interval must be positive.").ValidateOnStart();
+        services.AddHostedService<TrancheScheduleJob>();
         services.AddScoped<FeeTierService>();         // Configurable fixed fees used by UC08
         // services.AddScoped<ProductionService>();   // Features/Production
         // services.AddScoped<HarvestService>();      // Features/Harvest

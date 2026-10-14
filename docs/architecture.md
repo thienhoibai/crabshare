@@ -133,6 +133,7 @@ stateDiagram-v2
     [*] --> Draft
     Draft --> PendingApproval: Hộ nuôi gửi duyệt (UC07)
     PendingApproval --> Rejected: Quản trị từ chối
+    PendingApproval --> Draft: Yêu cầu bổ sung, giữ lịch sử phiên bản để gửi lại
     PendingApproval --> Funding: Duyệt + khoá chi phí chuẩn (UC08)
     Funding --> Cancelled: Hết hạn, chưa đủ vốn tối thiểu → hoàn tiền
     Funding --> Stocked: Đủ vốn, thả giống, gán hộp

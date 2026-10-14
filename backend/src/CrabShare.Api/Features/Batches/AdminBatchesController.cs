@@ -17,4 +17,6 @@ public sealed class AdminBatchesController(BatchReviewService batches) : Control
     public async Task<ActionResult<AdminBatchResponse>> Approve(string code, ApproveBatchRequest req, CancellationToken ct) => Ok(await batches.ApproveAsync(code, req, ct));
     [HttpPost("{code}/reject")]
     public async Task<ActionResult<AdminBatchResponse>> Reject(string code, RejectBatchRequest req, CancellationToken ct) => Ok(await batches.RejectAsync(code, req, ct));
+    [HttpPost("{code}/request-revision")]
+    public async Task<ActionResult<AdminBatchResponse>> RequestRevision(string code,RejectBatchRequest req,CancellationToken ct) => Ok(await batches.RequestRevisionAsync(code,req,ct));
 }

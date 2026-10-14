@@ -1,10 +1,10 @@
 import { http } from '../../shared/api/http'
-import type { Batch } from '../operator/batchesApi'
+import type { Batch,CostTranche } from '../operator/batchesApi'
 export type AdminBatch = {
   batch: Batch; operator: { operatorId: number; legalName: string; farmAddress: string; status: string };
   fundingOpenAt: string | null; fundingDeadline: string | null; feeTierId: number | null; feeTierCode: string | null;
   platformFeeAmount: number | null; rejectionReason: string | null; approvedAt: string | null; approvedBy: number | null;
-  tranches: { trancheNo: number; plannedAmount: number; plannedDate: string; unlockCondition: string; status: string }[]
+  tranches: (CostTranche & { plannedAmount: number; status: string })[]
 }
 export type AdminBatchPage = { items: AdminBatch[]; page: number; pageSize: number; total: number }
 const path = (code: string) => `/api/admin/batches/${encodeURIComponent(code)}`
@@ -14,3 +14,4 @@ export const getAdminBatch = async (code: string, signal?: AbortSignal) => (awai
 export const approveBatch = async (code: string, fundingOpenAt: string, fundingDeadline: string) =>
   (await http.post<AdminBatch>(`${path(code)}/approve`, { fundingOpenAt, fundingDeadline })).data
 export const rejectBatch = async (code: string, reason: string) => (await http.post<AdminBatch>(`${path(code)}/reject`, { reason })).data
+export const requestBatchRevision = async (code: string,reason: string) => (await http.post<AdminBatch>(`${path(code)}/request-revision`,{reason})).data

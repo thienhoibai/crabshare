@@ -119,6 +119,8 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
             BatchId = b.BatchId,
             TrancheNo = p.TrancheNo,
             PlannedDate = p.PlannedDate,
+            AnchorCode = p.AnchorCode,
+            OffsetDays = p.OffsetDays,
             UnlockCondition = p.UnlockCondition,
             PlannedAmount = cost.StandardCostItems.Where(i => BatchService.Scheduled(i.Category) && i.TrancheNo == p.TrancheNo).Sum(i => (decimal)BatchService.Amount(i.Quantity, i.UnitPrice)),
             Status = "Planned",
@@ -144,10 +146,21 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
         return after;
     }, ct);
 
+    public Task<AdminBatchResponse> RequestRevisionAsync(string code,RejectBatchRequest req,CancellationToken ct) => WriteAsync(code,async b=>
+    {
+        BatchService.Validate(req);
+        var before=await DetailAsync(b,ct);
+        // Submitted version is preserved. Saving the returned draft creates the next cost version.
+        b.Status="Draft"; b.RejectionReason=req.Reason.Trim(); b.UpdatedAt=clock.GetUtcNow();
+        var after=await DetailAsync(b,ct);
+        await audit.WriteAsync("batch",b.BatchId,"request_revision",before,after,ct);
+        return after;
+    },ct);
+
     private async Task<AdminBatchResponse> DetailAsync(Batch b, CancellationToken ct)
         => Response(b, await batches.CostAsync(b.BatchId, ct), await db.DisbursementTranches.Where(t => t.BatchId == b.BatchId).OrderBy(t => t.TrancheNo).ToListAsync(ct));
     private static AdminBatchResponse Response(Batch b, StandardCostVersion? cost, IReadOnlyList<DisbursementTranche> tranches)
         => new(BatchService.ToResponse(b, cost, false), new(b.OperatorId, b.Operator.LegalName, b.Operator.FarmAddress, b.Operator.Status),
             b.FundingOpenAt, b.FundingDeadline, b.FeeTierId, b.FeeTier?.TierCode, b.PlatformFeeAmount is null ? null : (long)b.PlatformFeeAmount,
-            b.RejectionReason, b.ApprovedAt, b.ApprovedBy, tranches.Select(t => new DisbursementResponse(t.TrancheNo, (long)t.PlannedAmount, t.PlannedDate, t.UnlockCondition, t.Status)).ToList());
+            b.RejectionReason, b.ApprovedAt, b.ApprovedBy, tranches.Select(t => new DisbursementResponse(t.TrancheNo, (long)t.PlannedAmount, t.PlannedDate, t.UnlockCondition, t.Status,t.AnchorCode,t.OffsetDays)).ToList());
 }

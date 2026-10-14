@@ -15,7 +15,9 @@ public sealed class StandardCostTranchePlan
 {
     public long CostVersionId { get; set; }
     public byte TrancheNo { get; set; }
-    public DateOnly PlannedDate { get; set; }
+    public DateOnly? PlannedDate { get; set; }
+    public string? AnchorCode { get; set; }
+    public short? OffsetDays { get; set; }
     public string UnlockCondition { get; set; } = "";
     public StandardCostVersion CostVersion { get; set; } = null!;
 }

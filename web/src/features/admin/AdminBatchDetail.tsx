@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router'
 import { ArrowLeft, CheckCircle, FileText } from 'lucide-react'
 import AdminLayout from './AdminLayout'
-import { approveBatch, getAdminBatch, rejectBatch } from './adminBatchesApi'
+import { approveBatch, getAdminBatch, rejectBatch, requestBatchRevision } from './adminBatchesApi'
+import { scheduleLabel } from '../operator/CostScheduleEditor'
 import { batchStatuses, costCategories, crabTypes } from '../operator/batchesApi'
 import { useAuthStore } from '../../shared/auth/authStore'
 import { errorMessage } from '../../shared/api/http'
@@ -22,20 +23,20 @@ export default function AdminBatchDetail() {
   const [message, setMessage] = useState('')
   const [problem, setProblem] = useState('')
   const busy = useRef(false)
-  const mutation = useMutation({ mutationFn: (action: 'approve' | 'reject') => action === 'approve'
-    ? approveBatch(code, `${open}:00+07:00`, `${deadline}:00+07:00`) : rejectBatch(code, reason.trim()),
+  const mutation = useMutation({ mutationFn: (action: 'approve' | 'reject' | 'revise') => action === 'approve'
+    ? approveBatch(code, `${open}:00+07:00`, `${deadline}:00+07:00`) : action === 'revise' ? requestBatchRevision(code,reason.trim()) : rejectBatch(code, reason.trim()),
     onSuccess: async (result, action) => {
       qc.setQueryData(key, result)
-      setMessage(action === 'approve' ? 'Đã duyệt lô, mở gọi vốn và khóa chi phí chuẩn.' : 'Đã từ chối lô và lưu lý do.')
+      setMessage(action === 'approve' ? 'Đã duyệt lô, mở gọi vốn và khóa chi phí chuẩn.' : action === 'revise' ? 'Đã trả hồ sơ về nháp để hộ nuôi bổ sung và gửi lại.' : 'Đã từ chối dứt điểm lô và lưu lý do.')
       await Promise.all([qc.invalidateQueries({ queryKey: ['admin-batches'] }), qc.invalidateQueries({ queryKey: ['operator-batches'] }), qc.invalidateQueries({ queryKey: ['operator-batch'] })])
     },
     onError: async error => { setProblem(errorMessage(error)); await query.refetch() },
   })
-  const decide = async (event: FormEvent, action: 'approve' | 'reject') => {
+  const decide = async (event: FormEvent, action: 'approve' | 'reject' | 'revise') => {
     event.preventDefault()
     if (busy.current || query.isFetching || query.data?.batch.status !== 'PendingApproval') return
     setProblem(''); setMessage('')
-    if (action === 'reject' && !reason.trim()) { setProblem('Nhập lý do từ chối.'); return }
+    if (action !== 'approve' && !reason.trim()) { setProblem('Nhập lý do từ chối hoặc yêu cầu bổ sung.'); return }
     if (action === 'approve' && (!open || !deadline || open >= deadline)) { setProblem('Thời gian mở phải trước hạn gọi vốn.'); return }
     busy.current = true
     try { await mutation.mutateAsync(action) } catch { /* preserve inputs and show server error */ }
@@ -72,8 +73,8 @@ export default function AdminBatchDetail() {
           </section>
           <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><h2 className="font-bold mb-4">Lịch giải ngân do hộ nuôi đề xuất</h2>
             {(cost?.tranches ?? []).length === 0 && <p>Chưa có lịch đợt. Nếu có khoản chi theo đợt, hộ nuôi cần bổ sung trước khi duyệt.</p>}
-            {(cost?.tranches ?? []).map(p => <div className="border-t py-3 text-sm" key={p.trancheNo}><p className="font-bold">Đợt {p.trancheNo} · {p.plannedDate} · {formatVnd(p.amount)}</p><p className="whitespace-pre-wrap break-words">{p.unlockCondition}</p><p>{detail.tranches.find(t => t.trancheNo === p.trancheNo)?.status}</p></div>)}
-            <p className="text-sm text-slate-500 mt-3">Dự phòng hao hụt giữ lại theo sự kiện; khấu hao trả khi quyết toán. Ngày dự kiến phải từ ngày kết thúc gọi vốn trở đi.</p>
+            {(cost?.tranches ?? []).map(p => { const actual=detail.tranches.find(t=>t.trancheNo===p.trancheNo); return <div className="border-t py-3 text-sm" key={p.trancheNo}><p className="font-bold">Đợt {p.trancheNo} · {formatVnd(p.amount)}</p><p>{scheduleLabel(p)}</p><p className="whitespace-pre-wrap break-words">{p.unlockCondition}</p>{actual && <p>{actual.status} · {actual.plannedDate ? `Ngày xác định: ${actual.plannedDate}` : 'Chờ mốc thực tế'}</p>}</div> })}
+            <p className="text-sm text-slate-500 mt-3">Dự phòng hao hụt giữ lại theo sự kiện; khấu hao trả khi quyết toán. Chưa có mốc thực tế thì chưa có ngày cụ thể. Xác định ngày không đồng nghĩa với duyệt chi.</p>
           </section>
         </div>
         <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit space-y-4">
@@ -84,7 +85,7 @@ export default function AdminBatchDetail() {
               <label className="block text-sm">Hạn gọi vốn (giờ Việt Nam)<input className={inputClass} type="datetime-local" required value={deadline} onChange={e => setDeadline(e.target.value)} disabled={disabled} /></label>
               <button disabled={disabled} className="w-full flex items-center justify-center gap-2 bg-red-600 text-white p-3 rounded-lg font-bold disabled:opacity-50"><CheckCircle size={16} />{mutation.isPending ? 'Đang xử lý…' : 'Duyệt & Mở gọi vốn'}</button>
             </form>
-            <form className="space-y-3 border-t pt-4" onSubmit={e => void decide(e, 'reject')}><label className="block text-sm">Lý do từ chối<textarea className={inputClass} required maxLength={300} value={reason} onChange={e => setReason(e.target.value)} disabled={disabled} /></label><button disabled={disabled} className="w-full border border-slate-300 p-3 rounded-lg font-bold disabled:opacity-50">Từ chối lô</button></form>
+            <form className="space-y-3 border-t pt-4" onSubmit={e => void decide(e, (e.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'revise' ? 'revise' : 'reject')}><label className="block text-sm">Lý do từ chối hoặc yêu cầu bổ sung<textarea className={inputClass} required maxLength={300} value={reason} onChange={e => setReason(e.target.value)} disabled={disabled} /></label><button value="revise" disabled={disabled} className="w-full border border-amber-400 p-3 rounded-lg font-bold disabled:opacity-50">Yêu cầu bổ sung</button><button disabled={disabled} className="w-full border border-slate-300 p-3 rounded-lg font-bold disabled:opacity-50">Từ chối lô</button></form>
           </> : <>
             <p>Lô đã được xử lý: {batchStatuses[b.status]}.</p>
             {detail.rejectionReason && <p className="whitespace-pre-wrap break-words">{detail.rejectionReason}</p>}
