@@ -36,6 +36,7 @@ const OperatorDailyLog = lazy(() => import('../features/operator/OperatorDailyLo
 const OperatorBatchStatus = lazy(() => import('../features/operator/OperatorBatchStatus'))
 const OperatorBatchDetail = lazy(() => import('../features/operator/OperatorBatchDetail'))
 const OperatorAlerts = lazy(() => import('../features/operator/OperatorAlerts'))
+const OperatorEvidence = lazy(() => import('../features/operator/OperatorEvidence'))
 const OperatorListings = lazy(() => import('../features/operator/OperatorListings'))
 const OperatorMembers = lazy(() => import('../features/operator/OperatorMembers'))
 const OperatorOrders = lazy(() => import('../features/operator/OperatorOrders'))
@@ -128,6 +129,8 @@ export const router = createBrowserRouter([
           { path: '/operator/batch', element: page(OperatorBatchStatus) },
           { path: '/operator/batch/detail', element: page(OperatorBatchDetail) },
           { path: '/operator/alerts', element: page(OperatorAlerts) },
+          { path: '/operator/evidence', element: page(OperatorEvidence) },
+          { path: '/operator/evidence/:id', element: page(OperatorEvidence) },
           { path: '/operator/listings', element: page(OperatorListings) },
           { path: '/operator/members', element: page(OperatorMembers) },
           { path: '/operator/orders', element: page(OperatorOrders) },

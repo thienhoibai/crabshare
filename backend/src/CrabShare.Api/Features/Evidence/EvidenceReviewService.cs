@@ -5,13 +5,11 @@ using CrabShare.Api.Common.Errors;
 using CrabShare.Api.Common.Paging;
 using CrabShare.Api.Infrastructure.Persistence;
 using CrabShare.Api.Infrastructure.Persistence.Entities;
-using CrabShare.Api.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrabShare.Api.Features.Evidence;
 
-public sealed record ReviewImage(Stream Stream, string ContentType);
-public sealed class EvidenceReviewService(AppDbContext db, ICurrentUser me, IFileStorage storage, TimeProvider clock)
+public sealed class EvidenceReviewService(AppDbContext db, ICurrentUser me, EvidenceImageReader images, TimeProvider clock)
 {
     public async Task<PagedResult<ReviewEvidenceSummary>> ListAsync(EvidenceReviewQuery filter, PageQuery paging, CancellationToken ct)
     {
@@ -34,16 +32,11 @@ public sealed class EvidenceReviewService(AppDbContext db, ICurrentUser me, IFil
         await RequireAccessAsync(id, ct);
         return Detail(await Load(id, ct));
     }
-    public async Task<ReviewImage> OpenImageAsync(long id, CancellationToken ct)
+    public async Task<EvidenceImageContent> OpenImageAsync(long id, CancellationToken ct)
     {
         await RequireAccessAsync(id, ct);
         var row = await db.Evidences.AsNoTracking().SingleAsync(e => e.EvidenceId == id, ct);
-        var type = Path.GetExtension(row.FileUri).ToLowerInvariant() switch { ".jpg" or ".jpeg" => "image/jpeg", ".png" => "image/png", ".webp" => "image/webp", _ => null };
-        if (row.MediaType != "Photo" || type is null)
-            throw new BusinessRuleException("evidence.not_photo", "Bằng chứng này không có ảnh ở định dạng được hỗ trợ.");
-        try { return new(await storage.OpenReadAsync(row.FileUri, ct), type); }
-        catch (Exception error) when (error is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException)
-        { throw new NotFoundException("evidence.image_not_found", "Không tìm thấy ảnh bằng chứng."); }
+        return await images.OpenAsync(row.FileUri, row.MediaType, ct);
     }
     public Task<ReviewEvidenceDetail> DecideAsync(long id, EvidenceVerdictRequest request, CancellationToken ct)
     {

@@ -179,6 +179,11 @@ mở đúng hộp/lô và gửi `captureRequestId` cùng ảnh. Khi hoàn thành
 được tải lại và biến mất khỏi danh sách đang chờ. Xem
 [CS-50](../docs/validation/CS-50-random-capture-requests.md).
 
+CS-57: tab Cảnh báo → **Bằng chứng bị gắn cờ** → xem ảnh và phản hồi thẩm định,
+nhập giải trình tối đa 1.000 ký tự và gửi qua API. Ảnh tải bằng JWT theo hộ nuôi;
+khi gửi lỗi giữ nội dung để thử lại. Giải trình đã gửi vẫn chờ kiểm định viên
+thẩm định. Xem [CS-57](../docs/validation/CS-57-evidence-explanation.md).
+
 eKYC đã dùng `ApiKycRepository` riêng: GET `/api/me/kyc`, POST multipart
 `/api/kyc/ekyc`. Màn Tài khoản → Xác minh danh tính yêu cầu đồng ý điều khoản,
 chụp CCCD trước/sau bằng camera sau, selfie bằng camera trước, rồi gửi cả 3 ảnh.

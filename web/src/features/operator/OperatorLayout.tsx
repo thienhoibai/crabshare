@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  Bell, BellRing, ClipboardSignature, DollarSign, Home, LayoutGrid, LogOut, Menu, Monitor, NotebookPen, Package, Smartphone, Store, Users, X,
+  Bell, BellRing, ClipboardSignature, DollarSign, Flag, Home, LayoutGrid, LogOut, Menu, Monitor, NotebookPen, Package, Smartphone, Store, Users, X,
 } from 'lucide-react'
 import { Logo, Shell } from '../../shared/ui/kit/kit'
 import { useAuthStore } from '../../shared/auth/authStore'
@@ -41,6 +41,7 @@ const navGroups = [
     items: [
       { id: 'log', href: '/operator/log', icon: NotebookPen, label: 'Nhật ký nuôi' },
       { id: 'alerts', href: '/operator/alerts', icon: BellRing, label: 'Cảnh báo' },
+      { id: 'evidence', href: '/operator/evidence', icon: Flag, label: 'Giải trình bằng chứng' },
     ],
   },
 ]

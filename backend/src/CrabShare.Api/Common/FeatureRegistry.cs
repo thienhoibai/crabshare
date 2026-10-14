@@ -85,6 +85,8 @@ public static class FeatureRegistry
         services.AddScoped<CaptureRequestService>();
         services.AddScoped<CaptureRequestJob>();     // CS-50
         services.AddScoped<EvidenceReviewService>(); // CS-54
+        services.AddScoped<EvidenceExplanationService>(); // CS-57
+        services.AddScoped<EvidenceImageReader>();
         services.AddScoped<EvidenceAccess>();
         services.AddSingleton<EvidenceImageProcessor>();
         services.AddScoped<AlertService>();          // Features/Alerts

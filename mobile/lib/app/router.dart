@@ -15,6 +15,7 @@ import '../features/investor/notifications/notifications_page.dart';
 import '../features/onboarding/onboarding_page.dart';
 import '../features/operator/alerts/alerts_page.dart';
 import '../features/operator/evidence/capture_page.dart';
+import '../features/operator/evidence/evidence_explanation_page.dart';
 import '../features/operator/harvest/harvest_page.dart';
 import '../features/operator/logs/daily_log_form_page.dart';
 import '../features/operator/logs/daily_logs_page.dart';
@@ -201,6 +202,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: Routes.dailyLogNew,
         builder: (context, state) => DailyLogFormPage(
           initialBatchCode: state.uri.queryParameters['batch'],
+        ),
+      ),
+      GoRoute(
+        path: Routes.flaggedEvidence,
+        builder: (context, state) => const FlaggedEvidencePage(),
+      ),
+      GoRoute(
+        path: '${Routes.flaggedEvidence}/:id',
+        builder: (context, state) => EvidenceExplanationPage(
+          id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
         ),
       ),
       GoRoute(
