@@ -5,6 +5,7 @@ import 'package:crabshare_mobile/app/routes.dart';
 import 'package:crabshare_mobile/app/theme/app_theme.dart';
 import 'package:crabshare_mobile/core/auth/session.dart';
 import 'package:crabshare_mobile/features/operator/data/operator_models.dart';
+import 'package:crabshare_mobile/features/operator/data/operator_orders_repository.dart';
 import 'package:crabshare_mobile/features/operator/evidence/capture_page.dart';
 import 'package:crabshare_mobile/features/operator/evidence/capture_requests_repository.dart';
 import 'package:crabshare_mobile/features/operator/evidence/capture_requests_section.dart';
@@ -187,6 +188,9 @@ void main() {
             captureRequestsRepositoryProvider.overrideWithValue(requests),
             evidenceRepositoryProvider.overrideWithValue(evidence),
             evidenceCameraProvider.overrideWithValue(_Camera()),
+            operatorOrdersRepositoryProvider.overrideWithValue(
+              MockOperatorOrdersRepository(),
+            ),
           ],
           child: Consumer(
             builder: (context, ref, _) {

@@ -22,6 +22,7 @@ import 'package:crabshare_mobile/features/investor/notifications/notifications_p
 import 'package:crabshare_mobile/features/onboarding/onboarding_page.dart';
 import 'package:crabshare_mobile/features/operator/alerts/alerts_page.dart';
 import 'package:crabshare_mobile/features/operator/data/alert_repository.dart';
+import 'package:crabshare_mobile/features/operator/data/operator_orders_repository.dart';
 import 'package:crabshare_mobile/features/operator/data/operator_repository.dart';
 import 'package:crabshare_mobile/features/operator/data/operator_models.dart';
 import 'package:crabshare_mobile/features/operator/evidence/capture_page.dart';
@@ -110,6 +111,9 @@ void main() {
             ),
             captureRequestsRepositoryProvider.overrideWithValue(
               _SmokeCaptureRequests(),
+            ),
+            operatorOrdersRepositoryProvider.overrideWithValue(
+              MockOperatorOrdersRepository(),
             ),
           ],
           child: MaterialApp(theme: buildAppTheme(), home: page),
