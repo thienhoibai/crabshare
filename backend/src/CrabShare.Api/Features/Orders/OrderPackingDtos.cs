@@ -8,7 +8,7 @@ public static class PackingErrors
     /// <summary>Đơn không tồn tại hoặc không thuộc hộ nuôi đang đăng nhập (404).</summary>
     public const string OrderNotFound = "pack.order_not_found";
 
-    /// <summary>Tham số status của danh sách đơn chỉ nhận Paid hoặc Packed (400).</summary>
+    /// <summary>Tham số status của danh sách đơn chỉ nhận Paid, Packed, Shipping, Delivered hoặc Completed (400).</summary>
     public const string InvalidStatus = "pack.invalid_status";
 
     /// <summary>Chỉ đóng gói được đơn đang Paid (422).</summary>
@@ -84,4 +84,5 @@ public sealed record OperatorOrderDetailResponse(
     string ShippingAddress,
     long TotalAmount,
     decimal TotalKg,
-    IReadOnlyList<OperatorOrderLineResponse> Lines);
+    IReadOnlyList<OperatorOrderLineResponse> Lines,
+    OrderShipmentResponse? Shipment = null);

@@ -10,6 +10,10 @@ public sealed class OrderOptions
     /// <summary>Cửa sổ giữ chỗ tồn kho chờ chuyển khoản (BR-13, TL-28 §5). Là tham số, hiệu chỉnh khi có số liệu thật.</summary>
     [Range(1, 1440)]
     public int ReservationMinutes { get; set; } = 15;
+
+    /// <summary>Cửa sổ đổi trả sau khi giao (UC30, TL-31): hết hạn mà không có khiếu nại mở thì job chuyển đơn Completed.</summary>
+    [Range(1, 720)]
+    public int ReturnWindowHours { get; set; } = 72;
 }
 
 public sealed class CheckoutLine

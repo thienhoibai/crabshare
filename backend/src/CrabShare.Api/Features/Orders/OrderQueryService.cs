@@ -67,7 +67,8 @@ public sealed class OrderQueryService(AppDbContext db, ICurrentUser me, TimeProv
 
         return new OrderTrackingResponse(order.OrderNo, order.Batch.BatchCode, order.Batch.Operator.LegalName, order.Status,
             (long)order.TotalAmount, order.PlacedAt, order.RecipientName, order.RecipientPhone, order.ShippingAddress,
-            order.CancelledAt, order.CancelReason, IsCancellable(order.Status), lines, payment, Timeline(order));
+            order.CancelledAt, order.CancelReason, IsCancellable(order.Status), lines, payment, Timeline(order),
+            OrderFulfilmentService.CanConfirmReceipt(order.Status, order.ReceivedAt), OrderFulfilmentService.ToShipment(order));
     }
 
     /// <summary>

@@ -19,13 +19,14 @@
 | POST | `/api/preorders` | Customer | UC27: đặt trước khi lô đang nuôi, trả cọc (`PreOrderDeposit`) |
 | GET | `/api/orders` · `/api/orders/{orderNo}` | Customer | UC28 |
 | POST | `/api/orders/{orderNo}/cancel` | Customer | Khi chưa đóng gói |
-| POST | `/api/orders/{orderNo}/receive` | Customer | UC30 → `Completed` sau hạn đổi trả |
+| POST | `/api/orders/{orderNo}/receive` | Customer | **Đã làm (CS-56, UC30).** `Shipping → Delivered` (bắt đầu 72h đổi trả) hoặc chỉ ghi `received_at`. |
 | POST | `/api/orders/{orderNo}/complaints` | Customer | UC31 |
 | POST | `/api/orders/{orderNo}/rating` | Customer | UC34 |
-| GET | `/api/operators/me/orders?status=` | OperatorMember | **Đã làm (CS-53).** `status=Paid` (mặc định) hoặc `Packed`. Sai giá trị → 400 `pack.invalid_status`. |
-| GET | `/api/operators/me/orders/{orderNo}` | OperatorMember | **Đã làm (CS-53).** Chi tiết dòng, kg đã gán, tem đã quét. Đơn hộ khác → 403 `pack.order_forbidden`. |
+| GET | `/api/operators/me/orders?status=` | OperatorMember | **Đã làm (CS-53, CS-56).** Nhận `Paid|Packed|Shipping|Delivered|Completed`. Mặc định `Paid`. Sai giá trị → 400 `pack.invalid_status`. |
+| GET | `/api/operators/me/orders/{orderNo}` | OperatorMember | **Đã làm (CS-53, CS-56).** Chi tiết dòng, kg đã gán, tem đã quét, thông tin giao hàng `shipment`. Đơn hộ khác → 403 `pack.order_forbidden`. |
 | POST | `/api/orders/{orderNo}/pack` | OperatorMember | **Đã làm (CS-53, UC29).** `{ tagCodes: [...] }` — tem Active, cua InStock, cùng lô, đúng hạng, không trùng, đủ kg → cua `Packed` + `order_line_id`, event `Packed` + `tag_id`, đơn `Packed`, audit `sales_order/pack`. |
-| POST | `/api/orders/{orderNo}/ship` · `/deliver` | OperatorMember | Cập nhật giao hàng (nền tảng không tự giao) |
+| POST | `/api/orders/{orderNo}/ship` | OperatorMember | **Đã làm (CS-56, UC30).** Body `{ carrierName*, vehiclePlate?, driverPhone*, expectedArrivalAt?, note? }` → `Packed → Shipping`, lưu thông tin nhà xe. |
+| POST | `/api/orders/{orderNo}/deliver` | OperatorMember | **Đã làm (CS-56, UC30).** `Shipping → Delivered`, cua `Packed → Sold` + event `Delivered`, `return_window_ends_at = now + Orders:ReturnWindowHours (72)`. |
 | POST | `/api/complaints/{id}/respond` | OperatorMember | Hộ nuôi phản hồi |
 | GET | `/api/admin/complaints?status=Escalated` | PlatformAdmin | |
 | POST | `/api/admin/complaints/{id}/resolve` | PlatformAdmin | UC32 |
@@ -88,3 +89,22 @@ Huỷ chạy `InTransactionAsync` + `IAuditLog` (khoá chuỗi trước khi đ�
 Job `ReservationExpiryJob` mỗi 1 phút (`ReservationExpiryService`, tắt bằng `Orders:ExpiryJob:Enabled = false` / `Orders__ExpiryJob__Enabled`). Đơn `PendingPayment` giữ chỗ `Active` đã quá `expires_at` → Cancelled, `cancel_reason = payment_timeout`, khoản thu Pending → Expired. Câu UPDATE đơn có điều kiện `status = PendingPayment`.
 
 Test: `OrderTrackingRulesTests` (CI), `OrderTrackingDatabaseTests` (LocalDB). Web: `OrderHistoryPage.tsx` (`/lich-su-don-hang`, `/huy-tra-hang`), `OrderTrackingPage.tsx` (`/theo-doi-don-hang`, `/theo-doi-don-hang/:orderNo`). `/danh-gia-don-hang` vẫn là bản mẫu.
+
+## NH-10 — Giao hàng + hoàn tất đơn (CS-56)
+
+Controller: `OperatorOrdersController` (hộ nuôi), `OrderTrackingController` (khách).
+
+- **Cột V010 trên `sales_order`**: `carrier_name`, `vehicle_plate`, `driver_phone`, `expected_arrival_at`, `shipping_note`, `received_at`.
+- **Nền tảng không thu phí ship** (BR-52, TL-31): hộ nuôi tự gửi hàng qua nhà xe, thông tin nhập để khách liên hệ tài xế.
+- **Quy tắc chuyển trạng thái**:
+  - `Packed` → `Shipping` (`POST /api/orders/{orderNo}/ship`, hộ nuôi): ghi thông tin nhà xe, `shipped_at`.
+  - `Shipping` → `Delivered` (`POST /api/orders/{orderNo}/deliver`, hộ nuôi): `delivered_at`, `return_window_ends_at = now + Orders:ReturnWindowHours (72)`. Cua của đơn `Packed` → `Sold`, mỗi con ghi 1 `CrabItemEvent` `Delivered`.
+  - `POST /api/orders/{orderNo}/receive` (khách): nếu đơn `Shipping` thì chuyển `Delivered` (+72h từ lúc khách bấm); nếu đơn đã `Delivered` thì chỉ ghi `received_at`, không đổi hạn; xác nhận lại trả 200 không ghi thêm audit.
+- **Job `OrderCompletionJob`** chạy mỗi 1 phút (`OrderCompletionService`, cấu hình `Orders:CompletionJob:Enabled`): chuyển đơn `Delivered` có `return_window_ends_at <= now` sang `Completed`, bỏ qua đơn có khiếu nại đang mở (`Open`, `OperatorResponded`, `Escalated`). Đơn `Completed` cộng vào doanh thu lô (`v_batch_actual_revenue`).
+- **Mã lỗi `fulfil.*`**:
+  - `fulfil.order_not_found` (404): không tìm thấy đơn.
+  - `fulfil.order_forbidden` (403): đơn thuộc hộ nuôi khác.
+  - `fulfil.invalid_status` (422): trạng thái không hợp lệ cho thao tác này.
+  - `fulfil.eta_invalid` (422): giờ xe đến quá khứ hoặc quá 7 ngày.
+  - `fulfil.status_changed` (409): trạng thái vừa bị thay đổi đồng thời.
+
