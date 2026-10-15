@@ -273,7 +273,7 @@ public class OrderPackingDatabaseTests(OrderDatabaseFixture fixture) : IClassFix
         Assert.Equal("Paid", detail!.Status);
         Assert.Equal(0m, detail.Lines.Single().AssignedKg);
 
-        using var badStatus = await client.GetAsync("/api/operators/me/orders?status=Shipping");
+        using var badStatus = await client.GetAsync("/api/operators/me/orders?status=Cancelled");
         Assert.Equal(HttpStatusCode.BadRequest, badStatus.StatusCode);
         Assert.Equal(PackingErrors.InvalidStatus, await ErrorCode(badStatus));
     }
