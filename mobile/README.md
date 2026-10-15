@@ -1,5 +1,15 @@
 # Mobile — Flutter
 
+CS-42 / UC09: Khám phá lô và chi tiết dùng `GET /api/batches` và
+`GET /api/batches/{code}` qua client có JWT. Lọc `status`, `crabType`, phân trang
+`page` (bắt đầu từ 1), `pageSize=20` trên máy chủ. Chỉ hiển thị bộ lọc các trạng
+thái đã công bố. Chi tiết gồm điều khoản, phiên bản chi phí đã khóa, vốn xác nhận,
+vốn giữ chỗ và số nhà đầu tư. Nhãn phần trăm dùng nguyên `fundingProgress.percentLabel`
+của API; thanh tiến độ dùng `pctOfTarget / 100` và giới hạn phần vẽ trong 0–1.
+Lỗi API không thay bằng dữ liệu mẫu; có thử lại, danh sách trống và lô không còn
+xem được. Kiểm tra: `flutter test test/batch_discovery_test.dart test/batch_discovery_widgets_test.dart`.
+
+
 CS-65: Tab Thông báo và badge nhà đầu tư dùng `GET /api/me/notifications`.
 Mốc đã đọc lưu trong secure storage riêng theo tài khoản, gồm cả ID để không bỏ sót
 thông báo cùng giờ. Chọn Đã đọc/Đọc tất cả hoặc mở lô để lưu; có kéo làm mới và

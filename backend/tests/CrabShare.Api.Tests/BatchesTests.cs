@@ -167,6 +167,32 @@ public class BatchesTests(OperatorDatabaseFixture fixture) : IClassFixture<Opera
     }
 
     [Fact]
+    public async Task Dual_role_investor_owner_has_explicit_authoring_read_without_exposing_draft_to_discovery()
+    {
+        var (owner, auth, operatorId) = await Owner(); var code = await Create(owner);
+        await using var db = fixture.OpenDb();
+        var now = DateTimeOffset.UtcNow;
+        db.Investors.Add(new Investor { UserId = auth.User.UserId, InvestorKind = "Individual", VerificationStatus = "Unverified", CreatedAt = now });
+        db.AppUserRoles.Add(new AppUserRole { UserId = auth.User.UserId, RoleCode = Roles.Investor, GrantedAt = now });
+        await db.SaveChangesAsync();
+        var login = await owner.PostAsJsonAsync("/api/auth/login", new { email = auth.User.Email, password = "Test-password-123" });
+        login.EnsureSuccessStatusCode();
+        var dual = (await login.Content.ReadFromJsonAsync<AuthResponse>())!;
+        Assert.Contains(Roles.Investor, dual.User.Roles); Assert.Contains(Roles.OperatorMember, dual.User.Roles);
+        owner.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", dual.AccessToken);
+        var authoring = await owner.GetFromJsonAsync<JsonElement>($"/api/operators/me/batches/{code}");
+        Assert.Equal("Draft", authoring.GetProperty("status").GetString());
+        Assert.True(authoring.GetProperty("canEdit").GetBoolean()); Assert.Equal(operatorId, authoring.GetProperty("operatorId").GetInt64());
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync($"/api/batches/{code}")).StatusCode);
+        var created = await owner.PostAsJsonAsync("/api/batches", Batch());
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.NotNull(created.Headers.Location);
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(created.Headers.Location)).StatusCode);
+        var (other, _, _) = await Owner();
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.GetAsync($"/api/operators/me/batches/{code}")).StatusCode);
+    }
+
+    [Fact]
     public async Task Staff_can_read_but_cannot_write_and_revoked_or_stale_membership_is_denied()
     {
         var (owner, _, operatorId) = await Owner(); var code = await Create(owner);

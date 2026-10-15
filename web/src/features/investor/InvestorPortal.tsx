@@ -1,26 +1,22 @@
-/* Cổng nhà đầu tư bản 2: Tổng quan/Danh mục và hồ sơ dùng API.
-   Các trang khám phá/quyết toán mẫu còn lại thuộc task Funding/Batches/Settlement. */
-import { useEffect, useState, type CSSProperties } from 'react'
+/* Cổng nhà đầu tư bản 2. Quyết toán mẫu thuộc task Settlement. */
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { ArrowLeft, Compass, House, Receipt, Wallet, ShoppingBag, UserRound } from 'lucide-react'
 import { useAuthStore } from '../../shared/auth/authStore'
 import KycVerification, { KycStatusCard } from '../accounts/KycVerification'
 import PayoutAccountForm from '../accounts/PayoutAccountForm'
-import OpenBatches from './funding/OpenBatches'
+import InvestorBatches, { InvestorBatchDetail } from './batches/InvestorBatches'
 import InvestorPortfolio, { PortfolioOverview, PortfolioPosition } from './portfolio/InvestorPortfolio'
 import NotificationBell from './notifications/NotificationBell'
-import {
-  HOLDINGS, LOTS, STAGES, closedPayout2610, lot, maxCapital, minContribution,
-  pct, small, stage, tr, vnd, type Lot,
-} from '../../shared/ui/kit/mock-data'
-import {
-  ContributeModal, CostBars, FundBar, Lifeline, Logo, SettleSim, SettlementCard, Shell, StageChip, Tabs, Tranches,
-} from '../../shared/ui/kit/kit'
+import { closedPayout2610, vnd } from '../../shared/ui/kit/mock-data'
+import { Logo, SettlementCard, Shell } from '../../shared/ui/kit/kit'
 import './investor.css'
 
 /* ---------- điều hướng trong một bản ---------- */
 type View = 'home' | 'explore' | 'lot' | 'settle' | 'profile' | 'portfolio' | 'position'
 function pathView(path: string): View | null {
+  if (path.startsWith('/nha-dau-tu/lo/')) return 'lot'
+  if (path === '/nha-dau-tu/kham-pha') return 'explore'
   if (path.startsWith('/nha-dau-tu/danh-muc/')) return 'position'
   if (path === '/nha-dau-tu/danh-muc') return 'portfolio'
   if (path.endsWith('/ho-so')) return 'profile'
@@ -34,96 +30,22 @@ function useNav() {
   const navigate = useNavigate()
   const [view, setView] = useState<View>(pathView(location.pathname) ?? 'home')
   useEffect(() => {
-    setView((current) => pathView(location.pathname) ?? (['profile', 'portfolio', 'position'].includes(current) ? 'home' : current))
+    setView((current) => pathView(location.pathname) ?? (['profile', 'portfolio', 'position', 'explore', 'lot'].includes(current) ? 'home' : current))
   }, [location.pathname])
-  const [code, setCode] = useState('L2612-01')
-  const [prev, setPrev] = useState<View>('home')
+  let code = ''
+  try { code = decodeURIComponent(location.pathname.split('/lo/')[1] ?? '') } catch { /* Mã URL không hợp lệ. */ }
   const top = () => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
   return {
     view,
     code,
     portfolioCode: portfolioCode(location.pathname),
     /** Trang đang được coi là mục menu hiện tại (lô mở từ đâu thì giữ mục đó). */
-    section: view === 'position' ? 'portfolio' : view === 'lot' ? prev : view,
-    go: (v: View) => { setView(v); navigate(v === 'profile' ? '/nha-dau-tu/ho-so' : v === 'portfolio' ? '/nha-dau-tu/danh-muc' : '/nha-dau-tu'); top() },
+    section: view === 'position' ? 'portfolio' : view === 'lot' ? 'explore' : view,
+    go: (v: View) => { setView(v); navigate(v === 'profile' ? '/nha-dau-tu/ho-so' : v === 'portfolio' ? '/nha-dau-tu/danh-muc' : v === 'explore' ? '/nha-dau-tu/kham-pha' : '/nha-dau-tu'); top() },
     openPosition: (c: string) => { navigate(`/nha-dau-tu/danh-muc/${encodeURIComponent(c)}`); top() },
-    open: (c: string) => { setPrev(view === 'lot' ? prev : view); setCode(c); setView('lot'); top() },
-    back: () => { setView(prev); top() },
+    open: (c: string) => { navigate(`/nha-dau-tu/lo/${encodeURIComponent(c)}${location.search}`); top() },
+    back: () => { navigate(`/nha-dau-tu/kham-pha${location.search}`); top() },
   }
-}
-
-const FILTERS = ['Tất cả', ...STAGES.map((s) => s.label)] as const
-type Filter = (typeof FILTERS)[number]
-const byFilter = (f: Filter) => LOTS.filter((l) => f === 'Tất cả' || stage(l.stage).label === f)
-const holdingOf = (code: string) => HOLDINGS.find((h) => h.code === code)
-const facts = (l: Lot) => [
-  ['Mục tiêu', tr(l.target, 0)],
-  ['Đã góp', `${pct(l.confirmed, l.target)}%`],
-  ['Góp tối thiểu', tr(minContribution(l))],
-  ['Chu kỳ', `${l.cycleDays} ngày · ${l.boxes} ô`],
-]
-
-/** Thẻ lô có ảnh nền: dùng ở lưới (bản 1) và băng chuyền (bản 3). */
-
-/** Các khối nội dung của trang lô, bản nào cũng dùng. */
-function LotSections({ l }: { l: Lot }) {
-  return (
-    <>
-      <section className="iv-card">
-        <h3 className="rd-h3">Tiền đi đâu</h3>
-        <CostBars l={l} />
-      </section>
-      <section className="iv-card">
-        <h3 className="rd-h3">Hành trình</h3>
-        <Lifeline s={l.stage} />
-        <Tranches l={l} />
-        <p className="rd-note">{l.note}</p>
-      </section>
-      {l.stage === 'settle' ? (
-        <section className="iv-card iv-card--wide">
-          <h3 className="rd-h3">Bảng quyết toán</h3>
-          <SettlementCard />
-        </section>
-      ) : l.stage !== 'closed' ? (
-        <section className="iv-card iv-card--wide">
-          <h3 className="rd-h3">Thử xem cách chia</h3>
-          <SettleSim l={l} />
-        </section>
-      ) : null}
-    </>
-  )
-}
-
-function InvestCard({ l, onInvest }: { l: Lot; onInvest: (amount: number) => void }) {
-  const min = minContribution(l)
-  const room = Math.max(min, maxCapital(l) - l.confirmed)
-  const [amount, setAmount] = useState(Math.min(room, Math.max(min, 10_000_000)))
-  const mine = holdingOf(l.code)
-  if (l.stage !== 'funding') {
-    return (
-      <aside className="i2-invest">
-        <StageChip s={l.stage} />
-        <p className="i2-invest__big">{l.when}</p>
-        {mine ? <p className="rd-muted">Bạn góp {vnd(mine.amount)} vào lô này.</p> : <p className="rd-muted">Lô không nhận thêm vốn.</p>}
-        <p className="rd-note">{l.note}</p>
-      </aside>
-    )
-  }
-  return (
-    <aside className="i2-invest">
-      <p className="rd-eyebrow">Góp vào lô này</p>
-      <p className="i2-invest__big">{vnd(amount)}</p>
-      <input className="rd-range" type="range" min={min} max={room} step={500_000} value={amount} onChange={(e) => setAmount(Number(e.target.value))} style={{ '--p': (amount - min) / Math.max(1, room - min) } as CSSProperties} aria-label="Số tiền góp" />
-      <div className="rd-range__ends"><span>Tối thiểu {tr(min)}</span><span>Còn {tr(room)}</span></div>
-      <dl className="i2-invest__dl">
-        <dt>Phần của bạn</dt><dd>≈ {pct(amount, l.confirmed + amount)}%</dd>
-        <dt>Lỗ tối đa</dt><dd>{tr(amount)}</dd>
-        <dt>Hạn gọi vốn</dt><dd>{l.when.replace(' gọi vốn', '')}</dd>
-      </dl>
-      <button type="button" className="rd-btn rd-btn--primary rd-btn--block rd-btn--lg" onClick={() => onInvest(amount)}>Góp vốn</button>
-      <p className="rd-note">Giữ chỗ 15 phút. Chưa đủ 80% đúng hạn thì hoàn tiền.</p>
-    </aside>
-  )
 }
 
 function InvV2Inner() {
@@ -131,9 +53,6 @@ function InvV2Inner() {
   const user = useAuthStore((s) => s.user)
   const fullName = user?.fullName ?? 'Nhà đầu tư'
   const initials = fullName.trim().split(/\s+/).slice(-2).map((word) => word[0]).join('')
-  const [filter, setFilter] = useState<Filter>('Tất cả')
-  const [investing, setInvesting] = useState<{ l: Lot; amount: number } | null>(null)
-  const l = lot(nav.code)
   const items: { v: View; label: string; icon: typeof House }[] = [
     { v: 'home', label: 'Tổng quan', icon: House },
     { v: 'portfolio', label: 'Danh mục', icon: Wallet },
@@ -142,7 +61,7 @@ function InvV2Inner() {
     { v: 'profile', label: 'Hồ sơ & eKYC', icon: UserRound },
   ]
   const active = nav.section
-  const titles: Record<View, string> = { home: `Chào ${fullName}`, explore: 'Khám phá lô', lot: l.code, settle: 'Quyết toán', profile: 'Hồ sơ & eKYC', portfolio: 'Danh mục', position: 'Chi tiết danh mục' }
+  const titles: Record<View, string> = { home: `Chào ${fullName}`, explore: 'Khám phá lô', lot: nav.code, settle: 'Quyết toán', profile: 'Hồ sơ & eKYC', portfolio: 'Danh mục', position: 'Chi tiết danh mục' }
   return (
     <div className="i2">
       <aside className="i2-side">
@@ -178,35 +97,8 @@ function InvV2Inner() {
           {user?.roles.includes('Customer') && <section className="iv-card"><h3 className="rd-h3">Địa chỉ giao hàng</h3><a className="rd-btn rd-btn--ghost" href="/tai-khoan/dia-chi">Mở sổ địa chỉ</a></section>}
         </div>}
 
-        {nav.view === 'explore' && (
-          <div className="i2-explore">
-            <OpenBatches />
-            <Tabs items={FILTERS} value={filter} onChange={setFilter} />
-            <div className="iv-card i2-list">
-              {byFilter(filter).map((x) => (
-                <button type="button" key={x.code} className="i2-lrow" onClick={() => nav.open(x.code)}>
-                  <img src={small(x.img, 240)} alt="" />
-                  <span className="i2-lrow__name"><b>{x.code}</b><small>{x.crab} · {x.boxes} ô</small></span>
-                  <span className="i2-lrow__prog">{x.stage === 'funding' ? <><FundBar l={x} labels={false} /><small>{pct(x.confirmed, x.target)}% của {tr(x.target, 0)}</small></> : <><Lifeline s={x.stage} compact /><small>{stage(x.stage).label}</small></>}</span>
-                  <span className="i2-lrow__when">{x.when}</span>
-                  <span className="rd-btn rd-btn--ghost rd-btn--sm">Xem</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {nav.view === 'lot' && (
-          <div className="i2-lot">
-            <div className="i2-lot__main">
-              <div className="i2-lot__img"><img src={l.img} alt="" /><StageChip s={l.stage} solid /></div>
-              <p className="rd-muted">{l.crab} · {l.boxes} ô · {OPERATOR_NAME}</p>
-              <dl className="i2-facts">{facts(l).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
-              <LotSections l={l} />
-            </div>
-            <InvestCard key={l.code} l={l} onInvest={(amount) => setInvesting({ l, amount })} />
-          </div>
-        )}
+        {nav.view === 'explore' && <InvestorBatches open={nav.open} />}
+        {nav.view === 'lot' && <InvestorBatchDetail code={nav.code} />}
 
         {nav.view === 'settle' && (
           <div className="i2-grid">
@@ -222,11 +114,9 @@ function InvV2Inner() {
           </div>
         )}
       </main>
-      {investing && <ContributeModal l={investing.l} initial={investing.amount} onClose={() => setInvesting(null)} />}
     </div>
   )
 }
-const OPERATOR_NAME = 'HTX Nuôi cua Cà Mau'
 
 export default function InvestorPortal() {
   return (

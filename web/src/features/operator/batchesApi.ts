@@ -15,7 +15,7 @@ export type Batch = BatchRequest & {
 }
 export type BatchPage = { items: Batch[]; total: number; page: number; pageSize: number }
 const path = (code: string) => `/api/batches/${encodeURIComponent(code)}`
-export const getBatch = async (code: string, signal?: AbortSignal) => (await http.get<Batch>(path(code), { signal })).data
+export const getBatch = async (code: string, signal?: AbortSignal) => (await http.get<Batch>(`/api/operators/me/batches/${encodeURIComponent(code)}`, { signal })).data
 export const listBatches = async (status: string, page: number, signal?: AbortSignal) =>
   (await http.get<BatchPage>('/api/operators/me/batches', { params: { status: status || undefined, page, pageSize: 20 }, signal })).data
 export const saveBatch = async (code: string | null, request: BatchRequest) =>
