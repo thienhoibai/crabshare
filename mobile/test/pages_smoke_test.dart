@@ -4,7 +4,6 @@ import 'package:crabshare_mobile/features/investor/notifications/notification_re
 
 import 'helpers/notification_fakes.dart';
 
-import 'package:crabshare_mobile/features/investor/data/portfolio_repository.dart';
 // Dựng từng màn hình ở khổ điện thoại với dữ liệu mẫu: lỗi tràn layout hay exception sẽ làm test fail.
 // Thêm màn mới thì thêm một dòng vào danh sách `pages` bên dưới.
 import 'package:crabshare_mobile/app/theme/app_theme.dart';
