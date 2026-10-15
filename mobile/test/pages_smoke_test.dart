@@ -1,3 +1,5 @@
+import 'helpers/discovery_fakes.dart';
+import 'package:crabshare_mobile/features/investor/data/investor_repository.dart';
 import 'package:crabshare_mobile/features/investor/notifications/notification_repository.dart';
 
 import 'helpers/notification_fakes.dart';
@@ -87,6 +89,10 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            investorRepositoryProvider.overrideWithValue(ApiInvestorRepository(discoveryDio((request) =>
+              jsonResponse(request.path == '/api/batches'
+                ? {'items': [discoveryBatch()], 'page': 1, 'pageSize': 20, 'total': 1}
+                : discoveryBatch())))),
             notificationPollIntervalProvider.overrideWithValue(null),
             notificationRepositoryProvider.overrideWithValue(
               EmptyNotificationRepository(),

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -12,7 +13,7 @@ import '../../../shared/widgets/app_ui.dart';
 import '../data/investor_models.dart';
 import '../data/investor_repository.dart';
 
-/// Chi tiết lô: ảnh lớn, điều khoản đã công bố, tiến độ gọi vốn / chu kỳ nuôi, dòng thời gian.
+/// Chi tiết lô: điều khoản công bố, chi phí đã khóa và tiến độ gọi vốn từ API.
 /// Không hiển thị lợi suất kỳ vọng (TL-05 §8, BR-49).
 class BatchDetailPage extends ConsumerWidget {
   const BatchDetailPage({super.key, required this.code});
@@ -25,7 +26,7 @@ class BatchDetailPage extends ConsumerWidget {
     return Scaffold(
       body: batch.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => SafeArea(child: ErrorView(message: apiErrorMessage(e), onRetry: () => ref.invalidate(batchDetailProvider(code)))),
+        error: (e, _) => SafeArea(child: ErrorView(message: e is DioException && [403, 404].contains(e.response?.statusCode) ? 'Lô không tồn tại hoặc không còn được phép xem.' : apiErrorMessage(e), onRetry: () => ref.invalidate(batchDetailProvider(code)))),
         data: (b) => _Body(batch: b),
       ),
     );
@@ -93,7 +94,8 @@ class _Body extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 14),
-                    if (isFunding) _FundingCard(batch: b) else _ProductionCard(batch: b),
+                    _FundingCard(batch: b),
+                    _PublishedTerms(batch: b),
                     const SectionHeader(title: 'Tiến trình lô'),
                     _Timeline(current: b.status),
                     const SizedBox(height: 16),
@@ -222,11 +224,11 @@ class _FundingCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(child: Text(formatVnd(b.raisedCapital), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700))),
-              Text('${(b.fundingProgress * 100).round()}% mục tiêu', style: const TextStyle(color: AppColors.accentText, fontWeight: FontWeight.w700)),
+              Flexible(child: Text('${b.discoveryProgress?.percentLabel ?? '—'} mục tiêu', textAlign: TextAlign.end, style: const TextStyle(color: AppColors.accentText, fontWeight: FontWeight.w700))),
             ],
           ),
           const SizedBox(height: 10),
-          SoftProgressBar(value: b.fundingProgress, height: 10),
+          SoftProgressBar(value: b.discoveryProgress?.barValue ?? 0, height: 10),
           const SizedBox(height: 10),
           MetricRow(metrics: [
             Metric('mục tiêu', formatMillions(b.targetCapital)),
@@ -239,41 +241,38 @@ class _FundingCard extends StatelessWidget {
   }
 }
 
-class _ProductionCard extends StatelessWidget {
-  const _ProductionCard({required this.batch});
-
+class _PublishedTerms extends StatelessWidget {
+  const _PublishedTerms({required this.batch});
   final BatchSummary batch;
-
   @override
   Widget build(BuildContext context) {
     final b = batch;
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Text(
-                  b.aliveCount == null ? '—' : '${formatCount(b.aliveCount!)} con',
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-                ),
-              ),
-              Text('Ngày ${b.dayOfCycle ?? '—'}/${b.cycleDays}', style: const TextStyle(color: AppColors.accentText, fontWeight: FontWeight.w700)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          SoftProgressBar(value: b.cycleProgress, height: 10),
-          const SizedBox(height: 10),
-          MetricRow(metrics: [
-            Metric('vốn đã khoá', formatMillions(b.raisedCapital)),
-            Metric('cảnh báo mở', '${b.openAlerts}', color: b.openAlerts > 0 ? AppColors.danger : AppColors.success),
-            if (b.expectedHarvestDate != null) Metric('dự kiến thu', formatDayMonth(b.expectedHarvestDate!), color: AppColors.ink),
-          ]),
-        ],
-      ),
-    );
+    final cost = b.standardCost;
+    Widget term(String label, String value) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: Text(label)), const SizedBox(width: 12),
+        Flexible(child: Text(value, textAlign: TextAlign.end))]));
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SectionHeader(title: 'Điều khoản đã công bố'),
+      AppCard(child: Column(children: [
+        term('Vốn khả thi tối thiểu', b.minViableCapital == null ? '—' : formatVnd(b.minViableCapital!)),
+        term('Vốn tối đa', b.maxCapital == null ? '—' : formatVnd(b.maxCapital!)),
+        term('Góp tối thiểu', formatVnd(b.minContribution)),
+        term('Sản lượng dự kiến', '${b.expectedOutputKg ?? '—'} kg'),
+        term('Hạn bổ sung giống', '${b.restockCutoffDays ?? '—'} ngày'),
+        term('Tỷ lệ hộ nuôi', '${b.operatorSharePct ?? '—'}%'),
+        if (b.fundingOpenAt != null) term('Mở gọi vốn', formatDate(b.fundingOpenAt!)),
+        if (b.fundingDeadline != null) term('Hạn gọi vốn', formatDate(b.fundingDeadline!)),
+        term('Vốn giữ chỗ', formatVnd(b.discoveryProgress?.reservedCapital ?? 0)),
+        term('Nhà đầu tư', '${b.discoveryProgress?.investorCount ?? 0}') ])),
+      const SectionHeader(title: 'Chi phí chuẩn đã khóa'),
+      AppCard(child: cost == null ? const Text('Chưa có bản chi phí đã khóa được công bố.') : Column(children: [
+        term('Phiên bản', '${cost.versionNo} · ${cost.status}'),
+        if (cost.lockedAt != null) term('Ngày khóa', formatDate(cost.lockedAt!)),
+        for (final item in cost.items) term(item.category, formatVnd(item.amount)),
+        term('Tổng chi phí', formatVnd(cost.total)) ])),
+    ]);
   }
 }
 
@@ -284,6 +283,9 @@ class _Timeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (current == BatchStatus.cancelled) {
+      return const AppCard(child: Text('Đã huỷ'));
+    }
     final steps = BatchStatus.timeline;
     final currentIndex = steps.indexOf(current);
     return AppCard(

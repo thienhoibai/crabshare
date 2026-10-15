@@ -15,11 +15,25 @@ class BatchSummary {
     required this.cycleDays,
     required this.seedQuantity,
     this.fundingDeadline,
+    this.expectedOutputKg,
+    this.restockCutoffDays,
+    this.minViableCapital,
+    this.maxCapital,
+    this.operatorSharePct,
+    this.fundingOpenAt,
+    this.discoveryProgress,
+    this.standardCost,
     this.dayOfCycle,
     this.aliveCount,
     this.openAlerts = 0,
     this.expectedHarvestDate,
   });
+
+  final double? expectedOutputKg, operatorSharePct;
+  final int? restockCutoffDays, minViableCapital, maxCapital;
+  final DateTime? fundingOpenAt;
+  final DiscoveryFundingProgress? discoveryProgress;
+  final LockedStandardCost? standardCost;
 
   final String code;
   final String title;
@@ -143,3 +157,31 @@ class PortfolioProduction {
 }
 
 enum KycStatus { unverified, pending, verified, rejected }
+
+class BatchPage {
+  const BatchPage({required this.items, required this.page, required this.pageSize, required this.total});
+  final List<BatchSummary> items;
+  final int page, pageSize, total;
+  bool get hasNext => page * pageSize < total;
+}
+
+class DiscoveryFundingProgress {
+  const DiscoveryFundingProgress({required this.confirmedCapital, required this.reservedCapital, required this.investorCount, required this.pctOfTarget, required this.percentLabel});
+  final int confirmedCapital, reservedCapital, investorCount;
+  final double pctOfTarget;
+  final String percentLabel;
+  double get barValue => (pctOfTarget / 100).clamp(0.0, 1.0);
+}
+
+class LockedStandardCost {
+  const LockedStandardCost({required this.versionNo, required this.status, required this.total, required this.items, this.lockedAt});
+  final int versionNo, total;
+  final String status;
+  final List<StandardCostItem> items;
+  final DateTime? lockedAt;
+}
+class StandardCostItem {
+  const StandardCostItem({required this.category, required this.amount});
+  final String category;
+  final int amount;
+}

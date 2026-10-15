@@ -58,6 +58,7 @@ public static class FeatureRegistry
         services.AddScoped<OperatorReviewService>();  // UC05
         services.AddScoped<BoxService>();            // Features/Boxes
         services.AddScoped<BatchService>();           // Features/Batches — UC07
+        services.AddScoped<BatchExploreService>();    // UC09
         services.AddScoped<BatchReviewService>();     // UC08
         services.AddScoped<TrancheScheduleResolver>();
         services.AddOptions<TrancheScheduleOptions>().BindConfiguration("Batches:Schedules")

@@ -15,7 +15,21 @@ async function setup(page: Page) {
   await page.addInitScript(() => localStorage.setItem('crabshare-auth', JSON.stringify({ state: { token: 'test-token', expiresAt: '2099-01-01T00:00:00Z', user: { userId: 1, email: 'vi04@test.local', fullName: 'VI04', phone: null, status: 'Active', roles: ['OperatorMember'], operatorId: 1 } }, version: 0 })))
   await page.route('**/api/operators/me', route => route.fulfill({ json: profile }))
   await page.route('**/api/operators/me/batches*', route => route.fulfill({ json: { items: [{ ...batch, status: 'PendingApproval', canEdit: false, canSubmit: false }], page: 1, pageSize: 20, total: 1 } }))
+  await page.route('**/api/operators/me/batches/B-TEST', route => route.fulfill({ json: batch }))
 }
+
+test('dual-role member reloads the editable operator contract from its own route', async ({ page }) => {
+  await setup(page)
+  await page.addInitScript(() => {
+    const saved = JSON.parse(localStorage.getItem('crabshare-auth')!)
+    saved.state.user.roles.push('Investor')
+    localStorage.setItem('crabshare-auth', JSON.stringify(saved))
+  })
+  await page.route('**/api/batches/B-TEST', route => route.fulfill({ status: 404, json: { detail: 'Không tìm thấy lô đã công bố.' } }))
+  await page.goto('/operator/create-batch?code=B-TEST')
+  await expect(page.getByLabel('Tên lô (tiêu đề gọi vốn)')).toHaveValue('Lô thử')
+  await expect(page.getByRole('button', { name: 'Lưu nháp', exact: true })).toBeEnabled()
+})
 
 test('cost save failure keeps form and code; retry updates same batch before submit', async ({ page }) => {
   await setup(page)
@@ -86,6 +100,7 @@ test('back after submission shows current status and disables editing cached dra
   await setup(page)
   let current = { ...batch }
   await page.route('**/api/batches/B-TEST', route => route.fulfill({ json: current }))
+  await page.route('**/api/operators/me/batches/B-TEST', route => route.fulfill({ json: current }))
   await page.route('**/api/batches/B-TEST/standard-cost', route => route.fulfill({ json: current }))
   await page.route('**/api/batches/B-TEST/submit', async route => {
     current = { ...batch, status: 'PendingApproval', canEdit: false, canSubmit: false }

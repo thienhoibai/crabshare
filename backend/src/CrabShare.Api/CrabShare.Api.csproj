@@ -20,6 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="CrabShare.Api.Tests" />
     <ProjectReference Include="..\CrabShare.SettlementEngine\CrabShare.SettlementEngine.csproj" />
   </ItemGroup>
 
