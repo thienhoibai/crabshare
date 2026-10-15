@@ -14,7 +14,7 @@
 ## Endpoint UC07 đã triển khai
 
 - `POST /api/batches`, `GET/PUT /api/batches/{code}`, `PUT /api/batches/{code}/standard-cost`, `POST /api/batches/{code}/submit`, `GET /api/operators/me/batches?status=&page=&pageSize=`.
-- GET trong UC07 dành cho Owner/Staff của chính hộ nuôi. UC08 Admin đã triển khai bên dưới; quyền xem công khai UC09 vẫn là phần riêng.
+- GET trong UC07 dành cho Owner/Staff của chính hộ nuôi; đường đọc rõ ràng `/api/operators/me/batches/{code}` hỗ trợ tài khoản có cả Investor và OperatorMember. GET `/api/batches` và GET `/api/batches/{code}` với Investor dùng UC09, chỉ trả lô đã công bố và chi phí Locked. Xem [contract CS-42](../../../../../docs/validation/CS-42-batch-discovery.md).
 - Quyền lấy từ tài khoản Active, vai trò OperatorMember và membership hiện hành trong DB. Token có claim hộ nuôi khác bị từ chối. Chỉ Owner của hộ nuôi Approved được ghi; Staff chỉ xem.
 - Sửa thông tin/chi phí và gửi duyệt chỉ khi Draft. Admin yêu cầu bổ sung bằng request-revision sẽ trả PendingApproval về Draft kèm lý do; hộ nuôi sửa rồi gửi lại. Rejected là từ chối dứt điểm, không sửa/gửi lại.
 - Dùng `InTransactionAsync` Serializable và `IAuditLog`: khóa audit trước hộ nuôi/lô, cùng thứ tự VI-02; mọi thay đổi dữ liệu/chi phí/trạng thái và audit cùng commit hoặc rollback.
