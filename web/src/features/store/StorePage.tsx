@@ -16,9 +16,15 @@ import './store.css'
 import { useAuthStore } from '../../shared/auth/authStore'
 import { useCartStore } from '../../shared/cart/cartStore'
 
-function AddressBookLink() {
-  const isCustomer = useAuthStore(s => s.user?.roles.includes('Customer'))
-  return isCustomer ? <a className="rd-btn rd-btn--ghost rd-btn--sm" href="/tai-khoan/dia-chi">Sổ địa chỉ</a> : null
+function CustomerNavLinks() {
+  const isCustomer = useAuthStore(s => s.user?.roles.some(r => r === 'Customer' || r === 'Investor'))
+  if (!isCustomer) return null
+  return (
+    <>
+      <a className="rd-btn rd-btn--ghost rd-btn--sm" href="/lich-su-don-hang">Đơn hàng của tôi</a>
+      <a className="rd-btn rd-btn--ghost rd-btn--sm" href="/tai-khoan/dia-chi">Sổ địa chỉ</a>
+    </>
+  )
 }
 const PAGE_SIZE = 12
 
@@ -214,7 +220,7 @@ function StoreV1Inner() {
 
   return (
     <>
-      <TopBar area="store" right={<><AddressBookLink /><CartButton /></>} />
+      <TopBar area="store" right={<><CustomerNavLinks /><CartButton /></>} />
       <main className="s1">
         <section className="s1-head">
           <p className="rd-eyebrow">Cửa hàng · hàng từ các lô đang bán</p>

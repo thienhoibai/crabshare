@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from 'react'
 import { useParams } from 'react-router'
-import { ArrowLeft, PackageCheck, RefreshCw, ScanLine, Truck } from 'lucide-react'
+import { ArrowLeft, ExternalLink, PackageCheck, RefreshCw, ScanLine, Truck } from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
 import { formatDateTime, formatVnd } from '../../shared/lib/format'
 import OperatorLayout from './OperatorLayout'
@@ -270,6 +270,18 @@ function OrderDetail({ orderNo }: { orderNo: string }) {
         eyebrow="Đơn hàng"
         title={order ? `Đơn ${order.orderNo}` : 'Chi tiết đơn'}
         description={order ? `${order.customerName} · lô ${order.batchCode}` : 'Đang tải…'}
+        action={
+          order ? (
+            <a
+              className="rd-btn rd-btn--ghost rd-btn--sm flex items-center gap-1.5"
+              href={`/theo-doi-don-hang/${order.orderNo}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <ExternalLink size={14} /> Xem trang Khách hàng
+            </a>
+          ) : undefined
+        }
       />
       {query.isPending ? (
         <p role="status" className="op-panel p-6">Đang tải đơn…</p>
