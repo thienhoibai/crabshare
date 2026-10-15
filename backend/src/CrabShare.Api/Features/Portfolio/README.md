@@ -22,10 +22,14 @@ Both require an Investor JWT, an active user with the current Investor database 
 
 Cycle uses Vietnam calendar dates, starting at day 1 on the actual stocking date and stopping at closure. Clients clamp gauge progress while showing the actual day. Alive count comes from Growing registry items, or is null without a registry. Alerts count Open/Escalated. Expected harvest date comes from the batch.
 
-Timeline includes actual batch milestones, own confirmations/signed contract timestamps, received logs and Accepted evidence only. Future events, other investor identities and private file paths are not returned. It is limited to 30 recent events. Notifications are a separate CS-65 task.
+Timeline includes actual batch milestones, own confirmations/signed contract timestamps, received logs and Accepted evidence only. Future events, other investor identities and private file paths are not returned. It is limited to 30 recent events.
+
+## CS-65 notifications
+
+`GET /api/me/notifications?after=&until=&page=1&pageSize=100` is an Investor-only, no-store feed derived from confirmations, fully signed contracts, production logs, alerts, settlement publication and completed successful payout instructions. It uses current database access checks and CS-61 batch eligibility. The after bound is exclusive and until/asOf is inclusive; all pages share the first server boundary. Stable event IDs and deterministic sorting support device-local read markers without a notification table or server writes. See [CS-65 validation](../../../../../docs/validation/CS-65-notifications.md) for source rules, client behavior and tests.
 
 ## Clients and verification
 
 Web: overview `/nha-dau-tu`, list `/nha-dau-tu/danh-muc`, detail `/nha-dau-tu/danh-muc/{code}`. Mobile: Investor Tổng quan and `/i/portfolio/{code}`. Existing design components handle loading, error/retry, empty portfolios and account changes.
 
-See [validation notes](../../../../../docs/validation/CS-61-investor-portfolio.md). SQL integration tests compare view amounts; browser/mobile tests cover API and layout. Unrelated exploration and notification mock repositories remain outside this task.
+See [validation notes](../../../../../docs/validation/CS-61-investor-portfolio.md). SQL integration tests compare view amounts; browser/mobile tests cover API and layout. Public exploration prototypes remain separate from the live portfolio/notification APIs.

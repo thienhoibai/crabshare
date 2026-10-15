@@ -142,22 +142,4 @@ class PortfolioProduction {
   final DateTime? verifiedAt;
 }
 
-enum NotificationKind { payment, production, alert, settlement, contract }
-
-class InvestorNotification {
-  const InvestorNotification({
-    required this.kind,
-    required this.title,
-    required this.body,
-    required this.at,
-    this.batchCode,
-  });
-
-  final NotificationKind kind;
-  final String title;
-  final String body;
-  final DateTime at;
-  final String? batchCode;
-}
-
 enum KycStatus { unverified, pending, verified, rejected }

@@ -7,9 +7,10 @@ import '../../app/theme/app_theme.dart';
 const kNavBarClearance = 120.0;
 
 class NavItem {
-  const NavItem(this.icon, this.label);
+  const NavItem(this.icon, this.label, {this.badgeCount = 0});
   final IconData icon;
   final String label;
+  final int badgeCount;
 }
 
 /// Khung chung của 2 vai: thanh điều hướng tối bo tròn + nút tròn cam ở giữa (theo mẫu).
@@ -30,13 +31,18 @@ class NavShell extends StatelessWidget {
   final String centerLabel;
   final VoidCallback onCenter;
 
-  void _goTab(int index) => shell.goBranch(index, initialLocation: index == shell.currentIndex);
+  void _goTab(int index) =>
+      shell.goBranch(index, initialLocation: index == shell.currentIndex);
 
   @override
   Widget build(BuildContext context) {
     Widget tab(int i) => Expanded(
-          child: _NavTab(item: items[i], selected: shell.currentIndex == i, onTap: () => _goTab(i)),
-        );
+      child: _NavTab(
+        item: items[i],
+        selected: shell.currentIndex == i,
+        onTap: () => _goTab(i),
+      ),
+    );
 
     return Scaffold(
       extendBody: true,
@@ -49,7 +55,13 @@ class NavShell extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.nav,
             borderRadius: BorderRadius.circular(35),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 24, offset: const Offset(0, 10))],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
           child: Row(
             children: [
@@ -65,7 +77,10 @@ class NavShell extends StatelessWidget {
                       child: Container(
                         width: 54,
                         height: 54,
-                        decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+                        decoration: const BoxDecoration(
+                          color: AppColors.accent,
+                          shape: BoxShape.circle,
+                        ),
                         child: Icon(centerIcon, color: AppColors.ink, size: 26),
                       ),
                     ),
@@ -83,7 +98,11 @@ class NavShell extends StatelessWidget {
 }
 
 class _NavTab extends StatelessWidget {
-  const _NavTab({required this.item, required this.selected, required this.onTap});
+  const _NavTab({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
 
   final NavItem item;
   final bool selected;
@@ -94,20 +113,57 @@ class _NavTab extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: item.label,
+      label: item.badgeCount > 0
+          ? '${item.label}, ${item.badgeCount} chưa đọc'
+          : item.label,
       child: InkResponse(
         onTap: onTap,
         radius: 28,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(item.icon, size: 25, color: selected ? Colors.white : const Color(0xFF8A8580)),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  item.icon,
+                  size: 25,
+                  color: selected ? Colors.white : const Color(0xFF8A8580),
+                ),
+                if (item.badgeCount > 0)
+                  Positioned(
+                    right: -12,
+                    top: -7,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
+                      decoration: const BoxDecoration(
+                        color: AppColors.accent,
+                        borderRadius: BorderRadius.all(Radius.circular(20)),
+                      ),
+                      child: Text(
+                        item.badgeCount > 99 ? '99+' : '${item.badgeCount}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 5),
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: selected ? 5 : 0,
               height: 5,
-              decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+              decoration: const BoxDecoration(
+                color: AppColors.accent,
+                shape: BoxShape.circle,
+              ),
             ),
           ],
         ),

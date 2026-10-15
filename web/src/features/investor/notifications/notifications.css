@@ -1,0 +1,17 @@
+.nf { position: relative; flex-shrink: 0; }
+.nf-trigger { position: relative; }
+.nf-count { position: absolute; top: -5px; right: -5px; min-width: 19px; height: 19px; padding: 0 4px; display: grid; place-items: center; border-radius: 999px; background: var(--accent); color: #15130f; font-size: 10px; font-weight: 700; box-shadow: 0 0 0 2px var(--bg); }
+.nf-panel { position: absolute; top: calc(100% + 12px); right: 0; z-index: 40; width: min(430px, calc(100vw - 32px)); gap: 12px; padding: 20px; box-shadow: var(--shadow); }
+.nf-head, .nf-actions, .nf-item__title { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.nf-actions { justify-content: flex-start; font-size: 12px; }
+.nf-list { display: grid; gap: 8px; max-height: min(55vh, 560px); overflow: auto; overscroll-behavior: contain; }
+.nf-item { padding: 14px; border-radius: 16px; background: var(--input); border: 1px solid var(--line); display: grid; gap: 7px; overflow-wrap: anywhere; }
+.nf-item.is-unread { border-color: var(--accent); }
+.nf-item__title { justify-content: flex-start; flex-wrap: nowrap; }
+.nf-item__title strong { flex: 1; font-size: 14px; }
+.nf-item__title svg { flex-shrink: 0; color: var(--accent); }
+.nf-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; flex-shrink: 0; }
+.nf-item p { font-size: 13px; }
+.nf-item time { color: var(--muted); font-size: 12px; }
+.nf-empty { padding: 20px 0; color: var(--muted); }
+.nf-error { color: #b63328; display: grid; gap: 10px; }

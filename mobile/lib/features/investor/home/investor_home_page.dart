@@ -14,6 +14,7 @@ import '../../../shared/widgets/segmented_gauge.dart';
 import '../data/investor_models.dart';
 import '../data/investor_repository.dart';
 import '../kyc/kyc_repository.dart';
+import '../notifications/notification_repository.dart';
 
 /// Tab "Tổng quan" của nhà đầu tư — bố cục theo màn dashboard của mẫu:
 /// đồng hồ bán nguyệt (tiến độ chu kỳ nuôi), thanh "+", thẻ từng khoản góp.
@@ -71,6 +72,7 @@ class _InvestorHomePageState extends ConsumerState<InvestorHomePage> {
                   GreetingHeader(
                     name: user?.fullName ?? '',
                     subtitle: 'Danh mục góp vốn của bạn',
+                    notificationCount: ref.watch(unreadNotificationsProvider),
                     onBell: () => context.go(Routes.investorNotifications),
                   ),
                   const SizedBox(height: 14),

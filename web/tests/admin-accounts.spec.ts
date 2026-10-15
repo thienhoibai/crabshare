@@ -138,7 +138,8 @@ test('evidence reviewer cannot open account administration or request its data',
   await signIn(page, 'EvidenceReviewer')
   let reads = 0
   await page.route('**/api/admin/users**', route => { reads++; return route.fulfill({ json: paged([user]) }) })
-  await page.goto('/admin/users?tab=users')
+  // Redirect authorization must not wait for the landing page's external images.
+  await page.goto('/admin/users?tab=users', { waitUntil: 'domcontentloaded' })
   await expect(page).toHaveURL('/')
   expect(reads).toBe(0)
 })

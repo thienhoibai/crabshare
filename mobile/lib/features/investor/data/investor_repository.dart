@@ -5,11 +5,10 @@ import 'investor_models.dart';
 
 export 'portfolio_repository.dart' show myContributionsProvider;
 
-/// Khám phá lô và thông báo mẫu; danh mục cá nhân dùng PortfolioRepository gọi API.
+/// Khám phá lô mẫu; danh mục và thông báo cá nhân dùng API riêng.
 abstract interface class InvestorRepository {
   Future<List<BatchSummary>> batches();
   Future<BatchSummary> batchByCode(String code);
-  Future<List<InvestorNotification>> notifications();
 }
 
 final investorRepositoryProvider = Provider<InvestorRepository>(
@@ -21,9 +20,6 @@ final batchesProvider = FutureProvider(
 );
 final batchDetailProvider = FutureProvider.family<BatchSummary, String>(
   (ref, code) => ref.watch(investorRepositoryProvider).batchByCode(code),
-);
-final investorNotificationsProvider = FutureProvider(
-  (ref) => ref.watch(investorRepositoryProvider).notifications(),
 );
 
 /// Dữ liệu mẫu để dựng giao diện. Tên hộ nuôi khớp seed của backend (DevDataSeeder); mã lô chỉ là ví dụ.
@@ -99,36 +95,4 @@ class MockInvestorRepository implements InvestorRepository {
   @override
   Future<BatchSummary> batchByCode(String code) =>
       _delay(_batches.firstWhere((b) => b.code == code));
-
-  @override
-  Future<List<InvestorNotification>> notifications() => _delay([
-    InvestorNotification(
-      kind: NotificationKind.production,
-      title: 'Nhật ký mới lô CS-2610-01',
-      body: 'pH 7,8 · 28,5°C · độ mặn 15‰ · thức ăn 2,4 kg',
-      at: _now.subtract(const Duration(hours: 2)),
-      batchCode: 'CS-2610-01',
-    ),
-    InvestorNotification(
-      kind: NotificationKind.alert,
-      title: 'Cảnh báo chất lượng nước — CS-2609-04',
-      body: 'Độ mặn ngoài ngưỡng. Hộ nuôi đã xác nhận và đang xử lý.',
-      at: _now.subtract(const Duration(hours: 9)),
-      batchCode: 'CS-2609-04',
-    ),
-    InvestorNotification(
-      kind: NotificationKind.payment,
-      title: 'Đã nhận tiền góp vốn',
-      body: '15.000.000 đ cho lô CS-2610-01 đã được xác nhận.',
-      at: _now.subtract(const Duration(days: 52)),
-      batchCode: 'CS-2610-01',
-    ),
-    InvestorNotification(
-      kind: NotificationKind.contract,
-      title: 'Hợp đồng đã ký đủ',
-      body: 'Hợp đồng góp vốn lô CS-2610-01 đã có đủ chữ ký số.',
-      at: _now.subtract(const Duration(days: 50)),
-      batchCode: 'CS-2610-01',
-    ),
-  ]);
 }
