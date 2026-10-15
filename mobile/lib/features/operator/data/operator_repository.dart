@@ -4,10 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/models/batch_enums.dart';
 import 'operator_models.dart';
-import 'packing_models.dart';
 export 'alert_repository.dart' show alertsProvider;
 export '../evidence/capture_requests_repository.dart'
     show captureRequestsProvider;
+export 'operator_orders_repository.dart'
+    show operatorOrdersProvider, operatorOrdersRepositoryProvider;
 
 /// Hợp đồng dữ liệu của tính năng Hộ nuôi.
 /// Hiện dùng [MockOperatorRepository]; khi backend có endpoint thì viết ApiOperatorRepository
@@ -26,9 +27,6 @@ abstract interface class OperatorRepository {
     required String batchCode,
     required int weightG,
   });
-  Future<List<OperatorOrderSummary>> ordersToPack();
-  Future<OperatorOrderDetail> orderDetail(String orderNo);
-  Future<OperatorOrderDetail> packOrder(String orderNo, List<String> tagCodes);
 }
 
 final operatorRepositoryProvider = Provider<OperatorRepository>(
@@ -46,9 +44,6 @@ final dailyLogsProvider = FutureProvider(
 );
 final boxesProvider = FutureProvider(
   (ref) => ref.watch(operatorRepositoryProvider).boxes(),
-);
-final ordersToPackProvider = FutureProvider(
-  (ref) => ref.watch(operatorRepositoryProvider).ordersToPack(),
 );
 
 /// Dữ liệu mẫu để dựng giao diện (số liệu ví dụ, không lấy từ backend).
@@ -199,88 +194,5 @@ class MockOperatorRepository implements OperatorRepository {
     final code =
         'CS${List.generate(10, (_) => chars[_random.nextInt(chars.length)]).join()}'; // CHAR(12) như crab_tag.tag_code
     return _delay(code);
-  }
-
-  static final _samplePaid = OperatorOrderDetail(
-    orderNo: 'ODPACKDEMO01',
-    status: 'Paid',
-    placedAt: _now.subtract(const Duration(hours: 2)),
-    paidAt: _now.subtract(const Duration(hours: 1)),
-    batchCode: 'CS-2609-04',
-    customerName: 'Nguyễn Văn An',
-    recipientName: 'Nguyễn Văn An',
-    recipientPhone: '0901234567',
-    shippingAddress: '12 Nguyễn Huệ, Cà Mau',
-    totalAmount: 400000,
-    totalKg: 1,
-    lines: const [
-      OperatorOrderLine(
-        orderLineId: 1,
-        title: 'Cua thịt L1 — lô CS-2609-04',
-        gradeCode: 'L1',
-        gradeName: 'Loại 1 (từ 500 g)',
-        quantityKg: 1,
-        assignedKg: 0,
-        assignedCount: 0,
-        tags: [],
-      ),
-    ],
-  );
-
-  @override
-  Future<List<OperatorOrderSummary>> ordersToPack() => _delay([
-    OperatorOrderSummary(
-      orderNo: _samplePaid.orderNo,
-      status: _samplePaid.status,
-      placedAt: _samplePaid.placedAt,
-      paidAt: _samplePaid.paidAt,
-      batchCode: _samplePaid.batchCode,
-      customerName: _samplePaid.customerName,
-      lineCount: _samplePaid.lines.length,
-      totalKg: _samplePaid.totalKg,
-      totalAmount: _samplePaid.totalAmount,
-    ),
-  ]);
-
-  @override
-  Future<OperatorOrderDetail> orderDetail(String orderNo) =>
-      _delay(_samplePaid);
-
-  @override
-  Future<OperatorOrderDetail> packOrder(String orderNo, List<String> tagCodes) {
-    if (tagCodes.length < 2) {
-      return Future.error(
-        Exception('Tổng khối lượng cua quét chưa đủ số kg khách đặt.'),
-      );
-    }
-    final packed = OperatorOrderDetail(
-      orderNo: orderNo,
-      status: 'Packed',
-      placedAt: _samplePaid.placedAt,
-      paidAt: _samplePaid.paidAt,
-      batchCode: _samplePaid.batchCode,
-      customerName: _samplePaid.customerName,
-      recipientName: _samplePaid.recipientName,
-      recipientPhone: _samplePaid.recipientPhone,
-      shippingAddress: _samplePaid.shippingAddress,
-      totalAmount: _samplePaid.totalAmount,
-      totalKg: _samplePaid.totalKg,
-      lines: [
-        OperatorOrderLine(
-          orderLineId: 1,
-          title: _samplePaid.lines.first.title,
-          gradeCode: 'L1',
-          gradeName: _samplePaid.lines.first.gradeName,
-          quantityKg: 1,
-          assignedKg: 1,
-          assignedCount: tagCodes.length,
-          tags: [
-            for (final code in tagCodes)
-              PackedTag(tagCode: code, weightG: 500, gradeCode: 'L1'),
-          ],
-        ),
-      ],
-    );
-    return _delay(packed);
   }
 }

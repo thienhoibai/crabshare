@@ -82,6 +82,9 @@ public static class FeatureRegistry
         services.AddScoped<OrderCancellationService>(); // NH-07 huỷ đơn
         services.AddScoped<ReservationExpiryService>(); // NH-07 trả tồn khi quá hạn thanh toán
         services.AddHostedService<ReservationExpiryJob>(); // chạy mỗi phút; tắt bằng Orders:ExpiryJob:Enabled = false
+        services.AddScoped<OrderFulfilmentService>();   // NH-10 giao hàng + xác nhận đã nhận (UC30)
+        services.AddScoped<OrderCompletionService>();   // NH-10 hết cửa sổ đổi trả → Completed
+        services.AddHostedService<OrderCompletionJob>(); // chạy mỗi phút; tắt bằng Orders:CompletionJob:Enabled = false
 
         // Khôi
         services.AddScoped<AccountService>();        // Features/Accounts

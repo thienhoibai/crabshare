@@ -55,6 +55,7 @@ public sealed record OrderTrackingPaymentResponse(
 public sealed record OrderTimelineStep(string Step, DateTimeOffset? At, bool Done);
 
 /// <param name="CanCancel">Khách còn tự huỷ được không (PendingPayment hoặc Paid chưa đóng gói).</param>
+/// <param name="CanConfirmReceipt">Khách còn bấm "Đã nhận hàng" được không (Shipping, hoặc Delivered mà chưa xác nhận).</param>
 public sealed record OrderTrackingResponse(
     string OrderNo,
     string BatchCode,
@@ -70,7 +71,9 @@ public sealed record OrderTrackingResponse(
     bool CanCancel,
     IReadOnlyList<OrderTrackingLineResponse> Lines,
     OrderTrackingPaymentResponse? Payment,
-    IReadOnlyList<OrderTimelineStep> Timeline);
+    IReadOnlyList<OrderTimelineStep> Timeline,
+    bool CanConfirmReceipt,
+    OrderShipmentResponse? Shipment = null);
 
 public sealed class CancelOrderRequest
 {

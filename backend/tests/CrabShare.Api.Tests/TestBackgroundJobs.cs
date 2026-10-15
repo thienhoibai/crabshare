@@ -15,4 +15,8 @@ internal static class TestBackgroundJobs
     // NH-07: job trả tồn chạy mỗi phút; test gọi ReservationExpiryService trực tiếp nên tắt lịch nền.
     [ModuleInitializer]
     internal static void DisableReservationExpiryJob() => Environment.SetEnvironmentVariable("Orders__ExpiryJob__Enabled", "false");
+
+    // NH-10: job hoàn tất đơn chạy mỗi phút; test gọi OrderCompletionService trực tiếp nên tắt lịch nền.
+    [ModuleInitializer]
+    internal static void DisableOrderCompletionJob() => Environment.SetEnvironmentVariable("Orders__CompletionJob__Enabled", "false");
 }

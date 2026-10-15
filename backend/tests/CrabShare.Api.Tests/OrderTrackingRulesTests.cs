@@ -53,4 +53,26 @@ public class OrderTrackingRulesTests
         Assert.Equal("Orders:ExpiryJob:Enabled", ReservationExpiryJob.EnabledKey);
         Assert.Equal(200, ReservationExpiryService.BatchSize);
     }
+
+    [Theory]
+    [InlineData("Packed", false, false)]
+    [InlineData("Shipping", false, true)]
+    [InlineData("Delivered", false, true)]
+    [InlineData("Delivered", true, false)]
+    [InlineData("Completed", true, false)]
+    [InlineData("Cancelled", false, false)]
+    public void Khach_xac_nhan_da_nhan_khi_dang_giao_hoac_da_giao_ma_chua_xac_nhan(string status, bool received, bool expected)
+        => Assert.Equal(expected, OrderFulfilmentService.CanConfirmReceipt(status, received ? DateTimeOffset.UtcNow : null));
+
+    [Fact]
+    public void Job_hoan_tat_don_co_the_tat_bang_cau_hinh()
+    {
+        Assert.Equal("Orders:CompletionJob:Enabled", OrderCompletionJob.EnabledKey);
+        Assert.Equal(200, OrderCompletionService.BatchSize);
+        Assert.Equal(72, new OrderOptions().ReturnWindowHours);
+    }
+
+    [Fact]
+    public void Don_chua_giao_khong_co_thong_tin_giao_hang()
+        => Assert.Null(OrderFulfilmentService.ToShipment(new SalesOrder { Status = "Packed" }));
 }

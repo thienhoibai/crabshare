@@ -42,6 +42,20 @@ export interface OrderTimelineStep {
   done: boolean
 }
 
+/** Thông tin giao nhận hộ nuôi khai (TL-31 §6.1). Nền tảng không vận chuyển, không thu phí ship. */
+export interface OrderShipment {
+  carrierName: string | null
+  vehiclePlate: string | null
+  driverPhone: string | null
+  expectedArrivalAt: string | null
+  note: string | null
+  shippedAt: string | null
+  deliveredAt: string | null
+  receivedAt: string | null
+  returnWindowEndsAt: string | null
+  completedAt: string | null
+}
+
 export interface OrderTracking {
   orderNo: string
   batchCode: string
@@ -58,6 +72,8 @@ export interface OrderTracking {
   lines: OrderTrackingLine[]
   payment: OrderTrackingPayment | null
   timeline: OrderTimelineStep[]
+  canConfirmReceipt: boolean
+  shipment: OrderShipment | null
 }
 
 export interface CancelOrderResult {
@@ -112,6 +128,8 @@ export const orderTrackingApi = {
     http.get<OrderTracking>(`/api/orders/${encodeURIComponent(orderNo)}`).then((r) => r.data),
   cancel: (orderNo: string, reason: string) =>
     http.post<CancelOrderResult>(`/api/orders/${encodeURIComponent(orderNo)}/cancel`, { reason }).then((r) => r.data),
+  receive: (orderNo: string) =>
+    http.post<OrderTracking>(`/api/orders/${encodeURIComponent(orderNo)}/receive`).then((r) => r.data),
 }
 
 export const orderKeys = {
@@ -136,6 +154,18 @@ export function useCancelOrder(orderNo: string) {
     mutationFn: (reason: string) => orderTrackingApi.cancel(orderNo, reason),
     onSuccess: () => {
       void cache.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+}
+
+export function useConfirmReceipt(orderNo: string) {
+  const cache = useQueryClient()
+  return useMutation({
+    retry: false,
+    mutationFn: () => orderTrackingApi.receive(orderNo),
+    onSuccess: (order) => {
+      cache.setQueryData(orderKeys.detail(orderNo), order)
+      void cache.invalidateQueries({ queryKey: ['orders', 'mine'] })
     },
   })
 }

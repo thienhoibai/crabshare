@@ -12,7 +12,7 @@ namespace CrabShare.Api.Features.Orders;
 /// </summary>
 public sealed class OrderPackingService(AppDbContext db, ICurrentUser me, IAuditLog audit, TimeProvider clock)
 {
-    private static readonly HashSet<string> AllowedListStatus = ["Paid", "Packed"];
+    private static readonly HashSet<string> AllowedListStatus = ["Paid", "Packed", "Shipping", "Delivered", "Completed"];
 
     public async Task<IReadOnlyList<OperatorOrderSummaryResponse>> ListMineAsync(string? status, CancellationToken ct)
     {
@@ -146,7 +146,7 @@ public sealed class OrderPackingService(AppDbContext db, ICurrentUser me, IAudit
         var value = string.IsNullOrWhiteSpace(status) ? "Paid" : status.Trim();
         if (!AllowedListStatus.Contains(value))
             throw new AppException(StatusCodes.Status400BadRequest, PackingErrors.InvalidStatus,
-                "Tham số status chỉ nhận Paid hoặc Packed.");
+                "Tham số status chỉ nhận Paid, Packed, Shipping, Delivered hoặc Completed.");
         return value;
     }
 
@@ -186,12 +186,13 @@ public sealed class OrderPackingService(AppDbContext db, ICurrentUser me, IAudit
         return new OperatorOrderDetailResponse(
             order.OrderNo, order.Status, order.PlacedAt, order.PaidAt, batchCode,
             order.Customer.FullName, order.RecipientName, order.RecipientPhone, order.ShippingAddress,
-            (long)order.TotalAmount, lines.Sum(l => l.QuantityKg), lines);
+            (long)order.TotalAmount, lines.Sum(l => l.QuantityKg), lines,
+            OrderFulfilmentService.ToShipment(order));
     }
 
     private static OperatorOrderLineResponse ToLine(OrderLine line, string batchCode)
     {
-        var packed = line.CrabItems.Where(c => c.Status == "Packed").OrderBy(c => c.CrabItemId).ToList();
+        var packed = line.CrabItems.Where(c => c.Status is "Packed" or "Sold").OrderBy(c => c.CrabItemId).ToList();
         var assignedKg = ToKg(packed.Sum(c => c.WeightG ?? 0));
         var tags = packed.Select(c => new PackedTagResponse(c.CrabTag?.TagCode.Trim() ?? "", c.WeightG ?? 0,
             line.ProductListing.Grade.GradeCode)).ToList();

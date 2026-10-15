@@ -1,7 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { http } from '../../shared/api/http'
 
-export type OperatorOrderStatus = 'Paid' | 'Packed'
+export type OperatorOrderStatus = 'Paid' | 'Packed' | 'Shipping' | 'Delivered' | 'Completed'
+
+export interface OperatorOrderShipment {
+  carrierName: string | null
+  vehiclePlate: string | null
+  driverPhone: string | null
+  expectedArrivalAt: string | null
+  note: string | null
+  shippedAt: string | null
+  deliveredAt: string | null
+  receivedAt: string | null
+  returnWindowEndsAt: string | null
+  completedAt: string | null
+}
+
+export interface ShipOrderInput {
+  carrierName: string
+  vehiclePlate?: string
+  driverPhone: string
+  expectedArrivalAt?: string
+  note?: string
+}
 
 export interface OperatorOrderSummary {
   orderNo: string
@@ -47,6 +68,7 @@ export interface OperatorOrderDetail {
   totalAmount: number
   totalKg: number
   lines: OperatorOrderLine[]
+  shipment: OperatorOrderShipment | null
 }
 
 export const operatorOrdersApi = {
@@ -55,6 +77,9 @@ export const operatorOrdersApi = {
   get: (orderNo: string) => http.get<OperatorOrderDetail>(`/api/operators/me/orders/${orderNo}`).then((r) => r.data),
   pack: (orderNo: string, tagCodes: string[]) =>
     http.post<OperatorOrderDetail>(`/api/orders/${orderNo}/pack`, { tagCodes }).then((r) => r.data),
+  ship: (orderNo: string, body: ShipOrderInput) =>
+    http.post<OperatorOrderDetail>(`/api/orders/${orderNo}/ship`, body).then((r) => r.data),
+  deliver: (orderNo: string) => http.post<OperatorOrderDetail>(`/api/orders/${orderNo}/deliver`).then((r) => r.data),
 }
 
 const keys = {
@@ -76,6 +101,30 @@ export function usePackOrder(orderNo: string) {
       qc.invalidateQueries({ queryKey: keys.list('Paid') })
       qc.invalidateQueries({ queryKey: keys.list('Packed') })
       qc.setQueryData(keys.detail(orderNo), detail)
+    },
+  })
+}
+
+export function useShipOrder(orderNo: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    retry: false,
+    mutationFn: (body: ShipOrderInput) => operatorOrdersApi.ship(orderNo, body),
+    onSuccess: (detail) => {
+      qc.setQueryData(keys.detail(orderNo), detail)
+      void qc.invalidateQueries({ queryKey: ['operator-orders'], predicate: (q) => q.queryKey[1] !== 'detail' })
+    },
+  })
+}
+
+export function useDeliverOrder(orderNo: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    retry: false,
+    mutationFn: () => operatorOrdersApi.deliver(orderNo),
+    onSuccess: (detail) => {
+      qc.setQueryData(keys.detail(orderNo), detail)
+      void qc.invalidateQueries({ queryKey: ['operator-orders'], predicate: (q) => q.queryKey[1] !== 'detail' })
     },
   })
 }

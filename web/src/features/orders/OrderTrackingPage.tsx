@@ -1,15 +1,15 @@
-/* UC28 — Theo dõi một đơn: dòng thời gian, hàng, khoản thu, huỷ khi chưa đóng gói (NH-07). */
+/* UC28 + UC30 — Theo dõi một đơn: dòng thời gian, hàng, khoản thu, huỷ khi chưa đóng gói (NH-07), giao hàng và xác nhận đã nhận (NH-10). */
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { MapPin, PackageSearch, Truck } from 'lucide-react'
+import { MapPin, PackageCheck, PackageSearch, Phone, Truck, Video } from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
 import { formatDateTime } from '../../shared/lib/format'
 import { vnd } from '../../shared/ui/kit/mock-data'
 import { Shell, TopBar } from '../../shared/ui/kit/kit'
 import { formatKg } from '../store/storeApi'
 import {
-  ORDER_STATUS_LABELS, TIMELINE_LABELS, statusTone, useCancelOrder, useOrderTracking,
-  type OrderTimelineStep, type OrderTracking,
+  ORDER_STATUS_LABELS, TIMELINE_LABELS, statusTone, useCancelOrder, useConfirmReceipt, useOrderTracking,
+  type OrderShipment, type OrderTimelineStep, type OrderTracking,
 } from './orderTrackingApi'
 import './checkout.css'
 
@@ -87,6 +87,57 @@ function CancelBox({ order }: { order: OrderTracking }) {
   )
 }
 
+function ShipmentBox({ shipment }: { shipment: OrderShipment }) {
+  return (
+    <section className="ot-ship" aria-label="Thông tin giao hàng">
+      <h3 className="rd-h3">Giao hàng</h3>
+      <p className="rd-muted">Hộ nuôi gửi hàng qua nhà xe. Nền tảng không thu phí vận chuyển.</p>
+      <div className="ot-meta">
+        {shipment.carrierName && (
+          <p><Truck size={14} /><span>Nhà xe</span><b>{shipment.carrierName}{shipment.vehiclePlate ? ` · ${shipment.vehiclePlate}` : ''}</b></p>
+        )}
+        {shipment.driverPhone && (
+          <p><Phone size={14} /><span>Tài xế</span><b><a href={`tel:${shipment.driverPhone}`}>{shipment.driverPhone}</a></b></p>
+        )}
+        {shipment.expectedArrivalAt && !shipment.deliveredAt && (
+          <p><span /><span>Dự kiến đến</span><b>{formatDateTime(shipment.expectedArrivalAt)}</b></p>
+        )}
+        {shipment.note && <p><span /><span>Ghi chú</span><b>{shipment.note}</b></p>}
+        {shipment.shippedAt && <p><span /><span>Gửi lúc</span><b>{formatDateTime(shipment.shippedAt)}</b></p>}
+        {shipment.receivedAt && <p><PackageCheck size={14} /><span>Bạn nhận lúc</span><b>{formatDateTime(shipment.receivedAt)}</b></p>}
+        {shipment.returnWindowEndsAt && !shipment.completedAt && (
+          <p><span /><span>Hạn báo lỗi</span><b>{formatDateTime(shipment.returnWindowEndsAt)} — sau mốc này đơn tự hoàn tất</b></p>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function ReceiveBox({ order }: { order: OrderTracking }) {
+  const receive = useConfirmReceipt(order.orderNo)
+  const [open, setOpen] = useState(false)
+  if (!open) {
+    return (
+      <div className="ot-receive">
+        <p className="rd-note"><Video size={14} /> Khi nhận hàng, hãy quay video lúc mở thùng (trong vòng 2 giờ) để làm bằng chứng nếu cua có vấn đề.</p>
+        <button type="button" className="rd-btn rd-btn--primary" onClick={() => setOpen(true)}>Đã nhận hàng</button>
+      </div>
+    )
+  }
+  return (
+    <div className="ot-receive" role="group" aria-label="Xác nhận đã nhận hàng">
+      <p>Bạn xác nhận đã nhận đủ hàng của đơn {order.orderNo}?</p>
+      {receive.isError && <p className="co-error" role="alert">{errorMessage(receive.error)}</p>}
+      <div className="ot-cancel__actions">
+        <button type="button" className="rd-btn rd-btn--ghost" disabled={receive.isPending} onClick={() => setOpen(false)}>Chưa</button>
+        <button type="button" className="rd-btn rd-btn--primary" disabled={receive.isPending} onClick={() => receive.mutate()}>
+          {receive.isPending ? 'Đang xác nhận…' : 'Xác nhận đã nhận'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function Detail({ orderNo }: { orderNo: string }) {
   const query = useOrderTracking(orderNo)
   if (query.isPending) return <p role="status" className="rd-muted">Đang tải đơn {orderNo}…</p>
@@ -135,6 +186,8 @@ function Detail({ orderNo }: { orderNo: string }) {
         {order.cancelReason && <p><span>Lý do huỷ</span><b>{order.cancelReason}</b></p>}
       </div>
 
+      {order.shipment && <ShipmentBox shipment={order.shipment} />}
+      {order.canConfirmReceipt && <ReceiveBox order={order} />}
       {order.canCancel && <CancelBox order={order} />}
     </article>
   )

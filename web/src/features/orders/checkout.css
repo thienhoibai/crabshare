@@ -77,3 +77,11 @@
   .ot-timeline { grid-template-columns: 1fr !important; }
   .ot-lookup { grid-template-columns: 1fr; }
 }
+
+/* NH-10 — giao hàng + xác nhận đã nhận */
+.ot-ship { margin: 16px 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.ot-ship .ot-meta { margin-bottom: 0; }
+.ot-ship a { color: var(--accent, #8b5023); font-weight: 700; }
+.ot-receive { display: grid; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.ot-receive .rd-note { display: flex; gap: 8px; align-items: flex-start; }
+

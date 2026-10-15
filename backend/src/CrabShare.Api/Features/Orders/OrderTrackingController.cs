@@ -12,7 +12,7 @@ namespace CrabShare.Api.Features.Orders;
 [ApiController]
 [Authorize(Policy = Policies.Customer)]
 [Route("api/orders")]
-public sealed class OrderTrackingController(OrderQueryService queries, OrderCancellationService cancellations) : ControllerBase
+public sealed class OrderTrackingController(OrderQueryService queries, OrderCancellationService cancellations, OrderFulfilmentService fulfilment) : ControllerBase
 {
     [HttpGet]
     [EndpointSummary("UC28 — Lịch sử đơn của tôi, mới nhất trước; lọc ?status=A,B; phân trang ?page=&pageSize=")]
@@ -29,4 +29,9 @@ public sealed class OrderTrackingController(OrderQueryService queries, OrderCanc
     [EndpointSummary("NH-07 — Huỷ đơn khi chưa đóng gói: trả tồn, huỷ mã QR; đơn đã trả tiền thì lập lệnh hoàn")]
     public async Task<ActionResult<CancelOrderResponse>> Cancel(string orderNo, CancelOrderRequest req, CancellationToken ct)
         => Ok(await cancellations.CancelAsync(orderNo.Trim().ToUpperInvariant(), req, ct));
+
+    [HttpPost("{orderNo}/receive")]
+    [EndpointSummary("UC30 — Khách xác nhận đã nhận hàng; đơn hoàn tất sau khi hết cửa sổ đổi trả")]
+    public async Task<ActionResult<OrderTrackingResponse>> Receive(string orderNo, CancellationToken ct)
+        => Ok(await fulfilment.ReceiveAsync(orderNo.Trim().ToUpperInvariant(), ct));
 }
