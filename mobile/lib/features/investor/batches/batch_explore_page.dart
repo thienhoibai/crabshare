@@ -28,12 +28,14 @@ class BatchExplorePage extends ConsumerWidget {
         Text('Khám phá lô nuôi', style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 14),
         DropdownButtonFormField<CrabType>(
+          isExpanded: true,
           initialValue: type, decoration: const InputDecoration(labelText: 'Loại cua'),
           items: [const DropdownMenuItem<CrabType>(value: null, child: Text('Tất cả loại cua')),
             for (final t in CrabType.values) DropdownMenuItem(value: t, child: Text(t.label))],
           onChanged: (v) { resetPage(); ref.read(discoveryTypeProvider.notifier).select(v); }),
         const SizedBox(height: 10),
         DropdownButtonFormField<BatchStatus>(
+          isExpanded: true,
           initialValue: status, decoration: const InputDecoration(labelText: 'Trạng thái'),
           items: [const DropdownMenuItem<BatchStatus>(value: null, child: Text('Tất cả trạng thái')),
             for (final s in [BatchStatus.funding, BatchStatus.cancelled, BatchStatus.stocked, BatchStatus.inProduction, BatchStatus.harvesting, BatchStatus.settlement, BatchStatus.closed])
@@ -49,9 +51,23 @@ class BatchExplorePage extends ConsumerWidget {
           if (result.items.isEmpty) const EmptyState(icon: Icons.search_off_rounded, title: 'Không có lô phù hợp'),
           for (final b in result.items) ...[
             _FundingBatchCard(batch: b, onTap: () => context.push(Routes.batch(b.code))), const SizedBox(height: 14)],
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            OutlinedButton(onPressed: page > 1 ? () => ref.read(discoveryPageProvider.notifier).select(page - 1) : null, child: const Text('Trang trước')),
-            OutlinedButton(onPressed: result.hasNext ? () => ref.read(discoveryPageProvider.notifier).select(page + 1) : null, child: const Text('Trang sau'))]),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: page > 1 ? () => ref.read(discoveryPageProvider.notifier).select(page - 1) : null,
+                  child: const Text('Trang trước'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: result.hasNext ? () => ref.read(discoveryPageProvider.notifier).select(page + 1) : null,
+                  child: const Text('Trang sau'),
+                ),
+              ),
+            ],
+          ),
         ]))),
     ])));
   }
