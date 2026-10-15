@@ -1,9 +1,9 @@
 /* UC28 + UC30 — Theo dõi một đơn: dòng thời gian, hàng, khoản thu, huỷ khi chưa đóng gói (NH-07), giao hàng và xác nhận đã nhận (NH-10). */
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { MapPin, PackageCheck, PackageSearch, Phone, Truck, Video } from 'lucide-react'
+import { AlertTriangle, ExternalLink, Image as ImageIcon, MapPin, MessageSquareWarning, PackageCheck, PackageSearch, Phone, Truck, Video } from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
-import { formatDateTime } from '../../shared/lib/format'
+import { formatDateTime, formatVnd } from '../../shared/lib/format'
 import { vnd } from '../../shared/ui/kit/mock-data'
 import { Shell, TopBar } from '../../shared/ui/kit/kit'
 import { formatKg } from '../store/storeApi'
@@ -11,6 +11,13 @@ import {
   ORDER_STATUS_LABELS, TIMELINE_LABELS, statusTone, useCancelOrder, useConfirmReceipt, useOrderTracking,
   type OrderShipment, type OrderTimelineStep, type OrderTracking,
 } from './orderTrackingApi'
+import {
+  COMPLAINT_STATUS_LABELS,
+  COMPLAINT_TYPE_LABELS,
+  useOrderComplaint,
+  useSubmitComplaint,
+  type ComplaintType,
+} from './complaintsApi'
 import './checkout.css'
 
 function Lookup() {
@@ -138,6 +145,210 @@ function ReceiveBox({ order }: { order: OrderTracking }) {
   )
 }
 
+function ComplaintSection({ order }: { order: OrderTracking }) {
+  const { data: complaint, isLoading, refetch } = useOrderComplaint(order.orderNo)
+  const submitComplaint = useSubmitComplaint(order.orderNo)
+
+  const [isOpenForm, setIsOpenForm] = useState(false)
+  const [complaintType, setComplaintType] = useState<ComplaintType>('Damaged')
+  const [description, setDescription] = useState('')
+  const [evidenceUri, setEvidenceUri] = useState('')
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  const canSubmit = !complaint && (order.status === 'Delivered' || order.status === 'Completed' || order.status === 'Shipping')
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setErrorMsg(null)
+    if (!description.trim()) {
+      setErrorMsg('Vui lòng nhập mô tả chi tiết vấn đề.')
+      return
+    }
+
+    try {
+      await submitComplaint.mutateAsync({
+        complaintType,
+        description: description.trim(),
+        evidenceUri: evidenceUri.trim() || null,
+      })
+      setIsOpenForm(false)
+      setDescription('')
+      setEvidenceUri('')
+      refetch()
+    } catch (err: unknown) {
+      setErrorMsg(errorMessage(err))
+    }
+  }
+
+  if (isLoading) return null
+
+  if (complaint) {
+    return (
+      <section className="ot-ship bg-amber-50/70 border border-amber-200 rounded-xl p-4 mt-4" aria-label="Khiếu nại đơn hàng">
+        <div className="flex items-center justify-between mb-3 border-b border-amber-200/80 pb-2">
+          <div className="flex items-center gap-2">
+            <MessageSquareWarning className="w-5 h-5 text-amber-700" />
+            <strong className="text-amber-950 font-bold">Khiếu nại #{complaint.complaintId}</strong>
+          </div>
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+            {COMPLAINT_STATUS_LABELS[complaint.status] ?? complaint.status}
+          </span>
+        </div>
+
+        <div className="space-y-2 text-sm text-amber-900">
+          <p>
+            <strong>Lý do: </strong>{COMPLAINT_TYPE_LABELS[complaint.complaintType] ?? complaint.complaintType}
+          </p>
+          <div className="bg-white/80 p-3 rounded-lg border border-amber-100">
+            <strong>Nội dung phản ánh: </strong>
+            <p className="whitespace-pre-line mt-1">{complaint.description}</p>
+            {complaint.evidenceUri && (
+              <a
+                href={complaint.evidenceUri}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-blue-700 underline font-semibold mt-2"
+              >
+                <ImageIcon size={14} /> Xem link hình ảnh/video bằng chứng
+                <ExternalLink size={12} />
+              </a>
+            )}
+          </div>
+
+          {complaint.operatorResponse && (
+            <div className="bg-blue-50/80 p-3 rounded-lg border border-blue-200 text-blue-950 mt-2">
+              <strong className="text-blue-900 block mb-1">Hộ nuôi giải trình:</strong>
+              <p className="whitespace-pre-line text-xs">{complaint.operatorResponse}</p>
+              {complaint.operatorEvidenceUri && (
+                <a
+                  href={complaint.operatorEvidenceUri}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-blue-700 underline font-semibold mt-2"
+                >
+                  <ImageIcon size={14} /> Bằng chứng đối chứng của hộ nuôi
+                  <ExternalLink size={12} />
+                </a>
+              )}
+            </div>
+          )}
+
+          {complaint.status === 'Escalated' && !complaint.operatorResponse && (
+            <p className="text-xs text-red-700 bg-red-50 p-2.5 rounded-lg border border-red-200">
+              Quá hạn 24 giờ hộ nuôi không phản hồi. Khiếu nại đã được chuyển lên Ban quản trị (Admin) để xử lý hoàn tiền / phân xử.
+            </p>
+          )}
+
+          {(complaint.status === 'Resolved' || complaint.status === 'Rejected') && (
+            <div className={`p-3 rounded-lg text-xs mt-2 border ${
+              complaint.status === 'Resolved' ? 'bg-emerald-50 border-emerald-200 text-emerald-950' : 'bg-slate-100 border-slate-300 text-slate-800'
+            }`}>
+              <strong className="block mb-1">
+                {complaint.status === 'Resolved' ? '✓ Ban quản trị đã giải quyết:' : '✕ Ban quản trị đã bác bỏ khiếu nại:'}
+              </strong>
+              {complaint.refundAmount !== null && complaint.refundAmount !== undefined && (
+                <p>Số tiền hoàn trả: <strong className="text-red-600 font-bold text-sm">{formatVnd(complaint.refundAmount)}</strong></p>
+              )}
+              {complaint.adminNotes && <p className="italic mt-1">"{complaint.adminNotes}"</p>}
+            </div>
+          )}
+        </div>
+      </section>
+    )
+  }
+
+  if (!canSubmit) return null
+
+  if (!isOpenForm) {
+    return (
+      <div className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between">
+        <p className="text-xs text-slate-500">
+          Cua có vấn đề khi nhận hàng hoặc giao trễ?
+        </p>
+        <button
+          type="button"
+          onClick={() => setIsOpenForm(true)}
+          className="rd-btn rd-btn--ghost text-xs font-semibold text-red-600 hover:text-red-700 border-red-200 hover:border-red-300 flex items-center gap-1.5"
+        >
+          <AlertTriangle size={14} /> Gửi khiếu nại / Báo lỗi
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <form className="ot-cancel mt-4 bg-red-50/40 p-4 rounded-xl border border-red-200" onSubmit={handleSubmit}>
+      <h3 className="rd-h3 text-red-950 flex items-center gap-2 mb-2">
+        <AlertTriangle size={18} className="text-red-600" />
+        Gửi khiếu nại đơn hàng {order.orderNo}
+      </h3>
+      <p className="rd-muted text-xs mb-3">
+        UC31: Khiếu nại sẽ được gửi trực tiếp tới hộ nuôi. Hộ nuôi có 24 giờ để phản hồi giải trình trước khi tự động chuyển lên Admin phân xử.
+      </p>
+
+      <label className="block mb-2 text-xs font-bold text-slate-700">
+        Loại khiếu nại
+        <select
+          value={complaintType}
+          onChange={(e) => setComplaintType(e.target.value as ComplaintType)}
+          className="rd-input w-full mt-1"
+        >
+          <option value="Damaged">Hàng hư hỏng / cua chết / ươn</option>
+          <option value="WrongGrade">Sai hạng / sai kích cỡ / trọng lượng</option>
+          <option value="LateDelivery">Giao hàng trễ hẹn</option>
+          <option value="NotReceived">Chưa nhận được hàng</option>
+          <option value="Other">Lý do khác</option>
+        </select>
+      </label>
+
+      <label className="block mb-2 text-xs font-bold text-slate-700">
+        Mô tả chi tiết vấn đề (*)
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Ví dụ: Khi mở thùng xốp thì 2 con cua đã chết có mùi ươn, dây buộc nặng..."
+          rows={3}
+          maxLength={1000}
+          required
+          className="rd-input w-full mt-1"
+        />
+      </label>
+
+      <label className="block mb-3 text-xs font-bold text-slate-700">
+        Link ảnh / video mở thùng làm bằng chứng (Google Drive, Imgur...):
+        <input
+          type="url"
+          value={evidenceUri}
+          onChange={(e) => setEvidenceUri(e.target.value)}
+          placeholder="https://drive.google.com/..."
+          maxLength={400}
+          className="rd-input w-full mt-1"
+        />
+      </label>
+
+      {errorMsg && <p className="co-error text-xs mb-3" role="alert">{errorMsg}</p>}
+
+      <div className="ot-cancel__actions">
+        <button
+          type="button"
+          className="rd-btn rd-btn--ghost text-xs"
+          disabled={submitComplaint.isPending}
+          onClick={() => { setIsOpenForm(false); setErrorMsg(null); }}
+        >
+          Đóng
+        </button>
+        <button
+          type="submit"
+          className="rd-btn rd-btn--primary text-xs bg-red-600 hover:bg-red-700"
+          disabled={submitComplaint.isPending || !description.trim()}
+        >
+          {submitComplaint.isPending ? 'Đang gửi...' : 'Xác nhận gửi khiếu nại'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
 function Detail({ orderNo }: { orderNo: string }) {
   const query = useOrderTracking(orderNo)
   if (query.isPending) return <p role="status" className="rd-muted">Đang tải đơn {orderNo}…</p>
@@ -189,6 +400,7 @@ function Detail({ orderNo }: { orderNo: string }) {
       {order.shipment && <ShipmentBox shipment={order.shipment} />}
       {order.canConfirmReceipt && <ReceiveBox order={order} />}
       {order.canCancel && <CancelBox order={order} />}
+      <ComplaintSection order={order} />
     </article>
   )
 }

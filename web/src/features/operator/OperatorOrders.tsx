@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from 'react'
 import { useParams } from 'react-router'
-import { ArrowLeft, ExternalLink, PackageCheck, RefreshCw, ScanLine, Truck } from 'lucide-react'
+import { ArrowLeft, ExternalLink, PackageCheck, RefreshCw, ScanLine, Truck, AlertTriangle, Image as ImageIcon } from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
 import { formatDateTime, formatVnd } from '../../shared/lib/format'
 import OperatorLayout from './OperatorLayout'
@@ -15,6 +15,12 @@ import {
   type OperatorOrderStatus,
   type OperatorOrderSummary,
 } from './operatorOrdersApi'
+import {
+  COMPLAINT_STATUS_LABELS,
+  COMPLAINT_TYPE_LABELS,
+  useOrderComplaint,
+  useRespondComplaint,
+} from '../orders/complaintsApi'
 
 const kg = (n: number) => `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 3 }).format(n)} kg`
 
@@ -260,6 +266,161 @@ function FulfilmentPanel({ order }: { order: OperatorOrderDetail }) {
   )
 }
 
+function OperatorComplaintBox({ orderNo }: { orderNo: string }) {
+  const { data: complaint, isLoading, refetch } = useOrderComplaint(orderNo)
+  const respondMutation = useRespondComplaint(complaint?.complaintId ?? 0)
+
+  const [response, setResponse] = useState('')
+  const [evidenceUri, setEvidenceUri] = useState('')
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  if (isLoading || !complaint) return null
+
+  const handleRespond = async (e: FormEvent) => {
+    e.preventDefault()
+    setErrorMsg(null)
+    if (!response.trim()) {
+      setErrorMsg('Vui lòng nhập nội dung giải trình.')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await respondMutation.mutateAsync({
+        response: response.trim(),
+        evidenceUri: evidenceUri.trim() || null,
+      })
+      setResponse('')
+      setEvidenceUri('')
+      refetch()
+    } catch (err: unknown) {
+      setErrorMsg(errorMessage(err))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <OpPanel
+      accent={complaint.status === 'Open' || complaint.status === 'Escalated'}
+      className="op-span-12"
+      title={`Khiếu nại #${complaint.complaintId}: ${COMPLAINT_STATUS_LABELS[complaint.status] ?? complaint.status}`}
+      subtitle={`Khách phản ánh về ${COMPLAINT_TYPE_LABELS[complaint.complaintType] ?? complaint.complaintType} · Mở lúc ${formatDateTime(complaint.openedAt)}`}
+    >
+      <div className="space-y-4 text-sm">
+        <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-amber-950">
+          <strong className="block mb-1 font-bold text-amber-900">Nội dung khiếu nại của khách hàng:</strong>
+          <p className="whitespace-pre-line text-xs bg-white/80 p-3 rounded-lg border border-amber-100">
+            "{complaint.description}"
+          </p>
+          {complaint.evidenceUri && (
+            <div className="mt-2">
+              <a
+                href={complaint.evidenceUri}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-blue-700 underline font-semibold"
+              >
+                <ImageIcon size={14} /> Xem link hình ảnh/video bằng chứng bóc hàng
+                <ExternalLink size={12} />
+              </a>
+            </div>
+          )}
+        </div>
+
+        {complaint.operatorResponse ? (
+          <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-blue-950">
+            <div className="flex items-center justify-between mb-1">
+              <strong className="font-bold text-blue-900">Giải trình của hộ nuôi:</strong>
+              {complaint.respondedAt && <span className="text-xs text-blue-700">{formatDateTime(complaint.respondedAt)}</span>}
+            </div>
+            <p className="whitespace-pre-line text-xs bg-white/80 p-3 rounded-lg border border-blue-100">
+              "{complaint.operatorResponse}"
+            </p>
+            {complaint.operatorEvidenceUri && (
+              <div className="mt-2">
+                <a
+                  href={complaint.operatorEvidenceUri}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-blue-700 underline font-semibold"
+                >
+                  <ImageIcon size={14} /> Bằng chứng đối chứng đóng gói
+                  <ExternalLink size={12} />
+                </a>
+              </div>
+            )}
+          </div>
+        ) : complaint.status === 'Open' ? (
+          <form className="bg-white p-4 rounded-xl border border-slate-300 shadow-sm space-y-3" onSubmit={handleRespond}>
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+              <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+              <span>
+                Hạn phản hồi: 24 giờ kể từ khi mở khiếu nại. Nếu không giải trình, khiếu nại sẽ được chuyển thẳng lên Admin phân xử!
+              </span>
+            </div>
+
+            <label className="block text-xs font-bold text-slate-700">
+              Nội dung giải trình / phản hồi (*)
+              <textarea
+                value={response}
+                onChange={(e) => setResponse(e.target.value)}
+                placeholder="Nêu rõ tình trạng cua khi đóng gói, cấp oxy, bàn giao cho nhà xe..."
+                rows={3}
+                required
+                maxLength={1000}
+                className="rd-input w-full mt-1"
+              />
+            </label>
+
+            <label className="block text-xs font-bold text-slate-700">
+              Link hình ảnh / video đóng gói đối chứng (Google Drive, Imgur...):
+              <input
+                type="url"
+                value={evidenceUri}
+                onChange={(e) => setEvidenceUri(e.target.value)}
+                placeholder="https://drive.google.com/..."
+                maxLength={400}
+                className="rd-input w-full mt-1"
+              />
+            </label>
+
+            {errorMsg && <p className="co-error text-xs" role="alert">{errorMsg}</p>}
+
+            <div className="flex justify-end">
+              <OpBtn type="submit" disabled={isSubmitting || !response.trim()}>
+                {isSubmitting ? 'Đang gửi giải trình...' : 'Gửi giải trình khiếu nại'}
+              </OpBtn>
+            </div>
+          </form>
+        ) : complaint.status === 'Escalated' ? (
+          <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-xs text-red-800 flex items-center gap-2">
+            <AlertTriangle size={18} className="text-red-600 shrink-0" />
+            <div>
+              <strong>Đã quá hạn 24 giờ phản hồi!</strong> Khiếu nại đã chuyển lên Admin để tiến hành phân xử bồi thường.
+            </div>
+          </div>
+        ) : null}
+
+        {(complaint.status === 'Resolved' || complaint.status === 'Rejected') && (
+          <div className={`p-4 rounded-xl border text-xs ${
+            complaint.status === 'Resolved' ? 'bg-emerald-50 border-emerald-200 text-emerald-950' : 'bg-slate-100 border-slate-300 text-slate-800'
+          }`}>
+            <strong className="block mb-1">
+              {complaint.status === 'Resolved' ? '✓ Phán quyết của Ban quản trị: Đã giải quyết / Hoàn tiền' : '✕ Phán quyết của Ban quản trị: Bác bỏ khiếu nại'}
+            </strong>
+            {complaint.refundAmount !== null && complaint.refundAmount !== undefined && (
+              <p>Số tiền hoàn cho khách: <strong className="text-red-600 font-bold text-sm">{formatVnd(complaint.refundAmount)}</strong> (khấu trừ từ tài khoản lô)</p>
+            )}
+            {complaint.adminNotes && <p className="italic mt-1">Ghi chú của Admin: "{complaint.adminNotes}"</p>}
+          </div>
+        )}
+      </div>
+    </OpPanel>
+  )
+}
+
 function OrderDetail({ orderNo }: { orderNo: string }) {
   const query = useOperatorOrder(orderNo)
   const order = query.data
@@ -299,6 +460,7 @@ function OrderDetail({ orderNo }: { orderNo: string }) {
             { label: 'Người nhận', value: order.recipientName },
           ]} />
           <div className="op-grid">
+            <OperatorComplaintBox orderNo={order.orderNo} />
             <OpPanel className="op-span-6" title="Dòng hàng" subtitle={order.shippingAddress}>
               {order.lines.map((line) => (
                 <div key={line.orderLineId} className="mb-4">
