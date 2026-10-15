@@ -1,14 +1,16 @@
 import { type FormEvent, useState } from 'react'
 import { useParams } from 'react-router'
-import { ArrowLeft, RefreshCw, ScanLine } from 'lucide-react'
+import { ArrowLeft, PackageCheck, RefreshCw, ScanLine, Truck } from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
 import { formatDateTime, formatVnd } from '../../shared/lib/format'
 import OperatorLayout from './OperatorLayout'
 import { OpBack, OpBadge, OpBtn, OpFacts, OpHeading, OpNote, OpPanel, OpRow } from './operatorUi'
 import {
+  useDeliverOrder,
   useOperatorOrder,
   useOperatorOrders,
   usePackOrder,
+  useShipOrder,
   type OperatorOrderDetail,
   type OperatorOrderStatus,
   type OperatorOrderSummary,
@@ -17,15 +19,21 @@ import {
 const kg = (n: number) => `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 3 }).format(n)} kg`
 
 function statusTone(status: string): 'ok' | 'warn' | 'mute' {
-  if (status === 'Packed') return 'ok'
-  if (status === 'Paid') return 'warn'
+  if (status === 'Paid' || status === 'Shipping') return 'warn'
+  if (status === 'Packed' || status === 'Delivered' || status === 'Completed') return 'ok'
   return 'mute'
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  Paid: 'Chờ đóng gói',
+  Packed: 'Đã đóng gói',
+  Shipping: 'Đang giao',
+  Delivered: 'Đã giao',
+  Completed: 'Hoàn tất',
+}
+
 function statusLabel(status: string) {
-  if (status === 'Packed') return 'Đã đóng gói'
-  if (status === 'Paid') return 'Chờ đóng gói'
-  return status
+  return STATUS_LABELS[status] ?? status
 }
 
 function OrderList({ status, onStatus }: { status: OperatorOrderStatus; onStatus: (s: OperatorOrderStatus) => void }) {
@@ -35,8 +43,8 @@ function OrderList({ status, onStatus }: { status: OperatorOrderStatus; onStatus
     <>
       <OpHeading
         eyebrow="Đơn hàng"
-        title="Đóng gói đơn bằng quét tem"
-        description="Chọn đơn đã thanh toán, nhập hoặc dán mã tem từng con, đủ kg thì đơn chuyển sang Packed."
+        title="Đóng gói và giao đơn"
+        description="Quét tem để đóng gói đơn đã thanh toán, giao cho nhà xe rồi báo đã giao khi khách nhận được hàng."
       />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 font-bold">
@@ -44,6 +52,9 @@ function OrderList({ status, onStatus }: { status: OperatorOrderStatus; onStatus
           <select aria-label="Trạng thái đơn" className="rd-input" value={status} onChange={(e) => onStatus(e.target.value as OperatorOrderStatus)}>
             <option value="Paid">Chờ đóng gói</option>
             <option value="Packed">Đã đóng gói</option>
+            <option value="Shipping">Đang giao</option>
+            <option value="Delivered">Đã giao</option>
+            <option value="Completed">Hoàn tất</option>
           </select>
         </label>
         <OpBtn variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>
@@ -63,7 +74,7 @@ function OrderList({ status, onStatus }: { status: OperatorOrderStatus; onStatus
           {!list.length && (
             <div className="op-empty">
               <b>Không có đơn {statusLabel(status).toLowerCase()}</b>
-              <span>Đơn Paid mới xuất hiện khi khách đã chuyển khoản thành công.</span>
+              {status === 'Paid' && <span>Đơn Paid mới xuất hiện khi khách đã chuyển khoản thành công.</span>}
             </div>
           )}
         </div>
@@ -119,6 +130,136 @@ function PackForm({ order }: { order: OperatorOrderDetail }) {
   )
 }
 
+const ETA_MAX_DAYS = 7
+
+function toLocalInput(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function ShipForm({ order }: { order: OperatorOrderDetail }) {
+  const ship = useShipOrder(order.orderNo)
+  const [carrierName, setCarrierName] = useState('')
+  const [vehiclePlate, setVehiclePlate] = useState('')
+  const [driverPhone, setDriverPhone] = useState('')
+  const [eta, setEta] = useState('')
+  const [note, setNote] = useState('')
+  const phoneOk = /^(0\d{9}|\+84\d{9})$/.test(driverPhone.trim())
+  const now = new Date()
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    if (!carrierName.trim() || !phoneOk || ship.isPending) return
+    ship.mutate({
+      carrierName: carrierName.trim(),
+      vehiclePlate: vehiclePlate.trim() || undefined,
+      driverPhone: driverPhone.trim(),
+      expectedArrivalAt: eta ? new Date(eta).toISOString() : undefined,
+      note: note.trim() || undefined,
+    })
+  }
+  return (
+    <form className="op-form" onSubmit={submit}>
+      <OpNote tone="info">Hộ nuôi tự gửi hàng qua nhà xe. Nền tảng không thu phí vận chuyển; khách gọi thẳng cho tài xế theo số bạn nhập.</OpNote>
+      <div className="op-field">
+        <label htmlFor="ship-carrier">Tên nhà xe</label>
+        <input id="ship-carrier" className="rd-input" maxLength={150} value={carrierName} onChange={(e) => setCarrierName(e.target.value)} required disabled={ship.isPending} />
+      </div>
+      <div className="op-field">
+        <label htmlFor="ship-plate">Biển số xe (không bắt buộc)</label>
+        <input id="ship-plate" className="rd-input" maxLength={20} value={vehiclePlate} onChange={(e) => setVehiclePlate(e.target.value)} disabled={ship.isPending} />
+      </div>
+      <div className="op-field">
+        <label htmlFor="ship-phone">Số điện thoại tài xế</label>
+        <input id="ship-phone" className="rd-input" inputMode="tel" maxLength={12} value={driverPhone} onChange={(e) => setDriverPhone(e.target.value)} required disabled={ship.isPending} />
+        {driverPhone.trim() && !phoneOk && <small className="text-red-700">Cần 10 chữ số bắt đầu bằng 0, hoặc dạng +84.</small>}
+      </div>
+      <div className="op-field">
+        <label htmlFor="ship-eta">Giờ dự kiến tới khách (không bắt buộc)</label>
+        <input id="ship-eta" className="rd-input" type="datetime-local" value={eta} onChange={(e) => setEta(e.target.value)}
+          min={toLocalInput(now)} max={toLocalInput(new Date(now.getTime() + ETA_MAX_DAYS * 86_400_000))} disabled={ship.isPending} />
+      </div>
+      <div className="op-field">
+        <label htmlFor="ship-note">Ghi chú cho khách (không bắt buộc)</label>
+        <textarea id="ship-note" className="rd-input" rows={2} maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} disabled={ship.isPending} />
+      </div>
+      {ship.isError && <p role="alert" className="text-red-700">{errorMessage(ship.error)}</p>}
+      <OpBtn type="submit" variant="ink" disabled={!carrierName.trim() || !phoneOk || ship.isPending}>
+        <Truck size={16} /> {ship.isPending ? 'Đang lưu…' : 'Giao cho nhà xe'}
+      </OpBtn>
+    </form>
+  )
+}
+
+function ShipmentFacts({ order }: { order: OperatorOrderDetail }) {
+  const s = order.shipment
+  if (!s) return null
+  return (
+    <ul className="grid gap-1 text-sm">
+      {s.carrierName && <li>Nhà xe: <b>{s.carrierName}</b>{s.vehiclePlate ? ` · ${s.vehiclePlate}` : ''}</li>}
+      {s.driverPhone && <li>Tài xế: <b>{s.driverPhone}</b></li>}
+      {s.shippedAt && <li>Gửi lúc: {formatDateTime(s.shippedAt)}</li>}
+      {s.expectedArrivalAt && !s.deliveredAt && <li>Dự kiến tới: {formatDateTime(s.expectedArrivalAt)}</li>}
+      {s.deliveredAt && <li>Đã giao lúc: {formatDateTime(s.deliveredAt)}</li>}
+      {s.receivedAt && <li>Khách xác nhận lúc: {formatDateTime(s.receivedAt)}</li>}
+      {s.returnWindowEndsAt && !s.completedAt && <li>Hạn đổi trả: {formatDateTime(s.returnWindowEndsAt)}</li>}
+      {s.completedAt && <li>Hoàn tất lúc: {formatDateTime(s.completedAt)}</li>}
+    </ul>
+  )
+}
+
+function DeliverBox({ order }: { order: OperatorOrderDetail }) {
+  const deliver = useDeliverOrder(order.orderNo)
+  const [confirming, setConfirming] = useState(false)
+  return (
+    <div className="op-form">
+      <ShipmentFacts order={order} />
+      {deliver.isError && <p role="alert" className="text-red-700">{errorMessage(deliver.error)}</p>}
+      {!confirming ? (
+        <OpBtn variant="ink" onClick={() => setConfirming(true)}><PackageCheck size={16} /> Đã giao tới khách</OpBtn>
+      ) : (
+        <>
+          <OpNote>Chỉ xác nhận khi nhà xe báo khách đã nhận hàng. Từ lúc này khách có 72 giờ để báo lỗi trước khi đơn tự hoàn tất.</OpNote>
+          <div className="flex flex-wrap gap-2">
+            <OpBtn variant="outline" disabled={deliver.isPending} onClick={() => setConfirming(false)}>Huỷ</OpBtn>
+            <OpBtn variant="ink" disabled={deliver.isPending} onClick={() => deliver.mutate()}>
+              {deliver.isPending ? 'Đang lưu…' : 'Xác nhận đã giao'}
+            </OpBtn>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function FulfilmentPanel({ order }: { order: OperatorOrderDetail }) {
+  if (order.status === 'Paid') {
+    return (
+      <OpPanel accent className="op-span-6" title="Quét tem" subtitle="Dán đủ cua đúng lô và đúng hạng, tổng kg không được thiếu.">
+        <PackForm order={order} />
+      </OpPanel>
+    )
+  }
+  if (order.status === 'Packed') {
+    return (
+      <OpPanel accent className="op-span-6" title="Giao cho nhà xe" subtitle={`Người nhận: ${order.recipientName} · ${order.recipientPhone}`}>
+        <ShipForm order={order} />
+      </OpPanel>
+    )
+  }
+  if (order.status === 'Shipping') {
+    return (
+      <OpPanel accent className="op-span-6" title="Đang giao" subtitle="Báo đã giao khi khách nhận được hàng.">
+        <DeliverBox order={order} />
+      </OpPanel>
+    )
+  }
+  return (
+    <OpPanel className="op-span-6" title={statusLabel(order.status)}>
+      {order.shipment ? <ShipmentFacts order={order} /> : <OpNote tone="ok">Đơn {statusLabel(order.status).toLowerCase()}.</OpNote>}
+    </OpPanel>
+  )
+}
+
 function OrderDetail({ orderNo }: { orderNo: string }) {
   const query = useOperatorOrder(orderNo)
   const order = query.data
@@ -126,7 +267,7 @@ function OrderDetail({ orderNo }: { orderNo: string }) {
     <>
       <OpHeading
         crumb={<OpBack href="/operator/orders"><ArrowLeft size={16} /> Quay lại danh sách đơn</OpBack>}
-        eyebrow="Đóng gói"
+        eyebrow="Đơn hàng"
         title={order ? `Đơn ${order.orderNo}` : 'Chi tiết đơn'}
         description={order ? `${order.customerName} · lô ${order.batchCode}` : 'Đang tải…'}
       />
@@ -140,7 +281,7 @@ function OrderDetail({ orderNo }: { orderNo: string }) {
       ) : order ? (
         <>
           <OpFacts items={[
-            { label: 'Trạng thái', value: statusLabel(order.status), tone: order.status === 'Packed' ? 'ok' : 'warn' },
+            { label: 'Trạng thái', value: statusLabel(order.status), tone: statusTone(order.status) === 'ok' ? 'ok' : statusTone(order.status) === 'warn' ? 'warn' : undefined },
             { label: 'Khối lượng', value: kg(order.totalKg) },
             { label: 'Giá trị', value: formatVnd(order.totalAmount) },
             { label: 'Người nhận', value: order.recipientName },
@@ -161,9 +302,7 @@ function OrderDetail({ orderNo }: { orderNo: string }) {
                 </div>
               ))}
             </OpPanel>
-            <OpPanel accent className="op-span-6" title="Quét tem" subtitle="Dán đủ cua đúng lô và đúng hạng, tổng kg không được thiếu.">
-              <PackForm order={order} />
-            </OpPanel>
+            <FulfilmentPanel order={order} />
           </div>
         </>
       ) : null}

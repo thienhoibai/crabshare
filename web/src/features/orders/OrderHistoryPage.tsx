@@ -34,7 +34,7 @@ function Row({ order }: { order: OrderSummary }) {
       <div className="ot-row__action">
         <b>{vnd(order.totalAmount)}</b>
         <Link className="rd-btn rd-btn--ghost rd-btn--sm" to={`/theo-doi-don-hang/${order.orderNo}`}>
-          {cancellable ? 'Theo dõi / huỷ' : 'Xem chi tiết'}
+          {cancellable ? 'Theo dõi / huỷ' : order.status === 'Shipping' ? 'Theo dõi giao hàng' : 'Xem chi tiết'}
         </Link>
       </div>
     </article>
