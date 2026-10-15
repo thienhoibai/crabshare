@@ -1,5 +1,10 @@
 # Mobile — Flutter
 
+CS-65: Tab Thông báo và badge nhà đầu tư dùng `GET /api/me/notifications`.
+Mốc đã đọc lưu trong secure storage riêng theo tài khoản, gồm cả ID để không bỏ sót
+thông báo cùng giờ. Chọn Đã đọc/Đọc tất cả hoặc mở lô để lưu; có kéo làm mới và
+cập nhật mỗi 30 giây khi app mở. Test: `flutter test test/notifications_test.dart`.
+
 CS-61: Tổng quan nhà đầu tư và chi tiết danh mục dùng `/api/investor/portfolio`.
 Vốn đã chốt lấy từ view; vốn mới xác nhận hiển thị tỷ lệ tạm tính. Không dùng khoản
 góp mock hay lợi suất. Chạm thẻ khoản góp để xem hợp đồng, nhật ký và hành trình

@@ -13,6 +13,7 @@ import '../features/investor/home/investor_home_page.dart';
 import '../features/investor/portfolio/portfolio_detail_page.dart';
 import '../features/investor/kyc/kyc_page.dart';
 import '../features/investor/notifications/notifications_page.dart';
+import '../features/investor/notifications/notification_repository.dart';
 import '../features/onboarding/onboarding_page.dart';
 import '../features/operator/alerts/alerts_page.dart';
 import '../features/operator/evidence/capture_page.dart';
@@ -101,17 +102,23 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // ---------- Nhà đầu tư ----------
       StatefulShellRoute.indexedStack(
-        builder: (context, state, shell) => NavShell(
-          shell: shell,
-          items: const [
-            NavItem(Icons.home_rounded, 'Tổng quan'),
-            NavItem(Icons.grid_view_rounded, 'Lô nuôi'),
-            NavItem(Icons.notifications_rounded, 'Thông báo'),
-            NavItem(Icons.person_rounded, 'Tài khoản'),
-          ],
-          centerIcon: Icons.qr_code_scanner_rounded,
-          centerLabel: 'Quét tem',
-          onCenter: () => context.push(Routes.scan),
+        builder: (context, state, shell) => Consumer(
+          builder: (context, ref, child) => NavShell(
+            shell: shell,
+            items: [
+              NavItem(Icons.home_rounded, 'Tổng quan'),
+              NavItem(Icons.grid_view_rounded, 'Lô nuôi'),
+              NavItem(
+                Icons.notifications_rounded,
+                'Thông báo',
+                badgeCount: ref.watch(unreadNotificationsProvider),
+              ),
+              NavItem(Icons.person_rounded, 'Tài khoản'),
+            ],
+            centerIcon: Icons.qr_code_scanner_rounded,
+            centerLabel: 'Quét tem',
+            onCenter: () => context.push(Routes.scan),
+          ),
         ),
         branches: [
           StatefulShellBranch(

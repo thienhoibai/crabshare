@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { http } from '../../../shared/api/http'
 import { paymentKeys, type PaymentRequest } from '../../../shared/payments/paymentsApi'
 import { portfolioKeys } from '../portfolio/portfolioApi'
+import { notificationKeys } from '../notifications/notificationsApi'
 
 /* API Features/Funding (TH-04, TH-05). Tiền là số nguyên đồng. Không có trường lợi suất kỳ vọng (BR-49). */
 
@@ -91,6 +92,7 @@ function useRefreshFunding(code?: string) {
     queryClient.invalidateQueries({ queryKey: fundingKeys.open }),
     queryClient.invalidateQueries({ queryKey: fundingKeys.mine }),
     queryClient.invalidateQueries({ queryKey: portfolioKeys.root }),
+    queryClient.invalidateQueries({ queryKey: notificationKeys.root }),
     queryClient.invalidateQueries({ queryKey: fundingKeys.disclosure }),
   ])
 }

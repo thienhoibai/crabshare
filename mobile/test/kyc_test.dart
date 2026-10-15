@@ -1,3 +1,7 @@
+import 'package:crabshare_mobile/features/investor/notifications/notification_repository.dart';
+
+import 'helpers/notification_fakes.dart';
+
 import 'package:crabshare_mobile/features/investor/data/portfolio_repository.dart';
 
 import 'dart:convert';
@@ -155,6 +159,13 @@ void main() {
     final session = _Session();
     final container = ProviderContainer(
       overrides: [
+        notificationPollIntervalProvider.overrideWithValue(null),
+        notificationRepositoryProvider.overrideWithValue(
+          EmptyNotificationRepository(),
+        ),
+        notificationReadStoreProvider.overrideWithValue(
+          MemoryNotificationReadStore(),
+        ),
         sessionProvider.overrideWith(() => session),
         kycRepositoryProvider.overrideWithValue(repository),
       ],
@@ -184,6 +195,13 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          notificationPollIntervalProvider.overrideWithValue(null),
+          notificationRepositoryProvider.overrideWithValue(
+            EmptyNotificationRepository(),
+          ),
+          notificationReadStoreProvider.overrideWithValue(
+            MemoryNotificationReadStore(),
+          ),
           sessionProvider.overrideWith(_Session.new),
           myContributionsProvider.overrideWith((ref) async => []),
           kycRepositoryProvider.overrideWithValue(repository),
@@ -261,6 +279,13 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          notificationPollIntervalProvider.overrideWithValue(null),
+          notificationRepositoryProvider.overrideWithValue(
+            EmptyNotificationRepository(),
+          ),
+          notificationReadStoreProvider.overrideWithValue(
+            MemoryNotificationReadStore(),
+          ),
           sessionProvider.overrideWith(_Session.new),
           myContributionsProvider.overrideWith((ref) async => []),
           kycRepositoryProvider.overrideWithValue(repository),

@@ -1,3 +1,7 @@
+import 'package:crabshare_mobile/features/investor/notifications/notification_repository.dart';
+
+import 'helpers/notification_fakes.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -182,6 +186,13 @@ Future<void> _showHome(WidgetTester tester, _Repo repo) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        notificationPollIntervalProvider.overrideWithValue(null),
+        notificationRepositoryProvider.overrideWithValue(
+          EmptyNotificationRepository(),
+        ),
+        notificationReadStoreProvider.overrideWithValue(
+          MemoryNotificationReadStore(),
+        ),
         sessionProvider.overrideWith(_Session.new),
         portfolioRepositoryProvider.overrideWithValue(repo),
         kycRepositoryProvider.overrideWithValue(_Kyc()),
@@ -333,6 +344,13 @@ void main() {
       final repo = _Repo();
       final container = ProviderContainer(
         overrides: [
+          notificationPollIntervalProvider.overrideWithValue(null),
+          notificationRepositoryProvider.overrideWithValue(
+            EmptyNotificationRepository(),
+          ),
+          notificationReadStoreProvider.overrideWithValue(
+            MemoryNotificationReadStore(),
+          ),
           sessionProvider.overrideWith(
             () => SessionController(session(62, investor: false)),
           ),

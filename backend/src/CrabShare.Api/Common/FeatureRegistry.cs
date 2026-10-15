@@ -98,6 +98,7 @@ public static class FeatureRegistry
         services.AddScoped<AlertService>();          // Features/Alerts
         services.AddScoped<AlertJob>();              // CS-40
         services.AddScoped<PortfolioService>();     // CS-61
+        services.AddScoped<NotificationService>();  // CS-65
         // services.AddScoped<AdminService>();        // Features/Admin
 
         return services;

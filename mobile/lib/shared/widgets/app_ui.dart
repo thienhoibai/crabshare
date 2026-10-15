@@ -26,33 +26,94 @@ class AppCard extends StatelessWidget {
 
 /// Lời chào đầu trang: avatar chữ cái + tên + nút chuông.
 class GreetingHeader extends StatelessWidget {
-  const GreetingHeader({super.key, required this.name, required this.subtitle, this.onBell});
+  const GreetingHeader({
+    super.key,
+    required this.name,
+    required this.subtitle,
+    this.onBell,
+    this.notificationCount = 0,
+  });
 
   final String name;
   final String subtitle;
   final VoidCallback? onBell;
+  final int notificationCount;
 
   @override
   Widget build(BuildContext context) {
-    final initials = name.trim().isEmpty ? '?' : name.trim().split(RegExp(r'\s+')).last.characters.first.toUpperCase();
+    final initials = name.trim().isEmpty
+        ? '?'
+        : name.trim().split(RegExp(r'\s+')).last.characters.first.toUpperCase();
     return Row(
       children: [
         CircleAvatar(
           radius: 24,
           backgroundColor: AppColors.accentSoft,
-          child: Text(initials, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.accentText, fontSize: 18)),
+          child: Text(
+            initials,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: AppColors.accentText,
+              fontSize: 18,
+            ),
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Xin chào, $name', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
-              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                'Xin chào, $name',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
           ),
         ),
-        CircleIconButton(icon: Icons.notifications_none_rounded, onTap: onBell),
+        Semantics(
+          label: notificationCount > 0
+              ? 'Thông báo, $notificationCount chưa đọc'
+              : 'Thông báo',
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              CircleIconButton(
+                icon: Icons.notifications_none_rounded,
+                onTap: onBell,
+              ),
+              if (notificationCount > 0)
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
+                    ),
+                    decoration: const BoxDecoration(
+                      color: AppColors.accent,
+                      borderRadius: BorderRadius.all(Radius.circular(20)),
+                    ),
+                    child: Text(
+                      notificationCount > 99 ? '99+' : '$notificationCount',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ],
     );
   }

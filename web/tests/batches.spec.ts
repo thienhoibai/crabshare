@@ -1,8 +1,12 @@
 import { test, expect, type Page } from '@playwright/test'
 async function fillSchedule(page: Page) {
+  await expect(page.getByRole('button', { name: 'Lưu nháp', exact: true })).toBeEnabled()
   await page.getByLabel('Mốc tính lịch đợt 1').selectOption('FundingReady')
   await page.getByLabel('Số ngày sau mốc đợt 1').fill('0')
   await page.getByLabel('Điều kiện đợt 1').fill('Đủ vốn và hợp đồng hai bên đầy đủ chữ ký')
+  await expect(page.getByLabel('Mốc tính lịch đợt 1')).toHaveValue('FundingReady')
+  await expect(page.getByLabel('Số ngày sau mốc đợt 1')).toHaveValue('0')
+  await expect(page.getByLabel('Điều kiện đợt 1')).toHaveValue('Đủ vốn và hợp đồng hai bên đầy đủ chữ ký')
 }
 
 const profile = { operatorId: 1, legalName: 'HTX VI04', taxCode: '1234567890', businessRegNo: 'VI04', farmAddress: 'Cà Mau', status: 'Approved', memberRole: 'Owner', canEdit: false, canSubmit: false, submittedAt: null }

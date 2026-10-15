@@ -2,12 +2,13 @@
    Các trang khám phá/quyết toán mẫu còn lại thuộc task Funding/Batches/Settlement. */
 import { useEffect, useState, type CSSProperties } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { ArrowLeft, Bell, Compass, House, Receipt, Wallet, ShoppingBag, UserRound } from 'lucide-react'
+import { ArrowLeft, Compass, House, Receipt, Wallet, ShoppingBag, UserRound } from 'lucide-react'
 import { useAuthStore } from '../../shared/auth/authStore'
 import KycVerification, { KycStatusCard } from '../accounts/KycVerification'
 import PayoutAccountForm from '../accounts/PayoutAccountForm'
 import OpenBatches from './funding/OpenBatches'
 import InvestorPortfolio, { PortfolioOverview, PortfolioPosition } from './portfolio/InvestorPortfolio'
+import NotificationBell from './notifications/NotificationBell'
 import {
   HOLDINGS, LOTS, STAGES, closedPayout2610, lot, maxCapital, minContribution,
   pct, small, stage, tr, vnd, type Lot,
@@ -61,10 +62,6 @@ const facts = (l: Lot) => [
   ['Góp tối thiểu', tr(minContribution(l))],
   ['Chu kỳ', `${l.cycleDays} ngày · ${l.boxes} ô`],
 ]
-
-function Bell0() {
-  return <button type="button" className="rd-iconbtn iv-bell" aria-label="Thông báo, 3 mới"><Bell size={18} /><i /></button>
-}
 
 /** Thẻ lô có ảnh nền: dùng ở lưới (bản 1) và băng chuyền (bản 3). */
 
@@ -166,7 +163,7 @@ function InvV2Inner() {
             {nav.view === 'lot' && <button type="button" className="iv-back" onClick={nav.back}><ArrowLeft size={16} /> Quay lại</button>}
             <h1 className="rd-h2">{titles[nav.view]}</h1>
           </div>
-          <Bell0 />
+          <NotificationBell />
         </header>
 
         {nav.view === 'home' && <><KycStatusCard /><PortfolioOverview open={nav.openPosition} all={() => nav.go('portfolio')} /></>}
