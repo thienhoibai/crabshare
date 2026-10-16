@@ -17,4 +17,4 @@ Validation completed locally:
 - Actionlint v1.7.12 passed both changed workflows (download SHA-256 verified). Remote-reset guard rejected an `example.invalid` connection before any database connection attempt.
 - Local Docker engine is unavailable; CI builds both image targets and checks non-root runtime. Its result belongs in the PR checks.
 
-The CS-88 dependency fixes inherited Pkcs advisories in API/migrator. Review CS-80's maintenance workflow before deploying V011. Team review/merge is still required; production OIDC deliberately trusts only develop. CS-92 records actual feature acceptance after that deploy.
+The CS-88 dependency fixes inherited Pkcs advisories in API/migrator. Review CS-80's maintenance workflow before deploying V012. Team review/merge is still required; production OIDC deliberately trusts only develop. CS-92 records actual feature acceptance after that deploy.

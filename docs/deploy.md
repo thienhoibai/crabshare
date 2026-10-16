@@ -42,7 +42,7 @@ The workflow runs only from `develop`. Another team member must review the PR an
 4. Readiness must pass, followed by `python deploy/smoke.py --expected-revision <SHA>`: HTTPS, database, anonymous 401, web/JS asset and the deployed API commit. The report contains no tokens, photos or account numbers.
 5. Run CS-92 acceptance afterwards. Vercel must build with `VITE_API_URL=https://crabshare-api.azurewebsites.net`. Changing that value requires a redeploy. A blocked Preview needs the Vercel project owner's deployment permissions; code CI does not prove a Preview deployment succeeded.
 
-Failure after maintenance begins does not automatically reopen an old binary. Inspect the last successful Actions step, preserve SQL and keys, deploy a compatible fixed binary and then start the app. Never reset/recreate Azure SQL or roll back to a plaintext-reading binary after V011. Only the infrastructure owner performs coordinated SQL/key backup recovery; prefer a forward fix. DbMigrator now rejects `--reset` outside LocalDB and never creates a missing remote database with an unintended service tier.
+Failure after maintenance begins does not automatically reopen an old binary. Inspect the last successful Actions step, preserve SQL and keys, deploy a compatible fixed binary and then start the app. Never reset/recreate Azure SQL or roll back to a plaintext-reading binary after V012. Only the infrastructure owner performs coordinated SQL/key backup recovery; prefer a forward fix. DbMigrator now rejects `--reset` outside LocalDB and never creates a missing remote database with an unintended service tier.
 
 `Security__DataProtectionKeyPath=/home/data/keys` is private and separate from `/home/data/storage`. CS-88 accepts forwarded headers only from configured proxies/networks, framework loopback defaults, and documented App Service private ingress ranges when running on that platform. Do not enable `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` or expose Kestrel directly. Reconfigure `Security__KnownProxies__0` / `Security__KnownNetworks__0` when changing ingress.
 
@@ -74,4 +74,3 @@ python deploy/smoke.py --api https://<api-host> --web https://<web-host> --expec
 ```
 
 This optional template does not provision a VPS/SQL service and has not been deployed to a new server.
-
