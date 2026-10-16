@@ -56,6 +56,18 @@ export interface OrderShipment {
   completedAt: string | null
 }
 
+export interface ReturnRequestInfo {
+  status: 'Pending' | 'Approved' | 'Rejected'
+  reason: string
+  evidenceUri: string | null
+  requestedAt: string
+  respondedAt: string | null
+  operatorNote: string | null
+  operatorEvidenceUri: string | null
+  refundAmount: number | null
+  refundInstructionId: number | null
+}
+
 export interface OrderTracking {
   orderNo: string
   batchCode: string
@@ -75,6 +87,7 @@ export interface OrderTracking {
   canConfirmReceipt: boolean
   shipment: OrderShipment | null
   canReturn: boolean
+  returnRequest?: ReturnRequestInfo | null
 }
 
 export interface CancelOrderResult {

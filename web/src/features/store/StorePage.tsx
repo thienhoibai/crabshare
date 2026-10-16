@@ -10,7 +10,7 @@ import { CartButton, CartDrawer, CartProvider, ProductView, Shell, Tabs, TopBar,
 import { REASON_LABELS, type StorageType } from '../operator/listingsApi'
 import {
   GRADES, formatDate, formatKg, toProduct, useStoreListing, useStoreListings,
-  type CrabType, type PublicPriceRevision, type StoreSort,
+  type CrabType, type ListingReview, type PublicPriceRevision, type StoreSort,
 } from './storeApi'
 import './store.css'
 import { useAuthStore } from '../../shared/auth/authStore'
@@ -184,6 +184,41 @@ function PriceHistory({ items }: { items: PublicPriceRevision[] }) {
   )
 }
 
+function ListingReviews({ items, averageStars, ratingCount }: { items: ListingReview[]; averageStars?: number | null; ratingCount: number }) {
+  return (
+    <section className="s1-reviews" aria-label="Đánh giá từ người mua">
+      <h3>Đánh giá từ người mua</h3>
+      {ratingCount === 0 || items.length === 0 ? (
+        <p className="s1-reviews__summary">Chưa có đánh giá nào cho sản phẩm này.</p>
+      ) : (
+        <>
+          <p className="s1-reviews__summary">
+            Trung bình <b>{averageStars?.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} / 5 sao</b> từ {ratingCount} lượt đánh giá thực tế của mặt hàng này.
+          </p>
+          <ul className="s1-reviews__list">
+            {items.map((r) => (
+              <li key={r.ratingId} className="s1-reviews__item">
+                <div className="s1-reviews__head">
+                  <strong>{r.buyerName} <span className="s1-reviews__meta">· Đơn {r.orderNo}</span></strong>
+                  <span className="s1-reviews__stars" aria-label={`${r.stars} trên 5 sao`}>
+                    {'★'.repeat(r.stars)}{'☆'.repeat(Math.max(0, 5 - r.stars))} ({r.stars}/5)
+                  </span>
+                </div>
+                {r.comment ? (
+                  <p className="s1-reviews__comment">{r.comment}</p>
+                ) : (
+                  <p className="s1-reviews__meta">Khách hàng không để lại nhận xét bằng chữ.</p>
+                )}
+                <span className="s1-reviews__meta">{formatDate(r.createdAt)}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  )
+}
+
 function ListingDetail({ id }: { id: number }) {
   const { data, isPending, error } = useStoreListing(id)
   if (isPending) return <p className="s1-state">Đang tải sản phẩm…</p>
@@ -194,6 +229,7 @@ function ListingDetail({ id }: { id: number }) {
       <ProductView key={id} p={p} />
       {data.sellUntil && <p className="s1-state">Hàng cấp đông, bán đến hết ngày {formatDate(data.sellUntil)}.</p>}
       <PriceHistory items={data.priceHistory} />
+      <ListingReviews items={data.reviews ?? []} averageStars={p.averageStars} ratingCount={p.ratingCount ?? 0} />
     </div>
   )
 }

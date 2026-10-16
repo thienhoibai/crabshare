@@ -74,7 +74,8 @@ public sealed record OrderTrackingResponse(
     IReadOnlyList<OrderTimelineStep> Timeline,
     bool CanConfirmReceipt,
     OrderShipmentResponse? Shipment = null,
-    bool CanReturn = false);
+    bool CanReturn = false,
+    ReturnRequestInfo? ReturnRequest = null);
 
 public sealed class CancelOrderRequest
 {

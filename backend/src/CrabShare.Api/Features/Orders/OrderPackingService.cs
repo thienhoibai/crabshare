@@ -10,21 +10,51 @@ namespace CrabShare.Api.Features.Orders;
 /// <summary>
 /// UC29 Đóng gói đơn bằng quét tem (NH-09). Tem Active, cua InStock, đúng lô/hạng, đủ kg → cua Packed + event Packed, đơn Packed.
 /// </summary>
-public sealed class OrderPackingService(AppDbContext db, ICurrentUser me, IAuditLog audit, TimeProvider clock)
+public sealed class OrderPackingService(
+    AppDbContext db, ICurrentUser me, IAuditLog audit, OrderReturnService returns, TimeProvider clock)
 {
-    private static readonly HashSet<string> AllowedListStatus = ["Paid", "Packed", "Shipping", "Delivered", "Completed"];
+    private static readonly HashSet<string> AllowedListStatus =
+        ["Paid", "Packed", "Shipping", "Delivered", "Completed", "Returned", "ReturnRequested", "All"];
 
     public async Task<IReadOnlyList<OperatorOrderSummaryResponse>> ListMineAsync(string? status, CancellationToken ct)
     {
         var operatorId = me.RequireOperatorId();
         var filter = NormalizeListStatus(status);
-        return await db.SalesOrders.AsNoTracking()
-            .Where(o => o.Batch.OperatorId == operatorId && o.Status == filter)
-            .OrderBy(o => o.PaidAt ?? o.PlacedAt).ThenBy(o => o.OrderId)
-            .Select(o => new OperatorOrderSummaryResponse(
-                o.OrderNo, o.Status, o.PlacedAt, o.PaidAt, o.Batch.BatchCode, o.Customer.FullName,
-                o.OrderLines.Count, o.OrderLines.Sum(l => l.QuantityKg), (long)o.TotalAmount))
+
+        var query = db.SalesOrders.AsNoTracking().Where(o => o.Batch.OperatorId == operatorId);
+        if (filter == "ReturnRequested")
+        {
+            query = query.Where(o => o.Status == "Shipping" || o.Status == "Delivered");
+        }
+        else if (filter != "All")
+        {
+            query = query.Where(o => o.Status == filter);
+        }
+
+        var rows = await query
+            .OrderByDescending(o => o.UpdatedAt).ThenByDescending(o => o.OrderId)
+            .Select(o => new
+            {
+                o.OrderId,
+                Summary = new OperatorOrderSummaryResponse(
+                    o.OrderNo, o.Status, o.PlacedAt, o.PaidAt, o.Batch.BatchCode, o.Customer.FullName,
+                    o.OrderLines.Count, o.OrderLines.Sum(l => l.QuantityKg), (long)o.TotalAmount),
+            })
             .ToListAsync(ct);
+
+        var reqMap = await returns.GetReturnRequestsByOrderIdsAsync(rows.Select(r => r.OrderId).ToList(), ct);
+        var items = rows
+            .Select(r => reqMap.TryGetValue(r.OrderId, out var req)
+                ? r.Summary with { ReturnRequest = req }
+                : r.Summary)
+            .ToList();
+
+        if (filter == "ReturnRequested")
+        {
+            items = items.Where(i => i.ReturnRequest?.Status == "Pending").ToList();
+        }
+
+        return items;
     }
 
     public async Task<OperatorOrderDetailResponse> GetMineAsync(string orderNo, CancellationToken ct)
@@ -33,7 +63,38 @@ public sealed class OrderPackingService(AppDbContext db, ICurrentUser me, IAudit
         var order = await DetailQuery().AsNoTracking().FirstOrDefaultAsync(o => o.OrderNo == orderNo, ct)
                     ?? throw OrderNotFound();
         EnsureOwned(order, operatorId);
-        return ToDetail(order);
+        var detail = ToDetail(order);
+        var returnRequest = await returns.GetReturnRequestByOrderIdAsync(order.OrderId, ct);
+        if (returnRequest is not null)
+        {
+            detail = detail with
+            {
+                ReturnRequest = returnRequest,
+                ReturnReason = returnRequest.Reason,
+                RefundAmount = returnRequest.RefundAmount ?? detail.RefundAmount,
+            };
+        }
+        if (order.Status == "Returned" && (detail.ReturnReason is null || detail.RefundAmount is null))
+        {
+            var refund = await db.PaymentInstructions.AsNoTracking()
+                .Where(i => i.OrderId == order.OrderId && i.InstructionType == "Refund")
+                .OrderByDescending(i => i.InstructionId)
+                .FirstOrDefaultAsync(ct);
+            if (refund is not null)
+            {
+                var note = refund.BeneficiaryNote ?? "";
+                var prefix = $"Hoàn tiền trả hàng đơn {order.OrderNo}: ";
+                var reason = note.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                    ? note[prefix.Length..].Trim()
+                    : note;
+                detail = detail with
+                {
+                    ReturnReason = detail.ReturnReason ?? reason,
+                    RefundAmount = detail.RefundAmount ?? (long)refund.Amount,
+                };
+            }
+        }
+        return detail;
     }
 
     public Task<OperatorOrderDetailResponse> PackAsync(string orderNo, PackOrderRequest req, CancellationToken ct)
@@ -141,12 +202,44 @@ public sealed class OrderPackingService(AppDbContext db, ICurrentUser me, IAudit
     private static NotFoundException OrderNotFound() =>
         new(PackingErrors.OrderNotFound, "Không tìm thấy đơn hàng.");
 
+    public async Task<OperatorOrderCountsResponse> GetCountsAsync(CancellationToken ct)
+    {
+        var operatorId = me.RequireOperatorId();
+
+        var statusCounts = await db.SalesOrders.AsNoTracking()
+            .Where(o => o.Batch.OperatorId == operatorId)
+            .GroupBy(o => o.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.Status, g => g.Count, ct);
+
+        var candidateOrderIds = await db.SalesOrders.AsNoTracking()
+            .Where(o => o.Batch.OperatorId == operatorId && (o.Status == "Shipping" || o.Status == "Delivered"))
+            .Select(o => o.OrderId)
+            .ToListAsync(ct);
+
+        var reqMap = await returns.GetReturnRequestsByOrderIdsAsync(candidateOrderIds, ct);
+        var returnRequestedCount = reqMap.Values.Count(r => r.Status == "Pending");
+
+        int Get(string s) => statusCounts.GetValueOrDefault(s, 0);
+        var total = statusCounts.Values.Sum();
+
+        return new OperatorOrderCountsResponse(
+            All: total,
+            ReturnRequested: returnRequestedCount,
+            Paid: Get("Paid"),
+            Packed: Get("Packed"),
+            Shipping: Get("Shipping"),
+            Delivered: Get("Delivered"),
+            Returned: Get("Returned"),
+            Completed: Get("Completed"));
+    }
+
     private static string NormalizeListStatus(string? status)
     {
         var value = string.IsNullOrWhiteSpace(status) ? "Paid" : status.Trim();
         if (!AllowedListStatus.Contains(value))
             throw new AppException(StatusCodes.Status400BadRequest, PackingErrors.InvalidStatus,
-                "Tham số status chỉ nhận Paid, Packed, Shipping, Delivered hoặc Completed.");
+                "Tham số status chỉ nhận All, Paid, Packed, Shipping, Delivered, Completed, Returned hoặc ReturnRequested.");
         return value;
     }
 

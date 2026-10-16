@@ -290,9 +290,10 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
             .ToList();
 
         var stats = await LoadRatingStatsAsync([listing.ListingId], ct);
+        var reviews = await LoadListingReviewsAsync(listing.ListingId, ct);
         return new StoreListingDetailResponse(
             ToStoreResponse(ToStoreRowCompiled(listing), stats),
-            listing.Batch.Title, listing.FrozenAt, SellUntil(listing), tagCode, history);
+            listing.Batch.Title, listing.FrozenAt, SellUntil(listing), tagCode, history, reviews);
     }
 
     private static readonly string[] StoreStatuses = ["Published", "SoldOut"];
@@ -370,14 +371,52 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
         var pairs = await db.OrderLines.AsNoTracking()
             .Where(l => listingIds.Contains(l.ListingId))
             .Join(db.ProductRatings.AsNoTracking(), l => l.OrderId, r => r.OrderId,
-                (l, r) => new { l.ListingId, r.RatingId, r.Stars })
+                (l, r) => new { l.ListingId, r.RatingId, r.Stars, r.Comment })
             .ToListAsync(ct);
         return pairs
             .DistinctBy(p => (p.ListingId, p.RatingId))
             .GroupBy(p => p.ListingId)
             .ToDictionary(
                 g => g.Key,
-                g => ((decimal)Math.Round(g.Average(x => (decimal)x.Stars), 2), g.Count()));
+                g =>
+                {
+                    var itemStars = g.Select(x => CrabShare.Api.Features.Orders.OrderRatingService.ExtractForListing(x.Stars, x.Comment, x.ListingId).Stars).ToList();
+                    return ((decimal)Math.Round(itemStars.Average(s => (decimal)s), 2), itemStars.Count);
+                });
+    }
+
+    private async Task<IReadOnlyList<ListingReviewResponse>> LoadListingReviewsAsync(long listingId, CancellationToken ct)
+    {
+        var raw = await db.OrderLines.AsNoTracking()
+            .Where(l => l.ListingId == listingId)
+            .Join(db.ProductRatings.AsNoTracking(), l => l.OrderId, r => r.OrderId,
+                (l, r) => new
+                {
+                    r.RatingId,
+                    l.SalesOrder.OrderNo,
+                    BuyerName = l.SalesOrder.RecipientName,
+                    r.Stars,
+                    r.Comment,
+                    r.CreatedAt,
+                })
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.RatingId)
+            .ToListAsync(ct);
+
+        return raw
+            .DistinctBy(x => x.RatingId)
+            .Select(x =>
+            {
+                var (stars, comment) = CrabShare.Api.Features.Orders.OrderRatingService.ExtractForListing(x.Stars, x.Comment, listingId);
+                return new ListingReviewResponse(
+                    x.RatingId,
+                    x.OrderNo,
+                    string.IsNullOrWhiteSpace(x.BuyerName) ? "Khách mua" : x.BuyerName,
+                    stars,
+                    comment,
+                    x.CreatedAt);
+            })
+            .ToList();
     }
 
     // ---------- nội bộ ----------

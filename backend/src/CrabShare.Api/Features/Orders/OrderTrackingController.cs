@@ -31,8 +31,8 @@ public sealed class OrderTrackingController(
     {
         var code = orderNo.Trim().ToUpperInvariant();
         var body = await queries.GetMineAsync(code, ct);
-        var canReturn = await returns.CanReturnAsync(code, ct);
-        return Ok(body with { CanReturn = canReturn });
+        var (canReturn, returnRequest) = await returns.GetStateAsync(code, ct);
+        return Ok(body with { CanReturn = canReturn, ReturnRequest = returnRequest });
     }
 
     [HttpPost("{orderNo}/cancel")]
@@ -43,7 +43,12 @@ public sealed class OrderTrackingController(
     [HttpPost("{orderNo}/receive")]
     [EndpointSummary("UC30 — Khách xác nhận đã nhận hàng; đơn hoàn tất sau khi hết cửa sổ đổi trả")]
     public async Task<ActionResult<OrderTrackingResponse>> Receive(string orderNo, CancellationToken ct)
-        => Ok(await fulfilment.ReceiveAsync(orderNo.Trim().ToUpperInvariant(), ct));
+    {
+        var code = orderNo.Trim().ToUpperInvariant();
+        var body = await fulfilment.ReceiveAsync(code, ct);
+        var (canReturn, returnRequest) = await returns.GetStateAsync(code, ct);
+        return Ok(body with { CanReturn = canReturn, ReturnRequest = returnRequest });
+    }
 
     [HttpGet("{orderNo}/rating")]
     [EndpointSummary("UC34 — Xem đánh giá của đơn và có được gửi không")]

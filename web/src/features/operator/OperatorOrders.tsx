@@ -1,16 +1,33 @@
 import { type FormEvent, useState } from 'react'
 import { useParams } from 'react-router'
-import { ArrowLeft, ExternalLink, PackageCheck, RefreshCw, ScanLine, Truck, AlertTriangle, Image as ImageIcon } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  ExternalLink,
+  Image as ImageIcon,
+  Layers,
+  PackageCheck,
+  RefreshCw,
+  RotateCcw,
+  ScanLine,
+  Truck,
+  XCircle,
+} from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
 import { formatDateTime, formatVnd } from '../../shared/lib/format'
 import OperatorLayout from './OperatorLayout'
 import { OpBack, OpBadge, OpBtn, OpFacts, OpHeading, OpNote, OpPanel, OpRow } from './operatorUi'
 import {
+  useApproveReturnOrder,
   useDeliverOrder,
   useOperatorOrder,
+  useOperatorOrderCounts,
   useOperatorOrders,
   usePackOrder,
+  useRejectReturnOrder,
   useShipOrder,
+  type OperatorOrderCounts,
   type OperatorOrderDetail,
   type OperatorOrderStatus,
   type OperatorOrderSummary,
@@ -25,54 +42,119 @@ import {
 const kg = (n: number) => `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 3 }).format(n)} kg`
 
 function statusTone(status: string): 'ok' | 'warn' | 'mute' {
-  if (status === 'Paid' || status === 'Shipping') return 'warn'
+  if (status === 'Paid' || status === 'Shipping' || status === 'ReturnRequested') return 'warn'
   if (status === 'Packed' || status === 'Delivered' || status === 'Completed') return 'ok'
   return 'mute'
 }
 
 const STATUS_LABELS: Record<string, string> = {
+  All: 'Tất cả đơn',
   Paid: 'Chờ đóng gói',
   Packed: 'Đã đóng gói',
   Shipping: 'Đang giao',
   Delivered: 'Đã giao',
   Completed: 'Hoàn tất',
+  ReturnRequested: 'Yêu cầu trả hàng (Chờ duyệt)',
+  Returned: 'Đã trả hàng',
 }
 
 function statusLabel(status: string) {
   return STATUS_LABELS[status] ?? status
 }
 
+interface StatusTabItem {
+  id: OperatorOrderStatus
+  label: string
+  countKey: keyof OperatorOrderCounts
+  icon: typeof ScanLine
+  isUrgent?: boolean
+}
+
+const STATUS_TABS: StatusTabItem[] = [
+  { id: 'All', label: 'Tất cả', countKey: 'all', icon: Layers },
+  { id: 'ReturnRequested', label: 'Yêu cầu trả hàng', countKey: 'returnRequested', icon: AlertTriangle, isUrgent: true },
+  { id: 'Paid', label: 'Chờ đóng gói', countKey: 'paid', icon: ScanLine },
+  { id: 'Packed', label: 'Đã đóng gói', countKey: 'packed', icon: PackageCheck },
+  { id: 'Shipping', label: 'Đang giao', countKey: 'shipping', icon: Truck },
+  { id: 'Delivered', label: 'Đã giao', countKey: 'delivered', icon: CheckCircle2 },
+  { id: 'Returned', label: 'Đã trả hàng', countKey: 'returned', icon: RotateCcw },
+  { id: 'Completed', label: 'Hoàn tất', countKey: 'completed', icon: CheckCircle2 },
+]
+
 function OrderList({ status, onStatus }: { status: OperatorOrderStatus; onStatus: (s: OperatorOrderStatus) => void }) {
   const query = useOperatorOrders(status)
+  const countsQuery = useOperatorOrderCounts()
+  const counts = countsQuery.data
   const list = query.data ?? []
+
+  const handleRefresh = () => {
+    void query.refetch()
+    void countsQuery.refetch()
+  }
+
   return (
     <>
       <OpHeading
         eyebrow="Đơn hàng"
         title="Đóng gói và giao đơn"
-        description="Quét tem để đóng gói đơn đã thanh toán, giao cho nhà xe rồi báo đã giao khi khách nhận được hàng."
+        description="Quét tem để đóng gói đơn đã thanh toán, giao cho nhà xe, báo đã giao hoặc kiểm duyệt yêu cầu trả hàng từ khách."
+        action={
+          <OpBtn variant="outline" disabled={query.isFetching || countsQuery.isFetching} onClick={handleRefresh}>
+            <RefreshCw size={16} className={query.isFetching || countsQuery.isFetching ? 'animate-spin' : ''} /> Làm mới
+          </OpBtn>
+        }
       />
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <label className="flex items-center gap-2 font-bold">
-          Trạng thái
-          <select aria-label="Trạng thái đơn" className="rd-input" value={status} onChange={(e) => onStatus(e.target.value as OperatorOrderStatus)}>
-            <option value="Paid">Chờ đóng gói</option>
-            <option value="Packed">Đã đóng gói</option>
-            <option value="Shipping">Đang giao</option>
-            <option value="Delivered">Đã giao</option>
-            <option value="Completed">Hoàn tất</option>
-          </select>
-        </label>
-        <OpBtn variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>
-          <RefreshCw size={16} /> Làm mới
-        </OpBtn>
+
+      {/* Dãy các ô trạng thái (Status Filter Cards) */}
+      <div className="op-status-grid">
+        {STATUS_TABS.map((tab) => {
+          const count = counts ? counts[tab.countKey] : undefined
+          const isActive = status === tab.id
+          const hasUrgentCount = tab.isUrgent && (count ?? 0) > 0
+          const TabIcon = tab.icon
+
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onStatus(tab.id)}
+              className={`op-status-card ${isActive ? 'is-active' : ''} ${hasUrgentCount ? 'is-urgent' : ''}`}
+            >
+              <div className="op-status-head">
+                <span className="flex items-center gap-1.5 truncate">
+                  <TabIcon size={14} />
+                  {tab.label}
+                </span>
+                {hasUrgentCount && !isActive && (
+                  <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                )}
+              </div>
+              <div className="op-status-body">
+                <span className="op-status-num">{count !== undefined ? count : '—'}</span>
+                <span className="op-status-unit">đơn</span>
+              </div>
+            </button>
+          )
+        })}
       </div>
+
+      {/* Thanh tiêu đề trạng thái và số lượng đang xem */}
+      <div className="mb-4 flex items-center justify-between px-1">
+        <div className="flex items-center gap-2 text-sm text-[#5c5549]">
+          <span>Đang xem:</span>
+          <span className="font-bold text-[#15130f]">{statusLabel(status)}</span>
+          <span className="rounded-full bg-[#15130f] px-2.5 py-0.5 text-xs font-bold text-white">
+            {list.length} đơn
+          </span>
+        </div>
+      </div>
+
       {query.isPending ? (
         <p role="status" className="op-panel p-6">Đang tải đơn hàng…</p>
       ) : query.isError ? (
         <div role="alert" className="op-panel p-6">
           <p>{errorMessage(query.error)}</p>
-          <OpBtn className="mt-3" onClick={() => void query.refetch()}>Thử lại</OpBtn>
+          <OpBtn className="mt-3" onClick={handleRefresh}>Thử lại</OpBtn>
         </div>
       ) : (
         <div className="op-panel op-list">
@@ -81,6 +163,7 @@ function OrderList({ status, onStatus }: { status: OperatorOrderStatus; onStatus
             <div className="op-empty">
               <b>Không có đơn {statusLabel(status).toLowerCase()}</b>
               {status === 'Paid' && <span>Đơn Paid mới xuất hiện khi khách đã chuyển khoản thành công.</span>}
+              {status === 'ReturnRequested' && <span>Hiện không có yêu cầu đổi trả hoặc hoàn tiền nào cần xử lý.</span>}
             </div>
           )}
         </div>
@@ -97,7 +180,15 @@ function OrderRow({ order }: { order: OperatorOrderSummary }) {
       title={<span className="op-mono">{order.orderNo}</span>}
       sub={`${order.customerName} · ${order.batchCode}`}
       mid={<span>{kg(order.totalKg)} · {order.lineCount} dòng · {order.paidAt ? formatDateTime(order.paidAt) : formatDateTime(order.placedAt)}</span>}
-      end={<><OpBadge tone={statusTone(order.status)}>{statusLabel(order.status)}</OpBadge><b>{formatVnd(order.totalAmount)}</b></>}
+      end={
+        <>
+          {order.returnRequest?.status === 'Pending' && (
+            <OpBadge tone="warn">⚠️ Chờ duyệt trả hàng</OpBadge>
+          )}
+          <OpBadge tone={statusTone(order.status)}>{statusLabel(order.status)}</OpBadge>
+          <b>{formatVnd(order.totalAmount)}</b>
+        </>
+      }
     />
   )
 }
@@ -421,6 +512,243 @@ function OperatorComplaintBox({ orderNo }: { orderNo: string }) {
   )
 }
 
+function OperatorMediaPreview({ uri, label }: { uri: string | null | undefined; label?: string }) {
+  if (!uri) return null
+  const isVideo = uri.startsWith('data:video/') || /\.(mp4|webm|mov)(\?|$)/i.test(uri)
+  const isImage =
+    uri.startsWith('data:image/') ||
+    /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(uri) ||
+    uri.includes('images.unsplash.com') ||
+    uri.includes('imgur.com') ||
+    uri.includes('placehold.co')
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      {label && <span className="block text-xs font-bold text-slate-700">{label}</span>}
+      {isVideo ? (
+        <video src={uri} controls className="max-h-60 rounded-lg border border-slate-300 bg-black" />
+      ) : isImage ? (
+        <a href={uri} target="_blank" rel="noreferrer" className="inline-block">
+          <img
+            src={uri}
+            alt={label ?? 'Bằng chứng'}
+            className="max-h-56 rounded-lg border border-slate-300 object-cover shadow-xs hover:opacity-95"
+          />
+        </a>
+      ) : null}
+      {!uri.startsWith('data:') && (
+        <div>
+          <a
+            href={uri}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-blue-700 underline font-semibold"
+          >
+            <ImageIcon size={14} /> Mở đường dẫn hình ảnh / video bằng chứng
+            <ExternalLink size={12} />
+          </a>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OperatorReturnReviewPanel({ order }: { order: OperatorOrderDetail }) {
+  const approve = useApproveReturnOrder(order.orderNo)
+  const reject = useRejectReturnOrder(order.orderNo)
+
+  const [note, setNote] = useState('')
+  const [opEvidenceUri, setOpEvidenceUri] = useState('')
+  const [localError, setLocalError] = useState<string | null>(null)
+
+  const req = order.returnRequest
+
+  if (req?.status === 'Pending' && order.status !== 'Returned') {
+    const handleApprove = () => {
+      setLocalError(null)
+      approve.mutate(note.trim() || 'Đã kiểm tra ảnh/video bằng chứng và đồng ý hoàn tiền.')
+    }
+
+    const handleReject = () => {
+      setLocalError(null)
+      if (note.trim().length < 5) {
+        setLocalError('Khi từ chối trả hàng, vui lòng nhập rõ lý do từ chối (tối thiểu 5 ký tự) để khách hàng nắm được.')
+        return
+      }
+      reject.mutate({
+        reason: note.trim(),
+        evidenceUri: opEvidenceUri.trim() || null,
+      })
+    }
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => setOpEvidenceUri(String(reader.result))
+      reader.readAsDataURL(file)
+    }
+
+    const isBusy = approve.isPending || reject.isPending
+
+    return (
+      <OpPanel
+        accent
+        className="op-span-12"
+        title="⚠️ Yêu cầu trả hàng từ khách — Chờ hộ nuôi phê duyệt"
+        subtitle={`Khách gửi yêu cầu lúc ${formatDateTime(req.requestedAt)} · Giá trị hoàn dự kiến: ${formatVnd(order.totalAmount)}`}
+      >
+        <div className="space-y-4 text-sm">
+          <div className="bg-amber-50 p-4 rounded-xl border border-amber-300 text-amber-950 space-y-2">
+            <div>
+              <strong className="font-bold text-amber-900">Lý do khách yêu cầu trả hàng:</strong>
+              <p className="mt-1 bg-white p-3 rounded-lg border border-amber-200 font-medium">
+                "{req.reason}"
+              </p>
+            </div>
+            <OperatorMediaPreview uri={req.evidenceUri} label="Hình ảnh / Video bằng chứng khách đính kèm:" />
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-xs space-y-3">
+            <label className="block text-xs font-bold text-slate-800">
+              Ghi chú phản hồi / Lý do từ chối (bắt buộc nếu Từ chối)
+              <textarea
+                value={note}
+                onChange={(e) => { setNote(e.target.value); if (localError) setLocalError(null) }}
+                rows={3}
+                maxLength={500}
+                placeholder="Nhập ghi chú xác nhận hoàn tiền hoặc nêu rõ lý do từ chối (VD: Tem QR trong ảnh không khớp, cua vẫn sống khoẻ khi giao...)"
+                className="rd-input w-full mt-1"
+                disabled={isBusy}
+              />
+            </label>
+
+            <div className="flex flex-wrap gap-2 text-xs">
+              <button
+                type="button"
+                className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-900 font-semibold hover:bg-emerald-100"
+                onClick={() => { setNote('Đã kiểm tra hình ảnh mở thùng của khách, xác nhận đồng ý nhận trả hàng và hoàn tiền.'); setLocalError(null) }}
+              >
+                + Mẫu đồng ý: Đã xác minh ảnh mở thùng
+              </button>
+              <button
+                type="button"
+                className="px-2.5 py-1 rounded-full bg-red-50 border border-red-300 text-red-900 font-semibold hover:bg-red-100"
+                onClick={() => { setNote('Hình ảnh bằng chứng chưa nhìn rõ mã tem QR trên càng cua, vui lòng gửi lại video rõ nét hơn.'); setLocalError(null) }}
+              >
+                + Mẫu từ chối: Ảnh chưa rõ mã tem QR
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-bold text-slate-700">
+                  Bằng chứng đối chứng lúc đóng gói của Hộ nuôi (không bắt buộc):
+                </span>
+                <label className="cursor-pointer inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 hover:bg-blue-100">
+                  <ImageIcon size={14} /> Chọn ảnh/video đối chứng từ máy
+                  <input type="file" accept="image/*,video/*" onChange={handleFileUpload} className="hidden" />
+                </label>
+              </div>
+              <input
+                type="text"
+                value={opEvidenceUri.startsWith('data:') ? '' : opEvidenceUri}
+                onChange={(e) => setOpEvidenceUri(e.target.value)}
+                placeholder="Hoặc dán link ảnh/video lúc đóng gói tại trại..."
+                className="rd-input w-full text-xs"
+                disabled={isBusy}
+              />
+              <OperatorMediaPreview uri={opEvidenceUri} label="Xem trước bằng chứng đối chứng:" />
+            </div>
+
+            {localError && <p role="alert" className="text-xs font-semibold text-red-700">{localError}</p>}
+            {approve.isError && <p role="alert" className="text-xs font-semibold text-red-700">{errorMessage(approve.error)}</p>}
+            {reject.isError && <p role="alert" className="text-xs font-semibold text-red-700">{errorMessage(reject.error)}</p>}
+
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-2 border-t border-slate-200">
+              <OpBtn
+                type="button"
+                variant="outline"
+                disabled={isBusy}
+                onClick={handleReject}
+              >
+                <XCircle size={16} /> {reject.isPending ? 'Đang từ chối…' : 'Từ chối yêu cầu trả hàng'}
+              </OpBtn>
+              <OpBtn
+                type="button"
+                variant="ink"
+                disabled={isBusy}
+                onClick={handleApprove}
+              >
+                <CheckCircle2 size={16} /> {approve.isPending ? 'Đang duyệt…' : `Chấp nhận trả hàng & Hoàn ${formatVnd(order.totalAmount)}`}
+              </OpBtn>
+            </div>
+          </div>
+        </div>
+      </OpPanel>
+    )
+  }
+
+  if (order.status === 'Returned' || req?.status === 'Approved') {
+    return (
+      <OpPanel
+        accent
+        className="op-span-12"
+        title="✓ Đã phê duyệt trả hàng & Lập lệnh hoàn tiền"
+        subtitle="Đơn hàng đã chuyển sang trạng thái Đã trả hàng (Returned)."
+      >
+        <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-red-950 space-y-2 text-sm">
+          {(req?.reason || order.returnReason) && (
+            <p>
+              <strong>Lý do khách trả hàng: </strong>
+              <span className="italic">"{req?.reason ?? order.returnReason}"</span>
+            </p>
+          )}
+          <OperatorMediaPreview uri={req?.evidenceUri} label="Bằng chứng mở thùng của khách:" />
+          {req?.operatorNote && (
+            <p>
+              <strong>Ghi chú phê duyệt của hộ nuôi: </strong>
+              <span>"{req.operatorNote}"</span>
+            </p>
+          )}
+          <p>
+            <strong>Số tiền lập lệnh hoàn cho khách: </strong>
+            <strong className="text-red-700 font-bold">{formatVnd(order.refundAmount ?? req?.refundAmount ?? order.totalAmount)}</strong>
+          </p>
+          <p className="text-xs text-red-800 pt-1 border-t border-red-200/80">
+            Quy tắc xử lý (TL-31): Cua tươi sống đã giao đi không được nhập lại tồn kho (số kg niêm yết giữ nguyên). Đơn trả hàng không tính vào doanh thu thực tế của lô và lệnh hoàn tiền đã được chuyển sang Ban quản trị giải ngân.
+          </p>
+        </div>
+      </OpPanel>
+    )
+  }
+
+  if (req?.status === 'Rejected') {
+    return (
+      <OpPanel
+        className="op-span-12"
+        title="✕ Đã từ chối yêu cầu trả hàng của khách"
+        subtitle={req.respondedAt ? `Phản hồi lúc ${formatDateTime(req.respondedAt)}` : undefined}
+      >
+        <div className="bg-slate-100 p-4 rounded-xl border border-slate-300 text-slate-900 space-y-2 text-sm">
+          <p>
+            <strong>Yêu cầu trả hàng của khách: </strong>
+            <span>"{req.reason}"</span>
+          </p>
+          <OperatorMediaPreview uri={req.evidenceUri} label="Bằng chứng khách đã gửi:" />
+          <p className="text-red-800">
+            <strong>Lý do từ chối của hộ nuôi: </strong>
+            <span className="font-semibold">"{req.operatorNote}"</span>
+          </p>
+          <OperatorMediaPreview uri={req.operatorEvidenceUri} label="Bằng chứng đối chứng của hộ nuôi:" />
+        </div>
+      </OpPanel>
+    )
+  }
+
+  return null
+}
+
 function OrderDetail({ orderNo }: { orderNo: string }) {
   const query = useOperatorOrder(orderNo)
   const order = query.data
@@ -460,6 +788,7 @@ function OrderDetail({ orderNo }: { orderNo: string }) {
             { label: 'Người nhận', value: order.recipientName },
           ]} />
           <div className="op-grid">
+            <OperatorReturnReviewPanel order={order} />
             <OperatorComplaintBox orderNo={order.orderNo} />
             <OpPanel className="op-span-6" title="Dòng hàng" subtitle={order.shippingAddress}>
               {order.lines.map((line) => (

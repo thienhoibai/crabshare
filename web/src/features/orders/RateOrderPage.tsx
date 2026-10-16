@@ -39,6 +39,8 @@ function RateOrderDetail({ code }: { code: string }) {
   const submit = useSubmitRating(code)
   const [stars, setStars] = useState(5)
   const [comment, setComment] = useState('')
+  const [itemStars, setItemStars] = useState<Record<number, number>>({})
+  const [itemComments, setItemComments] = useState<Record<number, string>>({})
 
   if (orderQuery.isPending || ratingQuery.isPending) {
     return <p role="status" className="rd-muted">Đang tải đơn…</p>
@@ -66,11 +68,28 @@ function RateOrderDetail({ code }: { code: string }) {
 
   const order = orderQuery.data
   const ratingView = ratingQuery.data
+  const isMultiLine = order.lines.length > 1
+
+  const getLineStars = (listingId: number) => itemStars[listingId] ?? 5
+  const getLineComment = (listingId: number) => itemComments[listingId] ?? ''
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (submit.isPending) return
-    submit.mutate({ stars, comment })
+    if (isMultiLine) {
+      const items = order.lines.map((l) => {
+        const raw = getLineComment(l.listingId).trim()
+        return {
+          listingId: l.listingId,
+          stars: getLineStars(l.listingId),
+          comment: raw === '' ? null : raw,
+        }
+      })
+      const avg = Math.round(items.reduce((s, i) => s + i.stars, 0) / items.length)
+      submit.mutate({ stars: avg, comment: '', items })
+    } else {
+      submit.mutate({ stars, comment })
+    }
   }
 
   return (
@@ -96,36 +115,95 @@ function RateOrderDetail({ code }: { code: string }) {
       {ratingView.rating ? (
         <section className="rv-done" role="status">
           <p className="rv-done__title">Bạn đã đánh giá {ratingView.rating.stars} sao</p>
-          {ratingView.rating.comment && <p className="rv-done__comment">{ratingView.rating.comment}</p>}
+          {ratingView.rating.items && ratingView.rating.items.length > 1 ? (
+            <ul className="rv-done__items">
+              {ratingView.rating.items.map((item) => (
+                <li key={item.listingId} className="rv-done__item">
+                  <div className="rv-done__item-head">
+                    <strong>{item.title}</strong>
+                    <span className="rv-done__badge">{'★'.repeat(item.stars)} ({item.stars}/5 sao)</span>
+                  </div>
+                  {item.comment && <p className="rv-done__comment">{item.comment}</p>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            ratingView.rating.comment && <p className="rv-done__comment">{ratingView.rating.comment}</p>
+          )}
           <p className="rd-muted">{formatDateTime(ratingView.rating.createdAt)}</p>
         </section>
       ) : ratingView.canRate ? (
         <form className="rv-form" onSubmit={onSubmit}>
-          <div className="rv-stars" role="group" aria-label="Chọn số sao">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <button
-                key={n}
-                type="button"
-                aria-label={`${n} sao`}
-                aria-pressed={stars === n}
-                className={`rv-star ${n <= stars ? 'is-on' : ''}`}
-                onClick={() => setStars(n)}
-              >
-                <Star size={22} />
-                <span>{n}</span>
-              </button>
-            ))}
-          </div>
-          <label className="rv-field">
-            <span>Nhận xét (tuỳ chọn, tối đa 500 ký tự)</span>
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              maxLength={500}
-              rows={4}
-              placeholder="Chia sẻ trải nghiệm về chất lượng cua và quy cách đóng gói…"
-            />
-          </label>
+          {isMultiLine ? (
+            <div className="rv-items">
+              <p className="rd-muted">Đơn có {order.lines.length} loại cua. Hãy chấm sao và nhận xét riêng cho từng loại để điểm đánh giá khách quan nhất:</p>
+              {order.lines.map((line) => {
+                const currentStars = getLineStars(line.listingId)
+                const currentComment = getLineComment(line.listingId)
+                return (
+                  <div key={line.listingId} className="rv-item-box">
+                    <div className="rv-item-box__head">
+                      <strong>{line.title}</strong>
+                      <small>{line.gradeName} · {formatKg(line.quantityKg)} kg</small>
+                    </div>
+                    <div className="rv-stars" role="group" aria-label={`Chọn số sao cho ${line.title}`}>
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          aria-label={`${line.title}: ${n} sao`}
+                          aria-pressed={currentStars === n}
+                          className={`rv-star ${n <= currentStars ? 'is-on' : ''}`}
+                          onClick={() => setItemStars((prev) => ({ ...prev, [line.listingId]: n }))}
+                        >
+                          <Star size={20} />
+                          <span>{n}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <label className="rv-field">
+                      <span>Nhận xét cho {line.title} (tuỳ chọn, tối đa 180 ký tự)</span>
+                      <textarea
+                        value={currentComment}
+                        onChange={(e) => setItemComments((prev) => ({ ...prev, [line.listingId]: e.target.value }))}
+                        maxLength={180}
+                        rows={2}
+                        placeholder={`Nhận xét riêng về ${line.title}…`}
+                      />
+                    </label>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <>
+              <div className="rv-stars" role="group" aria-label="Chọn số sao">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    aria-label={`${n} sao`}
+                    aria-pressed={stars === n}
+                    className={`rv-star ${n <= stars ? 'is-on' : ''}`}
+                    onClick={() => setStars(n)}
+                  >
+                    <Star size={22} />
+                    <span>{n}</span>
+                  </button>
+                ))}
+              </div>
+              <label className="rv-field">
+                <span>Nhận xét (tuỳ chọn, tối đa 500 ký tự)</span>
+                <textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  maxLength={500}
+                  rows={4}
+                  placeholder="Chia sẻ trải nghiệm về chất lượng cua và quy cách đóng gói…"
+                />
+              </label>
+            </>
+          )}
           {submit.isError && <p className="co-error" role="alert">{errorMessage(submit.error)}</p>}
           <div className="rv-actions">
             <button type="submit" className="rd-btn rd-btn--primary" disabled={submit.isPending}>

@@ -464,4 +464,113 @@ public class OrderRatingReturnDatabaseTests(OrderDatabaseFixture fixture) : ICla
         Assert.Equal(1, ratedItem.RatingCount);
         Assert.Equal(4m, ratedItem.AverageStars);
     }
+
+    [Fact]
+    public async Task Yeu_cau_tra_hang_co_bang_chung_va_Operator_phe_duyet()
+    {
+        var ctx = await DeliverAsync();
+        using var customer = fixture.Client(ctx.CustomerId);
+        using var op = fixture.OperatorClient(ctx.OperatorUserId, ctx.OperatorId);
+
+        // 1. Gửi yêu cầu trả hàng thiếu bằng chứng -> 422
+        using var missingEvidence = await customer.PostAsJsonAsync($"/api/orders/{ctx.OrderNo}/return", new
+        {
+            reason = "Cua chết khi mở thùng nhận hàng",
+            requireApproval = true,
+        });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, missingEvidence.StatusCode);
+        Assert.Equal("order.return_evidence_required", await ErrorCode(missingEvidence));
+
+        // 2. Gửi yêu cầu trả hàng có bằng chứng -> Pending
+        using var reqRes = await customer.PostAsJsonAsync($"/api/orders/{ctx.OrderNo}/return", new
+        {
+            reason = "Cua chết khi mở thùng nhận hàng",
+            evidenceUri = "https://example.com/unboxing-video.mp4",
+            requireApproval = true,
+        });
+        Assert.Equal(HttpStatusCode.OK, reqRes.StatusCode);
+        var reqBody = await reqRes.Content.ReadFromJsonAsync<ReturnOrderResponse>();
+        Assert.NotNull(reqBody);
+        Assert.Equal("ReturnRequested", reqBody.Status);
+        Assert.Equal("Pending", reqBody.ReturnRequest?.Status);
+
+        // 3. Operator từ chối yêu cầu trả hàng -> Rejected
+        using var rejectRes = await op.PostAsJsonAsync($"/api/orders/{ctx.OrderNo}/return/reject", new
+        {
+            reason = "Video chưa quay rõ mã tem QR trên càng cua",
+            evidenceUri = "https://example.com/packing-photo.jpg",
+        });
+        Assert.Equal(HttpStatusCode.OK, rejectRes.StatusCode);
+        var opDetailAfterReject = await rejectRes.Content.ReadFromJsonAsync<OperatorOrderDetailResponse>();
+        Assert.NotNull(opDetailAfterReject);
+        Assert.Equal("Rejected", opDetailAfterReject.ReturnRequest?.Status);
+
+        // 4. Khách xem lại đơn thấy lý do từ chối và được phép gửi lại (CanReturn = true)
+        var trackAfterReject = await customer.GetFromJsonAsync<OrderTrackingResponse>($"/api/orders/{ctx.OrderNo}");
+        Assert.NotNull(trackAfterReject);
+        Assert.True(trackAfterReject.CanReturn);
+        Assert.Equal("Rejected", trackAfterReject.ReturnRequest?.Status);
+        Assert.Equal("Video chưa quay rõ mã tem QR trên càng cua", trackAfterReject.ReturnRequest?.OperatorNote);
+
+        // 5. Khách gửi lại yêu cầu bổ sung bằng chứng -> Pending
+        using var resubmitRes = await customer.PostAsJsonAsync($"/api/orders/{ctx.OrderNo}/return", new
+        {
+            reason = "Đã quay rõ mã tem QR trên càng cua bị chết",
+            evidenceUri = "https://example.com/clear-qr-video.mp4",
+            requireApproval = true,
+        });
+        resubmitRes.EnsureSuccessStatusCode();
+
+        // 6. Operator duyệt chấp nhận trả hàng -> Returned + tạo lệnh hoàn tiền
+        using var approveRes = await op.PostAsJsonAsync($"/api/orders/{ctx.OrderNo}/return/approve", new
+        {
+            note = "Đã xác minh đúng mã tem QR, đồng ý hoàn tiền cho khách.",
+        });
+        Assert.Equal(HttpStatusCode.OK, approveRes.StatusCode);
+        var opDetailAfterApprove = await approveRes.Content.ReadFromJsonAsync<OperatorOrderDetailResponse>();
+        Assert.NotNull(opDetailAfterApprove);
+        Assert.Equal("Returned", opDetailAfterApprove.Status);
+        Assert.Equal("Approved", opDetailAfterApprove.ReturnRequest?.Status);
+        Assert.True(opDetailAfterApprove.RefundAmount > 0);
+    }
+
+    [Fact]
+    public async Task Operator_xem_duoc_thong_ke_counts_va_loc_theo_cac_trang_thai()
+    {
+        var ctx = await DeliverAsync();
+        using var customer = fixture.Client(ctx.CustomerId);
+        using var op = fixture.OperatorClient(ctx.OperatorUserId, ctx.OperatorId);
+
+        // Ban đầu chưa có yêu cầu trả hàng
+        var countsBefore = await op.GetFromJsonAsync<OperatorOrderCountsResponse>("/api/operators/me/orders/counts");
+        Assert.NotNull(countsBefore);
+        Assert.True(countsBefore.All >= 1);
+        Assert.Equal(0, countsBefore.ReturnRequested);
+        Assert.True(countsBefore.Delivered >= 1);
+
+        // Khách gửi yêu cầu trả hàng
+        using var returnRes = await customer.PostAsJsonAsync($"/api/orders/{ctx.OrderNo}/return", new
+        {
+            reason = "Cua chết khi giao",
+            evidenceUri = "https://example.com/dead.jpg",
+            requireApproval = true,
+        });
+        returnRes.EnsureSuccessStatusCode();
+
+        // Kiểm tra counts sau khi gửi yêu cầu trả hàng
+        var countsAfter = await op.GetFromJsonAsync<OperatorOrderCountsResponse>("/api/operators/me/orders/counts");
+        Assert.NotNull(countsAfter);
+        Assert.Equal(1, countsAfter.ReturnRequested);
+
+        // Operator lọc danh sách với status = All
+        var allList = await op.GetFromJsonAsync<List<OperatorOrderSummaryResponse>>("/api/operators/me/orders?status=All");
+        Assert.NotNull(allList);
+        Assert.Contains(allList, o => o.OrderNo == ctx.OrderNo);
+
+        // Operator lọc danh sách với status = ReturnRequested
+        var returnReqList = await op.GetFromJsonAsync<List<OperatorOrderSummaryResponse>>("/api/operators/me/orders?status=ReturnRequested");
+        Assert.NotNull(returnReqList);
+        var pendingOrder = Assert.Single(returnReqList, o => o.OrderNo == ctx.OrderNo);
+        Assert.Equal("Pending", pendingOrder.ReturnRequest?.Status);
+    }
 }

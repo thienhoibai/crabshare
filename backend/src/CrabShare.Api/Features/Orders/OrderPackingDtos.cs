@@ -53,7 +53,8 @@ public sealed record OperatorOrderSummaryResponse(
     string CustomerName,
     int LineCount,
     decimal TotalKg,
-    long TotalAmount);
+    long TotalAmount,
+    ReturnRequestInfo? ReturnRequest = null);
 
 /// <summary>Một con cua đã gán vào dòng đơn.</summary>
 public sealed record PackedTagResponse(string TagCode, int WeightG, string GradeCode);
@@ -85,4 +86,19 @@ public sealed record OperatorOrderDetailResponse(
     long TotalAmount,
     decimal TotalKg,
     IReadOnlyList<OperatorOrderLineResponse> Lines,
-    OrderShipmentResponse? Shipment = null);
+    OrderShipmentResponse? Shipment = null,
+    string? ReturnReason = null,
+    long? RefundAmount = null,
+    ReturnRequestInfo? ReturnRequest = null);
+
+/// <summary>Thống kê số lượng đơn theo các trạng thái phục vụ thanh bộ lọc dạng ô/thẻ của Hộ nuôi.</summary>
+public sealed record OperatorOrderCountsResponse(
+    int All,
+    int ReturnRequested,
+    int Paid,
+    int Packed,
+    int Shipping,
+    int Delivered,
+    int Returned,
+    int Completed);
+

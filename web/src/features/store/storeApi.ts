@@ -37,6 +37,15 @@ export interface PublicPriceRevision {
   flaggedAbnormal: boolean
 }
 
+export interface ListingReview {
+  ratingId: number
+  orderNo: string
+  buyerName: string
+  stars: number
+  comment: string | null
+  createdAt: string
+}
+
 export interface StoreListingDetail {
   listing: StoreListing
   batchTitle: string
@@ -44,6 +53,7 @@ export interface StoreListingDetail {
   sellUntil: string | null
   traceTagCode: string | null
   priceHistory: PublicPriceRevision[]
+  reviews?: ListingReview[]
 }
 
 export interface Paged<T> {

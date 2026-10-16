@@ -85,6 +85,32 @@
 .ot-receive { display: grid; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .ot-receive .rd-note { display: flex; gap: 8px; align-items: flex-start; }
 
-.ot-return { margin-top: 1rem; display: grid; gap: 0.5rem; }
-.ot-return textarea { width: 100%; }
-.ot-return__actions { display: flex; gap: 0.5rem; }
+.ot-return { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+.ot-return form.ot-return { margin-top: 0; padding-top: 0; border-top: 0; }
+.ot-return label { display: grid; gap: 6px; font-weight: 600; font-size: 14px; }
+.ot-return textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--line, #d1d5db);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--fg, #111);
+  font: inherit;
+  font-weight: 400;
+  resize: vertical;
+}
+.ot-return textarea:focus {
+  outline: 2px solid var(--accent, #8b5023);
+  border-color: var(--accent, #8b5023);
+}
+.ot-return__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ot-return__chip {
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line, #d1d5db);
+  background: var(--surface-2, #fdf8f3);
+  font-size: 12px;
+  cursor: pointer;
+}
+.ot-return__chip:hover { border-color: var(--accent, #8b5023); }
+.ot-return__actions { display: flex; gap: 8px; align-items: center; }
