@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import OperatorLayout from './OperatorLayout'
@@ -83,6 +83,9 @@ export default function OperatorFarmMap() {
   const boxes = useQuery({ queryKey: ['boxes', userId, status, search.trim(), page], queryFn: ({ signal }) => listBoxes(status, search, page, signal), retry: false })
   const canManage = application.data?.memberRole === 'Owner' && application.data.status === 'Approved'
   const totalPages = Math.max(1, Math.ceil((boxes.data?.total ?? 0) / 50))
+  useEffect(() => {
+    if (boxes.isSuccess && !boxes.isFetching && page > totalPages) setPage(totalPages)
+  }, [boxes.isSuccess, boxes.isFetching, page, totalPages])
   function refresh() { void qc.invalidateQueries({ queryKey: ['boxes', userId] }) }
   return <OperatorLayout activeTab="boxes">
     <OpHeading eyebrow="Vận hành" title="Hộp nuôi" description="Đánh số hộp theo nhãn tại trại. Dãy, kệ, tầng và cột là thông tin tuỳ chọn." action={canManage && <><OpBtn variant="ghost" onClick={() => setMode('single')}>Thêm hộp</OpBtn><OpBtn onClick={() => setMode('range')}>Tạo hàng loạt</OpBtn></>} />

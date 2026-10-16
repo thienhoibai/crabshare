@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Features.Auth;
 using CrabShare.Api.Infrastructure.Persistence.Entities;
@@ -260,6 +261,49 @@ public class OperatorReviewTests(OperatorDatabaseFixture fixture) : IClassFixtur
         {
             throw new InvalidOperationException("VI02 test: fail before transaction commit");
         }
+    }
+
+    [Fact]
+    public async Task Shared_audit_writer_failure_rolls_back_operator_and_audit_together()
+    {
+        var (owner, _) = await UserAsync();
+        var id = await OperatorAsync(owner);
+        var (_, adminAuth) = await UserAsync(Roles.PlatformAdmin);
+        await using var failing = fixture.Factory.WithWebHostBuilder(b => b.ConfigureServices(services =>
+            services.AddScoped<IAuditLog, FailAfterAuditWrite>()));
+        using var client = failing.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminAuth.AccessToken);
+
+        Assert.Equal(HttpStatusCode.InternalServerError,
+            (await client.PostAsJsonAsync($"/api/admin/operators/{id}/approve", new { approvedSlotCapacity = 100 })).StatusCode);
+
+        await using var db = fixture.OpenDb();
+        var op = (await db.Operators.FindAsync(id))!;
+        Assert.Equal("Submitted", op.Status);
+        Assert.Equal(0, op.ApprovedSlotCapacity);
+        Assert.Null(op.ApprovedAt);
+        Assert.Null(op.ApprovedBy);
+        Assert.False(await db.AuditLogs.AnyAsync(a => a.EntityType == "operator" && a.EntityId == id));
+    }
+
+    private sealed class FailAfterAuditWrite(AppDbContext db, ICurrentUser me, TimeProvider clock) : IAuditLog
+    {
+        private readonly AuditLogService inner = new(db, me, clock);
+
+        public Task LockAsync(CancellationToken ct) => inner.LockAsync(ct);
+
+        public Task WriteAsync(string entityType, long entityId, string action, object? oldValue, object? newValue, CancellationToken ct)
+            => WriteAsync(entityType, entityId, action, oldValue, newValue, clock.GetUtcNow(), ct);
+
+        public async Task WriteAsync(string entityType, long entityId, string action, object? oldValue, object? newValue,
+            DateTimeOffset occurredAt, CancellationToken ct)
+        {
+            await inner.WriteAsync(entityType, entityId, action, oldValue, newValue, occurredAt, ct);
+            throw new InvalidOperationException("VI02 test: shared audit writer failed after saving");
+        }
+
+        public Task<AuditChainResult> VerifyChainAsync(long? fromAuditId, long? toAuditId, CancellationToken ct)
+            => inner.VerifyChainAsync(fromAuditId, toAuditId, ct);
     }
 
     [Fact]

@@ -64,5 +64,5 @@ Gán hộp cho lô (`POST /api/batches/{code}/allocations`) thuộc Production, 
 
 ### Phạm vi và bàn giao KH-07
 - Playwright kiểm tra UI với API giả lập; chưa chạy trình duyệt nối API/DB thật xuyên suốt, tải production hoặc mô phỏng mất kết nối giữa bulk insert và commit. Test trùng dải kiểm tra không ghi một phần khi phát hiện mã trùng, chưa mô phỏng lỗi SQL ở giữa bulk insert.
-- Mobile hiện dùng `MockOperatorRepository` trong `mobile/lib/features/operator/data/operator_repository.dart`, chưa tích hợp GET thật. KH-07 cần đọc kết quả phân trang (mặc định 20, tối đa 100 hộp mỗi trang) và ánh xạ trạng thái.
-- Màn chụp bằng chứng yêu cầu `box.batchCode`, còn `BoxResponse` chỉ trả mã hộp, trạng thái và vị trí. KH-07 cần thống nhất nguồn lấy batch đang gán hộp trước khi thay dữ liệu giả bằng GET `/api/boxes`.
+- Màn Chụp bằng chứng hiện dùng `ApiEvidenceRepository` trong `mobile/lib/features/operator/evidence/evidence_repository.dart`, gọi GET thật với `status=Occupied`, `pageSize=100` và đọc các trang đến khi đủ `total` hoặc hết kết quả.
+- `BoxResponse` đã trả `batchCode` của lượt gán đang mở và `latestEvidence`. Mobile ánh xạ hai trường này, chỉ cho chọn hộp `Occupied` có `batchCode`; phụ thuộc dữ liệu hộp cho KH-07 đã được triển khai. Việc nối mobile với API/DB thật xuyên suốt cần được xác minh riêng.

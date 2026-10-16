@@ -39,7 +39,7 @@ public sealed class BatchService(AppDbContext db, IAuditLog audit)
 - `oldValue` / `newValue`: object (tự thành JSON camelCase) hoặc chuỗi JSON có sẵn. Người làm lấy từ token; job nền để trống.
 - Ghi ngoài transaction → `InvalidOperationException`. Cần các thao tác đồng thời chạy lần lượt từ đầu (hai admin cùng duyệt một hồ sơ) → gọi `await audit.LockAsync(ct)` ngay đầu transaction.
 - Kiểm tra chuỗi: `await audit.VerifyChainAsync(fromId, toId, ct)` → `IsValid`, `BrokenAuditId`, `Problem` (dùng cho UC43 xuất nhật ký). Job `AuditChainCheckJob` tự kiểm tra cả bảng mỗi 6 giờ, gãy thì log Critical.
-- Giao thức băm/khoá chỉ có ở `Common/Auditing/AuditChain.cs`: khoá `TABLOCKX, HOLDLOCK`, `row_hash = SHA-256(prev_hash + JSON {entityType, entityId, actionType, oldValue, newValue, actorUserId, occurredAt})`. Các writer của Accounts và Operators đang ghi trực tiếp theo đúng giao thức này nên chung một chuỗi; code mới dùng `IAuditLog`, không tự viết công thức khác.
+- Giao thức băm/khoá chỉ có ở `Common/Auditing/AuditChain.cs`: khoá `TABLOCKX, HOLDLOCK`, `row_hash = SHA-256(prev_hash + JSON {entityType, entityId, actionType, oldValue, newValue, actorUserId, occurredAt})`. Writer của Accounts ghi theo cùng giao thức; Operators đã dùng `IAuditLog` để ghi vào chung chuỗi. Code mới dùng `IAuditLog`, không tự viết công thức khác.
 
 ## Job nền (TH-02)
 Kế thừa `Common/Jobs/RecurringJob`: đặt `Interval`, viết `RunAsync(services, ct)` (lấy `AppDbContext`, `IAuditLog`... từ `services`), đăng ký `services.AddHostedService<TênJob>()`. Mỗi lần chạy có scope riêng, lỗi chỉ ghi log rồi chờ chu kỳ sau; lần chạy đầu là sau một chu kỳ. Tắt mọi job: `Jobs:Enabled = false`. Mẫu: `Common/Auditing/AuditChainCheckJob.cs`.
