@@ -1,13 +1,13 @@
 # CS-88 — Authorization and sensitive data
 
-Payout account numbers are encrypted through an EF value converter using ASP.NET Data Protection (`dp:v1:`). The generated context/entities remain untouched. V011 replaces the plaintext unique index with a keyed HMAC lookup index, preserving duplicate detection across owners and leading zeroes. Public batch collection/VietQR account numbers are separate fields and remain usable.
+Payout account numbers are encrypted through an EF value converter using ASP.NET Data Protection (`dp:v1:`). The generated context/entities remain untouched. V012 replaces the plaintext unique index with a keyed HMAC lookup index, preserving duplicate detection across owners and leading zeroes. Public batch collection/VietQR account numbers are separate fields and remain usable.
 
 ## Deployment and recovery
 
-- Apply V011 and the matching API during a maintenance window; stop the old API first. Never run an old API against upgraded account rows. CS-80 prepares this deployment sequence.
+- Apply V012 and the matching API during a maintenance window; stop the old API first. Never run an old API against upgraded account rows. CS-80 prepares this deployment sequence.
 - Persist the entire private key directory, including `payout-lookup-key.protected`. Configure `Security__DataProtectionKeyPath`; App Service defaults to `/home/data/keys`. Keep it outside uploads/webroot, restrict filesystem access and back up with the database. Linux directory permissions are owner-only. These files are secrets; do not commit/upload them as build artifacts.
 - The production startup upgrade encrypts legacy numbers without changing IDs, owner, status, timestamps or audit history. It checks all protected rows/digests in bounded chunks before serving. Missing/wrong keys or corruption stop startup. Restore the original key-directory backup; never generate replacement keys to recover existing records.
-- Local Development: after applying V011 set `Security__UpgradeLegacyPayouts=true` for the upgrade. Seeding also upgrades before reading existing rows. This is skipped by validation-only test hosts without a database.
+- Local Development: after applying V012 set `Security__UpgradeLegacyPayouts=true` for the upgrade. Seeding also upgrades before reading existing rows. This is skipped by validation-only test hosts without a database.
 - Existing backups may still contain historical plaintext; handle them as sensitive backups. Encryption does not erase prior backups or protect a server compromised together with its private key directory. No image identity/selfie storage was introduced.
 
 ## Request security
