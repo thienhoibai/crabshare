@@ -42,6 +42,7 @@ const OperatorMembers = lazy(() => import('../features/operator/OperatorMembers'
 const OperatorOrders = lazy(() => import('../features/operator/OperatorOrders'))
 
 const AdminDashboard = lazy(() => import('../features/admin/AdminDashboard'))
+const AdminAuditLog = lazy(() => import('../features/admin/AdminAuditLog'))
 const AdminUsers = lazy(() => import('../features/admin/AdminUsers'))
 const AdminUserDetail = lazy(() => import('../features/admin/AdminUserDetail'))
 const AdminBatches = lazy(() => import('../features/admin/AdminBatches'))
@@ -143,6 +144,7 @@ export const router = createBrowserRouter([
         element: guarded(['PlatformAdmin', 'EvidenceReviewer']),
         children: [
           { path: '/admin', element: page(AdminDashboard) },
+          { path: '/admin/audit-log', element: page(AdminAuditLog) },
           { path: '/admin/evidence', element: <RequireRole roles={['EvidenceReviewer']}>{page(AdminEvidence)}</RequireRole> },
           { path: '/admin/evidence/:id', element: <RequireRole roles={['EvidenceReviewer']}>{page(AdminEvidenceDetail)}</RequireRole> },
           { path: '/admin/users', element: <RequireRole roles={['PlatformAdmin']}>{page(AdminUsers)}</RequireRole> },

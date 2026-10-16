@@ -23,7 +23,7 @@ using CrabShare.Api.Features.Accounts;
 using CrabShare.Api.Features.Evidence;
 using CrabShare.Api.Features.Alerts;
 using CrabShare.Api.Features.Portfolio;
-// using CrabShare.Api.Features.Admin;
+using CrabShare.Api.Features.Admin;
 
 namespace CrabShare.Api.Common;
 
@@ -103,7 +103,7 @@ public static class FeatureRegistry
         services.AddScoped<AlertJob>();              // CS-40
         services.AddScoped<PortfolioService>();     // CS-61
         services.AddScoped<NotificationService>();  // CS-65
-        // services.AddScoped<AdminService>();        // Features/Admin
+        services.AddScoped<AuditLogQueryService>(); // CS-76
 
         return services;
     }
