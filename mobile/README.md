@@ -1,5 +1,9 @@
 # Mobile — Flutter
 
+CS-69 / KH-13: đã bổ sung skeleton, lỗi/mất mạng, kéo tải lại và kiểm tra màn nhỏ.
+Xem [bảng API/mock và kết quả kiểm thử](../docs/validation/CS-69-mobile-midterm.md).
+Nhật ký, thu hoạch và truy xuất hiện vẫn là minh hoạ, có nhãn ngay trên màn hình.
+
 CS-42 / UC09: Khám phá lô và chi tiết dùng `GET /api/batches` và
 `GET /api/batches/{code}` qua client có JWT. Lọc `status`, `crabType`, phân trang
 `page` (bắt đầu từ 1), `pageSize=20` trên máy chủ. Chỉ hiển thị bộ lọc các trạng
@@ -121,8 +125,21 @@ adb -s <device-id> install -r build/app/outputs/flutter-apk/app-debug.apk
 ```
 
 Bản LAN dùng `--dart-define=API_URL=http://<IP-LAN>:5233` lúc build. Bản debug
-cho phép HTTP tới API dev; bản release cần API HTTPS. `INTERNET` được khai báo
+cho phép HTTP tới API dev; bản release cần API HTTPS, ngoại trừ địa chỉ
+loopback `localhost`, `127.0.0.1`, `10.0.2.2` để thử qua USB/máy ảo. `INTERNET` được khai báo
 trong manifest chính để bản release cũng kết nối mạng được.
+
+### Build APK release để thử qua USB
+
+```powershell
+flutter build apk --release --dart-define=API_URL=http://localhost:5233 --dart-define=WEB_URL=http://localhost:5173
+adb -s <device-id> reverse tcp:5233 tcp:5233
+adb -s <device-id> reverse tcp:5173 tcp:5173
+adb -s <device-id> install -r build/app/outputs/flutter-apk/app-release.apk
+```
+
+Bản này chạy chế độ release và dùng khoá debug hiện có để cài thử. Khi phát hành
+cần khoá ký riêng và API/web HTTPS; bản HTTP LAN chỉ dùng trong debug.
 
 ## Font, icon và quyền thiết bị
 
@@ -138,15 +155,13 @@ trong manifest chính để bản release cũng kết nối mạng được.
   camera, thư viện ảnh và vị trí khi sử dụng.
 - `image_picker` xin quyền camera khi người dùng bấm **Chụp**; ảnh bằng chứng dùng
   `ImageSource.camera`. Không xin quyền khi khởi động app.
-- `mobile_scanner` và `geolocator` đã được thêm để các task quét tem/bằng chứng
-  triển khai tiếp. Khi dùng vị trí: kiểm tra dịch vụ vị trí, kiểm tra quyền rồi
-  gọi `Geolocator.requestPermission()` nếu bị từ chối; chỉ lấy vị trí lúc người
-  dùng chụp bằng chứng. Tích hợp QR thật và GPS/upload là các task nghiệp vụ sau.
+- Chụp bằng chứng đã dùng GPS và upload thật. Camera quét tem đóng gói đã dùng
+  `mobile_scanner`; riêng khung quét truy xuất công khai vẫn là minh hoạ và nhập mã thủ công.
 
 | Lệnh | Việc |
 |---|---|
 | `flutter analyze` | kiểm tra code (CI chạy) |
-| `flutter test` | unit test + dựng thử **mọi màn** ở khổ 360×780 (CI chạy) |
+| `flutter test` | unit test + 24 màn ở 360×780 và 320×568/chữ lớn, cuộn và mất mạng (CI chạy) |
 | `flutter build apk` | ra file APK để cài thử |
 | `flutter build web --pwa-strategy=none` | bản web để xem trên trình duyệt |
 
@@ -175,15 +190,15 @@ lib/
 | Màn | File | Người làm (đổi sang API) |
 |---|---|---|
 | Chào, Đăng nhập | `onboarding/`, `auth/` | xong (đăng nhập đã gọi API thật) |
-| NĐT · Tổng quan, Thông báo | `investor/home/`, `investor/notifications/` | Khôi |
-| NĐT · Khám phá lô, Chi tiết lô | `investor/batches/` | Viên (dữ liệu lô), Thiện (nút Góp vốn) |
+| NĐT · Tổng quan, Thông báo | `investor/home/`, `investor/notifications/` | Khôi — API thật (CS-61/65) |
+| NĐT · Khám phá lô, Chi tiết lô | `investor/batches/` | API thật; Góp vốn mở web |
 | NĐT · eKYC | `investor/kyc/` | Khôi — đã nối API (CS-27) |
-| Hộ nuôi · Hôm nay, Nhật ký | `operator/today/`, `operator/logs/` | Viên |
+| Hộ nuôi · Hôm nay, Nhật ký | `operator/today/`, `operator/logs/` | Gauge/lô/nhật ký còn mock; yêu cầu chụp dùng API |
 | Hộ nuôi · Chụp bằng chứng | `operator/evidence/` | Khôi — đã nối API (CS-44) |
-| Hộ nuôi · Cảnh báo | `operator/alerts/` | Khôi |
-| Hộ nuôi · Thu hoạch & in tem | `operator/harvest/` | Viên |
-| Quét tem, Truy xuất | `trace/` | Viên |
-| Hộ nuôi · Đóng gói đơn (quét tem) | *chưa có — tạo mới* | Nhân |
+| Hộ nuôi · Cảnh báo | `operator/alerts/` | Khôi — API thật (CS-54/57) |
+| Hộ nuôi · Thu hoạch & in tem | `operator/harvest/` | Minh hoạ; chưa in hoặc kích hoạt tem thật |
+| Quét tem, Truy xuất | `trace/` | Minh hoạ; chưa nối QR/API truy xuất |
+| Hộ nuôi · Đóng gói / giao hàng | `operator/packing/` | API thật và camera quét QR |
 | Tài khoản | `account/` | Khôi |
 
 ## Đổi dữ liệu mẫu sang API (việc chính của từng task)
@@ -216,24 +231,10 @@ trên web rồi dùng tài khoản đó trên app. Provider backend hiện là s
 Test `test/kyc_test.dart` kiểm tra multipart, consent, camera từ chối quyền,
 đổi tài khoản và kết quả Verified; camera trong widget test được thay bằng ảnh mẫu.
 
-Mỗi tính năng có **interface repository** + **bản Mock**. Ví dụ nhật ký nuôi:
-
-```dart
-// features/operator/data/operator_repository.dart
-class ApiOperatorRepository extends MockOperatorRepository {
-  ApiOperatorRepository(this._dio);
-  final Dio _dio;
-
-  @override
-  Future<void> submitLog(DailyLogInput input) =>
-      _dio.post('/api/batches/${input.batchCode}/production-logs', data: input.toJson());
-}
-
-// đổi đúng một dòng:
-final operatorRepositoryProvider = Provider<OperatorRepository>((ref) => ApiOperatorRepository(ref.watch(dioProvider)));
-```
-
-`extends MockOperatorRepository` để các hàm **chưa có API** vẫn chạy bằng dữ liệu mẫu; làm xong hàm nào thì `override` hàm đó.
+Các tính năng chưa nối API giữ repository minh hoạ và nhãn rõ trên màn hình.
+Khi tích hợp tiếp, thay repository bằng API và bỏ nhãn khi toàn bộ thao tác đã
+lưu/đọc thật. API lỗi phải hiện lỗi và thử lại; không thay bằng dữ liệu mock.
+Mock đơn hàng chỉ dùng trong test. Chi tiết các phần còn lại nằm trong bảng CS-69.
 
 ## Quy tắc
 - Import Material bằng `package:material_ui/material_ui.dart` (Flutter 3.44+ đã tách Material khỏi SDK). **Không** dùng `package:flutter/material.dart` — trộn hai cái sẽ lỗi kiểu `ThemeData`/`TextTheme`.

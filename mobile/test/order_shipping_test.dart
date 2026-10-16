@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:crabshare_mobile/app/theme/app_theme.dart';
+import 'package:crabshare_mobile/shared/widgets/app_ui.dart';
 import 'package:crabshare_mobile/features/operator/data/operator_orders_repository.dart';
 import 'package:crabshare_mobile/features/operator/data/packing_models.dart';
 import 'package:crabshare_mobile/features/operator/packing/pack_order_page.dart';
@@ -118,6 +119,13 @@ Future<void> _pumpPage(
       ),
     ),
   );
+  for (
+    var attempt = 0;
+    attempt < 20 && find.byType(LoadingSkeleton).evaluate().isNotEmpty;
+    attempt++
+  ) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
   await tester.pumpAndSettle();
 }
 
@@ -199,7 +207,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.shipCalls, 1);
       expect(find.text('Tài xế: 0901234567'), findsOneWidget);
-      ScaffoldMessenger.of(tester.element(find.byType(PackOrderPage))).clearSnackBars();
+      ScaffoldMessenger.of(tester.element(find.byType(PackOrderPage)))
+          .clearSnackBars();
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Đã giao tới khách'));
       await tester.tap(find.text('Đã giao tới khách'));

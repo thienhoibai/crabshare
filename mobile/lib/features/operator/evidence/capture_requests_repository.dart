@@ -46,4 +46,4 @@ final captureRequestsProvider =
       return ref
           .watch(captureRequestsRepositoryProvider)
           .list(cancelToken: cancel);
-    });
+    }, retry: (_, _) => null);

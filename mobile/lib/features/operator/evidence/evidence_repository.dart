@@ -187,4 +187,4 @@ final captureBoxesProvider = FutureProvider.autoDispose<List<BoxSlot>>((ref) {
   final cancel = CancelToken();
   ref.onDispose(() => cancel.cancel());
   return ref.watch(evidenceRepositoryProvider).boxes(cancelToken: cancel);
-});
+}, retry: (_, _) => null);

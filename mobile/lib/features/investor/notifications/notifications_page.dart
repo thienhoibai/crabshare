@@ -34,7 +34,7 @@ class NotificationsPage extends ConsumerWidget {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: RefreshIndicator(
+        child: AppRefreshIndicator(
           onRefresh: () => ref.refresh(investorNotificationsProvider.future),
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -91,9 +91,7 @@ class NotificationsPage extends ConsumerWidget {
                 ),
               const SizedBox(height: 6),
               ...items.when(
-                loading: () => [
-                  const Center(child: CircularProgressIndicator()),
-                ],
+                loading: () => [const LoadingSkeleton(rows: 2)],
                 error: (e, _) => [
                   ErrorView(
                     message: apiErrorMessage(e),

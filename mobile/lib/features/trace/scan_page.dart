@@ -26,7 +26,8 @@ class _ScanPageState extends State<ScanPage> {
   void _lookup() {
     final code = _code.text.trim().toUpperCase();
     if (code.length != 12) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mã tem gồm 12 ký tự.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Mã tem gồm 12 ký tự.')));
       return;
     }
     context.push(Routes.trace(code));
@@ -37,7 +38,7 @@ class _ScanPageState extends State<ScanPage> {
     return Scaffold(
       backgroundColor: AppColors.nav,
       body: SafeArea(
-        child: Column(
+        child: ListView(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
@@ -55,13 +56,20 @@ class _ScanPageState extends State<ScanPage> {
                       'Quét tem truy xuất',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            const Expanded(child: Center(child: _Viewfinder())),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: _Viewfinder()),
+            ),
             Container(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
               decoration: const BoxDecoration(
@@ -71,17 +79,27 @@ class _ScanPageState extends State<ScanPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Hoặc nhập mã trên tem', style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Nhập mã tem minh hoạ',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _code,
                     maxLength: 12,
                     textCapitalization: TextCapitalization.characters,
                     onSubmitted: (_) => _lookup(),
-                    decoration: const InputDecoration(hintText: 'VD: CSAB23CD45EF', prefixIcon: Icon(Icons.qr_code_2_rounded), counterText: ''),
+                    decoration: const InputDecoration(
+                      hintText: 'VD: CSAB23CD45EF',
+                      prefixIcon: Icon(Icons.qr_code_2_rounded),
+                      counterText: '',
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  FilledButton(onPressed: _lookup, child: const Text('Tra cứu')),
+                  FilledButton(
+                    onPressed: _lookup,
+                    child: const Text('Tra cứu'),
+                  ),
                 ],
               ),
             ),
@@ -100,8 +118,12 @@ class _Viewfinder extends StatefulWidget {
   State<_Viewfinder> createState() => _ViewfinderState();
 }
 
-class _ViewfinderState extends State<_Viewfinder> with SingleTickerProviderStateMixin {
-  late final _anim = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
+class _ViewfinderState extends State<_Viewfinder>
+    with SingleTickerProviderStateMixin {
+  late final _anim = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 2),
+  )..repeat(reverse: true);
 
   @override
   void dispose() {
@@ -134,7 +156,10 @@ class _ViewfinderState extends State<_Viewfinder> with SingleTickerProviderState
           ),
         ),
         const SizedBox(height: 18),
-        const Text('Hướng camera vào mã QR trên tem', style: TextStyle(color: Color(0xFFBDB7B1))),
+        const Text(
+          'Khung minh hoạ · Nhập mã ở bên dưới',
+          style: TextStyle(color: Color(0xFFBDB7B1)),
+        ),
       ],
     );
   }
@@ -151,7 +176,12 @@ class _CornersPainter extends CustomPainter {
     const l = 36.0;
     final w = size.width;
     final h = size.height;
-    for (final (x, y, dx, dy) in [(0.0, 0.0, 1.0, 1.0), (w, 0.0, -1.0, 1.0), (0.0, h, 1.0, -1.0), (w, h, -1.0, -1.0)]) {
+    for (final (x, y, dx, dy) in [
+      (0.0, 0.0, 1.0, 1.0),
+      (w, 0.0, -1.0, 1.0),
+      (0.0, h, 1.0, -1.0),
+      (w, h, -1.0, -1.0),
+    ]) {
       canvas.drawLine(Offset(x, y), Offset(x + l * dx, y), p);
       canvas.drawLine(Offset(x, y), Offset(x, y + l * dy), p);
     }

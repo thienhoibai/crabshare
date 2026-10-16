@@ -24,10 +24,42 @@ class BatchDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final batch = ref.watch(batchDetailProvider(code));
     return Scaffold(
-      body: batch.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => SafeArea(child: ErrorView(message: e is DioException && [403, 404].contains(e.response?.statusCode) ? 'Lô không tồn tại hoặc không còn được phép xem.' : apiErrorMessage(e), onRetry: () => ref.invalidate(batchDetailProvider(code)))),
-        data: (b) => _Body(batch: b),
+      body: AppRefreshIndicator(
+        onRefresh: () => ref.refresh(batchDetailProvider(code).future),
+        child: batch.when(
+          loading: () => SafeArea(
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [
+                Padding(
+                  padding: EdgeInsets.all(20),
+                  child: SubPageHeader(title: 'Chi tiết lô'),
+                ),
+                LoadingSkeleton(),
+              ],
+            ),
+          ),
+          error: (e, _) => SafeArea(
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(20),
+                  child: SubPageHeader(title: 'Chi tiết lô'),
+                ),
+                ErrorView(
+                  message:
+                      e is DioException &&
+                          [403, 404].contains(e.response?.statusCode)
+                      ? 'Lô không tồn tại hoặc không còn được phép xem.'
+                      : apiErrorMessage(e),
+                  onRetry: () => ref.invalidate(batchDetailProvider(code)),
+                ),
+              ],
+            ),
+          ),
+          data: (b) => _Body(batch: b),
+        ),
       ),
     );
   }
@@ -47,17 +79,30 @@ class _Body extends StatelessWidget {
     return Stack(
       children: [
         ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.zero,
           children: [
             Stack(
               children: [
-                Image.asset(b.crabType.image, height: 330, width: double.infinity, fit: BoxFit.cover),
+                Image.asset(
+                  b.crabType.image,
+                  height: 330,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
                 Positioned(
                   left: 16,
                   top: MediaQuery.paddingOf(context).top + 8,
-                  child: CircleIconButton(icon: Icons.arrow_back_rounded, onTap: () => Navigator.of(context).maybePop()),
+                  child: CircleIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    onTap: () => Navigator.of(context).maybePop(),
+                  ),
                 ),
-                Positioned(left: 16, bottom: 36, child: InfoChip(icon: Icons.circle, label: b.status.label)),
+                Positioned(
+                  left: 16,
+                  bottom: 36,
+                  child: InfoChip(icon: Icons.circle, label: b.status.label),
+                ),
               ],
             ),
             Transform.translate(
@@ -77,20 +122,54 @@ class _Body extends StatelessWidget {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        const CircleAvatar(radius: 18, backgroundImage: AssetImage(AppImages.farmer)),
+                        const CircleAvatar(
+                          radius: 18,
+                          backgroundImage: AssetImage(AppImages.farmer),
+                        ),
                         const SizedBox(width: 10),
-                        Expanded(child: Text(b.operatorName, style: text.titleMedium)),
-                        const InfoChip(icon: Icons.verified_rounded, label: 'Hộ nuôi đã duyệt', background: AppColors.accentSoft, foreground: AppColors.accentText),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(b.operatorName, style: text.titleMedium),
+                              const SizedBox(height: 6),
+                              const InfoChip(
+                                icon: Icons.verified_rounded,
+                                label: 'Hộ nuôi đã duyệt',
+                                background: AppColors.accentSoft,
+                                foreground: AppColors.accentText,
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 18),
                     Row(
                       children: [
-                        Expanded(child: _Fact(icon: Icons.set_meal_outlined, label: 'Loại cua', value: b.crabType.label)),
+                        Expanded(
+                          child: _Fact(
+                            icon: Icons.set_meal_outlined,
+                            label: 'Loại cua',
+                            value: b.crabType.label,
+                          ),
+                        ),
                         const SizedBox(width: 10),
-                        Expanded(child: _Fact(icon: Icons.timelapse_rounded, label: 'Chu kỳ', value: '${b.cycleDays} ngày')),
+                        Expanded(
+                          child: _Fact(
+                            icon: Icons.timelapse_rounded,
+                            label: 'Chu kỳ',
+                            value: '${b.cycleDays} ngày',
+                          ),
+                        ),
                         const SizedBox(width: 10),
-                        Expanded(child: _Fact(icon: Icons.grid_view_rounded, label: 'Con giống', value: formatCount(b.seedQuantity))),
+                        Expanded(
+                          child: _Fact(
+                            icon: Icons.grid_view_rounded,
+                            label: 'Con giống',
+                            value: formatCount(b.seedQuantity),
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -120,7 +199,9 @@ class _Body extends StatelessWidget {
             bottom: MediaQuery.paddingOf(context).bottom + 16,
             child: FilledButton(
               onPressed: () => _showContributeFlow(context, b),
-              child: Text('Góp vốn · tối thiểu ${formatVnd(b.minContribution)}'),
+              child: Text(
+                'Góp vốn · tối thiểu ${formatVnd(b.minContribution)}',
+              ),
             ),
           ),
       ],
@@ -133,7 +214,10 @@ class _Body extends StatelessWidget {
     const steps = [
       ('Xác nhận công bố rủi ro', 'Đọc và xác nhận bản RD hiện hành'),
       ('Chọn số tiền & giữ chỗ', 'Giữ suất trong thời hạn thanh toán'),
-      ('Ký hợp đồng điện tử', 'Ký số theo thứ tự qua dịch vụ ký Viettel (sandbox)'),
+      (
+        'Ký hợp đồng điện tử',
+        'Ký số theo thứ tự qua dịch vụ ký Viettel (sandbox)',
+      ),
       ('Thanh toán VietQR', 'Chuyển vào tài khoản chuyên dùng của lô'),
       ('Hoàn tất', 'Tiền được xác nhận khi có thông báo giao dịch'),
     ];
@@ -141,28 +225,40 @@ class _Body extends StatelessWidget {
       context: context,
       backgroundColor: AppColors.background,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Góp vốn lô ${b.code}', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                'Góp vốn lô ${b.code}',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: 12),
               for (final (i, step) in steps.indexed)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(
-                    backgroundColor: i == 0 ? AppColors.accent : AppColors.surfaceMuted,
+                    backgroundColor: i == 0
+                        ? AppColors.accent
+                        : AppColors.surfaceMuted,
                     foregroundColor: AppColors.ink,
                     child: Text('${i + 1}'),
                   ),
-                  title: Text(step.$1, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  title: Text(
+                    step.$1,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   subtitle: Text(step.$2),
                 ),
               const SizedBox(height: 8),
-              Text('Các bước làm trên web CrabShare, đăng nhập bằng cùng tài khoản.', style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                'Các bước làm trên web CrabShare, đăng nhập bằng cùng tài khoản.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               const SizedBox(height: 12),
               FilledButton.icon(
                 onPressed: () => _openWebFlow(context, b.code),
@@ -179,9 +275,31 @@ class _Body extends StatelessWidget {
   Future<void> _openWebFlow(BuildContext context, String code) async {
     final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
-    final opened = await launchUrl(Uri.parse('$webUrl/nha-dau-tu/gop-von/${Uri.encodeComponent(code)}'),
-        mode: LaunchMode.externalApplication);
-    if (!opened) messenger.showSnackBar(const SnackBar(content: Text('Không mở được trình duyệt. Thử lại hoặc mở web CrabShare.')));
+    try {
+      final opened = await launchUrl(
+        Uri.parse('$webUrl/nha-dau-tu/gop-von/${Uri.encodeComponent(code)}'),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened && messenger.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Không mở được trình duyệt. Thử lại hoặc mở web CrabShare.',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (messenger.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Không mở được trình duyệt. Thử lại hoặc mở web CrabShare.',
+            ),
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -223,18 +341,49 @@ class _FundingCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Expanded(child: Text(formatVnd(b.raisedCapital), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700))),
-              Flexible(child: Text('${b.discoveryProgress?.percentLabel ?? '—'} mục tiêu', textAlign: TextAlign.end, style: const TextStyle(color: AppColors.accentText, fontWeight: FontWeight.w700))),
+              Expanded(
+                child: Text(
+                  formatVnd(b.raisedCapital),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Flexible(
+                child: Text(
+                  '${b.discoveryProgress?.percentLabel ?? '—'} mục tiêu',
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(
+                    color: AppColors.accentText,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
-          SoftProgressBar(value: b.discoveryProgress?.barValue ?? 0, height: 10),
+          SoftProgressBar(
+            value: b.discoveryProgress?.barValue ?? 0,
+            height: 10,
+          ),
           const SizedBox(height: 10),
-          MetricRow(metrics: [
-            Metric('mục tiêu', formatMillions(b.targetCapital)),
-            Metric('tối thiểu', formatMillions(b.minContribution), color: AppColors.ink),
-            if (b.fundingDeadline != null) Metric('hạn', formatDate(b.fundingDeadline!), color: AppColors.success),
-          ]),
+          MetricRow(
+            metrics: [
+              Metric('mục tiêu', formatMillions(b.targetCapital)),
+              Metric(
+                'tối thiểu',
+                formatMillions(b.minContribution),
+                color: AppColors.ink,
+              ),
+              if (b.fundingDeadline != null)
+                Metric(
+                  'hạn',
+                  formatDate(b.fundingDeadline!),
+                  color: AppColors.success,
+                ),
+            ],
+          ),
         ],
       ),
     );
@@ -250,29 +399,65 @@ class _PublishedTerms extends StatelessWidget {
     final cost = b.standardCost;
     Widget term(String label, String value) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(child: Text(label)), const SizedBox(width: 12),
-        Flexible(child: Text(value, textAlign: TextAlign.end))]));
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const SectionHeader(title: 'Điều khoản đã công bố'),
-      AppCard(child: Column(children: [
-        term('Vốn khả thi tối thiểu', b.minViableCapital == null ? '—' : formatVnd(b.minViableCapital!)),
-        term('Vốn tối đa', b.maxCapital == null ? '—' : formatVnd(b.maxCapital!)),
-        term('Góp tối thiểu', formatVnd(b.minContribution)),
-        term('Sản lượng dự kiến', '${b.expectedOutputKg ?? '—'} kg'),
-        term('Hạn bổ sung giống', '${b.restockCutoffDays ?? '—'} ngày'),
-        term('Tỷ lệ hộ nuôi', '${b.operatorSharePct ?? '—'}%'),
-        if (b.fundingOpenAt != null) term('Mở gọi vốn', formatDate(b.fundingOpenAt!)),
-        if (b.fundingDeadline != null) term('Hạn gọi vốn', formatDate(b.fundingDeadline!)),
-        term('Vốn giữ chỗ', formatVnd(b.discoveryProgress?.reservedCapital ?? 0)),
-        term('Nhà đầu tư', '${b.discoveryProgress?.investorCount ?? 0}') ])),
-      const SectionHeader(title: 'Chi phí chuẩn đã khóa'),
-      AppCard(child: cost == null ? const Text('Chưa có bản chi phí đã khóa được công bố.') : Column(children: [
-        term('Phiên bản', '${cost.versionNo} · ${cost.status}'),
-        if (cost.lockedAt != null) term('Ngày khóa', formatDate(cost.lockedAt!)),
-        for (final item in cost.items) term(item.category, formatVnd(item.amount)),
-        term('Tổng chi phí', formatVnd(cost.total)) ])),
-    ]);
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: Text(label)),
+          const SizedBox(width: 12),
+          Flexible(child: Text(value, textAlign: TextAlign.end)),
+        ],
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(title: 'Điều khoản đã công bố'),
+        AppCard(
+          child: Column(
+            children: [
+              term(
+                'Vốn khả thi tối thiểu',
+                b.minViableCapital == null
+                    ? '—'
+                    : formatVnd(b.minViableCapital!),
+              ),
+              term(
+                'Vốn tối đa',
+                b.maxCapital == null ? '—' : formatVnd(b.maxCapital!),
+              ),
+              term('Góp tối thiểu', formatVnd(b.minContribution)),
+              term('Sản lượng dự kiến', '${b.expectedOutputKg ?? '—'} kg'),
+              term('Hạn bổ sung giống', '${b.restockCutoffDays ?? '—'} ngày'),
+              term('Tỷ lệ hộ nuôi', '${b.operatorSharePct ?? '—'}%'),
+              if (b.fundingOpenAt != null)
+                term('Mở gọi vốn', formatDate(b.fundingOpenAt!)),
+              if (b.fundingDeadline != null)
+                term('Hạn gọi vốn', formatDate(b.fundingDeadline!)),
+              term(
+                'Vốn giữ chỗ',
+                formatVnd(b.discoveryProgress?.reservedCapital ?? 0),
+              ),
+              term('Nhà đầu tư', '${b.discoveryProgress?.investorCount ?? 0}'),
+            ],
+          ),
+        ),
+        const SectionHeader(title: 'Chi phí chuẩn đã khóa'),
+        AppCard(
+          child: cost == null
+              ? const Text('Chưa có bản chi phí đã khóa được công bố.')
+              : Column(
+                  children: [
+                    term('Phiên bản', '${cost.versionNo} · ${cost.status}'),
+                    if (cost.lockedAt != null)
+                      term('Ngày khóa', formatDate(cost.lockedAt!)),
+                    for (final item in cost.items)
+                      term(item.category, formatVnd(item.amount)),
+                    term('Tổng chi phí', formatVnd(cost.total)),
+                  ],
+                ),
+        ),
+      ],
+    );
   }
 }
 
@@ -304,12 +489,23 @@ class _Timeline extends StatelessWidget {
                         color: i < currentIndex
                             ? AppColors.ink
                             : i == currentIndex
-                                ? AppColors.accent
-                                : AppColors.surfaceMuted,
+                            ? AppColors.accent
+                            : AppColors.surfaceMuted,
                       ),
-                      child: i < currentIndex ? const Icon(Icons.check_rounded, size: 14, color: Colors.white) : null,
+                      child: i < currentIndex
+                          ? const Icon(
+                              Icons.check_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            )
+                          : null,
                     ),
-                    if (i < steps.length - 1) Container(width: 2, height: 22, color: AppColors.surfaceMuted),
+                    if (i < steps.length - 1)
+                      Container(
+                        width: 2,
+                        height: 22,
+                        color: AppColors.surfaceMuted,
+                      ),
                   ],
                 ),
                 const SizedBox(width: 12),
@@ -318,7 +514,14 @@ class _Timeline extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 22),
                     child: Text(
                       s.label,
-                      style: TextStyle(fontWeight: i == currentIndex ? FontWeight.w700 : FontWeight.w500, color: i > currentIndex ? AppColors.inkMuted : AppColors.ink),
+                      style: TextStyle(
+                        fontWeight: i == currentIndex
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: i > currentIndex
+                            ? AppColors.inkMuted
+                            : AppColors.ink,
+                      ),
                     ),
                   ),
                 ),
