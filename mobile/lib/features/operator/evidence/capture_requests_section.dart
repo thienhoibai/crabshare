@@ -64,14 +64,7 @@ class _CaptureRequestsSectionState extends ConsumerState<CaptureRequestsSection>
         const SectionHeader(title: 'Yêu cầu chụp'),
         ...requests.when(
           skipLoadingOnRefresh: false,
-          loading: () => [
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ),
-            ),
-          ],
+          loading: () => [const LoadingSkeleton(rows: 2)],
           error: (error, _) => [
             ErrorView(
               message: apiErrorMessage(error),

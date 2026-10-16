@@ -24,7 +24,7 @@ final operatorOrdersProvider =
     FutureProvider.family<List<OperatorOrderSummary>, String>((ref, status) {
       ref.watch(sessionProvider.select((session) => session.user?.userId));
       return ref.watch(operatorOrdersRepositoryProvider).list(status);
-    });
+    }, retry: (_, _) => null);
 
 class ApiOperatorOrdersRepository implements OperatorOrdersRepository {
   ApiOperatorOrdersRepository(this.dio);

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/routes.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/api/api_client.dart';
 import '../../../core/format/dates.dart';
 import '../../../core/format/money.dart';
 import '../../../shared/models/batch_enums.dart';
@@ -20,10 +21,12 @@ import '../evidence/capture_requests_section.dart';
 class OperatorTodayPage extends ConsumerWidget {
   const OperatorTodayPage({super.key});
 
-  Future<void> _refresh(WidgetRef ref) {
-    ref.invalidate(todaySummaryProvider);
-    ref.invalidate(captureRequestsProvider);
-    return ref.refresh(activeBatchesProvider.future);
+  Future<void> _refresh(WidgetRef ref) async {
+    await Future.wait([
+      ref.refresh(todaySummaryProvider.future),
+      ref.refresh(captureRequestsProvider.future),
+      ref.refresh(activeBatchesProvider.future),
+    ]);
   }
 
   @override
@@ -36,9 +39,10 @@ class OperatorTodayPage extends ConsumerWidget {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: RefreshIndicator(
+        child: AppRefreshIndicator(
           onRefresh: () => _refresh(ref),
           child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 12, 20, kNavBarClearance),
             children: [
               GreetingHeader(
@@ -47,6 +51,10 @@ class OperatorTodayPage extends ConsumerWidget {
                 onBell: () => context.go(Routes.operatorAlerts),
               ),
               const SizedBox(height: 18),
+              const Text(
+                'Tiến độ minh hoạ',
+                style: TextStyle(color: AppColors.inkMuted),
+              ),
               AppCard(
                 padding: const EdgeInsets.fromLTRB(16, 22, 16, 18),
                 child: Column(
@@ -102,16 +110,15 @@ class OperatorTodayPage extends ConsumerWidget {
               ),
               const CaptureRequestsSection(),
               const SectionHeader(title: 'Lô đang nuôi'),
+              const DemoNotice(),
               ...batches.when(
-                loading: () => [
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: CircularProgressIndicator(),
-                    ),
+                loading: () => [const LoadingSkeleton(rows: 2)],
+                error: (e, _) => [
+                  ErrorView(
+                    message: apiErrorMessage(e),
+                    onRetry: () => ref.invalidate(activeBatchesProvider),
                   ),
                 ],
-                error: (e, _) => [Text('$e')],
                 data: (list) => [
                   for (final b in list) ...[
                     _BatchCard(batch: b),
@@ -176,27 +183,26 @@ class _BatchCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Wrap(
+            spacing: 12,
+            runSpacing: 6,
             children: [
-              Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    children: [
-                      TextSpan(
-                        text: formatCount(b.aliveCount),
-                        style: const TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.5,
-                        ),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: formatCount(b.aliveCount),
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.5,
                       ),
-                      const TextSpan(
-                        text: '  con',
-                        style: TextStyle(color: AppColors.inkMuted),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const TextSpan(
+                      text: '  con',
+                      style: TextStyle(color: AppColors.inkMuted),
+                    ),
+                  ],
                 ),
               ),
               Text(

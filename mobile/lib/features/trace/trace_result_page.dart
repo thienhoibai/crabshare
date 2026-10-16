@@ -17,29 +17,41 @@ class TraceResultPage extends ConsumerWidget {
     final result = ref.watch(traceProvider(tagCode));
     return Scaffold(
       body: SafeArea(
-        child: result.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                const SubPageHeader(title: 'Truy xuất'),
-                const Spacer(),
-                EmptyState(icon: Icons.qr_code_2_rounded, title: 'Không tìm thấy tem $tagCode', message: '$e'),
-                const Spacer(),
-              ],
-            ),
-          ),
+        child: AsyncContent(
+          value: result,
+          onRefresh: () => ref.refresh(traceProvider(tagCode).future),
+          header: const SubPageHeader(title: 'Truy xuất'),
           data: (t) => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             children: [
               const SubPageHeader(title: 'Truy xuất nguồn gốc'),
               const SizedBox(height: 16),
+              const DemoNotice(),
               Stack(
                 children: [
-                  RoundedImage(t.crabType.image, height: 200, width: double.infinity, radius: AppRadius.card),
-                  Positioned(left: 12, top: 12, child: InfoChip(icon: Icons.qr_code_2_rounded, label: t.tagCode)),
-                  const Positioned(right: 12, top: 12, child: InfoChip(icon: Icons.verified_rounded, label: 'Tem đã kích hoạt')),
+                  RoundedImage(
+                    t.crabType.image,
+                    height: 200,
+                    width: double.infinity,
+                    radius: AppRadius.card,
+                  ),
+                  Positioned(
+                    left: 12,
+                    top: 12,
+                    child: InfoChip(
+                      icon: Icons.qr_code_2_rounded,
+                      label: t.tagCode,
+                    ),
+                  ),
+                  const Positioned(
+                    right: 12,
+                    bottom: 12,
+                    child: InfoChip(
+                      icon: Icons.verified_rounded,
+                      label: 'Tem minh hoạ',
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 14),
@@ -47,11 +59,26 @@ class TraceResultPage extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${t.crabType.label} · hạng ${t.gradeCode} · ${t.weightG} g', style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      '${t.crabType.label} · hạng ${t.gradeCode} · ${t.weightG} g',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const SizedBox(height: 12),
-                    _Row(icon: Icons.storefront_outlined, label: 'Hộ nuôi', value: t.operatorName),
-                    _Row(icon: Icons.inventory_2_outlined, label: 'Lô', value: t.batchCode),
-                    _Row(icon: Icons.grid_view_rounded, label: 'Hộp nuôi', value: 'Số ${t.slotCode}'),
+                    _Row(
+                      icon: Icons.storefront_outlined,
+                      label: 'Hộ nuôi',
+                      value: t.operatorName,
+                    ),
+                    _Row(
+                      icon: Icons.inventory_2_outlined,
+                      label: 'Lô',
+                      value: t.batchCode,
+                    ),
+                    _Row(
+                      icon: Icons.grid_view_rounded,
+                      label: 'Hộp nuôi',
+                      value: 'Số ${t.slotCode}',
+                    ),
                   ],
                 ),
               ),
@@ -69,9 +96,19 @@ class TraceResultPage extends ConsumerWidget {
                                 width: 14,
                                 height: 14,
                                 margin: const EdgeInsets.only(top: 3),
-                                decoration: BoxDecoration(color: i == t.events.length - 1 ? AppColors.accent : AppColors.ink, shape: BoxShape.circle),
+                                decoration: BoxDecoration(
+                                  color: i == t.events.length - 1
+                                      ? AppColors.accent
+                                      : AppColors.ink,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
-                              if (i < t.events.length - 1) Container(width: 2, height: 40, color: AppColors.surfaceMuted),
+                              if (i < t.events.length - 1)
+                                Container(
+                                  width: 2,
+                                  height: 40,
+                                  color: AppColors.surfaceMuted,
+                                ),
                             ],
                           ),
                           const SizedBox(width: 12),
@@ -79,8 +116,16 @@ class TraceResultPage extends ConsumerWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('${e.title} · ${formatDate(e.at)}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                                Text(e.detail, style: Theme.of(context).textTheme.bodySmall),
+                                Text(
+                                  '${e.title} · ${formatDate(e.at)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  e.detail,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
                                 const SizedBox(height: 12),
                               ],
                             ),
@@ -116,7 +161,13 @@ class _Row extends StatelessWidget {
           Text(label, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(value, textAlign: TextAlign.end, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),

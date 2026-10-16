@@ -21,6 +21,7 @@ class _Repository implements PayoutRepository {
   int reads = 0;
   int saves = 0;
   bool fail = false;
+  bool offlineRead = false;
   bool mismatch = false;
   PayoutProfile profile = const PayoutProfile(
     ownerType: 'Investor',
@@ -30,6 +31,12 @@ class _Repository implements PayoutRepository {
   @override
   Future<PayoutProfile> get(String ownerType) async {
     reads++;
+    if (offlineRead) {
+      throw DioException(
+        requestOptions: RequestOptions(),
+        type: DioExceptionType.connectionError,
+      );
+    }
     owners.add(ownerType);
     return PayoutProfile(
       ownerType: ownerType,
@@ -128,6 +135,27 @@ Future<void> _fill(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('failed refresh preserves the edited payout form', (
+    tester,
+  ) async {
+    final repo = _Repository();
+    await _mount(tester, repo);
+    await _fill(tester);
+    repo.offlineRead = true;
+    final refreshed = tester
+        .widget<RefreshIndicator>(find.byType(RefreshIndicator))
+        .onRefresh();
+    await tester.pumpAndSettle();
+    await refreshed;
+    final fields = tester
+        .widgetList<TextFormField>(find.byType(TextFormField))
+        .toList();
+    expect(fields[0].controller!.text, 'vcb');
+    expect(fields[1].controller!.text, '1234567890');
+    expect(find.textContaining('Không kết nối được máy chủ.'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   test('API repository uses explicit owner scope and PUT JSON', () async {
     final adapter = _Adapter();
     final dio = Dio(BaseOptions(baseUrl: 'http://test.local'))

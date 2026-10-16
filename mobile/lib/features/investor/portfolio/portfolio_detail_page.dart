@@ -32,7 +32,7 @@ class InvestorPortfolioDetailPage extends ConsumerWidget {
     final text = Theme.of(context).textTheme;
     return Scaffold(
       body: SafeArea(
-        child: RefreshIndicator(
+        child: AppRefreshIndicator(
           onRefresh: () => ref.refresh(provider.future),
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -41,9 +41,7 @@ class InvestorPortfolioDetailPage extends ConsumerWidget {
               const SubPageHeader(title: 'Chi tiết danh mục'),
               const SizedBox(height: 16),
               ...query.when(
-                loading: () => [
-                  const Center(child: CircularProgressIndicator()),
-                ],
+                loading: () => [const LoadingSkeleton(rows: 2)],
                 error: (e, _) => [
                   ErrorView(
                     message: apiErrorMessage(e),

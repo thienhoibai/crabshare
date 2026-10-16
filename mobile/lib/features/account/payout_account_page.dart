@@ -23,52 +23,54 @@ class _PayoutAccountPageState extends ConsumerState<PayoutAccountPage> {
     final query = ref.watch(payoutProfileProvider(owner));
     return Scaffold(
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-          children: [
-            const SubPageHeader(title: 'Tài khoản nhận tiền'),
-            const SizedBox(height: 20),
-            if (user.isInvestor && user.isOperator) ...[
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final type in ['Investor', 'Operator'])
-                    ChoiceChip(
-                      label: Text(type == 'Investor' ? 'Cá nhân' : 'Hộ nuôi'),
-                      selected: owner == type,
-                      onSelected: (_) => setState(() => _ownerType = type),
-                      showCheckmark: false,
-                      backgroundColor: AppColors.surface,
-                      selectedColor: AppColors.ink,
-                      labelStyle: TextStyle(
-                        color: owner == type ? Colors.white : AppColors.ink,
+        child: AppRefreshIndicator(
+          onRefresh: () => ref.refresh(payoutProfileProvider(owner).future),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            children: [
+              const SubPageHeader(title: 'Tài khoản nhận tiền'),
+              const SizedBox(height: 20),
+              if (user.isInvestor && user.isOperator) ...[
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final type in ['Investor', 'Operator'])
+                      ChoiceChip(
+                        label: Text(type == 'Investor' ? 'Cá nhân' : 'Hộ nuôi'),
+                        selected: owner == type,
+                        onSelected: (_) => setState(() => _ownerType = type),
+                        showCheckmark: false,
+                        backgroundColor: AppColors.surface,
+                        selectedColor: AppColors.ink,
+                        labelStyle: TextStyle(
+                          color: owner == type ? Colors.white : AppColors.ink,
+                        ),
+                        side: BorderSide.none,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.pill),
+                        ),
                       ),
-                      side: BorderSide.none,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
-            ],
-            query.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.all(40),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (e, _) => ErrorView(
-                message: apiErrorMessage(e),
-                onRetry: () => ref.invalidate(payoutProfileProvider(owner)),
-              ),
-              data: (profile) => _PayoutForm(
-                key: ValueKey(
-                  '${user.userId}-$owner-${profile.account?.updatedAt ?? 'new'}',
+                  ],
                 ),
-                profile: profile,
+                const SizedBox(height: 16),
+              ],
+              query.when(
+                skipError: true,
+                loading: () => const LoadingSkeleton(),
+                error: (e, _) => ErrorView(
+                  message: apiErrorMessage(e),
+                  onRetry: () => ref.invalidate(payoutProfileProvider(owner)),
+                ),
+                data: (profile) => _PayoutForm(
+                  key: ValueKey(
+                    '${user.userId}-$owner-${profile.account?.updatedAt ?? 'new'}',
+                  ),
+                  profile: profile,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
