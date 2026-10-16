@@ -188,3 +188,14 @@
 .s3-cart__total b { font-size: 22px; font-variant-numeric: tabular-nums; }
 .s3-mobilebar { display: none; }
 @media (max-width: 1024px) { .s3-mobilebar { display: block; } }
+
+.s1-rating { display: block; color: var(--rd-muted, #5c6b63); font-size: 0.875rem; }
+.s1-reviews { display: grid; gap: 12px; max-width: 640px; padding-top: 8px; }
+.s1-reviews h3 { font-size: 20px; letter-spacing: -0.02em; font-weight: 600; margin: 0; }
+.s1-reviews__summary { font-size: 13px; color: var(--muted); margin: 0; }
+.s1-reviews__list { display: grid; gap: 12px; list-style: none; padding: 0; margin: 0; }
+.s1-reviews__item { display: grid; gap: 6px; padding: 14px 16px; border-radius: 16px; background: var(--surface, #fff); border: 1px solid var(--line); }
+.s1-reviews__head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.s1-reviews__stars { color: #d97706; font-weight: 700; letter-spacing: 1px; }
+.s1-reviews__meta { font-size: 12px; color: var(--muted); }
+.s1-reviews__comment { margin: 0; font-size: 14px; line-height: 1.5; white-space: pre-line; }

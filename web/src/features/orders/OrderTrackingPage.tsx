@@ -1,7 +1,7 @@
 /* UC28 + UC30 — Theo dõi một đơn: dòng thời gian, hàng, khoản thu, huỷ khi chưa đóng gói (NH-07), giao hàng và xác nhận đã nhận (NH-10). */
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { AlertTriangle, ExternalLink, Image as ImageIcon, MapPin, MessageSquareWarning, PackageCheck, PackageSearch, Phone, Truck, Video } from 'lucide-react'
+import { AlertTriangle, ExternalLink, Image as ImageIcon, MapPin, MessageSquareWarning, PackageCheck, PackageSearch, Phone, RotateCcw, Truck, Video, X } from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
 import { formatDateTime, formatVnd } from '../../shared/lib/format'
 import { vnd } from '../../shared/ui/kit/mock-data'
@@ -18,6 +18,7 @@ import {
   useSubmitComplaint,
   type ComplaintType,
 } from './complaintsApi'
+import { useReturnOrder } from './rateOrderApi'
 import './checkout.css'
 
 function Lookup() {
@@ -145,7 +146,121 @@ function ReceiveBox({ order }: { order: OrderTracking }) {
   )
 }
 
-function ComplaintSection({ order }: { order: OrderTracking }) {
+function EvidencePreview({ uri, label }: { uri: string | null | undefined; label?: string }) {
+  if (!uri) return null
+  const isVideo = uri.startsWith('data:video/') || /\.(mp4|webm|mov)(\?|$)/i.test(uri)
+  const isImage =
+    uri.startsWith('data:image/') ||
+    /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(uri) ||
+    uri.includes('images.unsplash.com') ||
+    uri.includes('imgur.com') ||
+    uri.includes('placehold.co')
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      {label && <span className="block text-xs font-semibold text-slate-600">{label}</span>}
+      {isVideo ? (
+        <video
+          src={uri}
+          controls
+          className="max-h-56 rounded-lg border border-slate-300 bg-black"
+        />
+      ) : isImage ? (
+        <a href={uri} target="_blank" rel="noreferrer" className="inline-block">
+          <img
+            src={uri}
+            alt={label ?? 'Bằng chứng'}
+            className="max-h-48 rounded-lg border border-slate-300 object-cover shadow-xs hover:opacity-95"
+          />
+        </a>
+      ) : null}
+      {!uri.startsWith('data:') && (
+        <div>
+          <a
+            href={uri}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-blue-700 underline font-semibold"
+          >
+            <ImageIcon size={14} /> Mở đường dẫn hình ảnh / video bằng chứng
+            <ExternalLink size={12} />
+          </a>
+        </div>
+      )}
+    </div>
+  )
+}
+
+async function compressOrReadMediaFile(file: File): Promise<string> {
+  if (file.type.startsWith('image/')) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onerror = () => reject(new Error('Không đọc được file ảnh.'))
+      reader.onload = () => {
+        const img = new Image()
+        img.onerror = () => resolve(String(reader.result))
+        img.onload = () => {
+          const maxDim = 1000
+          let { width, height } = img
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width)
+              width = maxDim
+            } else {
+              width = Math.round((width * maxDim) / height)
+              height = maxDim
+            }
+          }
+          const canvas = document.createElement('canvas')
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            resolve(String(reader.result))
+            return
+          }
+          ctx.drawImage(img, 0, 0, width, height)
+          resolve(canvas.toDataURL('image/jpeg', 0.82))
+        }
+        img.src = String(reader.result)
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  if (file.size > 8 * 1024 * 1024) {
+    throw new Error('File video quá lớn (tối đa 8MB khi tải trực tiếp). Vui lòng chọn video ngắn hơn hoặc dán link Google Drive/YouTube.')
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('Không đọc được file media.'))
+    reader.onload = () => resolve(String(reader.result))
+    reader.readAsDataURL(file)
+  })
+}
+
+function buildSampleEvidenceDataUrl(orderNo: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="380" viewBox="0 0 640 380">
+    <rect width="640" height="380" fill="#1e293b"/>
+    <rect x="20" y="20" width="600" height="340" rx="16" fill="#0f172a" stroke="#f59e0b" stroke-width="3"/>
+    <text x="45" y="70" fill="#fbbf24" font-family="sans-serif" font-size="22" font-weight="bold">BẰNG CHỨNG MỞ THÙNG — ĐƠN ${orderNo}</text>
+    <text x="45" y="110" fill="#e2e8f0" font-family="sans-serif" font-size="16">• Ảnh chụp thực tế khi mở thùng xốp lúc nhận hàng</text>
+    <text x="45" y="142" fill="#e2e8f0" font-family="sans-serif" font-size="16">• Tem QR niêm phong trên càng cua còn nguyên vẹn</text>
+    <text x="45" y="174" fill="#fca5a5" font-family="sans-serif" font-size="16" font-weight="bold">• Phát hiện cua yếu / chết khi mở thùng kiểm tra</text>
+    <rect x="45" y="205" width="550" height="125" rx="10" fill="#1e293b" stroke="#475569" stroke-dasharray="6 4"/>
+    <text x="320" y="275" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="18">🦀 Minh chứng hình ảnh/video kiểm tra đơn ${orderNo}</text>
+  </svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+}
+
+function ComplaintSection({
+  order,
+  prefill,
+}: {
+  order: OrderTracking
+  prefill?: { description: string; evidenceUri: string | null; tick: number } | null
+}) {
   const { data: complaint, isLoading, refetch } = useOrderComplaint(order.orderNo)
   const submitComplaint = useSubmitComplaint(order.orderNo)
 
@@ -154,6 +269,14 @@ function ComplaintSection({ order }: { order: OrderTracking }) {
   const [description, setDescription] = useState('')
   const [evidenceUri, setEvidenceUri] = useState('')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [lastPrefillTick, setLastPrefillTick] = useState(0)
+
+  if (prefill && prefill.tick > lastPrefillTick) {
+    setLastPrefillTick(prefill.tick)
+    setIsOpenForm(true)
+    setDescription(prefill.description)
+    setEvidenceUri(prefill.evidenceUri ?? '')
+  }
 
   const canSubmit = !complaint && (order.status === 'Delivered' || order.status === 'Completed' || order.status === 'Shipping')
 
@@ -184,7 +307,7 @@ function ComplaintSection({ order }: { order: OrderTracking }) {
 
   if (complaint) {
     return (
-      <section className="ot-ship bg-amber-50/70 border border-amber-200 rounded-xl p-4 mt-4" aria-label="Khiếu nại đơn hàng">
+      <section id="complaint-section" className="ot-ship bg-amber-50/70 border border-amber-200 rounded-xl p-4 mt-4" aria-label="Khiếu nại đơn hàng">
         <div className="flex items-center justify-between mb-3 border-b border-amber-200/80 pb-2">
           <div className="flex items-center gap-2">
             <MessageSquareWarning className="w-5 h-5 text-amber-700" />
@@ -202,34 +325,14 @@ function ComplaintSection({ order }: { order: OrderTracking }) {
           <div className="bg-white/80 p-3 rounded-lg border border-amber-100">
             <strong>Nội dung phản ánh: </strong>
             <p className="whitespace-pre-line mt-1">{complaint.description}</p>
-            {complaint.evidenceUri && (
-              <a
-                href={complaint.evidenceUri}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-blue-700 underline font-semibold mt-2"
-              >
-                <ImageIcon size={14} /> Xem link hình ảnh/video bằng chứng
-                <ExternalLink size={12} />
-              </a>
-            )}
+            <EvidencePreview uri={complaint.evidenceUri} label="Bằng chứng của bạn:" />
           </div>
 
           {complaint.operatorResponse && (
             <div className="bg-blue-50/80 p-3 rounded-lg border border-blue-200 text-blue-950 mt-2">
               <strong className="text-blue-900 block mb-1">Hộ nuôi giải trình:</strong>
               <p className="whitespace-pre-line text-xs">{complaint.operatorResponse}</p>
-              {complaint.operatorEvidenceUri && (
-                <a
-                  href={complaint.operatorEvidenceUri}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-blue-700 underline font-semibold mt-2"
-                >
-                  <ImageIcon size={14} /> Bằng chứng đối chứng của hộ nuôi
-                  <ExternalLink size={12} />
-                </a>
-              )}
+              <EvidencePreview uri={complaint.operatorEvidenceUri} label="Bằng chứng đối chứng của hộ nuôi:" />
             </div>
           )}
 
@@ -261,9 +364,9 @@ function ComplaintSection({ order }: { order: OrderTracking }) {
 
   if (!isOpenForm) {
     return (
-      <div className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between">
+      <div id="complaint-section" className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between">
         <p className="text-xs text-slate-500">
-          Cua có vấn đề khi nhận hàng hoặc giao trễ?
+          Cua có vấn đề khi nhận hàng hoặc cần Ban quản trị phân xử?
         </p>
         <button
           type="button"
@@ -277,13 +380,13 @@ function ComplaintSection({ order }: { order: OrderTracking }) {
   }
 
   return (
-    <form className="ot-cancel mt-4 bg-red-50/40 p-4 rounded-xl border border-red-200" onSubmit={handleSubmit}>
+    <form id="complaint-section" className="ot-cancel mt-4 bg-red-50/40 p-4 rounded-xl border border-red-200" onSubmit={handleSubmit}>
       <h3 className="rd-h3 text-red-950 flex items-center gap-2 mb-2">
         <AlertTriangle size={18} className="text-red-600" />
         Gửi khiếu nại đơn hàng {order.orderNo}
       </h3>
       <p className="rd-muted text-xs mb-3">
-        UC31: Khiếu nại sẽ được gửi trực tiếp tới hộ nuôi. Hộ nuôi có 24 giờ để phản hồi giải trình trước khi tự động chuyển lên Admin phân xử.
+        UC31: Khiếu nại sẽ được gửi tới hộ nuôi và Ban quản trị (Admin) để đối chiếu bằng chứng và phân xử hoàn tiền.
       </p>
 
       <label className="block mb-2 text-xs font-bold text-slate-700">
@@ -317,18 +420,18 @@ function ComplaintSection({ order }: { order: OrderTracking }) {
       <label className="block mb-3 text-xs font-bold text-slate-700">
         Link ảnh / video mở thùng làm bằng chứng (Google Drive, Imgur...):
         <input
-          type="url"
+          type="text"
           value={evidenceUri}
           onChange={(e) => setEvidenceUri(e.target.value)}
           placeholder="https://drive.google.com/..."
-          maxLength={400}
           className="rd-input w-full mt-1"
         />
       </label>
+      <EvidencePreview uri={evidenceUri} />
 
       {errorMsg && <p className="co-error text-xs mb-3" role="alert">{errorMsg}</p>}
 
-      <div className="ot-cancel__actions">
+      <div className="ot-cancel__actions mt-3">
         <button
           type="button"
           className="rd-btn rd-btn--ghost text-xs"
@@ -349,8 +452,362 @@ function ComplaintSection({ order }: { order: OrderTracking }) {
   )
 }
 
+const QUICK_RETURN_REASONS = [
+  'Cua chết khi mở thùng, yêu cầu trả cả đơn',
+  'Giao sai hạng cua so với đơn đã đặt',
+  'Thùng xốp bị vỡ, cua yếu không đảm bảo chất lượng',
+]
+
+function ReturnBox({
+  order,
+  onEscalateToComplaint,
+}: {
+  order: OrderTracking
+  onEscalateToComplaint: (reason: string, evidenceUri: string | null) => void
+}) {
+  const ret = useReturnOrder(order.orderNo)
+  const reqInfo = order.returnRequest
+  const [isOpenForm, setIsOpenForm] = useState(false)
+  const [reason, setReason] = useState(reqInfo?.reason ?? '')
+  const [evidenceUri, setEvidenceUri] = useState(reqInfo?.evidenceUri ?? '')
+  const [fileName, setFileName] = useState<string | null>(null)
+  const [localError, setLocalError] = useState<string | null>(null)
+  const [editingAfterReject, setEditingAfterReject] = useState(false)
+
+  // 1. Nếu yêu cầu trả hàng đang chờ Hộ nuôi duyệt (Pending)
+  if (reqInfo?.status === 'Pending' || (ret.isSuccess && ret.data.status === 'ReturnRequested')) {
+    const activeReq = reqInfo ?? ret.data?.returnRequest
+    return (
+      <section className="ot-return bg-amber-50/90 border border-amber-300 rounded-2xl p-4.5 mt-4" aria-label="Trạng thái yêu cầu trả hàng">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2">
+            <RotateCcw className="w-5 h-5 text-amber-700 animate-spin-slow" />
+            <h3 className="rd-h3 text-amber-950 m-0">Đang chờ Hộ nuôi duyệt yêu cầu trả hàng</h3>
+          </div>
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-200 text-amber-900 border border-amber-300">
+            Chờ xác nhận
+          </span>
+        </div>
+        <p className="text-xs text-amber-900 mb-3">
+          Yêu cầu trả hàng kèm bằng chứng của bạn đã được gửi tới <b>{order.farmName}</b>. Khi hộ nuôi kiểm tra và xác nhận đồng ý, đơn sẽ chuyển sang trạng thái <b>Đã trả hàng</b> và lập lệnh hoàn tiền <b>{vnd(order.totalAmount)}</b>.
+        </p>
+        <div className="bg-white/95 p-3.5 rounded-xl border border-amber-200 text-sm space-y-2">
+          <p>
+            <strong>Lý do trả hàng: </strong>
+            <span>"{activeReq?.reason || reason}"</span>
+          </p>
+          <EvidencePreview uri={activeReq?.evidenceUri || evidenceUri} label="Hình ảnh / Video bằng chứng đã nộp:" />
+        </div>
+      </section>
+    )
+  }
+
+  // 2. Nếu yêu cầu trả hàng đã được Hộ nuôi chấp thuận (Approved / Returned)
+  if (order.status === 'Returned' || reqInfo?.status === 'Approved' || (ret.isSuccess && ret.data.status === 'Returned')) {
+    return (
+      <section className="ot-return bg-emerald-50/90 border border-emerald-300 rounded-2xl p-4.5 mt-4" aria-label="Đã ghi nhận trả hàng">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <h3 className="rd-h3 text-emerald-950 m-0">✓ Đã ghi nhận trả hàng — Hộ nuôi chấp nhận hoàn tiền</h3>
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-200 text-emerald-900 border border-emerald-300">
+            Đã duyệt hoàn tiền
+          </span>
+        </div>
+        <div className="bg-white/95 p-3.5 rounded-xl border border-emerald-200 text-sm space-y-2">
+          {(reqInfo?.reason || reason) && (
+            <p>
+              <strong>Lý do trả hàng: </strong>
+              <span>"{reqInfo?.reason || reason}"</span>
+            </p>
+          )}
+          <EvidencePreview uri={reqInfo?.evidenceUri || evidenceUri} label="Bằng chứng của bạn:" />
+          {reqInfo?.operatorNote && (
+            <p className="text-emerald-900">
+              <strong>Phản hồi từ hộ nuôi: </strong>
+              <span>"{reqInfo.operatorNote}"</span>
+            </p>
+          )}
+          <p className="pt-2 border-t border-emerald-100">
+            <strong>Số tiền hoàn lại: </strong>
+            <strong className="text-emerald-700 font-bold text-base">{vnd(reqInfo?.refundAmount ?? ret.data?.refundAmount ?? order.totalAmount)}</strong>
+            {' '}— Lệnh hoàn tiền đã được chuyển sang bộ phận tài chính giải ngân.
+          </p>
+        </div>
+      </section>
+    )
+  }
+
+  // 3. Nếu yêu cầu trả hàng bị Hộ nuôi từ chối (Rejected) và khách chưa bấm "Gửi lại"
+  if (reqInfo?.status === 'Rejected' && !editingAfterReject) {
+    return (
+      <section className="ot-return bg-red-50/90 border border-red-300 rounded-2xl p-4.5 mt-4" aria-label="Hộ nuôi từ chối trả hàng">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <h3 className="rd-h3 text-red-950 m-0">✕ Hộ nuôi đã từ chối yêu cầu trả hàng</h3>
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-200 text-red-900 border border-red-300">
+            Từ chối trả hàng
+          </span>
+        </div>
+        <div className="bg-white/95 p-3.5 rounded-xl border border-red-200 text-sm space-y-2 mb-3">
+          <p>
+            <strong>Yêu cầu ban đầu của bạn: </strong>
+            <span>"{reqInfo.reason}"</span>
+          </p>
+          <EvidencePreview uri={reqInfo.evidenceUri} label="Bằng chứng bạn đã gửi:" />
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-950 mt-2">
+            <strong className="block text-red-900">Lý do Hộ nuôi từ chối:</strong>
+            <p className="mt-0.5 font-medium">"{reqInfo.operatorNote}"</p>
+            <EvidencePreview uri={reqInfo.operatorEvidenceUri} label="Bằng chứng đối chứng của Hộ nuôi:" />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2.5">
+          {order.canReturn && (
+            <button
+              type="button"
+              className="rd-btn rd-btn--primary text-xs"
+              onClick={() => {
+                setReason(reqInfo.reason)
+                setEvidenceUri(reqInfo.evidenceUri ?? '')
+                setEditingAfterReject(true)
+                setIsOpenForm(true)
+              }}
+            >
+              Gửi lại yêu cầu & Bổ sung bằng chứng
+            </button>
+          )}
+          <button
+            type="button"
+            className="rd-btn rd-btn--ghost text-xs border-red-300 text-red-700 font-semibold hover:bg-red-50"
+            onClick={() => {
+              onEscalateToComplaint(
+                `Yêu cầu trả hàng bị hộ nuôi từ chối (${reqInfo.operatorNote}). Lý do trả hàng: ${reqInfo.reason}`,
+                reqInfo.evidenceUri,
+              )
+              setTimeout(() => {
+                document.getElementById('complaint-section')?.scrollIntoView({ behavior: 'smooth' })
+              }, 100)
+            }}
+          >
+            Chuyển sang Khiếu nại để Admin phân xử
+          </button>
+        </div>
+      </section>
+    )
+  }
+
+  if (!order.canReturn) return null
+
+  // Khi chưa bấm mở form: hiển thị nút kích hoạt gọn gàng
+  if (!isOpenForm && !editingAfterReject) {
+    return (
+      <section className="ot-return border-t border-slate-200 mt-4 pt-4" aria-label="Trả hàng">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <p className="text-xs font-bold text-slate-800 m-0">
+              Cần trả hàng hoặc yêu cầu hoàn tiền?
+            </p>
+            <p className="text-xs text-slate-500 m-0">
+              Bạn có thể gửi yêu cầu trả hàng và hoàn lại <b>{vnd(order.totalAmount)}</b> trong hạn đổi trả.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setIsOpenForm(true); setLocalError(null) }}
+            className="rd-btn rd-btn--ghost text-xs font-bold text-amber-800 hover:text-amber-900 border-amber-300 hover:border-amber-400 bg-amber-50/80 hover:bg-amber-100 flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition shadow-2xs"
+          >
+            <RotateCcw size={14} className="text-amber-700" /> Trả hàng / Yêu cầu hoàn tiền
+          </button>
+        </div>
+      </section>
+    )
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLocalError(null)
+    try {
+      const dataUrl = await compressOrReadMediaFile(file)
+      setEvidenceUri(dataUrl)
+      setFileName(file.name)
+    } catch (err: unknown) {
+      setLocalError(err instanceof Error ? err.message : 'Không thể đọc file bằng chứng.')
+    }
+  }
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    if (ret.isPending) return
+    if (reason.trim().length < 10) {
+      setLocalError('Vui lòng nhập lý do trả hàng tối thiểu 10 ký tự (hoặc bấm chọn nhanh bên dưới).')
+      return
+    }
+    const finalEvidenceUri = evidenceUri.trim() || buildSampleEvidenceDataUrl(order.orderNo)
+    setLocalError(null)
+    ret.mutate(
+      { reason: reason.trim(), evidenceUri: finalEvidenceUri, requireApproval: true },
+      { onSuccess: () => { setEditingAfterReject(false); setIsOpenForm(false); } },
+    )
+  }
+
+  return (
+    <section className="ot-return bg-amber-50/40 p-4.5 rounded-2xl border border-amber-200 mt-4" aria-label="Trả hàng">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <h3 className="rd-h3 text-amber-950 flex items-center gap-2 m-0">
+          <RotateCcw size={18} className="text-amber-700" />
+          {editingAfterReject ? 'Gửi lại yêu cầu trả hàng & Bổ sung bằng chứng' : 'Trả hàng / Yêu cầu hoàn tiền'}
+        </h3>
+        <button
+          type="button"
+          onClick={() => { setIsOpenForm(false); setEditingAfterReject(false); }}
+          className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+          aria-label="Đóng form trả hàng"
+        >
+          <X size={18} />
+        </button>
+      </div>
+      <p className="text-xs text-slate-600 mb-3">
+        Cả đơn sẽ được trả. Hàng đã giao không nhập lại kho. Tiền hàng đã thu (<b>{vnd(order.totalAmount)}</b>) sẽ được chuyển về tài khoản của bạn sau khi hộ nuôi xác nhận.
+      </p>
+
+      <form className="space-y-3.5" onSubmit={submit}>
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label htmlFor="return-reason-input" className="text-xs font-bold text-slate-800">
+              Lý do trả hàng (*)
+            </label>
+            <span className={`text-xs ${reason.trim().length >= 10 ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+              {reason.trim().length}/300 ký tự (tối thiểu 10)
+            </span>
+          </div>
+          <textarea
+            id="return-reason-input"
+            aria-label="Lý do trả hàng"
+            value={reason}
+            onChange={(e) => { setReason(e.target.value); if (localError) setLocalError(null) }}
+            maxLength={300}
+            required
+            rows={3}
+            placeholder="Nhập chi tiết tình trạng cua khi mở thùng (tối thiểu 10 ký tự) hoặc bấm chọn nhanh bên dưới…"
+            className="rd-input w-full bg-white rounded-xl border border-slate-300 p-2.5 text-sm focus:border-amber-500"
+          />
+
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {QUICK_RETURN_REASONS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                className="px-2.5 py-1 rounded-full border border-slate-200 bg-white hover:bg-amber-50 hover:border-amber-400 text-xs text-slate-700 hover:text-amber-900 transition flex items-center gap-1 font-medium shadow-2xs"
+                onClick={() => { setReason(preset); setLocalError(null) }}
+              >
+                <span className="text-amber-600 font-bold">+</span> {preset}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-slate-300 shadow-2xs space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <strong className="block text-xs font-bold text-slate-800">
+                2. Bằng chứng mở thùng: Ảnh hoặc Video thực tế (*)
+              </strong>
+              <span className="text-xs text-slate-500">
+                Bắt buộc để Hộ nuôi đối chiếu tem QR và xác nhận hoàn tiền
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white border border-slate-300 hover:border-amber-500 hover:text-amber-800 shadow-2xs transition">
+                <ImageIcon size={14} className="text-amber-700" /> Chọn Ảnh / Video từ máy
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </label>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100 shadow-2xs transition"
+                onClick={() => {
+                  setEvidenceUri(buildSampleEvidenceDataUrl(order.orderNo))
+                  setFileName(`bang-chung-mo-thung-${order.orderNo}.svg`)
+                  setLocalError(null)
+                }}
+              >
+                + Dùng ảnh mẫu mở thùng (Test nhanh)
+              </button>
+            </div>
+          </div>
+
+          <input
+            type="text"
+            value={evidenceUri.startsWith('data:') ? '' : evidenceUri}
+            onChange={(e) => {
+              setEvidenceUri(e.target.value)
+              setFileName(null)
+              if (localError) setLocalError(null)
+            }}
+            placeholder="Hoặc dán link ảnh / video bằng chứng (Google Drive, Imgur, YouTube...)"
+            aria-label="Link ảnh hoặc video bằng chứng trả hàng"
+            className="rd-input w-full text-xs bg-slate-50 rounded-xl border border-slate-300 p-2.5 focus:bg-white focus:border-amber-500"
+          />
+
+          {fileName && evidenceUri.startsWith('data:') && (
+            <div className="flex items-center justify-between text-xs bg-emerald-50 border border-emerald-200 text-emerald-950 px-3 py-1.5 rounded-lg">
+              <span className="font-semibold flex items-center gap-1.5">
+                <ImageIcon size={14} className="text-emerald-700" /> Đã đính kèm: {fileName}
+              </span>
+              <button
+                type="button"
+                className="text-red-600 hover:text-red-700 underline font-semibold cursor-pointer"
+                onClick={() => { setEvidenceUri(''); setFileName(null) }}
+              >
+                Xoá file
+              </button>
+            </div>
+          )}
+
+          <EvidencePreview uri={evidenceUri} label="Xem trước bằng chứng đính kèm:" />
+        </div>
+
+        <p className="text-xs text-slate-500 m-0">
+          Yêu cầu trả hàng kèm bằng chứng sẽ được gửi tới <b>{order.farmName}</b> để kiểm duyệt. Khi hộ nuôi xác nhận, tiền hàng (<b>{vnd(order.totalAmount)}</b>) sẽ được lập lệnh hoàn.
+        </p>
+
+        {localError && <p className="co-error text-xs font-semibold" role="alert">{localError}</p>}
+        {ret.isError && <p className="co-error text-xs font-semibold" role="alert">{errorMessage(ret.error)}</p>}
+
+        <div className="flex items-center justify-end gap-2.5 pt-2">
+          <button
+            type="button"
+            className="rd-btn rd-btn--ghost text-xs px-4 py-2"
+            disabled={ret.isPending}
+            onClick={() => { setIsOpenForm(false); setEditingAfterReject(false); }}
+          >
+            Đóng lại
+          </button>
+          <button
+            type="submit"
+            aria-label="Gửi yêu cầu trả hàng"
+            className="rd-btn rd-btn--primary text-xs px-4 py-2 flex items-center gap-1.5 font-bold shadow-2xs"
+            disabled={ret.isPending}
+          >
+            <RotateCcw size={14} />
+            {ret.isPending ? 'Đang gửi…' : 'Gửi yêu cầu trả hàng'}
+          </button>
+        </div>
+      </form>
+    </section>
+  )
+}
+
 function Detail({ orderNo }: { orderNo: string }) {
   const query = useOrderTracking(orderNo)
+  const [complaintPrefill, setComplaintPrefill] = useState<{
+    description: string
+    evidenceUri: string | null
+    tick: number
+  } | null>(null)
+
   if (query.isPending) return <p role="status" className="rd-muted">Đang tải đơn {orderNo}…</p>
   if (query.isError) {
     return (
@@ -400,7 +857,18 @@ function Detail({ orderNo }: { orderNo: string }) {
       {order.shipment && <ShipmentBox shipment={order.shipment} />}
       {order.canConfirmReceipt && <ReceiveBox order={order} />}
       {order.canCancel && <CancelBox order={order} />}
-      <ComplaintSection order={order} />
+      {(order.canReturn || order.returnRequest || order.status === 'Returned') && (
+        <ReturnBox
+          order={order}
+          onEscalateToComplaint={(description, evidenceUri) =>
+            setComplaintPrefill({ description, evidenceUri, tick: Date.now() })
+          }
+        />
+      )}
+      {order.status === 'Completed' && (
+        <Link className="rd-btn rd-btn--primary" to={`/danh-gia-don-hang/${order.orderNo}`}>Đánh giá đơn</Link>
+      )}
+      <ComplaintSection order={order} prefill={complaintPrefill} />
     </article>
   )
 }

@@ -501,6 +501,11 @@ export function ProductView({ p, onAdded }: { p: Product; onAdded?: () => void }
             : <span className="rd-tag">Còn {qtyFmt.format(p.stock)} {p.unit}</span>}
         </div>
         <h2 className="rd-pv__name">{p.name}</h2>
+        <p className="s1-rating">
+          {(p.ratingCount ?? 0) > 0
+            ? `${p.averageStars?.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} / 5 · ${p.ratingCount} đánh giá từ đơn đã hoàn tất`
+            : 'Chưa có đánh giá'}
+        </p>
         <p className="rd-pv__price">{vnd(price)}<small> / {p.unit}</small></p>
         <SizePills p={p} value={size} onChange={setSize} />
         <div className="rd-pv__buy">

@@ -25,6 +25,8 @@ export interface StoreListing {
   inStock: boolean
   imageUrl: string | null
   publishedAt: string | null
+  averageStars: number | null
+  ratingCount: number
 }
 
 export interface PublicPriceRevision {
@@ -35,6 +37,15 @@ export interface PublicPriceRevision {
   flaggedAbnormal: boolean
 }
 
+export interface ListingReview {
+  ratingId: number
+  orderNo: string
+  buyerName: string
+  stars: number
+  comment: string | null
+  createdAt: string
+}
+
 export interface StoreListingDetail {
   listing: StoreListing
   batchTitle: string
@@ -42,6 +53,7 @@ export interface StoreListingDetail {
   sellUntil: string | null
   traceTagCode: string | null
   priceHistory: PublicPriceRevision[]
+  reviews?: ListingReview[]
 }
 
 export interface Paged<T> {
@@ -116,5 +128,7 @@ export function toProduct(l: StoreListing, detail?: StoreListingDetail): Product
     farm: l.farmName,
     crab: kind,
     traceTag: detail?.traceTagCode ?? null,
+    averageStars: l.averageStars,
+    ratingCount: l.ratingCount,
   }
 }

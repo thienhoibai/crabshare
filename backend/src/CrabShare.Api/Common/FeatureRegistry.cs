@@ -88,6 +88,8 @@ public static class FeatureRegistry
         services.AddHostedService<OrderCompletionJob>(); // chạy mỗi phút; tắt bằng Orders:CompletionJob:Enabled = false
         services.AddScoped<ComplaintService>();        // NH-11 khiếu nại + giải quyết tranh chấp (UC31, UC32)
         services.AddHostedService<ComplaintEscalationJob>(); // chạy mỗi phút; tắt bằng Orders:ComplaintEscalationJob:Enabled = false
+        services.AddScoped<OrderRatingService>();     // NH-12 đánh giá đơn Completed (UC34)
+        services.AddScoped<OrderReturnService>();     // NH-12 trả hàng trong hạn → Returned
 
         // Khôi
         services.AddScoped<AccountService>();        // Features/Accounts

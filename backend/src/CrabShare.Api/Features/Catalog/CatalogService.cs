@@ -261,7 +261,8 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
             .Skip((q.Page - 1) * q.PageSize).Take(q.PageSize)
             .Select(ToStoreRow)
             .ToListAsync(ct);
-        return new PagedResult<StoreListingResponse>(rows.Select(ToStoreResponse).ToList(), q.Page, q.PageSize, total);
+        var stats = await LoadRatingStatsAsync(rows.Select(r => r.ListingId).ToArray(), ct);
+        return new PagedResult<StoreListingResponse>(rows.Select(r => ToStoreResponse(r, stats)).ToList(), q.Page, q.PageSize, total);
     }
 
     /// <summary>Chi tiết ở cửa hàng: lịch sử giá công khai (TL-27) và một mã tem để mở trang truy xuất lô.</summary>
@@ -288,7 +289,11 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
             .Select(h => new PublicPriceRevisionResponse((long)h.PricePerKg, (long?)h.PreviousPricePerKg, h.ReasonCode, h.EffectiveFrom, h.FlaggedAbnormal))
             .ToList();
 
-        return new StoreListingDetailResponse(ToStoreResponse(ToStoreRowCompiled(listing)), listing.Batch.Title, listing.FrozenAt, SellUntil(listing), tagCode, history);
+        var stats = await LoadRatingStatsAsync([listing.ListingId], ct);
+        var reviews = await LoadListingReviewsAsync(listing.ListingId, ct);
+        return new StoreListingDetailResponse(
+            ToStoreResponse(ToStoreRowCompiled(listing), stats),
+            listing.Batch.Title, listing.FrozenAt, SellUntil(listing), tagCode, history, reviews);
     }
 
     private static readonly string[] StoreStatuses = ["Published", "SoldOut"];
@@ -347,14 +352,71 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
 
     private static readonly Func<ProductListing, StoreRow> ToStoreRowCompiled = ToStoreRow.Compile();
 
-    private static StoreListingResponse ToStoreResponse(StoreRow r)
+    private static StoreListingResponse ToStoreResponse(StoreRow r, IReadOnlyDictionary<long, (decimal Average, int Count)> stats)
     {
         var available = Math.Max(0, r.StockQtyKg - r.ReservedQtyKg);
         var imageUrl = r.ImageUri is null ? null : $"/api/listings/{r.ListingId}/image?v={r.ImageSha256?[..8]}";
+        stats.TryGetValue(r.ListingId, out var stat);
+        decimal? average = stat.Count == 0 ? null : stat.Average;
         return new StoreListingResponse(
             r.ListingId, r.Title, r.Status, r.CrabType, r.GradeCode, r.GradeName, r.MinWeightG, r.MaxWeightG,
             r.StorageType, r.BatchCode, r.FarmName, r.HarvestedAt, (long)r.PricePerKg, available,
-            r.Status == "Published" && available > 0, imageUrl, r.PublishedAt);
+            r.Status == "Published" && available > 0, imageUrl, r.PublishedAt, average, stat.Count);
+    }
+
+    private async Task<Dictionary<long, (decimal Average, int Count)>> LoadRatingStatsAsync(
+        IReadOnlyCollection<long> listingIds, CancellationToken ct)
+    {
+        if (listingIds.Count == 0) return [];
+        var pairs = await db.OrderLines.AsNoTracking()
+            .Where(l => listingIds.Contains(l.ListingId))
+            .Join(db.ProductRatings.AsNoTracking(), l => l.OrderId, r => r.OrderId,
+                (l, r) => new { l.ListingId, r.RatingId, r.Stars, r.Comment })
+            .ToListAsync(ct);
+        return pairs
+            .DistinctBy(p => (p.ListingId, p.RatingId))
+            .GroupBy(p => p.ListingId)
+            .ToDictionary(
+                g => g.Key,
+                g =>
+                {
+                    var itemStars = g.Select(x => CrabShare.Api.Features.Orders.OrderRatingService.ExtractForListing(x.Stars, x.Comment, x.ListingId).Stars).ToList();
+                    return ((decimal)Math.Round(itemStars.Average(s => (decimal)s), 2), itemStars.Count);
+                });
+    }
+
+    private async Task<IReadOnlyList<ListingReviewResponse>> LoadListingReviewsAsync(long listingId, CancellationToken ct)
+    {
+        var raw = await db.OrderLines.AsNoTracking()
+            .Where(l => l.ListingId == listingId)
+            .Join(db.ProductRatings.AsNoTracking(), l => l.OrderId, r => r.OrderId,
+                (l, r) => new
+                {
+                    r.RatingId,
+                    l.SalesOrder.OrderNo,
+                    BuyerName = l.SalesOrder.RecipientName,
+                    r.Stars,
+                    r.Comment,
+                    r.CreatedAt,
+                })
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.RatingId)
+            .ToListAsync(ct);
+
+        return raw
+            .DistinctBy(x => x.RatingId)
+            .Select(x =>
+            {
+                var (stars, comment) = CrabShare.Api.Features.Orders.OrderRatingService.ExtractForListing(x.Stars, x.Comment, listingId);
+                return new ListingReviewResponse(
+                    x.RatingId,
+                    x.OrderNo,
+                    string.IsNullOrWhiteSpace(x.BuyerName) ? "Khách mua" : x.BuyerName,
+                    stars,
+                    comment,
+                    x.CreatedAt);
+            })
+            .ToList();
     }
 
     // ---------- nội bộ ----------

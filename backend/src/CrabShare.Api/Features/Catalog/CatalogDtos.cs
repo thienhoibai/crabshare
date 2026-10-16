@@ -232,7 +232,9 @@ public sealed record StoreListingResponse(
     decimal AvailableQtyKg,
     bool InStock,
     string? ImageUrl,
-    DateTimeOffset? PublishedAt);
+    DateTimeOffset? PublishedAt,
+    decimal? AverageStars,
+    int RatingCount);
 
 public sealed record PublicPriceRevisionResponse(
     long PricePerKg,
@@ -241,10 +243,19 @@ public sealed record PublicPriceRevisionResponse(
     DateTimeOffset EffectiveFrom,
     bool FlaggedAbnormal);
 
+public sealed record ListingReviewResponse(
+    long RatingId,
+    string OrderNo,
+    string BuyerName,
+    int Stars,
+    string? Comment,
+    DateTimeOffset CreatedAt);
+
 public sealed record StoreListingDetailResponse(
     StoreListingResponse Listing,
     string BatchTitle,
     DateTimeOffset? FrozenAt,
     DateTimeOffset? SellUntil,
     string? TraceTagCode,
-    IReadOnlyList<PublicPriceRevisionResponse> PriceHistory);
+    IReadOnlyList<PublicPriceRevisionResponse> PriceHistory,
+    IReadOnlyList<ListingReviewResponse>? Reviews = null);
