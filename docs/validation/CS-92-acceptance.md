@@ -67,4 +67,6 @@ Actual Vercel browser: admin login, Users API, Alerts API and no unhandled brows
 
 A separate local checkout combining CS-73/76/80/84/88 passed 691 API tests and 4 settlement tests, web production build and 101 browser tests (2 existing real-API scenarios skipped). This included the final V012 migration, four-digit legacy payout compatibility and both dashboard/audit registrations. The CS-84 source passed Flutter analyze, 151 tests, signed HTTPS APK build and signature/checksum checks. Script safety tests passed 4 cases. None of these replace the pending two-phone and CS-82 checks above.
 
+The subsequent CS-88 fix keeping CORS headers on throttled login responses passed 35 focused security/authentication tests. The deployed source revision remains unconfirmed until CS-80's version endpoint and revision smoke are deployed; the reports describe observed endpoint behavior only.
+
 Remaining acceptance gates: team review/merge/deployment, fresh server/admin retest, two real phones, and real activated-tag scanning supplied by CS-82/71/74. CS-84/92 are prepared and tested as far as the available deployment/hardware allows; full acceptance is still pending.
