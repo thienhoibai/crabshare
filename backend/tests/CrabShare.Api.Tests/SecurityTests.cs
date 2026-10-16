@@ -82,10 +82,12 @@ public class SecurityTests
     {
         await using var app = await App();
         using var client = app.GetTestClient();
+        client.DefaultRequestHeaders.Add("Origin", "https://web.test");
         for (var i = 0; i < 60; i++) Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("https://api.test/login", null)).StatusCode);
         var blocked = await client.PostAsync("https://api.test/login", null);
         Assert.Equal((HttpStatusCode)429, blocked.StatusCode);
         Assert.NotNull(blocked.Headers.RetryAfter);
+        Assert.Equal("https://web.test", blocked.Headers.GetValues("Access-Control-Allow-Origin").Single());
     }
 
     private static async Task<WebApplication> App(string remoteIp = "198.51.100.20", string? network = null)
@@ -96,6 +98,7 @@ public class SecurityTests
         { ["Security:DataProtectionKeyPath"] = Path.Combine(Path.GetTempPath(), "CrabShareSecurityTests", "middleware") });
         if (network is not null) builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["Security:KnownNetworks:0"] = network });
         builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddCors(o => o.AddPolicy("test", p => p.WithOrigins("https://web.test").AllowAnyMethod().AllowAnyHeader()));
         builder.Services.AddAppSecurity(builder.Configuration, builder.Environment);
         // Test the middleware alone; no actual DB, startup upgrade or background job.
         var upgrade = builder.Services.Single(d => d.ImplementationType == typeof(PayoutProtectionUpgrade));
@@ -103,6 +106,7 @@ public class SecurityTests
         var app = builder.Build();
         app.Use(async (context, next) => { context.Connection.RemoteIpAddress = IPAddress.Parse(remoteIp); await next(context); });
         app.UseRouting(); app.UseAppSecurity();
+        app.UseCors("test"); app.UseRateLimiter();
         app.MapPost("/private", () => Results.Ok());
         app.MapPost("/login", () => Results.Ok()).RequireRateLimiting("auth-attempts");
         await app.StartAsync(); return app;

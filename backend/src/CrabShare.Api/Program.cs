@@ -48,6 +48,7 @@ app.UseExceptionHandler();
 app.UseAppSecurity();
 app.UseStatusCodePages();
 app.UseCors("frontends");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

@@ -67,7 +67,6 @@ public static class SecuritySetup
                 await next(context);
             });
         }
-        app.UseRateLimiter();
         return app;
     }
 }

@@ -18,6 +18,8 @@ Production rejects HTTP business requests before authentication and emits HSTS o
 
 Authentication endpoints have a 60-request/minute/IP limit (429 + Retry-After). A normalized account permits five failed/in-flight attempts in 15 minutes, with a bounded 10,000-entry store and fixed expiry. Successful login clears the account window. Unknown users run password verification against a dummy hash and receive the same error. The guard is in memory for the current single-instance demo: restart clears it; scaling to multiple instances requires a shared limiter/edge protection. Database fixtures explicitly raise only their IP budget for bulk setup; security tests exercise actual defaults.
 
+Rate limiting runs after CORS so an allowed web origin can read a 429 response and Retry-After instead of seeing a generic connection failure. The final middleware-order change passed 35 focused security/authentication tests, including an actual throttled CORS response.
+
 Web ignores a delayed 401 belonging to an earlier session, while a current-token 401 signs out correctly.
 
 ## Dependency patches
