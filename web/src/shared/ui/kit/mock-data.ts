@@ -53,6 +53,8 @@ export type Product = {
   crab?: string
   traceTag?: string | null
   gallery?: string[]
+  averageStars?: number | null
+  ratingCount?: number
 }
 
 export const OPERATOR = 'HTX Nuôi cua Cà Mau'

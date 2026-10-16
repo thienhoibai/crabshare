@@ -18,6 +18,7 @@ import {
   useSubmitComplaint,
   type ComplaintType,
 } from './complaintsApi'
+import { useReturnOrder } from './rateOrderApi'
 import './checkout.css'
 
 function Lookup() {
@@ -349,6 +350,55 @@ function ComplaintSection({ order }: { order: OrderTracking }) {
   )
 }
 
+function ReturnBox({ order }: { order: OrderTracking }) {
+  const ret = useReturnOrder(order.orderNo)
+  const [reason, setReason] = useState('')
+  if (!order.canReturn) return null
+  if (ret.isSuccess) {
+    return (
+      <p role="status" className="rd-note">
+        Đã ghi nhận trả hàng. Lệnh hoàn {vnd(ret.data.refundAmount)} sẽ được gửi đi.
+      </p>
+    )
+  }
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    if (ret.isPending || reason.trim().length < 10) return
+    ret.mutate(reason)
+  }
+  return (
+    <section className="ot-return" aria-label="Trả hàng">
+      <form className="ot-return" onSubmit={submit}>
+        <label>
+          Lý do trả hàng
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            minLength={10}
+            maxLength={300}
+            required
+            rows={3}
+            placeholder="Nhập lý do trả hàng (từ 10 đến 300 ký tự)…"
+          />
+        </label>
+        <p className="rd-muted">
+          Cả đơn sẽ được trả. Hàng đã giao không nhập lại kho. Tiền hàng đã thu sẽ được lập lệnh hoàn.
+        </p>
+        {ret.isError && <p className="co-error" role="alert">{errorMessage(ret.error)}</p>}
+        <div className="ot-return__actions">
+          <button
+            type="submit"
+            className="rd-btn rd-btn--primary"
+            disabled={ret.isPending || reason.trim().length < 10}
+          >
+            {ret.isPending ? 'Đang gửi…' : 'Gửi yêu cầu trả hàng'}
+          </button>
+        </div>
+      </form>
+    </section>
+  )
+}
+
 function Detail({ orderNo }: { orderNo: string }) {
   const query = useOrderTracking(orderNo)
   if (query.isPending) return <p role="status" className="rd-muted">Đang tải đơn {orderNo}…</p>
@@ -400,6 +450,10 @@ function Detail({ orderNo }: { orderNo: string }) {
       {order.shipment && <ShipmentBox shipment={order.shipment} />}
       {order.canConfirmReceipt && <ReceiveBox order={order} />}
       {order.canCancel && <CancelBox order={order} />}
+      {order.canReturn && <ReturnBox order={order} />}
+      {order.status === 'Completed' && (
+        <Link className="rd-btn rd-btn--primary" to={`/danh-gia-don-hang/${order.orderNo}`}>Đánh giá đơn</Link>
+      )}
       <ComplaintSection order={order} />
     </article>
   )

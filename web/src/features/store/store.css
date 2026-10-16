@@ -188,3 +188,5 @@
 .s3-cart__total b { font-size: 22px; font-variant-numeric: tabular-nums; }
 .s3-mobilebar { display: none; }
 @media (max-width: 1024px) { .s3-mobilebar { display: block; } }
+
+.s1-rating { display: block; color: var(--rd-muted, #5c6b63); font-size: 0.875rem; }

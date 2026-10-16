@@ -74,6 +74,7 @@ export interface OrderTracking {
   timeline: OrderTimelineStep[]
   canConfirmReceipt: boolean
   shipment: OrderShipment | null
+  canReturn: boolean
 }
 
 export interface CancelOrderResult {

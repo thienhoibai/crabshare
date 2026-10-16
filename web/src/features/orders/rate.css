@@ -1,0 +1,33 @@
+.rv-card { display: grid; gap: 16px; }
+.rv-form { display: grid; gap: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.rv-stars { display: flex; gap: 8px; flex-wrap: wrap; }
+.rv-star {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: #9ca3af;
+  cursor: pointer;
+  font-weight: 600;
+}
+.rv-star.is-on {
+  border-color: var(--accent, #8b5023);
+  color: var(--accent, #8b5023);
+  background: var(--surface-2, #fdf8f3);
+}
+.rv-field { display: grid; gap: 6px; font-size: 14px; }
+.rv-field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font: inherit;
+  resize: vertical;
+}
+.rv-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.rv-done { display: grid; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.rv-done__title { font-weight: 700; font-size: 16px; margin: 0; }
+.rv-done__comment { margin: 0; white-space: pre-line; }

@@ -25,6 +25,8 @@ export interface StoreListing {
   inStock: boolean
   imageUrl: string | null
   publishedAt: string | null
+  averageStars: number | null
+  ratingCount: number
 }
 
 export interface PublicPriceRevision {
@@ -116,5 +118,7 @@ export function toProduct(l: StoreListing, detail?: StoreListingDetail): Product
     farm: l.farmName,
     crab: kind,
     traceTag: detail?.traceTagCode ?? null,
+    averageStars: l.averageStars,
+    ratingCount: l.ratingCount,
   }
 }

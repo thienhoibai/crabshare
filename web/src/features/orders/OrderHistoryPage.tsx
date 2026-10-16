@@ -36,6 +36,9 @@ function Row({ order }: { order: OrderSummary }) {
         <Link className="rd-btn rd-btn--ghost rd-btn--sm" to={`/theo-doi-don-hang/${order.orderNo}`}>
           {cancellable ? 'Theo dõi / huỷ' : order.status === 'Shipping' ? 'Theo dõi giao hàng' : 'Xem chi tiết'}
         </Link>
+        {order.status === 'Completed' && (
+          <Link className="rd-btn rd-btn--ghost rd-btn--sm" to={`/danh-gia-don-hang/${order.orderNo}`}>Đánh giá</Link>
+        )}
       </div>
     </article>
   )

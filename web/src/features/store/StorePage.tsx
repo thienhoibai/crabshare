@@ -149,7 +149,13 @@ function CardV1({ p, onOpen }: { p: Product; onOpen: () => void }) {
         )}
       </div>
       <div className="s1-card__meta">
-        <div><h3>{p.name}</h3><small>{p.sizes[0].label}</small></div>
+        <div>
+          <h3>{p.name}</h3>
+          {(p.ratingCount ?? 0) > 0 && (
+            <span className="s1-rating">{p.averageStars?.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} sao · {p.ratingCount} đánh giá</span>
+          )}
+          <small>{p.sizes[0].label}</small>
+        </div>
         <b>{vnd(p.sizes[0].price)}<small>/{p.unit}</small></b>
       </div>
     </article>
