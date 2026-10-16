@@ -43,29 +43,48 @@ class _DailyLogFormPageState extends ConsumerState<DailyLogFormPage> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     final batch = _batchCode;
-    if (batch == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chọn lô trước khi lưu.')));
+    if (batch == null ||
+        !(ref.read(activeBatchesProvider).value?.any((b) => b.code == batch) ??
+            false)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Chọn lô trước khi lưu.')));
       return;
     }
     setState(() => _saving = true);
     try {
-      await ref.read(operatorRepositoryProvider).submitLog(DailyLogInput(
-            batchCode: batch,
-            ph: parseDecimal(_ph.text),
-            waterTempC: parseDecimal(_temp.text),
-            salinityPpt: parseDecimal(_salinity.text),
-            feedKg: parseDecimal(_feed.text),
-            note: _note.text.trim().isEmpty ? null : _note.text.trim(),
-          ));
+      await ref
+          .read(operatorRepositoryProvider)
+          .submitLog(
+            DailyLogInput(
+              batchCode: batch,
+              ph: parseDecimal(_ph.text),
+              waterTempC: parseDecimal(_temp.text),
+              salinityPpt: parseDecimal(_salinity.text),
+              feedKg: parseDecimal(_feed.text),
+              note: _note.text.trim().isEmpty ? null : _note.text.trim(),
+            ),
+          );
+      if (!mounted) return;
       ref.invalidate(dailyLogsProvider);
       ref.invalidate(activeBatchesProvider);
       ref.invalidate(todaySummaryProvider);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã lưu nhật ký lô $batch')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Đã thử nhật ký minh hoạ lô $batch. Chưa lưu lên máy chủ.',
+          ),
+        ),
+      );
       Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -73,16 +92,25 @@ class _DailyLogFormPageState extends ConsumerState<DailyLogFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    final batches = ref.watch(activeBatchesProvider).value ?? const <OperatorBatch>[];
+    final batchesState = ref.watch(activeBatchesProvider);
+    final batches = batchesState.value ?? const <OperatorBatch>[];
     _batchCode ??= batches.isEmpty ? null : batches.first.code;
 
     return Scaffold(
       body: SafeArea(
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
             const SubPageHeader(title: 'Nhật ký hôm nay'),
             const SizedBox(height: 18),
+            const DemoNotice(),
+            if (batchesState.isLoading) const LoadingSkeleton(rows: 1),
+            if (batchesState.hasError)
+              ErrorView(
+                message: apiErrorMessage(batchesState.error!),
+                onRetry: () => ref.invalidate(activeBatchesProvider),
+              ),
             Wrap(
               spacing: 8,
               children: [
@@ -94,9 +122,16 @@ class _DailyLogFormPageState extends ConsumerState<DailyLogFormPage> {
                     showCheckmark: false,
                     backgroundColor: AppColors.surface,
                     selectedColor: AppColors.ink,
-                    labelStyle: TextStyle(color: _batchCode == b.code ? Colors.white : AppColors.ink, fontWeight: FontWeight.w600),
+                    labelStyle: TextStyle(
+                      color: _batchCode == b.code
+                          ? Colors.white
+                          : AppColors.ink,
+                      fontWeight: FontWeight.w600,
+                    ),
                     side: BorderSide.none,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.pill)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
                   ),
               ],
             ),
@@ -104,17 +139,47 @@ class _DailyLogFormPageState extends ConsumerState<DailyLogFormPage> {
             GridView(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount:
+                    MediaQuery.sizeOf(context).width < 360 ||
+                        MediaQuery.textScalerOf(context).scale(1) > 1.2
+                    ? 1
+                    : 2,
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
-                mainAxisExtent: 168,
+                mainAxisExtent:
+                    168 *
+                    MediaQuery.textScalerOf(context).scale(1).clamp(1, 1.6),
               ),
               children: [
-                _MetricInput(controller: _ph, label: 'pH', unit: '', icon: Icons.science_outlined, range: LogThresholds.ph),
-                _MetricInput(controller: _temp, label: 'Nhiệt độ nước', unit: '°C', icon: Icons.thermostat_outlined, range: LogThresholds.waterTempC),
-                _MetricInput(controller: _salinity, label: 'Độ mặn', unit: '‰', icon: Icons.water_drop_outlined, range: LogThresholds.salinityPpt),
-                _MetricInput(controller: _feed, label: 'Thức ăn', unit: 'kg', icon: Icons.set_meal_outlined, range: LogThresholds.feedKg),
+                _MetricInput(
+                  controller: _ph,
+                  label: 'pH',
+                  unit: '',
+                  icon: Icons.science_outlined,
+                  range: LogThresholds.ph,
+                ),
+                _MetricInput(
+                  controller: _temp,
+                  label: 'Nhiệt độ nước',
+                  unit: '°C',
+                  icon: Icons.thermostat_outlined,
+                  range: LogThresholds.waterTempC,
+                ),
+                _MetricInput(
+                  controller: _salinity,
+                  label: 'Độ mặn',
+                  unit: '‰',
+                  icon: Icons.water_drop_outlined,
+                  range: LogThresholds.salinityPpt,
+                ),
+                _MetricInput(
+                  controller: _feed,
+                  label: 'Thức ăn',
+                  unit: 'kg',
+                  icon: Icons.set_meal_outlined,
+                  range: LogThresholds.feedKg,
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -122,14 +187,29 @@ class _DailyLogFormPageState extends ConsumerState<DailyLogFormPage> {
               controller: _note,
               maxLines: 3,
               maxLength: 500,
-              decoration: const InputDecoration(hintText: 'Ghi chú (thay nước, thời tiết, cua bỏ ăn…)'),
+              decoration: const InputDecoration(
+                hintText: 'Ghi chú (thay nước, thời tiết, cua bỏ ăn…)',
+              ),
             ),
             const SizedBox(height: 8),
             FilledButton(
-              onPressed: _saving ? null : _save,
+              onPressed:
+                  _saving ||
+                      batchesState.isLoading ||
+                      batchesState.hasError ||
+                      !batches.any((b) => b.code == _batchCode)
+                  ? null
+                  : _save,
               child: _saving
-                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                  : const Text('Lưu nhật ký'),
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Lưu nhật ký minh hoạ'),
             ),
           ],
         ),
@@ -140,7 +220,13 @@ class _DailyLogFormPageState extends ConsumerState<DailyLogFormPage> {
 
 /// Ô nhập một chỉ số: số lớn ở giữa, báo cam khi ngoài khoảng thường gặp.
 class _MetricInput extends StatefulWidget {
-  const _MetricInput({required this.controller, required this.label, required this.unit, required this.icon, required this.range});
+  const _MetricInput({
+    required this.controller,
+    required this.label,
+    required this.unit,
+    required this.icon,
+    required this.range,
+  });
 
   final TextEditingController controller;
   final String label;
@@ -162,7 +248,10 @@ class _MetricInputState extends State<_MetricInput> {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: outOfRange ? AppColors.accent : Colors.transparent, width: 2),
+        border: Border.all(
+          color: outOfRange ? AppColors.accent : Colors.transparent,
+          width: 2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,7 +260,14 @@ class _MetricInputState extends State<_MetricInput> {
             children: [
               Icon(widget.icon, size: 20, color: AppColors.accentText),
               const SizedBox(width: 6),
-              Expanded(child: Text(widget.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
             ],
           ),
           const Spacer(),
@@ -191,10 +287,16 @@ class _MetricInputState extends State<_MetricInput> {
           ),
           const Spacer(),
           Text(
-            outOfRange ? 'Ngoài khoảng ${widget.range.format()}' : 'Thường gặp ${widget.range.format()}',
+            outOfRange
+                ? 'Ngoài khoảng ${widget.range.format()}'
+                : 'Thường gặp ${widget.range.format()}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12, color: outOfRange ? AppColors.accentText : AppColors.inkMuted, fontWeight: outOfRange ? FontWeight.w700 : FontWeight.w400),
+            style: TextStyle(
+              fontSize: 12,
+              color: outOfRange ? AppColors.accentText : AppColors.inkMuted,
+              fontWeight: outOfRange ? FontWeight.w700 : FontWeight.w400,
+            ),
           ),
         ],
       ),

@@ -25,9 +25,10 @@ class _PackOrdersPageState extends ConsumerState<PackOrdersPage> {
     final orders = ref.watch(operatorOrdersProvider(_status));
     return Scaffold(
       body: SafeArea(
-        child: RefreshIndicator(
+        child: AppRefreshIndicator(
           onRefresh: () => ref.refresh(operatorOrdersProvider(_status).future),
           child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             children: [
               const SubPageHeader(title: 'Đơn hàng'),
@@ -53,14 +54,7 @@ class _PackOrdersPageState extends ConsumerState<PackOrdersPage> {
                 ),
               ),
               ...orders.when(
-                loading: () => [
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: CircularProgressIndicator(),
-                    ),
-                  ),
-                ],
+                loading: () => [const LoadingSkeleton(rows: 2)],
                 error: (e, _) => [
                   Padding(
                     padding: const EdgeInsets.only(top: 16),

@@ -155,7 +155,10 @@ class KycController extends AsyncNotifier<KycVerification> {
 }
 
 final kycDetailsProvider =
-    AsyncNotifierProvider<KycController, KycVerification>(KycController.new);
+    AsyncNotifierProvider<KycController, KycVerification>(
+      KycController.new,
+      retry: (_, _) => null,
+    );
 final kycStatusProvider = Provider(
   (ref) => ref.watch(kycDetailsProvider).whenData((result) => result.status),
 );

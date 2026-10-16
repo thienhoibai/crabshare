@@ -63,6 +63,7 @@ class _PackOrderPageState extends ConsumerState<PackOrderPage> {
   }
 
   void _addTag(String raw) {
+    if (_saving) return;
     final code = _normalize(raw);
     if (code == null) {
       ScaffoldMessenger.of(context)
@@ -96,7 +97,7 @@ class _PackOrderPageState extends ConsumerState<PackOrderPage> {
   }
 
   Future<void> _pack() async {
-    if (_tags.isEmpty) return;
+    if (_saving || _tags.isEmpty) return;
     setState(() => _saving = true);
     try {
       final result = await ref
@@ -183,186 +184,211 @@ class _PackOrderPageState extends ConsumerState<PackOrderPage> {
     final order = _order;
     return Scaffold(
       body: SafeArea(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _loadError != null
-            ? ListView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-                children: [
-                  SubPageHeader(title: 'Đơn ${widget.orderNo}'),
-                  const SizedBox(height: 16),
-                  Text('$_loadError'),
-                  const SizedBox(height: 12),
-                  FilledButton(onPressed: _load, child: const Text('Thử lại')),
-                ],
-              )
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-                children: [
-                  SubPageHeader(title: 'Đơn ${widget.orderNo}'),
-                  const SizedBox(height: 12),
-                  if (order != null) ...[
-                    AppCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${order.customerName} · ${order.batchCode}',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${order.recipientName} · ${order.recipientPhone}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          Text(
-                            order.shippingAddress,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${formatVnd(order.totalAmount)} · ${order.totalKg.toString().replaceAll('.', ',')} kg · ${operatorOrderStatusLabel(order.status)}',
-                          ),
-                        ],
-                      ),
+        child: AppRefreshIndicator(
+          onRefresh: () async {
+            if (!_saving) await _load();
+          },
+          child: _loading
+              ? ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: SubPageHeader(title: 'Đơn ${widget.orderNo}'),
                     ),
-                    const SectionHeader(title: 'Dòng hàng'),
-                    for (final line in order.lines) ...[
+                    const LoadingSkeleton(),
+                  ],
+                )
+              : _loadError != null
+              ? ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                  children: [
+                    SubPageHeader(title: 'Đơn ${widget.orderNo}'),
+                    const SizedBox(height: 16),
+                    Text(apiErrorMessage(_loadError!)),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: _load,
+                      child: const Text('Thử lại'),
+                    ),
+                  ],
+                )
+              : ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                  children: [
+                    SubPageHeader(title: 'Đơn ${widget.orderNo}'),
+                    const SizedBox(height: 12),
+                    if (order != null) ...[
                       AppCard(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              line.title,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
+                              '${order.customerName} · ${order.batchCode}',
+                              style: Theme.of(context).textTheme.titleMedium,
                             ),
+                            const SizedBox(height: 4),
                             Text(
-                              '${line.gradeName} · cần ${line.quantityKg} kg · đã gán ${line.assignedKg} kg (${line.assignedCount} con)',
+                              '${order.recipientName} · ${order.recipientPhone}',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
-                            for (final tag in line.tags)
-                              Text(
-                                '${tag.tagCode} · ${tag.weightG} g',
-                                style: const TextStyle(letterSpacing: 0.5),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-                    if (order.status == 'Paid') ...[
-                      const SectionHeader(title: 'Tem đã quét'),
-                      AppCard(
-                        child: Column(
-                          children: [
-                            TextField(
-                              controller: _manual,
-                              maxLength: 12,
-                              textCapitalization: TextCapitalization.characters,
-                              decoration: const InputDecoration(
-                                labelText: 'Nhập mã tem',
-                                counterText: '',
-                              ),
-                              onSubmitted: _addTag,
+                            Text(
+                              order.shippingAddress,
+                              style: Theme.of(context).textTheme.bodySmall,
                             ),
                             const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: _saving ? null : _scan,
-                                    icon: const Icon(
-                                      Icons.qr_code_scanner_rounded,
-                                    ),
-                                    label: const Text('Quét'),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: FilledButton(
-                                    onPressed:
-                                        _saving || _manual.text.trim().isEmpty
-                                        ? null
-                                        : () => _addTag(_manual.text),
-                                    child: const Text('Thêm'),
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              '${formatVnd(order.totalAmount)} · ${order.totalKg.toString().replaceAll('.', ',')} kg · ${operatorOrderStatusLabel(order.status)}',
                             ),
                           ],
                         ),
                       ),
-                      for (final code in _tags) ...[
-                        const SizedBox(height: 8),
+                      const SectionHeader(title: 'Dòng hàng'),
+                      for (final line in order.lines) ...[
                         AppCard(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: Text(
-                                  code,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1,
-                                  ),
+                              Text(
+                                line.title,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              IconButton(
-                                onPressed: _saving
-                                    ? null
-                                    : () => setState(() => _tags.remove(code)),
-                                icon: const Icon(Icons.close_rounded),
+                              Text(
+                                '${line.gradeName} · cần ${line.quantityKg} kg · đã gán ${line.assignedKg} kg (${line.assignedCount} con)',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              for (final tag in line.tags)
+                                Text(
+                                  '${tag.tagCode} · ${tag.weightG} g',
+                                  style: const TextStyle(letterSpacing: 0.5),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      if (order.status == 'Paid') ...[
+                        const SectionHeader(title: 'Tem đã quét'),
+                        AppCard(
+                          child: Column(
+                            children: [
+                              TextField(
+                                controller: _manual,
+                                enabled: !_saving,
+                                onChanged: (_) => setState(() {}),
+                                maxLength: 12,
+                                textCapitalization:
+                                    TextCapitalization.characters,
+                                decoration: const InputDecoration(
+                                  labelText: 'Nhập mã tem',
+                                  counterText: '',
+                                ),
+                                onSubmitted: _addTag,
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: _saving ? null : _scan,
+                                      icon: const Icon(
+                                        Icons.qr_code_scanner_rounded,
+                                      ),
+                                      label: const Text('Quét'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: FilledButton(
+                                      onPressed:
+                                          _saving || _manual.text.trim().isEmpty
+                                          ? null
+                                          : () => _addTag(_manual.text),
+                                      child: const Text('Thêm'),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
                         ),
-                      ],
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        onPressed: _saving || _tags.isEmpty ? null : _pack,
-                        icon: const Icon(Icons.inventory_2_outlined),
-                        label: Text(
-                          _saving ? 'Đang đóng gói…' : 'Xác nhận đóng gói',
-                        ),
-                      ),
-                    ] else ...[
-                      if (order.shipment != null) ...[
-                        const SectionHeader(title: 'Giao hàng'),
-                        _ShipmentCard(shipment: order.shipment!),
-                      ],
-                      const SizedBox(height: 16),
-                      if (order.status == 'Packed')
-                        FilledButton.icon(
-                          onPressed: _saving ? null : _ship,
-                          icon: const Icon(Icons.local_shipping_outlined),
-                          label: Text(
-                            _saving ? 'Đang lưu…' : 'Giao cho nhà xe',
+                        for (final code in _tags) ...[
+                          const SizedBox(height: 8),
+                          AppCard(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    code,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 1,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: _saving
+                                      ? null
+                                      : () =>
+                                            setState(() => _tags.remove(code)),
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                              ],
+                            ),
                           ),
-                        )
-                      else if (order.status == 'Shipping')
+                        ],
+                        const SizedBox(height: 16),
                         FilledButton.icon(
-                          onPressed: _saving ? null : _deliver,
-                          icon: const Icon(Icons.check_circle_outline_rounded),
+                          onPressed: _saving || _tags.isEmpty ? null : _pack,
+                          icon: const Icon(Icons.inventory_2_outlined),
                           label: Text(
-                            _saving ? 'Đang lưu…' : 'Đã giao tới khách',
+                            _saving ? 'Đang đóng gói…' : 'Xác nhận đóng gói',
                           ),
-                        )
-                      else
-                        InfoChip(
-                          icon: Icons.check_rounded,
-                          label:
-                              'Đơn ${operatorOrderStatusLabel(order.status).toLowerCase()}',
-                          background: const Color(0xFFE3F2E9),
                         ),
+                      ] else ...[
+                        if (order.shipment != null) ...[
+                          const SectionHeader(title: 'Giao hàng'),
+                          _ShipmentCard(shipment: order.shipment!),
+                        ],
+                        const SizedBox(height: 16),
+                        if (order.status == 'Packed')
+                          FilledButton.icon(
+                            onPressed: _saving ? null : _ship,
+                            icon: const Icon(Icons.local_shipping_outlined),
+                            label: Text(
+                              _saving ? 'Đang lưu…' : 'Giao cho nhà xe',
+                            ),
+                          )
+                        else if (order.status == 'Shipping')
+                          FilledButton.icon(
+                            onPressed: _saving ? null : _deliver,
+                            icon: const Icon(
+                              Icons.check_circle_outline_rounded,
+                            ),
+                            label: Text(
+                              _saving ? 'Đang lưu…' : 'Đã giao tới khách',
+                            ),
+                          )
+                        else
+                          InfoChip(
+                            icon: Icons.check_rounded,
+                            label:
+                                'Đơn ${operatorOrderStatusLabel(order.status).toLowerCase()}',
+                            background: const Color(0xFFE3F2E9),
+                          ),
+                      ],
                     ],
                   ],
-                ],
-              ),
+                ),
+        ),
       ),
     );
   }
@@ -437,6 +463,16 @@ class _TagScannerPageState extends State<_TagScannerPage> {
           children: [
             MobileScanner(
               controller: _controller,
+              errorBuilder: (context, _) => const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(28),
+                  child: Text(
+                    'Không mở được camera. Kiểm tra quyền camera, hoặc quay lại để nhập mã tem.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
               onDetect: (capture) {
                 final value = capture.barcodes.firstOrNull?.rawValue;
                 if (value == null || _handled) return;

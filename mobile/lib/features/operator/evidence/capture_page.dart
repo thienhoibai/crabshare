@@ -190,7 +190,7 @@ class _CapturePageState extends ConsumerState<CapturePage> {
               ),
             ),
       body: SafeArea(
-        child: RefreshIndicator(
+        child: AppRefreshIndicator(
           onRefresh: () => ref.refresh(captureBoxesProvider.future),
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -274,11 +274,7 @@ class _CapturePageState extends ConsumerState<CapturePage> {
                         _ResultCard(result: _result!),
                         const SizedBox(height: 14),
                       ],
-                      if (boxes.isLoading)
-                        const Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Center(child: CircularProgressIndicator()),
-                        ),
+                      if (boxes.isLoading) const LoadingSkeleton(rows: 1),
                       if (boxes.hasError)
                         ErrorView(
                           message: apiErrorMessage(boxes.error!),

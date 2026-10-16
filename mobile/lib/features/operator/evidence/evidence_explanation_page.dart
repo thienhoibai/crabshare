@@ -27,7 +27,7 @@ class FlaggedEvidencePage extends ConsumerWidget {
     final query = ref.watch(flaggedEvidenceProvider);
     return Scaffold(
       body: SafeArea(
-        child: RefreshIndicator(
+        child: AppRefreshIndicator(
           onRefresh: () => ref.refresh(flaggedEvidenceProvider.future),
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -40,9 +40,7 @@ class FlaggedEvidencePage extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               ...query.when(
-                loading: () => [
-                  const Center(child: CircularProgressIndicator()),
-                ],
+                loading: () => [const LoadingSkeleton(rows: 2)],
                 error: (error, _) => [
                   ErrorView(
                     message: apiErrorMessage(error),
@@ -129,7 +127,7 @@ class EvidenceExplanationPage extends ConsumerWidget {
     );
     return Scaffold(
       body: SafeArea(
-        child: RefreshIndicator(
+        child: AppRefreshIndicator(
           onRefresh: () => ref.refresh(operatorEvidenceProvider(id).future),
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -137,9 +135,7 @@ class EvidenceExplanationPage extends ConsumerWidget {
             children: [
               const SubPageHeader(title: 'Giải trình bằng chứng'),
               ...query.when(
-                loading: () => [
-                  const Center(child: CircularProgressIndicator()),
-                ],
+                loading: () => [const LoadingSkeleton(rows: 2)],
                 error: (error, _) => [
                   ErrorView(
                     message: apiErrorMessage(error),

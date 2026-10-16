@@ -94,4 +94,4 @@ final payoutProfileProvider = FutureProvider.autoDispose
       final userId = ref.watch(sessionProvider.select((s) => s.user?.userId));
       if (userId == null) return Future.error(StateError('Bạn cần đăng nhập.'));
       return ref.watch(payoutRepositoryProvider).get(ownerType);
-    });
+    }, retry: (_, _) => null);

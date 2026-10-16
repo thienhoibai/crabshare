@@ -41,77 +41,64 @@ class _InvestorHomePageState extends ConsumerState<InvestorHomePage> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: contributions.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => ErrorView(
-            message: apiErrorMessage(e),
-            onRetry: () => ref.invalidate(myContributionsProvider),
-          ),
+        child: AsyncContent(
+          value: contributions,
+          onRefresh: () => Future.wait([
+            ref.refresh(myContributionsProvider.future),
+            ref.refresh(kycDetailsProvider.future),
+          ]),
           data: (items) {
             final index = items.indexWhere(
               (c) => c.batch.code == _selectedCode,
             );
             final selectedIndex = index < 0 ? 0 : index;
             final selected = items.isEmpty ? null : items[selectedIndex];
-            return RefreshIndicator(
-              onRefresh: () async {
-                await Future.wait([
-                  ref.refresh(myContributionsProvider.future),
-                  ref.refresh(kycDetailsProvider.future),
-                ]);
-              },
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(
-                  20,
-                  12,
-                  20,
-                  kNavBarClearance,
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, kNavBarClearance),
+              children: [
+                GreetingHeader(
+                  name: user?.fullName ?? '',
+                  subtitle: 'Danh mục góp vốn của bạn',
+                  notificationCount: ref.watch(unreadNotificationsProvider),
+                  onBell: () => context.go(Routes.investorNotifications),
                 ),
-                children: [
-                  GreetingHeader(
-                    name: user?.fullName ?? '',
-                    subtitle: 'Danh mục góp vốn của bạn',
-                    notificationCount: ref.watch(unreadNotificationsProvider),
-                    onBell: () => context.go(Routes.investorNotifications),
+                const SizedBox(height: 14),
+                const _KycBanner(),
+                if (selected == null)
+                  const EmptyState(
+                    icon: Icons.savings_outlined,
+                    title: 'Bạn chưa góp vốn lô nào',
+                    message: 'Chọn một lô đang gọi vốn để bắt đầu.',
+                  )
+                else ...[
+                  _BatchSwitcher(
+                    items: items,
+                    selected: selectedIndex,
+                    onSelect: (i) =>
+                        setState(() => _selectedCode = items[i].batch.code),
                   ),
-                  const SizedBox(height: 14),
-                  const _KycBanner(),
-                  if (selected == null)
-                    const EmptyState(
-                      icon: Icons.savings_outlined,
-                      title: 'Bạn chưa góp vốn lô nào',
-                      message: 'Chọn một lô đang gọi vốn để bắt đầu.',
-                    )
-                  else ...[
-                    _BatchSwitcher(
-                      items: items,
-                      selected: selectedIndex,
-                      onSelect: (i) =>
-                          setState(() => _selectedCode = items[i].batch.code),
-                    ),
-                    const SizedBox(height: 12),
-                    _CycleGaugeCard(contribution: selected),
-                  ],
-                  const SizedBox(height: 14),
-                  AddBar(
-                    label: 'Góp vốn lô mới',
-                    onTap: () => context.go(Routes.investorBatches),
-                  ),
-                  SectionHeader(
-                    title: 'Khoản góp của tôi',
-                    actionLabel: '${items.length} lô',
-                  ),
-                  for (final c in items) ...[
-                    _ContributionCard(
-                      contribution: c,
-                      onTap: () =>
-                          context.push(Routes.portfolioBatch(c.batch.code)),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
+                  const SizedBox(height: 12),
+                  _CycleGaugeCard(contribution: selected),
                 ],
-              ),
+                const SizedBox(height: 14),
+                AddBar(
+                  label: 'Góp vốn lô mới',
+                  onTap: () => context.go(Routes.investorBatches),
+                ),
+                SectionHeader(
+                  title: 'Khoản góp của tôi',
+                  actionLabel: '${items.length} lô',
+                ),
+                for (final c in items) ...[
+                  _ContributionCard(
+                    contribution: c,
+                    onTap: () =>
+                        context.push(Routes.portfolioBatch(c.batch.code)),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ],
             );
           },
         ),

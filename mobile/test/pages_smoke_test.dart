@@ -1,4 +1,13 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'helpers/discovery_fakes.dart';
+import 'portfolio_test.dart' as portfolio_fixtures;
+
+import 'package:crabshare_mobile/features/investor/data/portfolio_repository.dart';
+import 'package:crabshare_mobile/features/investor/portfolio/portfolio_detail_page.dart';
+import 'package:crabshare_mobile/features/operator/evidence/evidence_explanation_page.dart';
+import 'package:crabshare_mobile/features/operator/evidence/evidence_explanation_repository.dart';
 import 'package:crabshare_mobile/features/investor/data/investor_repository.dart';
 import 'package:crabshare_mobile/features/investor/notifications/notification_repository.dart';
 
@@ -51,88 +60,163 @@ const _user = AppUser(
   operatorId: 1,
 );
 
+final smokePages = <String, Widget>{
+  'Onboarding': const OnboardingPage(),
+  'Đăng nhập': const LoginPage(),
+  'Vai trò không hỗ trợ': const UnsupportedRolePage(),
+  'NĐT · Tổng quan': const InvestorHomePage(),
+  'NĐT · Khám phá lô': const BatchExplorePage(),
+  'NĐT · Chi tiết lô đang gọi vốn': const BatchDetailPage(code: 'CS-2610-02'),
+  'NĐT · Chi tiết lô đang nuôi': const BatchDetailPage(code: 'CS-2610-01'),
+  'NĐT · Thông báo': const NotificationsPage(),
+  'NĐT · eKYC': const KycPage(),
+  'NĐT · Chi tiết danh mục': const InvestorPortfolioDetailPage(
+    code: 'CS61-REAL-01',
+  ),
+  'Hộ nuôi · Bằng chứng gắn cờ': const FlaggedEvidencePage(),
+  'Hộ nuôi · Giải trình': const EvidenceExplanationPage(id: 1),
+  'Hộ nuôi · Hôm nay': const OperatorTodayPage(),
+  'Hộ nuôi · Nhật ký': const DailyLogsPage(),
+  'Hộ nuôi · Form nhật ký': const DailyLogFormPage(
+    initialBatchCode: 'CS-2610-01',
+  ),
+  'Hộ nuôi · Chụp bằng chứng': const CapturePage(initialSlot: '0014'),
+  'Hộ nuôi · Cảnh báo': const AlertsPage(),
+  'Hộ nuôi · Thu hoạch': const HarvestPage(batchCode: 'CS-2609-04'),
+  'Quét tem': const ScanPage(),
+  'Kết quả truy xuất': const TraceResultPage(tagCode: 'CSAB23CD45EF'),
+  'Tài khoản': const AccountPage(),
+  'Tài khoản nhận tiền': const PayoutAccountPage(),
+  'Hộ nuôi · Đóng gói đơn': const PackOrdersPage(),
+  'Hộ nuôi · Quét tem đóng gói': const PackOrderPage(orderNo: 'ODPACKDEMO01'),
+};
+
 void main() {
   setUpAll(() => initializeDateFormatting('vi_VN'));
 
-  final pages = <String, Widget>{
-    'Onboarding': const OnboardingPage(),
-    'Đăng nhập': const LoginPage(),
-    'Vai trò không hỗ trợ': const UnsupportedRolePage(),
-    'NĐT · Tổng quan': const InvestorHomePage(),
-    'NĐT · Khám phá lô': const BatchExplorePage(),
-    'NĐT · Chi tiết lô đang gọi vốn': const BatchDetailPage(code: 'CS-2610-02'),
-    'NĐT · Chi tiết lô đang nuôi': const BatchDetailPage(code: 'CS-2610-01'),
-    'NĐT · Thông báo': const NotificationsPage(),
-    'NĐT · eKYC': const KycPage(),
-    'Hộ nuôi · Hôm nay': const OperatorTodayPage(),
-    'Hộ nuôi · Nhật ký': const DailyLogsPage(),
-    'Hộ nuôi · Form nhật ký': const DailyLogFormPage(
-      initialBatchCode: 'CS-2610-01',
-    ),
-    'Hộ nuôi · Chụp bằng chứng': const CapturePage(initialSlot: '0014'),
-    'Hộ nuôi · Cảnh báo': const AlertsPage(),
-    'Hộ nuôi · Thu hoạch': const HarvestPage(batchCode: 'CS-2609-04'),
-    'Quét tem': const ScanPage(),
-    'Kết quả truy xuất': const TraceResultPage(tagCode: 'CSAB23CD45EF'),
-    'Tài khoản': const AccountPage(),
-    'Tài khoản nhận tiền': const PayoutAccountPage(),
-    'Hộ nuôi · Đóng gói đơn': const PackOrdersPage(),
-    'Hộ nuôi · Quét tem đóng gói': const PackOrderPage(orderNo: 'ODPACKDEMO01'),
-  };
+  for (final (size, scale) in [
+    (const Size(360, 780), 1.0),
+    (const Size(320, 568), 1.3),
+  ]) {
+    for (final MapEntry(key: name, value: page) in smokePages.entries) {
+      testWidgets('$name · $size · cỡ chữ $scale', (tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
 
-  for (final MapEntry(key: name, value: page) in pages.entries) {
-    testWidgets('$name dựng được ở khổ 360×780', (tester) async {
-      tester.view.physicalSize = const Size(360, 780);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            investorRepositoryProvider.overrideWithValue(ApiInvestorRepository(discoveryDio((request) =>
-              jsonResponse(request.path == '/api/batches'
-                ? {'items': [discoveryBatch()], 'page': 1, 'pageSize': 20, 'total': 1}
-                : discoveryBatch())))),
-            notificationPollIntervalProvider.overrideWithValue(null),
-            notificationRepositoryProvider.overrideWithValue(
-              EmptyNotificationRepository(),
-            ),
-            notificationReadStoreProvider.overrideWithValue(
-              MemoryNotificationReadStore(),
-            ),
-            sessionProvider.overrideWith(
-              () => SessionController(
-                const SessionState(token: 't', user: _user),
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              portfolioRepositoryProvider.overrideWithValue(
+                ApiPortfolioRepository(
+                  discoveryDio(
+                    (_) => jsonResponse(portfolio_fixtures.detailJson()),
+                  ),
+                ),
               ),
+              evidenceExplanationRepositoryProvider.overrideWithValue(
+                _SmokeExplanationRepository(),
+              ),
+              investorRepositoryProvider.overrideWithValue(
+                ApiInvestorRepository(
+                  discoveryDio(
+                    (request) => jsonResponse(
+                      request.path == '/api/batches'
+                          ? {
+                              'items': [discoveryBatch()],
+                              'page': 1,
+                              'pageSize': 20,
+                              'total': 1,
+                            }
+                          : discoveryBatch(),
+                    ),
+                  ),
+                ),
+              ),
+              notificationPollIntervalProvider.overrideWithValue(null),
+              notificationRepositoryProvider.overrideWithValue(
+                EmptyNotificationRepository(),
+              ),
+              notificationReadStoreProvider.overrideWithValue(
+                MemoryNotificationReadStore(),
+              ),
+              sessionProvider.overrideWith(
+                () => SessionController(
+                  const SessionState(token: 't', user: _user),
+                ),
+              ),
+              myContributionsProvider.overrideWith((ref) async => []),
+              kycRepositoryProvider.overrideWithValue(_SmokeKycRepository()),
+              payoutRepositoryProvider.overrideWithValue(
+                _SmokePayoutRepository(),
+              ),
+              alertRepositoryProvider.overrideWithValue(
+                _SmokeAlertRepository(),
+              ),
+              evidenceRepositoryProvider.overrideWithValue(
+                _SmokeEvidenceRepository(),
+              ),
+              captureRequestsRepositoryProvider.overrideWithValue(
+                _SmokeCaptureRequests(),
+              ),
+              operatorOrdersRepositoryProvider.overrideWithValue(
+                MockOperatorOrdersRepository(),
+              ),
+            ],
+            child: MaterialApp(
+              theme: buildAppTheme(),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: page,
             ),
-            myContributionsProvider.overrideWith((ref) async => []),
-            kycRepositoryProvider.overrideWithValue(_SmokeKycRepository()),
-            payoutRepositoryProvider.overrideWithValue(
-              _SmokePayoutRepository(),
-            ),
-            alertRepositoryProvider.overrideWithValue(_SmokeAlertRepository()),
-            evidenceRepositoryProvider.overrideWithValue(
-              _SmokeEvidenceRepository(),
-            ),
-            captureRequestsRepositoryProvider.overrideWithValue(
-              _SmokeCaptureRequests(),
-            ),
-            operatorOrdersRepositoryProvider.overrideWithValue(
-              MockOperatorOrdersRepository(),
-            ),
-          ],
-          child: MaterialApp(theme: buildAppTheme(), home: page),
-        ),
-      );
-      // Dữ liệu mẫu trả về sau ~300 ms; chờ thêm cho animation đồng hồ chạy xong.
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.pump(const Duration(seconds: 1));
+          ),
+        );
+        // Dữ liệu mẫu trả về sau ~300 ms; chờ thêm cho animation đồng hồ chạy xong.
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.pump(const Duration(seconds: 1));
 
-      expect(tester.takeException(), isNull);
-      // Tháo cây widget để dừng các animation lặp (khung quét) trước khi test kết thúc.
-      await tester.pumpWidget(const SizedBox());
-    });
+        expect(tester.takeException(), isNull);
+        // Exercise content below the fold, including forms and long timelines.
+        final lists = find.byType(Scrollable);
+        if (lists.evaluate().isNotEmpty) {
+          for (var i = 0; i < 6; i++) {
+            await tester.drag(lists.first, const Offset(0, -380));
+            await tester.pump(const Duration(milliseconds: 250));
+            expect(tester.takeException(), isNull);
+          }
+        }
+        // Tháo cây widget để dừng các animation lặp (khung quét) trước khi test kết thúc.
+        await tester.pumpWidget(const SizedBox());
+      });
+    }
   }
+}
+
+class _SmokeExplanationRepository implements EvidenceExplanationRepository {
+  @override
+  Future<List<FlaggedEvidence>> list({CancelToken? cancelToken}) async => [
+    await get(1),
+  ];
+  @override
+  Future<FlaggedEvidence> get(int id, {CancelToken? cancelToken}) async =>
+      FlaggedEvidence(
+        id: id,
+        batchCode: 'CS-2610-01',
+        slotCode: '0014',
+        reviewStatus: 'Flagged',
+        receivedAt: DateTime(2026, 10, 16),
+        canExplain: true,
+      );
+  @override
+  Future<Uint8List> image(int id, {CancelToken? cancelToken}) async =>
+      base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jC9sAAAAASUVORK5CYII=',
+      );
+  @override
+  Future<FlaggedEvidence> explain(int id, String text) => get(id);
 }
 
 class _SmokeEvidenceRepository implements EvidenceRepository {

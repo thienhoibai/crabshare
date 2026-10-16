@@ -57,12 +57,9 @@ class AlertsPage extends ConsumerWidget {
               ),
             ),
             Expanded(
-              child: alerts.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => ErrorView(
-                  message: apiErrorMessage(e),
-                  onRetry: () => ref.invalidate(alertsProvider),
-                ),
+              child: AsyncContent(
+                value: alerts,
+                onRefresh: () => ref.refresh(alertsProvider.future),
                 data: (list) {
                   final open = list
                       .where(
@@ -72,38 +69,35 @@ class AlertsPage extends ConsumerWidget {
                       )
                       .toList();
                   final done = list.where((a) => !open.contains(a)).toList();
-                  return RefreshIndicator(
-                    onRefresh: () => ref.refresh(alertsProvider.future),
-                    child: ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(
-                        20,
-                        12,
-                        20,
-                        kNavBarClearance,
-                      ),
-                      children: [
-                        SectionHeader(
-                          title: 'Cần phản hồi',
-                          actionLabel: '${open.length}',
-                        ),
-                        if (open.isEmpty)
-                          const EmptyState(
-                            icon: Icons.check_circle_outline_rounded,
-                            title: 'Không có cảnh báo mở',
-                          ),
-                        for (final a in open) ...[
-                          _AlertCard(alert: a),
-                          const SizedBox(height: 10),
-                        ],
-                        if (done.isNotEmpty)
-                          const SectionHeader(title: 'Đã xử lý'),
-                        for (final a in done) ...[
-                          _AlertCard(alert: a),
-                          const SizedBox(height: 10),
-                        ],
-                      ],
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(
+                      20,
+                      12,
+                      20,
+                      kNavBarClearance,
                     ),
+                    children: [
+                      SectionHeader(
+                        title: 'Cần phản hồi',
+                        actionLabel: '${open.length}',
+                      ),
+                      if (open.isEmpty)
+                        const EmptyState(
+                          icon: Icons.check_circle_outline_rounded,
+                          title: 'Không có cảnh báo mở',
+                        ),
+                      for (final a in open) ...[
+                        _AlertCard(alert: a),
+                        const SizedBox(height: 10),
+                      ],
+                      if (done.isNotEmpty)
+                        const SectionHeader(title: 'Đã xử lý'),
+                      for (final a in done) ...[
+                        _AlertCard(alert: a),
+                        const SizedBox(height: 10),
+                      ],
+                    ],
                   );
                 },
               ),
