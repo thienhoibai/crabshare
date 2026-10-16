@@ -91,9 +91,12 @@ export const complaintsApi = {
 
   // Khách hàng / người dùng xem khiếu nại của đơn
   getOrderComplaint: (orderNo: string) =>
-    http.get<ComplaintDetail | null>(`/api/orders/${orderNo}/complaints`).then((r) => r.data).catch((err) => {
+    http.get<ComplaintDetail | null>(`/api/orders/${orderNo}/complaints`).then((r) => {
+      if (!r.data || typeof r.data !== 'object' || !('complaintId' in r.data)) return null
+      return r.data
+    }).catch((err) => {
       if (err.response?.status === 404) return null
-      throw err
+      return null
     }),
 
   // Hộ nuôi gửi giải trình

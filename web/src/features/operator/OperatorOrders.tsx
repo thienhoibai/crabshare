@@ -275,7 +275,7 @@ function OperatorComplaintBox({ orderNo }: { orderNo: string }) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  if (isLoading || !complaint) return null
+  if (isLoading || !complaint || !complaint.complaintId) return null
 
   const handleRespond = async (e: FormEvent) => {
     e.preventDefault()
