@@ -99,6 +99,10 @@ test('customer returns a delivered order within return window', async ({ page })
   await page.goto('/theo-doi-don-hang/ODRET00000001')
   const region = page.getByRole('region', { name: 'Trả hàng' })
   await expect(region).toBeVisible()
+  const openFormBtn = region.getByRole('button', { name: /Trả hàng/ })
+  if (await openFormBtn.isVisible()) {
+    await openFormBtn.click()
+  }
   await region.getByLabel('Lý do trả hàng').fill('Cua chết khi mở thùng nhận hàng')
   await region.getByRole('button', { name: 'Gửi yêu cầu trả hàng' }).click()
   await expect(page.getByText(/Đã ghi nhận trả hàng/)).toBeVisible()

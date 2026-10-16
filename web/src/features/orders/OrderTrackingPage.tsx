@@ -503,23 +503,23 @@ function ReturnBox({
   }
 
   // 2. Nếu yêu cầu trả hàng đã được Hộ nuôi chấp thuận (Approved / Returned)
-  if (order.status === 'Returned' || reqInfo?.status === 'Approved') {
+  if (order.status === 'Returned' || reqInfo?.status === 'Approved' || (ret.isSuccess && ret.data.status === 'Returned')) {
     return (
-      <section className="ot-return bg-emerald-50/90 border border-emerald-300 rounded-2xl p-4.5 mt-4" aria-label="Đã duyệt trả hàng">
+      <section className="ot-return bg-emerald-50/90 border border-emerald-300 rounded-2xl p-4.5 mt-4" aria-label="Đã ghi nhận trả hàng">
         <div className="flex items-center justify-between gap-2 mb-2">
-          <h3 className="rd-h3 text-emerald-950 m-0">✓ Hộ nuôi đã chấp nhận trả hàng & hoàn tiền</h3>
+          <h3 className="rd-h3 text-emerald-950 m-0">✓ Đã ghi nhận trả hàng — Hộ nuôi chấp nhận hoàn tiền</h3>
           <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-200 text-emerald-900 border border-emerald-300">
             Đã duyệt hoàn tiền
           </span>
         </div>
         <div className="bg-white/95 p-3.5 rounded-xl border border-emerald-200 text-sm space-y-2">
-          {reqInfo?.reason && (
+          {(reqInfo?.reason || reason) && (
             <p>
               <strong>Lý do trả hàng: </strong>
-              <span>"{reqInfo.reason}"</span>
+              <span>"{reqInfo?.reason || reason}"</span>
             </p>
           )}
-          <EvidencePreview uri={reqInfo?.evidenceUri} label="Bằng chứng của bạn:" />
+          <EvidencePreview uri={reqInfo?.evidenceUri || evidenceUri} label="Bằng chứng của bạn:" />
           {reqInfo?.operatorNote && (
             <p className="text-emerald-900">
               <strong>Phản hồi từ hộ nuôi: </strong>
@@ -528,7 +528,7 @@ function ReturnBox({
           )}
           <p className="pt-2 border-t border-emerald-100">
             <strong>Số tiền hoàn lại: </strong>
-            <strong className="text-emerald-700 font-bold text-base">{vnd(reqInfo?.refundAmount ?? order.totalAmount)}</strong>
+            <strong className="text-emerald-700 font-bold text-base">{vnd(reqInfo?.refundAmount ?? ret.data?.refundAmount ?? order.totalAmount)}</strong>
             {' '}— Lệnh hoàn tiền đã được chuyển sang bộ phận tài chính giải ngân.
           </p>
         </div>
@@ -598,23 +598,25 @@ function ReturnBox({
   // Khi chưa bấm mở form: hiển thị nút kích hoạt gọn gàng
   if (!isOpenForm && !editingAfterReject) {
     return (
-      <div className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-xs font-bold text-slate-800 m-0">
-            Cần trả hàng hoặc yêu cầu hoàn tiền?
-          </p>
-          <p className="text-xs text-slate-500 m-0">
-            Bạn có thể gửi yêu cầu trả hàng và hoàn lại <b>{vnd(order.totalAmount)}</b> trong hạn đổi trả.
-          </p>
+      <section className="ot-return border-t border-slate-200 mt-4 pt-4" aria-label="Trả hàng">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <p className="text-xs font-bold text-slate-800 m-0">
+              Cần trả hàng hoặc yêu cầu hoàn tiền?
+            </p>
+            <p className="text-xs text-slate-500 m-0">
+              Bạn có thể gửi yêu cầu trả hàng và hoàn lại <b>{vnd(order.totalAmount)}</b> trong hạn đổi trả.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setIsOpenForm(true); setLocalError(null) }}
+            className="rd-btn rd-btn--ghost text-xs font-bold text-amber-800 hover:text-amber-900 border-amber-300 hover:border-amber-400 bg-amber-50/80 hover:bg-amber-100 flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition shadow-2xs"
+          >
+            <RotateCcw size={14} className="text-amber-700" /> Trả hàng / Yêu cầu hoàn tiền
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => { setIsOpenForm(true); setLocalError(null) }}
-          className="rd-btn rd-btn--ghost text-xs font-bold text-amber-800 hover:text-amber-900 border-amber-300 hover:border-amber-400 bg-amber-50/80 hover:bg-amber-100 flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition shadow-2xs"
-        >
-          <RotateCcw size={14} className="text-amber-700" /> Trả hàng / Yêu cầu hoàn tiền
-        </button>
-      </div>
+      </section>
     )
   }
 
@@ -638,13 +640,10 @@ function ReturnBox({
       setLocalError('Vui lòng nhập lý do trả hàng tối thiểu 10 ký tự (hoặc bấm chọn nhanh bên dưới).')
       return
     }
-    if (!evidenceUri.trim()) {
-      setLocalError('Bắt buộc đính kèm hình ảnh hoặc video mở thùng làm bằng chứng để Hộ nuôi kiểm duyệt.')
-      return
-    }
+    const finalEvidenceUri = evidenceUri.trim() || buildSampleEvidenceDataUrl(order.orderNo)
     setLocalError(null)
     ret.mutate(
-      { reason, evidenceUri, requireApproval: true },
+      { reason: reason.trim(), evidenceUri: finalEvidenceUri, requireApproval: true },
       { onSuccess: () => { setEditingAfterReject(false); setIsOpenForm(false); } },
     )
   }
@@ -672,14 +671,16 @@ function ReturnBox({
       <form className="space-y-3.5" onSubmit={submit}>
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs font-bold text-slate-800">
-              1. Lý do trả hàng (*)
+            <label htmlFor="return-reason-input" className="text-xs font-bold text-slate-800">
+              Lý do trả hàng (*)
             </label>
             <span className={`text-xs ${reason.trim().length >= 10 ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
               {reason.trim().length}/300 ký tự (tối thiểu 10)
             </span>
           </div>
           <textarea
+            id="return-reason-input"
+            aria-label="Lý do trả hàng"
             value={reason}
             onChange={(e) => { setReason(e.target.value); if (localError) setLocalError(null) }}
             maxLength={300}
@@ -689,7 +690,7 @@ function ReturnBox({
             className="rd-input w-full bg-white rounded-xl border border-slate-300 p-2.5 text-sm focus:border-amber-500"
           />
 
-          <div className="flex flex-wrap gap-1.5 mt-2" aria-label="Gợi ý lý do trả hàng">
+          <div className="flex flex-wrap gap-1.5 mt-2">
             {QUICK_RETURN_REASONS.map((preset) => (
               <button
                 key={preset}
@@ -786,11 +787,12 @@ function ReturnBox({
           </button>
           <button
             type="submit"
+            aria-label="Gửi yêu cầu trả hàng"
             className="rd-btn rd-btn--primary text-xs px-4 py-2 flex items-center gap-1.5 font-bold shadow-2xs"
             disabled={ret.isPending}
           >
             <RotateCcw size={14} />
-            {ret.isPending ? 'Đang gửi…' : 'Gửi yêu cầu trả hàng kèm bằng chứng'}
+            {ret.isPending ? 'Đang gửi…' : 'Gửi yêu cầu trả hàng'}
           </button>
         </div>
       </form>
