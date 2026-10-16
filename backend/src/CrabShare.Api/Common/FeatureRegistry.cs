@@ -86,6 +86,8 @@ public static class FeatureRegistry
         services.AddScoped<OrderFulfilmentService>();   // NH-10 giao hàng + xác nhận đã nhận (UC30)
         services.AddScoped<OrderCompletionService>();   // NH-10 hết cửa sổ đổi trả → Completed
         services.AddHostedService<OrderCompletionJob>(); // chạy mỗi phút; tắt bằng Orders:CompletionJob:Enabled = false
+        services.AddScoped<ComplaintService>();        // NH-11 khiếu nại + giải quyết tranh chấp (UC31, UC32)
+        services.AddHostedService<ComplaintEscalationJob>(); // chạy mỗi phút; tắt bằng Orders:ComplaintEscalationJob:Enabled = false
 
         // Khôi
         services.AddScoped<AccountService>();        // Features/Accounts
@@ -104,6 +106,7 @@ public static class FeatureRegistry
         services.AddScoped<PortfolioService>();     // CS-61
         services.AddScoped<NotificationService>();  // CS-65
         services.AddScoped<AuditLogQueryService>(); // CS-76
+        services.AddScoped<DashboardService>();     // CS-73
 
         return services;
     }

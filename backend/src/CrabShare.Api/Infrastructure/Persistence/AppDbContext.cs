@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using CrabShare.Api.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -638,6 +638,24 @@ public partial class AppDbContext : DbContext
                 .HasPrecision(3)
                 .HasDefaultValueSql("(sysdatetimeoffset())", "df_complaint_updated_at")
                 .HasColumnName("updated_at");
+
+            entity.Property(e => e.OperatorResponse)
+                .HasMaxLength(1000)
+                .HasColumnName("operator_response");
+            entity.Property(e => e.OperatorEvidenceUri)
+                .HasMaxLength(400)
+                .HasColumnName("operator_evidence_uri");
+            entity.Property(e => e.RespondedAt)
+                .HasPrecision(3)
+                .HasColumnName("responded_at");
+            entity.Property(e => e.EscalatedAt)
+                .HasPrecision(3)
+                .HasColumnName("escalated_at");
+            entity.Property(e => e.AdminNotes)
+                .HasMaxLength(1000)
+                .HasColumnName("admin_notes");
+
+            entity.HasIndex(e => new { e.Status, e.OpenedAt }, "ix_complaint_status_opened_at");
 
             entity.HasOne(d => d.Order).WithMany(p => p.Complaints)
                 .HasForeignKey(d => d.OrderId)
