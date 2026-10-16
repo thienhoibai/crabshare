@@ -30,7 +30,7 @@ public sealed class PayoutProtectionUpgrade(IServiceScopeFactory scopes) : IHost
                 {
                     var number = row.Stored.StartsWith(PayoutAccountProtection.Prefix, StringComparison.Ordinal)
                         ? db.PayoutProtection.Unprotect(row.Stored) : row.Stored;
-                    if (number.Length is < 6 or > 30 || number.Any(c => c is < '0' or > '9'))
+                    if (number.Length is < 4 or > 30 || number.Any(c => c is < '0' or > '9'))
                         throw new InvalidOperationException("Invalid legacy payout number; resolve before deployment.");
                     var encrypted = db.PayoutProtection.Protect(number);
                     var digest = db.PayoutProtection.Digest(row.BankCode, number);

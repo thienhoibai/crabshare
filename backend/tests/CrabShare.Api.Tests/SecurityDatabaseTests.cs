@@ -54,7 +54,7 @@ public class SecurityDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<K
         var id = await fixture.CreateInvestorAsync();
         await Db(async db =>
         {
-            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT dbo.payout_account(owner_user_id,bank_code,account_no,account_holder_name,name_match_status,status) VALUES({id},'ACB','000123456789','KYC Test','Matched','Active')");
+            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT dbo.payout_account(owner_user_id,bank_code,account_no,account_holder_name,name_match_status,status) VALUES({id},'ACB','0012','KYC Test','Matched','Active')");
             return true;
         });
         var before = await Db(db => db.AuditLogs.CountAsync());
@@ -63,7 +63,7 @@ public class SecurityDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<K
         await Db(async db =>
         {
             var account = await db.PayoutAccounts.SingleAsync(a => a.OwnerUserId == id);
-            Assert.Equal("000123456789", account.AccountNo); Assert.Equal("Active", account.Status);
+            Assert.Equal("0012", account.AccountNo); Assert.Equal("Active", account.Status);
             Assert.NotNull(account.AccountNoDigest); Assert.Equal(before, await db.AuditLogs.CountAsync());
             Assert.StartsWith(PayoutAccountProtection.Prefix, await db.Database.SqlQuery<string>($"SELECT account_no AS Value FROM dbo.payout_account WHERE owner_user_id={id}").SingleAsync());
             return true;
