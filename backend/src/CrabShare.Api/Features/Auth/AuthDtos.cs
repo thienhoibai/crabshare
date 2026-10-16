@@ -28,10 +28,10 @@ public sealed class RegisterRequest
 
 public sealed class LoginRequest
 {
-    [Required, EmailAddress]
+    [Required, EmailAddress, MaxLength(254)]
     public string Email { get; set; } = "";
 
-    [Required]
+    [Required, MaxLength(100)]
     public string Password { get; set; } = "";
 }
 

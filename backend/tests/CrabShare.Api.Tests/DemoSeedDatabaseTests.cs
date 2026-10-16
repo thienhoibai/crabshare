@@ -34,6 +34,7 @@ public sealed class DemoSeedFixture : IAsyncLifetime
         }
         // Khởi động API ở Development với Seed bật → DevDataSeeder chạy trên CSDL trống
         factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
+            .UseSetting("Security:AuthIpPermitLimit", "10000")
             .UseSetting("Seed:Enabled", "true")
             .UseSetting("ConnectionStrings:Default", ConnectionString));
         factory.CreateClient().Dispose();

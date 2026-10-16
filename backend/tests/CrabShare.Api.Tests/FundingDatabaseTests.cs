@@ -55,6 +55,7 @@ public sealed class FundingDatabaseFixture : IAsyncLifetime
             OperatorId = farm.OperatorId;
         }
         Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
+            .UseSetting("Security:AuthIpPermitLimit", "10000")
             .UseSetting("Seed:Enabled", "false")
             .UseSetting("ConnectionStrings:Default", ConnectionString));
     }

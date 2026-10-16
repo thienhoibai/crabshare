@@ -16,7 +16,9 @@ http.interceptors.request.use((config) => {
 http.interceptors.response.use(
   (res) => res,
   (error: AxiosError) => {
-    if (error.response?.status === 401 && useAuthStore.getState().token) useAuthStore.getState().logout()
+    const token = useAuthStore.getState().token
+    if (error.response?.status === 401 && token && error.config?.headers.Authorization === `Bearer ${token}`)
+      useAuthStore.getState().logout()
     return Promise.reject(error)
   },
 )

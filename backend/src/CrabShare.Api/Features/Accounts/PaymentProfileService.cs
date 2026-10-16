@@ -34,7 +34,8 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
             var accounts = await OwnedAccounts(owner).ToListAsync(ct);
             if (accounts.Any(a => a.Status == "Locked" && a.NameMatchStatus == "Matched"))
                 throw new ForbiddenException("payout.locked", "Tài khoản nhận tiền đã bị khoá. Vui lòng liên hệ quản trị.");
-            var existing = await db.PayoutAccounts.SingleOrDefaultAsync(a => a.BankCode == bankCode && a.AccountNo == req.AccountNo, ct);
+            var digest = db.PayoutProtection.Digest(bankCode, req.AccountNo);
+            var existing = await db.PayoutAccounts.SingleOrDefaultAsync(a => a.AccountNoDigest == digest, ct);
             if (existing is not null && !accounts.Contains(existing))
                 throw new ConflictException("payout.account_taken", "Tài khoản ngân hàng này đã được đăng ký cho chủ sở hữu khác.");
             if (existing is not null && existing.AccountHolderName != req.AccountHolderName.Trim()

@@ -44,6 +44,7 @@ public sealed class KycDatabaseFixture : IAsyncLifetime
             }
         }
         Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
+            .UseSetting("Security:AuthIpPermitLimit", "10000")
             .UseSetting("Seed:Enabled", "false")
             .UseSetting("ConnectionStrings:Default", connectionString)
             .UseSetting("Storage:RootPath", StorageRoot)

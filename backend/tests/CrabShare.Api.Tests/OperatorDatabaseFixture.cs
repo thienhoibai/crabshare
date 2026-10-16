@@ -33,6 +33,7 @@ public sealed class OperatorDatabaseFixture : IAsyncLifetime
             if (!string.IsNullOrWhiteSpace(batch))
                 await new SqlCommand(batch, connection) { CommandTimeout = 60 }.ExecuteNonQueryAsync();
         Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
+            .UseSetting("Security:AuthIpPermitLimit", "10000")
             .UseSetting("Seed:Enabled", "false")
             .UseSetting("Jobs:Enabled", "false")
             .UseSetting("ConnectionStrings:Default", ConnectionString));

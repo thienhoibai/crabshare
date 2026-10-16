@@ -36,7 +36,14 @@ public static class AuthSetup
                         var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
                         var status = await db.AppUsers.AsNoTracking().Where(u => u.UserId == userId).Select(u => u.Status)
                             .SingleOrDefaultAsync(context.HttpContext.RequestAborted);
-                        if (status is null or "Locked") context.Fail("Account unavailable.");
+                        if (status != "Active") { context.Fail("Account unavailable."); return; }
+                        // Authorize against current database roles, including revoked grants on unexpired JWTs.
+                        var identity = (ClaimsIdentity)context.Principal!.Identity!;
+                        foreach (var claim in identity.FindAll(RoleClaim).ToArray()) identity.RemoveClaim(claim);
+                        foreach (var role in await db.AppUserRoles.AsNoTracking().Where(r => r.UserId == userId)
+                            .Select(r => r.RoleCode).ToListAsync(context.HttpContext.RequestAborted)) identity.AddClaim(new(RoleClaim, role));
+                        // Keep the signed operator_id. Existing ownership checks reject a token for a previous farm;
+                        // rebinding that claim to a new membership would silently grant the old token access there.
                     },
                 };
                 o.TokenValidationParameters = new TokenValidationParameters
