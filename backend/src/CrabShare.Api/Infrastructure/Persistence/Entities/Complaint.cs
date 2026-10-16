@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace CrabShare.Api.Infrastructure.Persistence.Entities;
@@ -38,6 +38,16 @@ public partial class Complaint
     public DateTimeOffset OpenedAt { get; set; }
 
     public DateTimeOffset? ResolvedAt { get; set; }
+
+    public string? OperatorResponse { get; set; }
+
+    public string? OperatorEvidenceUri { get; set; }
+
+    public DateTimeOffset? RespondedAt { get; set; }
+
+    public DateTimeOffset? EscalatedAt { get; set; }
+
+    public string? AdminNotes { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 
