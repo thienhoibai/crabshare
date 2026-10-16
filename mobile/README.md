@@ -132,6 +132,7 @@ trong manifest chính để bản release cũng kết nối mạng được.
 ### Build APK release để thử qua USB
 
 ```powershell
+$env:CRABSHARE_ALLOW_LOCAL_RELEASE='true' # explicit local USB test only; unset before demo release
 flutter build apk --release --dart-define=API_URL=http://localhost:5233 --dart-define=WEB_URL=http://localhost:5173
 adb -s <device-id> reverse tcp:5233 tcp:5233
 adb -s <device-id> reverse tcp:5173 tcp:5173
@@ -251,3 +252,5 @@ Mock đơn hàng chỉ dùng trong test. Chi tiết các phần còn lại nằm
 | `geolocator` | Lấy vị trí khi chụp bằng chứng |
 | Font DM Sans trong `assets/fonts/` | Font offline cho app và test |
 | `flutter_launcher_icons` (dev) | Sinh icon Android/iOS từ `assets/icon/` |
+
+Demo HTTPS release, private signing, GitHub draft and installation: [docs/demo-app.md](../docs/demo-app.md).
