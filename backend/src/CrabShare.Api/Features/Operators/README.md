@@ -31,15 +31,15 @@
 - Danh sách Admin hỗ trợ `status=Draft|Submitted|Approved|Rejected|Suspended` và `page`, `pageSize` qua `PageQuery`. Bỏ status để xem mọi trạng thái; sắp theo `submittedAt`, `operatorId`.
 - Thêm Staff bằng `{ "email": "staff@example.com" }`: tài khoản có sẵn, Active, chưa thuộc hộ nuôi nào. Scope hộ nuôi và quyền Owner lấy từ CSDL; client không chọn role hoặc hộ nuôi. Không có invitation.
 - Thêm / gỡ Staff cập nhật `operator_member` và vai trò `OperatorMember` trong cùng transaction Serializable; không xóa Owner hay vai trò khác của tài khoản.
-- Thành viên cần đăng nhập lại để JWT chứa claim mới. Staff bị gỡ **mất quyền ngay** trên API hộ nuôi hiện có vì service luôn kiểm tra membership / role hiện hành từ CSDL. Token còn claim hộ nuôi cũ bị từ chối nếu người đó chuyển hộ nuôi.
+- Thành viên cần đăng nhập lại để JWT chứa claim mới. Staff bị gỡ mất quyền ngay trên các API hồ sơ/thành viên, hộp và lô vì service kiểm tra membership / role hiện hành từ CSDL. Token còn claim hộ nuôi cũ bị từ chối nếu người đó chuyển hộ nuôi. Một số API Catalog/Orders vẫn tin claim cũ; lỗi tích hợp đó được ghi nhận và để lại theo phạm vi người dùng chốt trong [báo cáo kiểm thử local](../../../../../docs/validation/2026-10-16-vi-local-validation.md).
 - Ghi `audit_log` khi duyệt / từ chối / đình chỉ trong cùng transaction với cập nhật hồ sơ; rollback cả hai khi lỗi. Các quyết định đồng thời chỉ có một quyết định hợp lệ cho mỗi trạng thái nguồn.
 
 ## Điểm tích hợp TH-02 và VI-04
 
-- TH-02 chưa có implementation `IAuditLog` trên nhánh nền. VI-02 ghi trực tiếp bảng audit hiện hữu trong `OperatorReviewService`, không migration / bảng / cơ chế lưu trữ mới. Khi TH-02 có service dùng chung, thay điểm ghi này và giữ nguyên yêu cầu transaction.
+- VI-02 đã tích hợp `IAuditLog` dùng chung của TH-02 trong `OperatorReviewService`, bọc quyết định bằng `db.InTransactionAsync` để cập nhật hộ nuôi và audit cùng commit hoặc rollback; không migration / bảng / cơ chế lưu trữ mới.
 - Audit VI-02: `entity_type=operator`, `action_type=approve|reject|suspend`; `old_value` / `new_value` là JSON chứa `status`, `approvedSlotCapacity`, `approvedBy`, `approvedAt`, `reason`. Actor và thời gian lấy phía server.
 - Chuỗi toàn bảng theo `audit_id`: `prev_hash` là `row_hash` gần nhất, dòng đầu là null. SHA-256 UTF-8 của `(prev_hash ?? "") + content`, hex chữ thường. `content` là JSON .NET mặc định, thứ tự cố định: `entityType`, `entityId`, `actionType`, `oldValue`, `newValue`, `actorUserId`, `occurredAt`. Không đưa `auditId` / hash vào content. Thời gian UTC được cắt đến millisecond trước khi ghi/băm cho khớp `DATETIMEOFFSET(3)`.
-- Đọc đầu chuỗi bằng `TABLOCKX, HOLDLOCK` và giữ khoá tới commit, kể cả bảng rỗng. Writer TH-02 phải dùng cùng giao thức chuỗi / thứ tự lấy khoá để không rẽ nhánh; verifier phải hỗ trợ định dạng dòng VI-02 khi tích hợp.
+- Gọi `IAuditLog.LockAsync` trước khi đọc hộ nuôi, cùng thứ tự audit → hộ nuôi của VI-04. Service dùng chung đọc đầu chuỗi bằng `TABLOCKX, HOLDLOCK` và giữ khoá tới commit, kể cả bảng rỗng; `AuditChain` quản lý giao thức hash/thời gian và verifier dùng chung xác minh cả dòng VI-02.
 - VI-04 đã triển khai `BatchService`: transaction Serializable, khóa audit trước hộ nuôi cùng thứ tự VI-02, kiểm tra Owner/membership/role từ CSDL và chỉ cho hộ nuôi `Approved` ghi lô. Claim `operator_id` không quyết định scope; claim cũ khác membership bị từ chối. Test API LocalDB bao phủ tạo/lưu/gửi duyệt, Staff, scope, đình chỉ và rollback; xem `Features/Batches/README.md`.
 - Ca kiểm thử bàn giao VI-04: `Approved` + Owner tạo lô thành công; `Draft`, `Submitted`, `Rejected`, `Suspended` không tạo được; Staff / người ngoài hộ nuôi không tạo được; token cũ sau khi gỡ Staff hoặc đình chỉ không vượt guard. Đình chỉ không tự hủy lô cũ.
 
@@ -56,7 +56,7 @@
 
 ## Kiểm thử UC05
 
-- `dotnet test backend/CrabShare.sln`: gồm `OperatorReviewTests` trên LocalDB và test anonymous cho các route mới. Bao phủ lọc/phân trang/quyền Admin, sức chứa và dữ liệu sai, trạng thái, lý do, audit/hash-chain, rollback khi lỗi sau SaveChanges trước commit, các quyết định đồng thời, quản lý Staff, scope, tài khoản không Active, thêm trùng/đồng thời, bảo vệ Owner, thu hồi role và token hộ nuôi cũ.
+- `dotnet test backend/CrabShare.sln`: gồm `OperatorReviewTests` trên LocalDB và test anonymous cho các route mới. Bao phủ lọc/phân trang/quyền Admin, sức chứa và dữ liệu sai, trạng thái, lý do, audit/hash-chain, rollback khi lỗi sau SaveChanges trước commit hoặc khi `IAuditLog` dùng chung lỗi sau khi ghi, các quyết định đồng thời, quản lý Staff, scope, tài khoản không Active, thêm trùng/đồng thời, bảo vệ Owner, thu hồi role và token hộ nuôi cũ.
 - Không có thay đổi schema/migration.
 
 ## Web UC05

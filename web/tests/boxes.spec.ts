@@ -34,6 +34,93 @@ test('creates a padded range then changes a box status and filters', async ({ pa
   await expect(page.getByText('Không có hộp phù hợp.')).toBeVisible()
 })
 
+test('returns to a reachable page after the last filtered box changes status', async ({ page }) => {
+  await setup(page)
+  let items = Array.from({ length: 51 }, (_, i) => ({ ...box, slotCode: String(i + 1).padStart(4, '0'), batchCode: null, latestEvidence: null }))
+  await page.route('**/api/boxes?*', route => {
+    const p = new URL(route.request().url()).searchParams
+    const currentPage = Number(p.get('page'))
+    const filtered = items.filter(b => !p.get('status') || b.status === p.get('status'))
+    return route.fulfill({ json: { items: filtered.slice((currentPage - 1) * 50, currentPage * 50), total: filtered.length, page: currentPage, pageSize: 50 } })
+  })
+  await page.route('**/api/boxes/0051', route => {
+    expect(route.request().postDataJSON()).toEqual({ status: 'Maintenance' })
+    items = items.map(b => b.slotCode === '0051' ? { ...b, status: 'Maintenance' } : b)
+    return route.fulfill({ json: items[50] })
+  })
+  await page.goto('/operator/boxes')
+  await page.getByLabel('Trạng thái hộp').selectOption('Available')
+  await page.getByRole('button', { name: 'Trang sau' }).click()
+  await expect(page.getByText('Trang 2 / 2')).toBeVisible()
+  await page.getByRole('button', { name: 'Hộp 0051, Sẵn sàng' }).click()
+  await page.getByRole('button', { name: 'Chuyển bảo trì' }).click()
+  await expect(page.getByText('Đã cập nhật trạng thái hộp.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Hộp 0001, Sẵn sàng' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Hộp \d+, Sẵn sàng$/ })).toHaveCount(50)
+  await expect(page.getByLabel('Trạng thái hộp')).toHaveValue('Available')
+  await expect(page.getByText('Không có hộp phù hợp.')).toHaveCount(0)
+})
+
+test('recovers when another update removes the requested last page', async ({ page }) => {
+  await setup(page, 'Staff')
+  const items = Array.from({ length: 50 }, (_, i) => ({ ...box, slotCode: String(i + 1).padStart(4, '0'), batchCode: null, latestEvidence: null }))
+  let total = 51
+  await page.route('**/api/boxes?*', route => {
+    const currentPage = Number(new URL(route.request().url()).searchParams.get('page'))
+    if (currentPage === 2) total = 50
+    return route.fulfill({ json: { items: items.slice((currentPage - 1) * 50, currentPage * 50), total, page: currentPage, pageSize: 50 } })
+  })
+  await page.goto('/operator/boxes')
+  await expect(page.getByText('Trang 1 / 2')).toBeVisible()
+  const lastPage = page.waitForResponse(response => new URL(response.url()).pathname === '/api/boxes' && new URL(response.url()).searchParams.get('page') === '2')
+  await page.getByRole('button', { name: 'Trang sau' }).click()
+  await lastPage
+  await expect(page.getByRole('button', { name: 'Hộp 0001, Sẵn sàng' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Hộp \d+, Sẵn sàng$/ })).toHaveCount(50)
+  await expect(page.getByText('Không có hộp phù hợp.')).toHaveCount(0)
+})
+
+test('keeps the last page reachable when boxes regrow after a status change', async ({ page }) => {
+  await setup(page)
+  let items = Array.from({ length: 51 }, (_, i) => ({ ...box, slotCode: String(i + 1).padStart(4, '0'), batchCode: null, latestEvidence: null }))
+  let releaseRegrownPage!: () => void
+  const regrownPage = new Promise<void>(resolve => { releaseRegrownPage = resolve })
+  await page.route('**/api/boxes?*', async route => {
+    const p = new URL(route.request().url()).searchParams
+    const currentPage = Number(p.get('page'))
+    if (currentPage === 2 && items.length === 52) await regrownPage
+    const filtered = items.filter(b => !p.get('status') || b.status === p.get('status'))
+    return route.fulfill({ json: { items: filtered.slice((currentPage - 1) * 50, currentPage * 50), total: filtered.length, page: currentPage, pageSize: 50 } })
+  })
+  await page.route('**/api/boxes/0051', route => {
+    items = items.map(b => b.slotCode === '0051' ? { ...b, status: 'Maintenance' } : b)
+    return route.fulfill({ json: items[50] })
+  })
+  await page.route('**/api/boxes', route => {
+    const created = { ...box, slotCode: route.request().postDataJSON().slotCode, batchCode: null, latestEvidence: null }
+    items = [...items, created]
+    return route.fulfill({ status: 201, json: created })
+  })
+  await page.goto('/operator/boxes')
+  await page.getByLabel('Trạng thái hộp').selectOption('Available')
+  await page.getByRole('button', { name: 'Trang sau' }).click()
+  await page.getByRole('button', { name: 'Hộp 0051, Sẵn sàng' }).click()
+  await page.getByRole('button', { name: 'Chuyển bảo trì' }).click()
+  await expect(page.getByRole('button', { name: 'Hộp 0001, Sẵn sàng' })).toBeVisible()
+  await expect(page.getByText('50 hộp phù hợp')).toBeVisible()
+  await page.getByRole('button', { name: 'Thêm hộp', exact: true }).click()
+  await page.getByLabel('Số hộp', { exact: true }).fill('0052')
+  await page.getByRole('dialog').getByRole('button', { name: 'Tạo hộp' }).click()
+  await expect(page.getByText('51 hộp phù hợp')).toBeVisible()
+  const lastPageRequest = page.waitForRequest(request => new URL(request.url()).pathname === '/api/boxes' && new URL(request.url()).searchParams.get('page') === '2')
+  await page.getByRole('button', { name: 'Trang sau' }).click()
+  await lastPageRequest
+  releaseRegrownPage()
+  await expect(page.getByRole('button', { name: 'Hộp 0052, Sẵn sàng' })).toBeVisible()
+  await expect(page.getByText('Trang 2 / 2')).toBeVisible()
+  await expect(page.getByText('Không có hộp phù hợp.')).toHaveCount(0)
+})
+
 test('capacity error retains input and staff cannot create', async ({ page }) => {
   await setup(page)
   await page.route('**/api/boxes?*', route => route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 50 } }))
