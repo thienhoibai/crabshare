@@ -32,15 +32,46 @@ Web gọi API qua biến `VITE_API_URL` trên Vercel (loại Config, gắn lúc 
 
 App mobile trỏ vào server: `--dart-define=API_URL=https://crabshare-api.azurewebsites.net --dart-define=WEB_URL=https://crabshare.vercel.app`.
 
-## Làm mới dữ liệu demo trên Azure (cần quyền quản trị CSDL — Thiện)
+## CS-80: deployment and recovery
+
+The workflow runs only from `develop`. Another team member must review the PR and CI must pass before merging (`docs/git-workflow.md`). Azure OIDC deliberately does not trust feature branches.
+
+1. The infrastructure owner confirms the current Azure SQL backup and a private backup of the complete `/home/data/keys` directory. Keep keys outside GitHub build artifacts. CS-88 creates the directory on first use; preserve it for the lifetime of encrypted records.
+2. Build, test and publish before maintenance. The workflow checks configuration without printing secrets, enforces HTTPS-only/Production, disables seed and sets persistent storage/keys. Existing JWT and managed identity credentials remain in Azure. No new paid infrastructure is needed.
+3. Stop the old API, apply new migrations, deploy the matching binary and start the app. CS-88 upgrades legacy payout records before serving. Coordinate this short maintenance window with the team.
+4. Readiness must pass, followed by `python deploy/smoke.py --expected-revision <SHA>`: HTTPS, database, anonymous 401, web/JS asset and the deployed API commit. The report contains no tokens, photos or account numbers.
+5. Run CS-92 acceptance afterwards. Vercel must build with `VITE_API_URL=https://crabshare-api.azurewebsites.net`. Changing that value requires a redeploy. A blocked Preview needs the Vercel project owner's deployment permissions; code CI does not prove a Preview deployment succeeded.
+
+Failure after maintenance begins does not automatically reopen an old binary. Inspect the last successful Actions step, preserve SQL and keys, deploy a compatible fixed binary and then start the app. Never reset/recreate Azure SQL or roll back to a plaintext-reading binary after V011. Only the infrastructure owner performs coordinated SQL/key backup recovery; prefer a forward fix. DbMigrator now rejects `--reset` outside LocalDB and never creates a missing remote database with an unintended service tier.
+
+`Security__DataProtectionKeyPath=/home/data/keys` is private and separate from `/home/data/storage`. CS-88 accepts forwarded headers only from configured proxies/networks, framework loopback defaults, and documented App Service private ingress ranges when running on that platform. Do not enable `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` or expose Kestrel directly. Reconfigure `Security__KnownProxies__0` / `Security__KnownNetworks__0` when changing ingress.
+
+Demo data maintenance is an explicit owner action on the existing database. Do not delete/recreate the database or run Development seeding against Azure as a routine deploy step.
+
+## Optional container on an existing server
+
+Azure remains the actual demo environment. `backend/Dockerfile` supplies a non-root API image and an explicit `migrator` target. Replicas do not each apply schema migrations. Build from the repository root:
+
 ```bash
-az sql db delete -g crabshare-rg -s crabshare-sql -n crabshare --yes
-az sql db create -g crabshare-rg -s crabshare-sql -n crabshare --edition Basic --capacity 5 --max-size 2GB --backup-storage-redundancy Local
+docker build -f backend/Dockerfile --target api -t crabshare-api:<SHA> --build-arg SOURCE_REVISION=<SHA> .
+docker build -f backend/Dockerfile --target migrator -t crabshare-migrator:<SHA> .
 ```
-Rồi, với tài khoản quản trị (`az login`): tạo lại user CSDL `[crabshare-api]` (db_datareader, db_datawriter) và `[crabshare-github-deploy]` (db_ddladmin, db_datareader, db_datawriter) bằng `CREATE USER ... FROM EXTERNAL PROVIDER`, chạy workflow *Deploy backend* (tạo bảng), rồi chạy API trên máy một lần ở Development với chuỗi kết nối Azure để seed:
+
+`deploy/compose.yml` and `deploy/Caddyfile` target an existing server and existing SQL database. Supply private environment variables `CRABSHARE_DB`, `CRABSHARE_JWT_KEY` (random, at least 32 characters), `CRABSHARE_WEBHOOK_SECRET`, `CRABSHARE_API_HOST` and `CRABSHARE_WEB_HOST`. Never commit them. Production SQL must use TLS `Encrypt=True;TrustServerCertificate=False`, with a separate DDL migration identity and a read/write API identity.
+
+Set `CRABSHARE_SOURCE_REVISION` to the full reviewed commit SHA before a Compose build so the version smoke check can identify that binary.
+
+Point DNS at the server and allow 80/443 for Caddy's managed TLS. Only Caddy publishes ports; the API trusts Caddy at 10.77.0.2 on the dedicated 10.77.0.0/24 network. Change both subnet and proxy setting if they conflict with the host network. Back up `private-keys`, `uploads` and `tls-data`; never use `docker compose down -v` on demo data.
+
 ```bash
-# PowerShell, từ thư mục publish của API
-$env:AZURE_TOKEN_CREDENTIALS='AzureCliCredential'; $env:ASPNETCORE_ENVIRONMENT='Development'; $env:Seed__Enabled='true'
-$env:ConnectionStrings__Default='Server=tcp:crabshare-sql.database.windows.net,1433;Database=crabshare;Authentication=Active Directory Default;Encrypt=True'
-dotnet CrabShare.Api.dll   # thấy "Đã seed dữ liệu demo" thì Ctrl+C
+docker compose -f deploy/compose.yml build
+docker compose -f deploy/compose.yml stop api
+# Supply the migration identity's CRABSHARE_DB for this command.
+docker compose -f deploy/compose.yml --profile tools run --rm migrate
+# Restore the API identity's CRABSHARE_DB before starting the API.
+docker compose -f deploy/compose.yml up -d api caddy
+python deploy/smoke.py --api https://<api-host> --web https://<web-host> --expected-revision <SHA>
 ```
+
+This optional template does not provision a VPS/SQL service and has not been deployed to a new server.
+

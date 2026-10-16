@@ -9,6 +9,7 @@ on:
     paths:
       - backend/**
       - database/**
+      - deploy/**
       - .github/workflows/deploy-backend.yml
   workflow_dispatch:
 
@@ -23,11 +24,15 @@ concurrency:
 env:
   APP_NAME: crabshare-api
   API_URL: https://crabshare-api.azurewebsites.net
+  WEB_URL: https://crabshare.vercel.app
+  RESOURCE_GROUP: crabshare-rg
 
 jobs:
   deploy:
     name: Migrate + deploy to Azure
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -45,22 +50,49 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      # Không bao giờ thêm --reset ở đây: DbUp sẽ tạo lại CSDL theo gói mặc định rất đắt của Azure
+      - name: Publish matching immutable revision before maintenance
+        run: |
+          dotnet publish backend/src/CrabShare.Api/CrabShare.Api.csproj -c Release -o publish -p:SourceRevisionId="$GITHUB_SHA"
+          rm -f publish/appsettings.Development.json
+
+      - name: Validate existing production configuration without printing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          # --output none prevents appsettings set from echoing every secret value.
+          az webapp update -g "$RESOURCE_GROUP" -n "$APP_NAME" --https-only true --output none
+          az webapp config appsettings set -g "$RESOURCE_GROUP" -n "$APP_NAME" --output none --settings \
+            ASPNETCORE_ENVIRONMENT=Production Seed__Enabled=false \
+            Storage__RootPath=/home/data/storage Security__DataProtectionKeyPath=/home/data/keys \
+            ASPNETCORE_FORWARDEDHEADERS_ENABLED=false
+          az webapp config appsettings list -g "$RESOURCE_GROUP" -n "$APP_NAME" --output json | python3 -c '
+          import json,sys
+          values={item["name"]:item["value"] for item in json.load(sys.stdin)}
+          checks={"JWT signing key":len(values.get("Jwt__SigningKey",""))>=32,
+                  "database connection":bool(values.get("ConnectionStrings__Default")),
+                  "persistent key path":values.get("Security__DataProtectionKeyPath")=="/home/data/keys",
+                  "production mode":values.get("ASPNETCORE_ENVIRONMENT")=="Production"}
+          for name,passed in checks.items(): print(name+": "+("PASS" if passed else "FAIL"))
+          sys.exit(0 if all(checks.values()) else 1)'
+
+      - name: Stop old API before schema and encryption changes
+        id: maintenance
+        run: az webapp stop -g "$RESOURCE_GROUP" -n "$APP_NAME" --output none
+
+      # Never reset/recreate Azure SQL. Failure leaves the app stopped for deliberate recovery.
       - name: Migration (database/migrations)
         env:
           AZURE_TOKEN_CREDENTIALS: AzureCliCredential
           CRABSHARE_DB: Server=tcp:crabshare-sql.database.windows.net,1433;Database=crabshare;Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;Connection Timeout=60
         run: dotnet run --project backend/tools/CrabShare.DbMigrator -c Release --no-build
 
-      - name: Publish
-        run: |
-          dotnet publish backend/src/CrabShare.Api/CrabShare.Api.csproj -c Release -o publish --no-build
-          rm -f publish/appsettings.Development.json
-
       - uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.APP_NAME }}
           package: publish
+
+      - name: Start matching API after successful migration and deployment
+        run: az webapp start -g "$RESOURCE_GROUP" -n "$APP_NAME" --output none
 
       - name: Kiểm tra API đã kết nối CSDL
         run: |
@@ -70,3 +102,18 @@ jobs:
           done
           echo "API chưa sẵn sàng sau 5 phút" >&2
           exit 1
+
+      - name: Verify HTTPS, web asset, authentication boundary and deployed revision
+        run: python3 deploy/smoke.py --api "$API_URL" --web "$WEB_URL" --expected-revision "$GITHUB_SHA" --output deployment-smoke.json
+
+      - name: Upload redacted deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-evidence-${{ github.sha }}
+          path: deployment-smoke.json
+          if-no-files-found: ignore
+
+      - name: Explain maintenance recovery on failure
+        if: failure() && steps.maintenance.outcome == 'success'
+        run: echo 'Deployment failed after maintenance began. Check migration/deploy/start status, preserve /home/data/keys, and deploy the matching binary before reopening traffic. See docs/deploy.md. Do not reset the database or automatically restart an old API.' >> "$GITHUB_STEP_SUMMARY"

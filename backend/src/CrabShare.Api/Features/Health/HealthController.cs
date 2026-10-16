@@ -1,5 +1,6 @@
 using CrabShare.Api.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
+using System.Reflection;
 
 namespace CrabShare.Api.Features.Health;
 
@@ -10,6 +11,12 @@ public sealed class HealthController : ControllerBase
     /// <summary>API còn sống không (không chạm CSDL) — dùng cho kiểm tra triển khai.</summary>
     [HttpGet("live")]
     public IActionResult Live() => Ok(new { status = "ok" });
+
+    [HttpGet("version")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public IActionResult Version() => Ok(new {
+        version = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown"
+    });
 
     /// <summary>API có kết nối được CSDL không.</summary>
     [HttpGet("ready")]

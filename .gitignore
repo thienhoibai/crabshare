@@ -15,6 +15,7 @@ web/dist/
 web/test-results/
 web/playwright-report/
 *.tsbuildinfo
+**/__pycache__/
 .env
 .env.local
 .env.*.local

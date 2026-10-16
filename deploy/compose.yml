@@ -1,0 +1,52 @@
+# Optional self-hosting template. Azure remains the actual demo environment.
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: api
+      args:
+        SOURCE_REVISION: ${CRABSHARE_SOURCE_REVISION:-unknown}
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__Default: ${CRABSHARE_DB:?Provide an existing encrypted SQL connection}
+      Jwt__SigningKey: ${CRABSHARE_JWT_KEY:?Provide a private random signing key}
+      Payments__WebhookSecret: ${CRABSHARE_WEBHOOK_SECRET:?Provide a private webhook secret}
+      Cors__Origins__0: https://${CRABSHARE_WEB_HOST:?Provide the web hostname}
+      Security__KnownProxies__0: 10.77.0.2
+    volumes:
+      - uploads:/var/lib/crabshare/storage
+      - private-keys:/var/lib/crabshare/keys
+    networks: [private]
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      API_HOST: ${CRABSHARE_API_HOST:?Provide a public DNS hostname}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - tls-data:/data
+      - tls-config:/config
+    networks:
+      private:
+        ipv4_address: 10.77.0.2
+  migrate:
+    profiles: [tools]
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: migrator
+    environment:
+      CRABSHARE_DB: ${CRABSHARE_DB:?Provide the migration identity connection}
+    networks: [private]
+volumes:
+  uploads:
+  private-keys:
+  tls-data:
+  tls-config:
+networks:
+  private:
+    ipam:
+      config:
+        - subnet: 10.77.0.0/24
