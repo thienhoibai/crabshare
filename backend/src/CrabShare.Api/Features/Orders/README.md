@@ -88,7 +88,7 @@ Huỷ chạy `InTransactionAsync` + `IAuditLog` (khoá chuỗi trước khi đ�
 
 Job `ReservationExpiryJob` mỗi 1 phút (`ReservationExpiryService`, tắt bằng `Orders:ExpiryJob:Enabled = false` / `Orders__ExpiryJob__Enabled`). Đơn `PendingPayment` giữ chỗ `Active` đã quá `expires_at` → Cancelled, `cancel_reason = payment_timeout`, khoản thu Pending → Expired. Câu UPDATE đơn có điều kiện `status = PendingPayment`.
 
-Test: `OrderTrackingRulesTests` (CI), `OrderTrackingDatabaseTests` (LocalDB). Web: `OrderHistoryPage.tsx` (`/lich-su-don-hang`, `/huy-tra-hang`), `OrderTrackingPage.tsx` (`/theo-doi-don-hang`, `/theo-doi-don-hang/:orderNo`). `/danh-gia-don-hang` vẫn là bản mẫu.
+Test: `OrderTrackingRulesTests` (CI), `OrderTrackingDatabaseTests` (LocalDB). Web: `OrderHistoryPage.tsx` (`/lich-su-don-hang`, `/huy-tra-hang`), `OrderTrackingPage.tsx` (`/theo-doi-don-hang`, `/theo-doi-don-hang/:orderNo`). `/danh-gia-don-hang` đã nối API (CS-64).
 
 ## NH-10 — Giao hàng + hoàn tất đơn (CS-56)
 
@@ -107,4 +107,15 @@ Controller: `OperatorOrdersController` (hộ nuôi), `OrderTrackingController` (
   - `fulfil.invalid_status` (422): trạng thái không hợp lệ cho thao tác này.
   - `fulfil.eta_invalid` (422): giờ xe đến quá khứ hoặc quá 7 ngày.
   - `fulfil.status_changed` (409): trạng thái vừa bị thay đổi đồng thời.
+
+## NH-12 — Đánh giá đơn hàng + trả hàng trong hạn (CS-64)
+
+Controller: `OrderTrackingController` (khách).
+
+- **Route**:
+  - `GET /api/orders/{orderNo}/rating`: xem đánh giá của đơn và cờ `canRate`.
+  - `POST /api/orders/{orderNo}/rating`: một đánh giá một đơn khi `status = Completed` (1–5 sao, `comment` ≤ 500 ký tự). Điểm trung bình (`averageStars`, `ratingCount`) hiển thị trên `GET /api/listings` và `GET /api/listings/{id}`.
+  - `POST /api/orders/{orderNo}/return`: trả cả đơn khi `status = Delivered` và còn trong `return_window_ends_at` → `status = Returned`, lập một lệnh hoàn `Refund` bằng tổng `payment_request` `Paid`. Không nhập lại kho (`stock_qty_kg` không đổi), cua không đổi trạng thái.
+- **Mã lỗi**: `rating.order_not_completed` (422), `rating.already_exists` (409), `order.already_returned` (422), `order.return_not_delivered` (422), `order.return_window_closed` (422), `order.return_blocked_by_complaint` (422), `order.return_nothing_paid` (422), `order.return_batch_account_closed` (422), `order.return_batch_settled` (422), `order.return_reason_required` (422), `order.status_changed` (409).
+
 

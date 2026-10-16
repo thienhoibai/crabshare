@@ -73,7 +73,8 @@ public sealed record OrderTrackingResponse(
     OrderTrackingPaymentResponse? Payment,
     IReadOnlyList<OrderTimelineStep> Timeline,
     bool CanConfirmReceipt,
-    OrderShipmentResponse? Shipment = null);
+    OrderShipmentResponse? Shipment = null,
+    bool CanReturn = false);
 
 public sealed class CancelOrderRequest
 {

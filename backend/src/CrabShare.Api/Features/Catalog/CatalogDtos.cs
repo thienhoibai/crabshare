@@ -232,7 +232,9 @@ public sealed record StoreListingResponse(
     decimal AvailableQtyKg,
     bool InStock,
     string? ImageUrl,
-    DateTimeOffset? PublishedAt);
+    DateTimeOffset? PublishedAt,
+    decimal? AverageStars,
+    int RatingCount);
 
 public sealed record PublicPriceRevisionResponse(
     long PricePerKg,
