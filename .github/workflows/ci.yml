@@ -6,6 +6,20 @@ on:
     branches: [main, develop]
 
 jobs:
+  container:
+    name: API container
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate deployment smoke checks
+        run: python3 -m unittest discover -s deploy -p test_smoke.py
+      - name: Build API and explicit migrator images
+        run: |
+          docker build -f backend/Dockerfile --target api --build-arg SOURCE_REVISION="$GITHUB_SHA" -t crabshare-api:ci .
+          docker build -f backend/Dockerfile --target migrator -t crabshare-migrator:ci .
+          test "$(docker inspect --format '{{.Config.User}}' crabshare-api:ci)" -gt 0
+          docker run --rm --entrypoint dotnet crabshare-api:ci --info
+
   backend:
     name: Backend (.NET)
     runs-on: ubuntu-latest
