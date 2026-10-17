@@ -15,8 +15,8 @@ export function AdminStatusBadge({ value, label }: { value: string; label: strin
     : ['Locked', 'Failed', 'Rejected'].includes(value) ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-800'
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${color}`}>{label}</span>
 }
-export function AdminPagination({ page, total, busy, onChange }: { page: number; total: number; busy: boolean; onChange: (page: number) => void }) {
-  return <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 p-4 text-sm text-slate-600"><span>Trang {page} / {Math.max(1, Math.ceil(total / 10))} · {total} kết quả</span><div className="flex gap-2"><button className={adminButton} disabled={page === 1 || busy} onClick={() => onChange(page - 1)}>Trước</button><button className={adminButton} disabled={page * 10 >= total || busy} onClick={() => onChange(page + 1)}>Sau</button></div></div>
+export function AdminPagination({ page, total, busy, onChange, pageSize = 10 }: { page: number; total: number; busy: boolean; onChange: (page: number) => void; pageSize?: number }) {
+  return <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 p-4 text-sm text-slate-600"><span>Trang {page} / {Math.max(1, Math.ceil(total / pageSize))} · {total} kết quả</span><div className="flex gap-2"><button className={adminButton} disabled={page === 1 || busy} onClick={() => onChange(page - 1)}>Trước</button><button className={adminButton} disabled={page * pageSize >= total || busy} onClick={() => onChange(page + 1)}>Sau</button></div></div>
 }
 export interface DecisionSelection { action: AdminAccountDecision['action']; id: number; fullName: string }
 export function AdminAccountDecisionDialog({ selection, onClose, onDone }: { selection: DecisionSelection; onClose: () => void; onDone: (message: string) => void }) {

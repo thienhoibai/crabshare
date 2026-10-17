@@ -107,6 +107,7 @@ public static class FeatureRegistry
         services.AddScoped<AlertJob>();              // CS-40
         services.AddScoped<PortfolioService>();     // CS-61
         services.AddScoped<NotificationService>();  // CS-65
+        services.AddScoped<AuditLogQueryService>(); // CS-76
         services.AddScoped<DashboardService>();     // CS-73
 
         return services;

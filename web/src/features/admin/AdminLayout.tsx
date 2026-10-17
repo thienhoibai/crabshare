@@ -20,6 +20,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
     { id: 'alerts', icon: AlertTriangle, label: 'Cảnh báo', path: '/admin/alerts' },
     { id: 'disputes', icon: MessageSquareWarning, label: 'Xử lý Khiếu nại', path: '/admin/disputes' },
     { id: 'settings', icon: Settings, label: 'Cài đặt Hệ thống', path: '/admin/settings' },
+    { id: 'audit', icon: ShieldAlert, label: 'Nhật ký kiểm toán', path: '/admin/audit-log' },
   ].filter(item => item.id === 'evidence' ? isReviewer : isAdmin);
 
   return (
