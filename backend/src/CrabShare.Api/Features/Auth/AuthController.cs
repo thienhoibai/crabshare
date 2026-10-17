@@ -1,6 +1,7 @@
 using CrabShare.Api.Common.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CrabShare.Api.Features.Auth;
 
@@ -13,11 +14,13 @@ namespace CrabShare.Api.Features.Auth;
 public sealed class AuthController(AuthService auth, ICurrentUser me) : ControllerBase
 {
     [HttpPost("register")]
+    [EnableRateLimiting("auth-attempts")]
     [EndpointSummary("UC01 — Đăng ký tài khoản khách hàng hoặc nhà đầu tư")]
     public async Task<ActionResult<AuthResponse>> Register(RegisterRequest req, CancellationToken ct)
         => Ok(await auth.RegisterAsync(req, ct));
 
     [HttpPost("login")]
+    [EnableRateLimiting("auth-attempts")]
     [EndpointSummary("Đăng nhập, nhận JWT")]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest req, CancellationToken ct)
         => Ok(await auth.LoginAsync(req, ct));

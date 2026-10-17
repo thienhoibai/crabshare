@@ -40,6 +40,7 @@ public sealed class OrderDatabaseFixture : IAsyncLifetime
             }
         }
         Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
+            .UseSetting("Security:AuthIpPermitLimit", "10000")
             .UseSetting("Seed:Enabled", "false")
             .UseSetting("ConnectionStrings:Default", connectionString)
             .ConfigureTestServices(KycControllerTests.AddTestAuth));

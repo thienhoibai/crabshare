@@ -25,6 +25,7 @@ public sealed class GlobalExceptionHandler(IProblemDetailsService problems, ILog
         if (status >= 500) logger.LogError(ex, "Unhandled exception");
 
         http.Response.StatusCode = status;
+        if (status == 429) http.Response.Headers.RetryAfter = "900";
         var context = new ProblemDetailsContext
         {
             HttpContext = http,

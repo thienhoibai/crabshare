@@ -12,9 +12,11 @@ namespace CrabShare.Api.Features.Auth;
 /// Đây là TÍNH NĂNG MẪU: các tính năng khác làm theo cùng cấu trúc
 /// (Dtos → Service chứa nghiệp vụ → Controller chỉ nhận/trả HTTP).
 /// </summary>
-public sealed class AuthService(AppDbContext db, TokenService tokens, TimeProvider clock)
+public sealed class AuthService(AppDbContext db, TokenService tokens, TimeProvider clock, LoginAttemptLimiter limiter)
 {
     private static readonly PasswordHasher<AppUser> Hasher = new();
+    private static readonly AppUser DummyUser = new();
+    private static readonly string DummyHash = Hasher.HashPassword(DummyUser, Guid.NewGuid().ToString());
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest req, CancellationToken ct)
     {
@@ -51,13 +53,17 @@ public sealed class AuthService(AppDbContext db, TokenService tokens, TimeProvid
     public async Task<AuthResponse> LoginAsync(LoginRequest req, CancellationToken ct)
     {
         var email = req.Email.Trim().ToLowerInvariant();
+        limiter.Begin(email);
         var user = await db.AppUsers.Include(u => u.AppUserRoles).FirstOrDefaultAsync(u => u.Email == email, ct);
 
         // Cùng một thông báo cho "sai email" và "sai mật khẩu" để không lộ email nào đã đăng ký
-        if (user is null || Hasher.VerifyHashedPassword(user, user.PasswordHash, req.Password) == PasswordVerificationResult.Failed)
+        var verification = Hasher.VerifyHashedPassword(user ?? DummyUser, user?.PasswordHash ?? DummyHash, req.Password);
+        if (user is null || verification == PasswordVerificationResult.Failed)
             throw new AppException(StatusCodes.Status401Unauthorized, "auth.invalid_credentials", "Email hoặc mật khẩu không đúng.");
         if (user.Status == "Locked")
             throw new ForbiddenException("auth.locked", "Tài khoản đã bị khoá.");
+
+        limiter.Success(email);
 
         user.LastLoginAt = clock.GetUtcNow();
         await db.SaveChangesAsync(ct);

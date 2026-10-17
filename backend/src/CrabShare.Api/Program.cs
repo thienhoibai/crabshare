@@ -4,12 +4,14 @@ using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Errors;
 using CrabShare.Api.Infrastructure;
 using CrabShare.Api.Infrastructure.Persistence;
+using CrabShare.Api.Infrastructure.Security;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Hạ tầng: CSDL, lưu file, các dịch vụ bên ngoài (thanh toán, ký số, eKYC, nhận diện cua)
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddAppSecurity(builder.Configuration, builder.Environment);
 
 // 2. Đăng nhập JWT và phân quyền theo vai trò
 builder.Services.AddAppAuth(builder.Configuration);
@@ -43,8 +45,10 @@ builder.Services.AddCors(o => o.AddPolicy("frontends", p => p
 var app = builder.Build();
 
 app.UseExceptionHandler();
+app.UseAppSecurity();
 app.UseStatusCodePages();
 app.UseCors("frontends");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -52,6 +56,8 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference(o => o.WithTitle("CrabShare API"));
+    if (builder.Configuration.GetValue<bool>("Security:UpgradeLegacyPayouts") || builder.Configuration.GetValue<bool>("Seed:Enabled"))
+        await new PayoutProtectionUpgrade(app.Services.GetRequiredService<IServiceScopeFactory>()).StartAsync(CancellationToken.None);
     await DevDataSeeder.SeedAsync(app.Services);
 }
 
