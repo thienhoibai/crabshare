@@ -1,0 +1,205 @@
+{
+  "checkedAt": "2026-10-16T09:07:35.222261+00:00",
+  "api": "https://crabshare-api.azurewebsites.net",
+  "syntheticUserId": 8,
+  "results": [
+    {
+      "useCase": "Setup",
+      "check": "login-admin",
+      "status": "PASS"
+    },
+    {
+      "useCase": "Setup",
+      "check": "login-operator",
+      "status": "PASS"
+    },
+    {
+      "useCase": "Setup",
+      "check": "login-investor",
+      "status": "PASS"
+    },
+    {
+      "useCase": "Setup",
+      "check": "login-reviewer",
+      "status": "PASS"
+    },
+    {
+      "useCase": "Setup",
+      "check": "login-customer",
+      "status": "PASS"
+    },
+    {
+      "useCase": "Security",
+      "check": "anonymous-private-route",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC02",
+      "check": "kyc-status",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC03",
+      "check": "investor-payout",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC03",
+      "check": "operator-payout",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC03",
+      "check": "customer-addresses",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC06/45",
+      "check": "admin-users",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC06",
+      "check": "admin-kyc-checks",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC16",
+      "check": "boxes",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC16",
+      "check": "capture-requests",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC19",
+      "check": "operator-alerts",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC20",
+      "check": "review-evidence",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC20",
+      "check": "operator-explanations",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC42",
+      "check": "portfolio",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC43",
+      "check": "notifications",
+      "status": "PASS"
+    },
+    {
+      "useCase": "Security",
+      "check": "investor-cross-role-403-users",
+      "status": "PASS"
+    },
+    {
+      "useCase": "Security",
+      "check": "operator-cross-role-403-portfolio",
+      "status": "PASS"
+    },
+    {
+      "useCase": "Security",
+      "check": "customer-cross-role-403-payout-account",
+      "status": "PASS"
+    },
+    {
+      "useCase": "Security",
+      "check": "admin-cross-role-403-boxes",
+      "status": "PASS"
+    },
+    {
+      "useCase": "Security",
+      "check": "reviewer-cross-role-403-users",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC47",
+      "check": "admin-dashboard",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC47",
+      "check": "operator-dashboard",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC47",
+      "check": "csv-capital",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC47",
+      "check": "csv-batches",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC47",
+      "check": "csv-orders",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC47",
+      "check": "csv-payouts",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC48",
+      "check": "audit-chain",
+      "status": "BLOCKED_DEPLOYMENT",
+      "reason": "Expected HTTP 200, got 404"
+    },
+    {
+      "useCase": "UC48",
+      "check": "audit-export",
+      "status": "BLOCKED_DEPLOYMENT",
+      "reason": "Expected HTTP 200, got 404"
+    },
+    {
+      "useCase": "Setup",
+      "check": "synthetic-account-created",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC02",
+      "check": "synthetic-consent-400-then-verified",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC03",
+      "check": "synthetic-bank-match-and-round-trip",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC03",
+      "check": "synthetic-address-crud",
+      "status": "PASS"
+    },
+    {
+      "useCase": "UC06/45",
+      "check": "synthetic-lock-revokes-unexpired-token",
+      "status": "PASS"
+    },
+    {
+      "useCase": "Cleanup",
+      "check": "synthetic-account-disabled",
+      "status": "PASS"
+    }
+  ],
+  "automatedChecksPassed": false,
+  "physicalDevices": "PENDING: install/login/camera/GPS/upload on two real phones",
+  "qrAcceptance": "PENDING: CS-82 real scanner/trace and an activated tag",
+  "identityImageRetention": "Not observable over HTTP; covered by isolated backend storage tests",
+  "bankEncryptionAtRest": "Not observable over HTTP; requires CS-88 SQL/key validation on deployment",
+  "fullAcceptancePassed": false
+}
