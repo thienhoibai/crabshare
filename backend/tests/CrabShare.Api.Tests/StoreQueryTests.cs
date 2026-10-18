@@ -138,4 +138,30 @@ public class StoreQueryTests
 
         Assert.Equal([2, 3, 1], Ids(CatalogService.SortStore(source, StoreSort.Newest)));
     }
+
+    [Fact]
+    public void Dat_truoc_het_tran_xep_sau_niem_yet_con_hang()
+    {
+        var preorderEmpty = Listing(10, "Published", stock: 0, publishedDay: 5);
+        preorderEmpty.BatchId = 100;
+        preorderEmpty.Batch.Status = "InProduction";
+
+        var harvestingInStock = Listing(11, "Published", stock: 8, reserved: 0, publishedDay: 2);
+        harvestingInStock.BatchId = 101;
+        harvestingInStock.Batch.Status = "Harvesting";
+
+        var preorderAvailable = Listing(12, "Published", stock: 0, publishedDay: 1);
+        preorderAvailable.BatchId = 102;
+        preorderAvailable.Batch.Status = "InProduction";
+
+        var caps = new[]
+        {
+            new VBatchCommitmentCap { BatchId = 100, RemainingKg = 0m },
+            new VBatchCommitmentCap { BatchId = 102, RemainingKg = 5m },
+        }.AsQueryable();
+
+        var source = new[] { preorderEmpty, harvestingInStock, preorderAvailable }.AsQueryable();
+
+        Assert.Equal([11, 12, 10], Ids(CatalogService.SortStore(source, StoreSort.Newest, caps)));
+    }
 }

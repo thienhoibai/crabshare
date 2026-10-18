@@ -16,7 +16,7 @@
 |---|---|---|---|
 | POST | `/api/orders/checkout` | Customer | **Đã làm (CS-36, CS-43).** `{ lines: [{ listingId, quantityKg }], addressId }` → giữ tồn **nguyên tử** → mỗi lô một đơn `PendingPayment` + `payment_request` VietQR. Trả `{ orders: [{ orderNo, batchCode, totalAmount, expiresAt, lines, payment: { referenceCode, accountNo, amount, qrContent, expiresAt, paymentRequestId } }] }` |
 | — | (webhook `POST /api/webhooks/payment-provider`, module Payments) | Trung gian thanh toán | **Đã làm (CS-43).** `payment.paymentRequestId` có trong kết quả checkout để web hỏi `GET /api/payment-requests/{id}`. Tiền về đúng mã → `OrderPaymentHandler`: đơn `Paid` (+`paid_at`), giữ chỗ `Committed`, trừ `stock_qty_kg`/`reserved_qty_kg`, audit `sales_order/paid`. Dev: `POST /api/dev/payments/simulate { referenceCode: orderNo }` |
-| POST | `/api/preorders` | Customer | UC27: đặt trước khi lô đang nuôi, trả cọc (`PreOrderDeposit`) |
+| POST | `/api/preorders` | Customer | **Đã làm (CS-68, UC27).** `{ listingId, quantityKg, addressId }` — lô `InProduction`, trần `v_batch_commitment_cap`, cọc `PreOrderDeposit` (mã `DC`). Webhook → `DepositPaid`. Khi lô `Harvesting`: `PreorderBalanceService` tạo `PreOrderBalance` (`DT`). Dev: `POST /api/dev/preorders/issue-balances/{batchCode}`. |
 | GET | `/api/orders` · `/api/orders/{orderNo}` | Customer | UC28 |
 | POST | `/api/orders/{orderNo}/cancel` | Customer | Khi chưa đóng gói |
 | POST | `/api/orders/{orderNo}/receive` | Customer | **Đã làm (CS-56, UC30).** `Shipping → Delivered` (bắt đầu 72h đổi trả) hoặc chỉ ghi `received_at`. |
@@ -117,5 +117,14 @@ Controller: `OrderTrackingController` (khách).
   - `POST /api/orders/{orderNo}/rating`: một đánh giá một đơn khi `status = Completed` (1–5 sao, `comment` ≤ 500 ký tự). Điểm trung bình (`averageStars`, `ratingCount`) hiển thị trên `GET /api/listings` và `GET /api/listings/{id}`.
   - `POST /api/orders/{orderNo}/return`: trả cả đơn khi `status = Delivered` và còn trong `return_window_ends_at` → `status = Returned`, lập một lệnh hoàn `Refund` bằng tổng `payment_request` `Paid`. Không nhập lại kho (`stock_qty_kg` không đổi), cua không đổi trạng thái.
 - **Mã lỗi**: `rating.order_not_completed` (422), `rating.already_exists` (409), `order.already_returned` (422), `order.return_not_delivered` (422), `order.return_window_closed` (422), `order.return_blocked_by_complaint` (422), `order.return_nothing_paid` (422), `order.return_batch_account_closed` (422), `order.return_batch_settled` (422), `order.return_reason_required` (422), `order.status_changed` (409).
+
+## NH-13 — Đặt trước có cọc cho lô đang nuôi (CS-68)
+
+- Không giữ `reserved_qty_kg` trên `product_listing` và không tạo `stock_reservation`; trần cam kết kiểm tra theo `v_batch_commitment_cap` (khoá `batch` `UPDLOCK, HOLDLOCK`).
+- Cọc = `Round(total * batch.offtake_deposit_pct / 100, AwayFromZero)`; khoản thu `PreOrderDeposit` sinh mã `DC` riêng, không dùng `order_no`.
+- Thành viên hộ nuôi của lô không được đặt trước (`preorder.related_party` 422); vượt trần trả 422 `preorder.cap_exceeded`.
+- Webhook khớp mã `DC` chuyển đơn `PendingPayment → DepositPaid` (chưa ghi `paid_at`); quá 15 phút chưa trả cọc bị `ReservationExpiryService` huỷ (`payment_timeout`).
+- Khi lô `Harvesting`, `PreorderBalanceService` phát khoản thu `PreOrderBalance` (mã `DT`) = tổng − cọc; webhook khớp mã `DT` chuyển `DepositPaid → Paid` + `paid_at`.
+
 
 

@@ -18,6 +18,7 @@ export default function OperatorBatchStatus() {
   const userId = useAuthStore(s => s.user?.userId)
   const profile = useOperatorApplication()
   const query = useQuery({ queryKey: ['operator-batches', userId, status, page], retry: false,
+    refetchInterval: 4_000,
     queryFn: ({ signal }) => listBatches(status, page, signal) })
   return <OperatorLayout activeTab="batch">
     <OpHeading eyebrow="Lô nuôi" title="Quản lý lô nuôi" description="Danh sách lô của hộ nuôi, bao gồm bản nháp và lô đang chờ duyệt."

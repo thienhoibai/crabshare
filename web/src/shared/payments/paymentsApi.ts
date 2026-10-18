@@ -55,6 +55,9 @@ export function useSimulatePayment() {
     retry: false,
     mutationFn: async ({ referenceCode }: { paymentRequestId: number; referenceCode: string }) =>
       (await http.post<WebhookResult>('/api/dev/payments/simulate', { referenceCode })).data,
-    onSuccess: (_result, { paymentRequestId }) => queryClient.invalidateQueries({ queryKey: paymentKeys.request(paymentRequestId) }),
+    onSuccess: (_result, { paymentRequestId }) => {
+      void queryClient.invalidateQueries({ queryKey: paymentKeys.request(paymentRequestId) })
+      void queryClient.invalidateQueries({ queryKey: ['orders'] })
+    },
   })
 }

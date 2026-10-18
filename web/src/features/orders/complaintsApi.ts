@@ -130,6 +130,11 @@ export function useOrderComplaint(orderNo?: string) {
     queryKey: ['complaints', 'order', orderNo],
     queryFn: () => (orderNo ? complaintsApi.getOrderComplaint(orderNo) : Promise.resolve(null)),
     enabled: Boolean(orderNo),
+    refetchInterval: (query) => {
+      const c = query.state.data
+      if (!c) return 5_000
+      return c.status === 'Open' || c.status === 'OperatorResponded' || c.status === 'Escalated' ? 3_000 : false
+    },
   })
 }
 
@@ -148,6 +153,7 @@ export function useOperatorComplaints() {
   return useQuery({
     queryKey: ['operator', 'complaints'],
     queryFn: complaintsApi.getOperatorComplaints,
+    refetchInterval: 3_000,
   })
 }
 

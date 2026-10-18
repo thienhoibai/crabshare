@@ -68,6 +68,7 @@ export interface ListingOption {
   inStockCount: number
   inStockKg: number
   existingListingId: number | null
+  batchStatus?: string
 }
 
 export interface CreateListingInput {
@@ -128,8 +129,10 @@ const keys = {
   options: ['listings', 'options'] as const,
 }
 
-export const useMyListings = () => useQuery({ queryKey: keys.mine, queryFn: listingsApi.mine })
-export const useListingOptions = () => useQuery({ queryKey: keys.options, queryFn: listingsApi.options })
+export const useMyListings = () =>
+  useQuery({ queryKey: keys.mine, queryFn: listingsApi.mine, refetchInterval: 4_000 })
+export const useListingOptions = () =>
+  useQuery({ queryKey: keys.options, queryFn: listingsApi.options, refetchInterval: 4_000 })
 
 /** Mọi thao tác ghi đều làm mới danh sách niêm yết và danh sách hạng còn tồn. */
 function useListingMutation<TVars>(fn: (vars: TVars) => Promise<Listing>) {

@@ -110,13 +110,26 @@ const keys = {
 }
 
 export const useOperatorOrderCounts = () =>
-  useQuery({ queryKey: keys.counts(), queryFn: () => operatorOrdersApi.getCounts() })
+  useQuery({
+    queryKey: keys.counts(),
+    queryFn: () => operatorOrdersApi.getCounts(),
+    refetchInterval: 3_000,
+  })
 
 export const useOperatorOrders = (status: OperatorOrderStatus) =>
-  useQuery({ queryKey: keys.list(status), queryFn: () => operatorOrdersApi.list(status) })
+  useQuery({
+    queryKey: keys.list(status),
+    queryFn: () => operatorOrdersApi.list(status),
+    refetchInterval: 3_000,
+  })
 
 export const useOperatorOrder = (orderNo: string | undefined) =>
-  useQuery({ queryKey: keys.detail(orderNo ?? ''), queryFn: () => operatorOrdersApi.get(orderNo!), enabled: !!orderNo })
+  useQuery({
+    queryKey: keys.detail(orderNo ?? ''),
+    queryFn: () => operatorOrdersApi.get(orderNo!),
+    enabled: !!orderNo,
+    refetchInterval: 3_000,
+  })
 
 export function usePackOrder(orderNo: string) {
   const qc = useQueryClient()

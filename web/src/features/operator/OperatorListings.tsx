@@ -85,12 +85,12 @@ function CreateListingForm({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <OpPanel title="Tạo niêm yết" subtitle="Tồn lấy từ số cua đã cân trong kho của lô + hạng; không nhập tay số kg." accent>
+    <OpPanel title="Tạo niêm yết" subtitle="Lô đang thu hoạch lấy tồn đã cân; lô đang nuôi (đặt trước) tồn 0, trần kg do hệ thống giữ." accent>
       {isLoading ? (
         <p className="op-muted">Đang tải…</p>
       ) : free.length === 0 ? (
         <>
-          <OpNote>Không còn hạng nào của lô đang thu hoạch chưa có niêm yết. Cân và xếp hạng cua ở trang Thu hoạch trước.</OpNote>
+          <OpNote>Không còn hạng nào của lô đang thu hoạch chưa có niêm yết. Kể cả lô đang nuôi (đặt trước) nếu chưa niêm yết hạng đó.</OpNote>
           <OpBtn type="button" variant="ghost" sm onClick={onDone} className="justify-self-start">Đóng</OpBtn>
         </>
       ) : (
@@ -100,7 +100,10 @@ function CreateListingForm({ onDone }: { onDone: () => void }) {
             <select id="ls-choice" className="op-select" value={choice} onChange={(e) => setChoice(e.target.value)}>
               {free.map((o) => (
                 <option key={`${o.batchCode}|${o.gradeCode}`} value={`${o.batchCode}|${o.gradeCode}`}>
-                  {o.batchCode} · {CRAB_TYPE_LABELS[o.crabType] ?? o.crabType} · {o.gradeName} — {o.inStockCount} con, {kg(o.inStockKg)}
+                  {o.batchCode} · {CRAB_TYPE_LABELS[o.crabType] ?? o.crabType} · {o.gradeName}
+                  {o.batchStatus === 'InProduction'
+                    ? ' — Đặt trước · đang nuôi'
+                    : ` — ${o.inStockCount} con, ${kg(o.inStockKg)}`}
                 </option>
               ))}
             </select>

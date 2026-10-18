@@ -88,6 +88,10 @@ export interface OrderTracking {
   shipment: OrderShipment | null
   canReturn: boolean
   returnRequest?: ReturnRequestInfo | null
+  orderType?: string
+  depositAmount?: number | null
+  balanceDueAt?: string | null
+  payments?: OrderTrackingPayment[] | null
 }
 
 export interface CancelOrderResult {
@@ -107,6 +111,7 @@ export interface OrderListQuery {
 
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   PendingPayment: 'Chờ chuyển khoản',
+  DepositPaid: 'Đã cọc',
   Paid: 'Đã thanh toán',
   Packed: 'Đã đóng gói',
   Shipping: 'Đang giao',
@@ -117,8 +122,16 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   Expired: 'Hết hạn',
 }
 
+export const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  Pending: 'Chờ chuyển khoản',
+  Paid: 'Đã thanh toán',
+  Expired: 'Hết hạn',
+  Cancelled: 'Đã huỷ',
+}
+
 export const TIMELINE_LABELS: Record<string, string> = {
   placed: 'Đã đặt hàng',
+  deposit_paid: 'Đã trả cọc',
   paid: 'Đã thanh toán',
   packed: 'Đã đóng gói',
   shipped: 'Đang giao',
@@ -131,7 +144,7 @@ export const TIMELINE_LABELS: Record<string, string> = {
 export const statusTone = (status: string) => {
   if (status === 'Cancelled' || status === 'Returned' || status === 'Expired') return 'cancelled'
   if (status === 'Completed' || status === 'Delivered') return 'done'
-  if (status === 'Shipping' || status === 'Packed' || status === 'Paid') return 'progress'
+  if (status === 'Shipping' || status === 'Packed' || status === 'Paid' || status === 'DepositPaid') return 'progress'
   return 'wait'
 }
 
@@ -151,14 +164,36 @@ export const orderKeys = {
   detail: (orderNo: string) => ['orders', 'tracking', orderNo] as const,
 }
 
+const ACTIVE_POLL_STATUSES = new Set([
+  'PendingPayment',
+  'DepositPaid',
+  'Paid',
+  'Packed',
+  'Shipping',
+  'Delivered',
+])
+
 export const useMyOrders = (q: OrderListQuery) =>
-  useQuery({ queryKey: orderKeys.list(q), queryFn: () => orderTrackingApi.list(q) })
+  useQuery({
+    queryKey: orderKeys.list(q),
+    queryFn: () => orderTrackingApi.list(q),
+    refetchInterval: (query) =>
+      query.state.data?.items.some((o) => ACTIVE_POLL_STATUSES.has(o.status)) ? 3_000 : false,
+  })
 
 export const useOrderTracking = (orderNo: string | undefined) =>
   useQuery({
     queryKey: orderKeys.detail(orderNo ?? ''),
     queryFn: () => orderTrackingApi.get(orderNo!),
     enabled: !!orderNo,
+    refetchInterval: (query) => {
+      const d = query.state.data
+      if (!d) return false
+      if (ACTIVE_POLL_STATUSES.has(d.status)) return 3_000
+      if (d.returnRequest?.status === 'Pending') return 3_000
+      if (d.payments?.some((p) => p.status === 'Pending') || d.payment?.status === 'Pending') return 3_000
+      return false
+    },
   })
 
 export function useCancelOrder(orderNo: string) {

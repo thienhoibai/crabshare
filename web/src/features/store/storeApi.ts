@@ -27,6 +27,11 @@ export interface StoreListing {
   publishedAt: string | null
   averageStars: number | null
   ratingCount: number
+  batchStatus?: string
+  isPreorder?: boolean
+  remainingPreorderKg?: number | null
+  depositPct?: number | null
+  expectedHarvestDate?: string | null
 }
 
 export interface PublicPriceRevision {
@@ -124,11 +129,15 @@ export function toProduct(l: StoreListing, detail?: StoreListingDetail): Product
     gallery: [img, IMG.sorter, IMG.qr],
     stock: l.availableQtyKg,
     soldOut: !l.inStock,
-    harvest: l.harvestedAt ? formatDate(l.harvestedAt) : '—',
+    harvest: l.isPreorder
+      ? (l.expectedHarvestDate ? `dự kiến ${formatDate(l.expectedHarvestDate)}` : 'chưa chốt ngày thu')
+      : l.harvestedAt ? formatDate(l.harvestedAt) : '—',
     farm: l.farmName,
     crab: kind,
     traceTag: detail?.traceTagCode ?? null,
     averageStars: l.averageStars,
     ratingCount: l.ratingCount,
+    preorder: !!l.isPreorder,
+    depositPct: l.depositPct ?? undefined,
   }
 }

@@ -63,12 +63,28 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
             .Select(l => new { l.BatchId, l.GradeId, l.ListingId })
             .ToListAsync(ct);
 
-        return stock
+        var harvest = stock
             .OrderBy(s => s.Key.BatchCode).ThenBy(s => s.Key.GradeCode)
             .Select(s => new ListingOptionResponse(
                 s.Key.BatchCode, s.Key.Title, s.Key.CrabType, s.Key.GradeCode, s.Key.GradeName, s.Count, ToKg(s.Grams),
-                existing.FirstOrDefault(e => e.BatchId == s.Key.BatchId && e.GradeId == s.Key.GradeId)?.ListingId))
-            .ToList();
+                existing.FirstOrDefault(e => e.BatchId == s.Key.BatchId && e.GradeId == s.Key.GradeId)?.ListingId,
+                "Harvesting"));
+
+        var growing = await db.Batches.AsNoTracking()
+            .Where(b => b.OperatorId == operatorId && b.Status == "InProduction")
+            .Select(b => new { b.BatchId, b.BatchCode, b.Title, b.CrabType })
+            .ToListAsync(ct);
+        var grades = await db.ProductGrades.AsNoTracking()
+            .OrderBy(g => g.GradeCode)
+            .Select(g => new { g.GradeId, g.GradeCode, g.GradeName })
+            .ToListAsync(ct);
+
+        var preorder = growing.SelectMany(b => grades.Select(g => new ListingOptionResponse(
+            b.BatchCode, b.Title, b.CrabType, g.GradeCode, g.GradeName, 0, 0,
+            existing.FirstOrDefault(e => e.BatchId == b.BatchId && e.GradeId == g.GradeId)?.ListingId,
+            "InProduction")));
+
+        return harvest.Concat(preorder).OrderBy(o => o.BatchCode).ThenBy(o => o.GradeCode).ToList();
     }
 
     public async Task<ListingResponse> CreateAsync(CreateListingRequest req, CancellationToken ct)
@@ -79,8 +95,9 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
                     ?? throw new NotFoundException("batch.not_found", "Không tìm thấy lô.");
         if (batch.OperatorId != operatorId)
             throw new ForbiddenException("batch.not_owner", "Lô này không thuộc hộ nuôi của bạn.");
-        if (batch.Status != "Harvesting")
-            throw new BusinessRuleException("listing.batch_not_harvesting", "Chỉ niêm yết được lô đang thu hoạch.");
+        if (batch.Status is not ("InProduction" or "Harvesting"))
+            throw new BusinessRuleException("listing.batch_not_listable",
+                "Chỉ niêm yết được lô đang nuôi (đặt trước) hoặc lô đang thu hoạch.");
 
         var gradeCode = req.GradeCode.Trim().ToUpperInvariant();
         var grade = await db.ProductGrades.FirstOrDefaultAsync(g => g.GradeCode == gradeCode, ct)
@@ -88,8 +105,8 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
         if (await db.ProductListings.AnyAsync(l => l.BatchId == batch.BatchId && l.GradeId == grade.GradeId, ct))
             throw new ConflictException("listing.grade_listed", "Hạng này của lô đã có niêm yết. Mỗi lô + hạng chỉ có một kiểu bảo quản.");
 
-        var stockKg = await InStockKgAsync(batch.BatchId, grade.GradeId, ct);
-        if (stockKg <= 0)
+        var stockKg = batch.Status == "InProduction" ? 0 : await InStockKgAsync(batch.BatchId, grade.GradeId, ct);
+        if (batch.Status != "InProduction" && stockKg <= 0)
             throw new BusinessRuleException("listing.no_stock", "Lô chưa có cua hạng này trong kho.");
 
         var now = clock.GetUtcNow();
@@ -158,6 +175,15 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
         var listing = await LoadOwnedForUpdateAsync(listingId, ct);
         if (listing.Status != "Draft")
             throw new BusinessRuleException("listing.not_draft", "Chỉ đăng bán được niêm yết đang ở bản nháp.");
+        if (listing.Batch.Status == "InProduction")
+        {
+            var publishedAt = clock.GetUtcNow();
+            listing.Status = "Published";
+            listing.PublishedAt = publishedAt;
+            listing.UpdatedAt = publishedAt;
+            await SaveAsync(ct);
+            return await GetMineAsync(listingId, ct);
+        }
         if (listing.Batch.Status != "Harvesting")
             throw new BusinessRuleException("listing.batch_not_harvesting", "Lô không còn ở giai đoạn thu hoạch.");
 
@@ -257,12 +283,13 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
     {
         var query = FilterStore(db.ProductListings, q);
         var total = await query.CountAsync(ct);
-        var rows = await SortStore(query, q.Sort)
+        var rows = await SortStore(query, q.Sort, db.VBatchCommitmentCaps)
             .Skip((q.Page - 1) * q.PageSize).Take(q.PageSize)
             .Select(ToStoreRow)
             .ToListAsync(ct);
         var stats = await LoadRatingStatsAsync(rows.Select(r => r.ListingId).ToArray(), ct);
-        return new PagedResult<StoreListingResponse>(rows.Select(r => ToStoreResponse(r, stats)).ToList(), q.Page, q.PageSize, total);
+        var caps = await LoadCommitmentRemainingAsync(rows.Select(r => r.BatchId).Distinct().ToArray(), ct);
+        return new PagedResult<StoreListingResponse>(rows.Select(r => ToStoreResponse(r, stats, caps)).ToList(), q.Page, q.PageSize, total);
     }
 
     /// <summary>Chi tiết ở cửa hàng: lịch sử giá công khai (TL-27) và một mã tem để mở trang truy xuất lô.</summary>
@@ -290,9 +317,10 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
             .ToList();
 
         var stats = await LoadRatingStatsAsync([listing.ListingId], ct);
+        var caps = await LoadCommitmentRemainingAsync([listing.BatchId], ct);
         var reviews = await LoadListingReviewsAsync(listing.ListingId, ct);
         return new StoreListingDetailResponse(
-            ToStoreResponse(ToStoreRowCompiled(listing), stats),
+            ToStoreResponse(ToStoreRowCompiled(listing), stats, caps),
             listing.Batch.Title, listing.FrozenAt, SellUntil(listing), tagCode, history, reviews);
     }
 
@@ -328,9 +356,21 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
         return query;
     }
 
-    public static IQueryable<ProductListing> SortStore(IQueryable<ProductListing> query, StoreSort sort)
+    public static IQueryable<ProductListing> SortStore(
+        IQueryable<ProductListing> query,
+        StoreSort sort,
+        IQueryable<VBatchCommitmentCap>? commitmentCaps = null)
     {
-        var inStockFirst = query.OrderBy(l => l.Status == "SoldOut" || l.StockQtyKg - l.ReservedQtyKg <= 0);
+        var inStockFirst = commitmentCaps is null
+            ? query.OrderBy(l =>
+                l.Status == "SoldOut"
+                || (l.Batch.Status != "InProduction" && l.StockQtyKg - l.ReservedQtyKg <= 0)
+                || (l.Batch.Status == "InProduction" && l.Status != "Published"))
+            : query.OrderBy(l =>
+                l.Status == "SoldOut"
+                || (l.Batch.Status != "InProduction" && l.StockQtyKg - l.ReservedQtyKg <= 0)
+                || (l.Batch.Status == "InProduction" && (l.Status != "Published"
+                    || !commitmentCaps.Any(v => v.BatchId == l.BatchId && v.RemainingKg >= 0.001m))));
         return sort switch
         {
             StoreSort.PriceAsc => inStockFirst.ThenBy(l => l.CurrentPricePerKg).ThenBy(l => l.ListingId),
@@ -342,26 +382,47 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
     private sealed record StoreRow(
         long ListingId, string Title, string Status, string CrabType, string GradeCode, string GradeName,
         short? MinWeightG, short? MaxWeightG, string StorageType, string BatchCode, string FarmName, DateTimeOffset? HarvestedAt,
-        decimal PricePerKg, decimal StockQtyKg, decimal ReservedQtyKg, string? ImageUri, string? ImageSha256, DateTimeOffset? PublishedAt);
+        decimal PricePerKg, decimal StockQtyKg, decimal ReservedQtyKg, string? ImageUri, string? ImageSha256, DateTimeOffset? PublishedAt,
+        long BatchId, string BatchStatus, decimal OfftakeDepositPct, DateOnly? ExpectedHarvestDate);
 
     private static readonly Expression<Func<ProductListing, StoreRow>> ToStoreRow = l => new StoreRow(
         l.ListingId, l.Title, l.Status, l.Batch.CrabType, l.Grade.GradeCode, l.Grade.GradeName,
         l.Grade.MinWeightG, l.Grade.MaxWeightG, l.StorageType, l.Batch.BatchCode, l.Batch.Operator.LegalName,
         l.Batch.Harvests.Max(h => (DateTimeOffset?)h.HarvestedAt),
-        l.CurrentPricePerKg, l.StockQtyKg, l.ReservedQtyKg, l.ImageUri, l.ImageSha256, l.PublishedAt);
+        l.CurrentPricePerKg, l.StockQtyKg, l.ReservedQtyKg, l.ImageUri, l.ImageSha256, l.PublishedAt,
+        l.BatchId, l.Batch.Status, l.Batch.OfftakeDepositPct, l.Batch.ExpectedHarvestDate);
 
     private static readonly Func<ProductListing, StoreRow> ToStoreRowCompiled = ToStoreRow.Compile();
 
-    private static StoreListingResponse ToStoreResponse(StoreRow r, IReadOnlyDictionary<long, (decimal Average, int Count)> stats)
+    private static StoreListingResponse ToStoreResponse(
+        StoreRow r,
+        IReadOnlyDictionary<long, (decimal Average, int Count)> stats,
+        IReadOnlyDictionary<long, decimal> remainingByBatch)
     {
-        var available = Math.Max(0, r.StockQtyKg - r.ReservedQtyKg);
+        var isPreorder = r.Status == "Published" && r.BatchStatus == "InProduction";
+        remainingByBatch.TryGetValue(r.BatchId, out var remaining);
+        var available = isPreorder ? remaining : Math.Max(0, r.StockQtyKg - r.ReservedQtyKg);
+        var inStock = isPreorder ? remaining >= 0.001m : r.Status == "Published" && available > 0;
         var imageUrl = r.ImageUri is null ? null : $"/api/listings/{r.ListingId}/image?v={r.ImageSha256?[..8]}";
         stats.TryGetValue(r.ListingId, out var stat);
         decimal? average = stat.Count == 0 ? null : stat.Average;
         return new StoreListingResponse(
             r.ListingId, r.Title, r.Status, r.CrabType, r.GradeCode, r.GradeName, r.MinWeightG, r.MaxWeightG,
             r.StorageType, r.BatchCode, r.FarmName, r.HarvestedAt, (long)r.PricePerKg, available,
-            r.Status == "Published" && available > 0, imageUrl, r.PublishedAt, average, stat.Count);
+            inStock, imageUrl, r.PublishedAt, average, stat.Count,
+            r.BatchStatus, isPreorder,
+            isPreorder ? remaining : null,
+            isPreorder ? r.OfftakeDepositPct : null,
+            isPreorder ? r.ExpectedHarvestDate : null);
+    }
+
+    private async Task<Dictionary<long, decimal>> LoadCommitmentRemainingAsync(
+        IReadOnlyCollection<long> batchIds, CancellationToken ct)
+    {
+        if (batchIds.Count == 0) return [];
+        return await db.VBatchCommitmentCaps.AsNoTracking()
+            .Where(v => batchIds.Contains(v.BatchId))
+            .ToDictionaryAsync(v => v.BatchId, v => v.RemainingKg ?? 0, ct);
     }
 
     private async Task<Dictionary<long, (decimal Average, int Count)>> LoadRatingStatsAsync(

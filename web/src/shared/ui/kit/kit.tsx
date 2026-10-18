@@ -496,7 +496,7 @@ export function ProductView({ p, onAdded }: { p: Product; onAdded?: () => void }
       <div className="rd-pv__info">
         <div className="rd-pv__tags">
           <span className="rd-tag">{p.kind}</span>
-          {p.preorder ? <span className="rd-tag rd-tag--accent">Đặt trước · cọc 15%</span>
+          {p.preorder ? <span className="rd-tag rd-tag--accent">Đặt trước · cọc {p.depositPct ?? 15}%</span>
             : isSoldOut(p) ? <span className="rd-tag">Hết hàng</span>
             : <span className="rd-tag">Còn {qtyFmt.format(p.stock)} {p.unit}</span>}
         </div>
@@ -510,11 +510,18 @@ export function ProductView({ p, onAdded }: { p: Product; onAdded?: () => void }
         <SizePills p={p} value={size} onChange={setSize} />
         <div className="rd-pv__buy">
           <Qty value={qty} max={Math.max(1, max)} onChange={(v) => setQty(Math.max(1, v))} />
-          <button type="button" className="rd-btn rd-btn--primary rd-btn--lg rd-pv__cta" disabled={max < 1} onClick={() => { cart.add(p.id, size, qty, p); onAdded?.() }}>
-            {isSoldOut(p) ? 'Hết hàng' : max < 1 ? `Còn dưới 1 ${p.unit}, chưa bán lẻ được` : p.preorder ? `Đặt trước · cọc ${vnd(price * qty * DEPOSIT)}` : `Thêm vào giỏ · ${vnd(price * qty)}`}
+          <button type="button" className="rd-btn rd-btn--primary rd-btn--lg rd-pv__cta" disabled={max < 1} onClick={() => {
+            if (p.preorder && p.listingId) { onAdded?.(); return }
+            cart.add(p.id, size, qty, p)
+            onAdded?.()
+          }}>
+            {isSoldOut(p) ? 'Hết hàng'
+              : max < 1 ? `Còn dưới 1 ${p.unit}, chưa bán lẻ được`
+              : p.preorder ? `Đặt trước · cọc ${vnd(Math.round(price * qty * (p.depositPct ?? 15) / 100))}`
+              : `Thêm vào giỏ · ${vnd(price * qty)}`}
           </button>
         </div>
-        <p className="rd-pv__hint"><Clock size={14} /> Đặt hàng xong, hàng được giữ 15 phút để bạn chuyển khoản.</p>
+        <p className="rd-pv__hint"><Clock size={14} /> {p.preorder ? 'Chuyển cọc trong 15 phút. Phần còn lại thu khi lô thu hoạch.' : 'Đặt hàng xong, hàng được giữ 15 phút để bạn chuyển khoản.'}</p>
         <TraceCard p={p} />
         <ul className="rd-assure">
           <li><Truck size={16} /> Mỗi đơn thuộc đúng một lô</li>

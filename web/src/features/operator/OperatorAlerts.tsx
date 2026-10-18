@@ -30,7 +30,7 @@ export default function OperatorAlerts() {
   const [notice, setNotice] = useState('')
   const client = useQueryClient()
   const userId = useAuthStore(state => state.user?.userId)
-  const query = useQuery({ queryKey: ['operator-alerts', userId, status], queryFn: () => myAlerts(status), enabled: !!userId })
+  const query = useQuery({ queryKey: ['operator-alerts', userId, status], queryFn: () => myAlerts(status), enabled: !!userId, refetchInterval: 4_000 })
   const list = query.data ?? []
   const open = list.filter(a => a.status === 'Open' || a.status === 'Escalated')
   const high = open.filter(a => a.severity === 'High' || a.severity === 'Critical').length
