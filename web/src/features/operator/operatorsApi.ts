@@ -25,6 +25,8 @@ export function useOperatorApplication() {
     queryKey: ['operators', 'me', userId],
     enabled: !!userId,
     retry: false,
+    refetchInterval: (query) =>
+      query.state.data?.status === 'Submitted' ? 4_000 : false,
     queryFn: async () => {
       try {
         return (await http.get<OperatorApplication>('/api/operators/me')).data
@@ -61,6 +63,7 @@ export function useOperatorMembers() {
   const userId = useAuthStore(s => s.user?.userId)
   return useQuery({
     queryKey: ['operators', 'members', userId], enabled: !!userId, retry: false,
+    refetchInterval: 5_000,
     queryFn: async () => (await http.get<OperatorMember[]>('/api/operators/me/members')).data,
   })
 }

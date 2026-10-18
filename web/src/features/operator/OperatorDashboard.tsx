@@ -15,7 +15,7 @@ export default function OperatorDashboard() {
   const [period, setPeriod] = useState(initialPeriod)
   const userId = useAuthStore(s => s.user?.userId)
   const valid = validPeriod(period.from, period.to)
-  const query = useQuery({ queryKey: ['operator-dashboard', userId, period, selectedBatch], queryFn: ({ signal }) => operatorDashboard(period.from, period.to, selectedBatch, signal), enabled: !!userId && valid })
+  const query = useQuery({ queryKey: ['operator-dashboard', userId, period, selectedBatch], queryFn: ({ signal }) => operatorDashboard(period.from, period.to, selectedBatch, signal), enabled: !!userId && valid, refetchInterval: 5_000 })
   const data = query.data
   return <OperatorLayout activeTab="dashboard">
     <OpHeading eyebrow="Hôm nay" title={data && !query.isError ? `Chào ${data.farmName}` : 'Tổng quan hộ nuôi'} description="Cua đang nuôi, công việc hiện tại và nhật ký thật của hộ nuôi." action={<><select className="op-select op-select--pill" value={selectedBatch} onChange={e => setSelectedBatch(e.target.value)} aria-label="Lọc theo lô"><option value="">Tất cả lô đang nuôi</option>{data?.batches.map(b => <option key={b.batchCode} value={b.batchCode}>{b.title} · {b.batchCode}</option>)}</select><OpBtn variant="ink" onClick={() => { window.location.href = '/operator/log' }}><PlusCircle size={16} />Ghi nhật ký</OpBtn></>} />

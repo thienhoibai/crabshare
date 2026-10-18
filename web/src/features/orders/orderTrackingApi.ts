@@ -164,14 +164,36 @@ export const orderKeys = {
   detail: (orderNo: string) => ['orders', 'tracking', orderNo] as const,
 }
 
+const ACTIVE_POLL_STATUSES = new Set([
+  'PendingPayment',
+  'DepositPaid',
+  'Paid',
+  'Packed',
+  'Shipping',
+  'Delivered',
+])
+
 export const useMyOrders = (q: OrderListQuery) =>
-  useQuery({ queryKey: orderKeys.list(q), queryFn: () => orderTrackingApi.list(q) })
+  useQuery({
+    queryKey: orderKeys.list(q),
+    queryFn: () => orderTrackingApi.list(q),
+    refetchInterval: (query) =>
+      query.state.data?.items.some((o) => ACTIVE_POLL_STATUSES.has(o.status)) ? 3_000 : false,
+  })
 
 export const useOrderTracking = (orderNo: string | undefined) =>
   useQuery({
     queryKey: orderKeys.detail(orderNo ?? ''),
     queryFn: () => orderTrackingApi.get(orderNo!),
     enabled: !!orderNo,
+    refetchInterval: (query) => {
+      const d = query.state.data
+      if (!d) return false
+      if (ACTIVE_POLL_STATUSES.has(d.status)) return 3_000
+      if (d.returnRequest?.status === 'Pending') return 3_000
+      if (d.payments?.some((p) => p.status === 'Pending') || d.payment?.status === 'Pending') return 3_000
+      return false
+    },
   })
 
 export function useCancelOrder(orderNo: string) {

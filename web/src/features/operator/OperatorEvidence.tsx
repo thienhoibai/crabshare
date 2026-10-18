@@ -64,7 +64,7 @@ function ExplanationForm({ item, userId }: { item: EvidenceItem; userId: number 
 }
 
 function EvidenceDetail({ id, userId }: { id: number; userId: number }) {
-  const query = useQuery({ queryKey: ['operator-evidence-detail', userId, id], queryFn: ({ signal }) => operatorEvidenceDetail(id, signal), enabled: Number.isSafeInteger(id) && id > 0, retry: false })
+  const query = useQuery({ queryKey: ['operator-evidence-detail', userId, id], queryFn: ({ signal }) => operatorEvidenceDetail(id, signal), enabled: Number.isSafeInteger(id) && id > 0, retry: false, refetchInterval: 4_000 })
   const item = query.data
   return <>
     <OpHeading eyebrow="Bằng chứng" title={`Giải trình bằng chứng #${id}`} crumb={<OpBack href="/operator/evidence">← Danh sách bằng chứng</OpBack>} />
@@ -89,7 +89,7 @@ function EvidenceList({ userId }: { userId: number }) {
   const [status, setStatus] = useState('Flagged')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
-  const query = useQuery({ queryKey: ['operator-evidence', userId, status, q, page], queryFn: ({ signal }) => operatorEvidence(status, q, page, signal), retry: false })
+  const query = useQuery({ queryKey: ['operator-evidence', userId, status, q, page], queryFn: ({ signal }) => operatorEvidence(status, q, page, signal), retry: false, refetchInterval: 4_000 })
   return <>
     <OpHeading eyebrow="Bằng chứng" title="Bằng chứng bị gắn cờ" description="Xem ảnh và phản hồi thẩm định, gửi giải trình cho bằng chứng của hộ nuôi." />
     <div className="mb-4 flex flex-wrap items-end gap-3">

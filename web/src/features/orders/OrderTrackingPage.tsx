@@ -6,6 +6,7 @@ import { errorMessage } from '../../shared/api/http'
 import { formatDateTime, formatVnd } from '../../shared/lib/format'
 import { vnd } from '../../shared/ui/kit/mock-data'
 import { Shell, TopBar } from '../../shared/ui/kit/kit'
+import { SimulatePaymentButton } from '../../shared/payments/SimulatePaymentButton'
 import { formatKg } from '../store/storeApi'
 import {
   ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS, TIMELINE_LABELS, statusTone, useCancelOrder, useConfirmReceipt, useOrderTracking,
@@ -474,8 +475,11 @@ function ReturnBox({
   const [localError, setLocalError] = useState<string | null>(null)
   const [editingAfterReject, setEditingAfterReject] = useState(false)
 
+  const currentReqStatus =
+    reqInfo?.status ?? (ret.isSuccess && ret.data.status === 'ReturnRequested' ? 'Pending' : undefined)
+
   // 1. Nếu yêu cầu trả hàng đang chờ Hộ nuôi duyệt (Pending)
-  if (reqInfo?.status === 'Pending' || (ret.isSuccess && ret.data.status === 'ReturnRequested')) {
+  if (currentReqStatus === 'Pending') {
     const activeReq = reqInfo ?? ret.data?.returnRequest
     return (
       <section className="ot-return bg-amber-50/90 border border-amber-300 rounded-2xl p-4.5 mt-4" aria-label="Trạng thái yêu cầu trả hàng">
@@ -503,7 +507,7 @@ function ReturnBox({
   }
 
   // 2. Nếu yêu cầu trả hàng đã được Hộ nuôi chấp thuận (Approved / Returned)
-  if (order.status === 'Returned' || reqInfo?.status === 'Approved' || (ret.isSuccess && ret.data.status === 'Returned')) {
+  if (order.status === 'Returned' || currentReqStatus === 'Approved' || (!reqInfo && ret.isSuccess && ret.data.status === 'Returned')) {
     return (
       <section className="ot-return bg-emerald-50/90 border border-emerald-300 rounded-2xl p-4.5 mt-4" aria-label="Đã ghi nhận trả hàng">
         <div className="flex items-center justify-between gap-2 mb-2">
@@ -855,12 +859,22 @@ function Detail({ orderNo }: { orderNo: string }) {
         {order.payments && order.payments.length > 0 ? (
           order.payments.map((pm) => (
             <p key={pm.paymentRequestId}><Truck size={14} /><span>Thanh toán</span>
-              <b>{PAYMENT_STATUS_LABELS[pm.status] ?? pm.status} · {pm.referenceCode} · {vnd(pm.amount)}</b>
+              <b>
+                {PAYMENT_STATUS_LABELS[pm.status] ?? pm.status} · {pm.referenceCode} · {vnd(pm.amount)}
+                {pm.status === 'Pending' && (
+                  <> · <SimulatePaymentButton payment={{ paymentRequestId: pm.paymentRequestId, referenceCode: pm.referenceCode }} /></>
+                )}
+              </b>
             </p>
           ))
         ) : order.payment && (
           <p><Truck size={14} /><span>Thanh toán</span>
-            <b>{PAYMENT_STATUS_LABELS[order.payment.status] ?? order.payment.status} · {order.payment.referenceCode} · {vnd(order.payment.amount)}</b>
+            <b>
+              {PAYMENT_STATUS_LABELS[order.payment.status] ?? order.payment.status} · {order.payment.referenceCode} · {vnd(order.payment.amount)}
+              {order.payment.status === 'Pending' && (
+                <> · <SimulatePaymentButton payment={{ paymentRequestId: order.payment.paymentRequestId, referenceCode: order.payment.referenceCode }} /></>
+              )}
+            </b>
           </p>
         )}
         {order.cancelReason && <p><span>Lý do huỷ</span><b>{order.cancelReason}</b></p>}
