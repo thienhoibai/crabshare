@@ -2,6 +2,10 @@
 
 **Người làm:** Nhân · **Use case:** UC13 Register Offtake Commitment · UC23 Claim Priority Offtake Volume
 
+## Trạng thái implement
+- **CS-72 / NH-14 / UC13:** POST commitments + GET mine + GET offtake-cap + webhook Held + hết hạn cọc. ✅
+- **CS-75 / NH-15 / UC23:** claim / WindowOpen / Expired+Forfeited — chưa làm.
+
 Nhà đầu tư bao tiêu cam kết mua một lượng cua (kg, hạng) với giá cố định, trả cọc; khi thu hoạch được quyền lấy hàng trước trong một **cửa sổ ưu tiên**.
 
 ## Bảng

@@ -16,7 +16,7 @@ using CrabShare.Api.Features.Batches;
 using CrabShare.Api.Common.Alerts;
 using CrabShare.Api.Features.Catalog;
 using CrabShare.Api.Features.Orders;
-// using CrabShare.Api.Features.Offtake;
+using CrabShare.Api.Features.Offtake;
 
 // Khôi
 using CrabShare.Api.Features.Accounts;
@@ -78,7 +78,8 @@ public static class FeatureRegistry
         services.AddOptions<OrderOptions>().BindConfiguration(OrderOptions.Section);
         services.AddScoped<IPaymentPurposeHandler, OrderPaymentHandler>(); // tiền đơn hàng về → đơn Paid, trừ tồn (NH-06)
         services.AddScoped<OrderPackingService>();    // UC29 đóng gói quét tem (NH-09)
-        // services.AddScoped<OfftakeService>();      // Features/Offtake
+        services.AddScoped<OfftakeService>();          // NH-14 cam kết bao tiêu (UC13)
+        services.AddScoped<IPaymentPurposeHandler, OfftakeDepositHandler>();
         services.AddScoped<OrderQueryService>();        // NH-07 lịch sử + theo dõi đơn
         services.AddScoped<OrderCancellationService>(); // NH-07 huỷ đơn
         services.AddScoped<ReservationExpiryService>(); // NH-07 trả tồn khi quá hạn thanh toán
