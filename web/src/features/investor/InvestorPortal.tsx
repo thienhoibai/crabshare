@@ -1,24 +1,26 @@
 /* Cổng nhà đầu tư bản 2. Quyết toán mẫu thuộc task Settlement. */
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { ArrowLeft, Compass, House, Receipt, Wallet, ShoppingBag, UserRound } from 'lucide-react'
+import { ArrowLeft, Compass, Handshake, House, Receipt, Wallet, ShoppingBag, UserRound } from 'lucide-react'
 import { useAuthStore } from '../../shared/auth/authStore'
 import KycVerification, { KycStatusCard } from '../accounts/KycVerification'
 import PayoutAccountForm from '../accounts/PayoutAccountForm'
 import InvestorBatches, { InvestorBatchDetail } from './batches/InvestorBatches'
 import InvestorPortfolio, { PortfolioOverview, PortfolioPosition } from './portfolio/InvestorPortfolio'
+import InvestorOfftake from './offtake/InvestorOfftake'
 import NotificationBell from './notifications/NotificationBell'
 import { closedPayout2610, vnd } from '../../shared/ui/kit/mock-data'
 import { Logo, SettlementCard, Shell } from '../../shared/ui/kit/kit'
 import './investor.css'
 
 /* ---------- điều hướng trong một bản ---------- */
-type View = 'home' | 'explore' | 'lot' | 'settle' | 'profile' | 'portfolio' | 'position'
+type View = 'home' | 'explore' | 'lot' | 'settle' | 'profile' | 'portfolio' | 'position' | 'offtake'
 function pathView(path: string): View | null {
   if (path.startsWith('/nha-dau-tu/lo/')) return 'lot'
   if (path === '/nha-dau-tu/kham-pha') return 'explore'
   if (path.startsWith('/nha-dau-tu/danh-muc/')) return 'position'
   if (path === '/nha-dau-tu/danh-muc') return 'portfolio'
+  if (path === '/nha-dau-tu/bao-tieu' || path.startsWith('/nha-dau-tu/bao-tieu')) return 'offtake'
   if (path.endsWith('/ho-so')) return 'profile'
   return null
 }
@@ -30,7 +32,7 @@ function useNav() {
   const navigate = useNavigate()
   const [view, setView] = useState<View>(pathView(location.pathname) ?? 'home')
   useEffect(() => {
-    setView((current) => pathView(location.pathname) ?? (['profile', 'portfolio', 'position', 'explore', 'lot'].includes(current) ? 'home' : current))
+    setView((current) => pathView(location.pathname) ?? (['profile', 'portfolio', 'position', 'explore', 'lot', 'offtake'].includes(current) ? 'home' : current))
   }, [location.pathname])
   let code = ''
   try { code = decodeURIComponent(location.pathname.split('/lo/')[1] ?? '') } catch { /* Mã URL không hợp lệ. */ }
@@ -41,7 +43,7 @@ function useNav() {
     portfolioCode: portfolioCode(location.pathname),
     /** Trang đang được coi là mục menu hiện tại (lô mở từ đâu thì giữ mục đó). */
     section: view === 'position' ? 'portfolio' : view === 'lot' ? 'explore' : view,
-    go: (v: View) => { setView(v); navigate(v === 'profile' ? '/nha-dau-tu/ho-so' : v === 'portfolio' ? '/nha-dau-tu/danh-muc' : v === 'explore' ? '/nha-dau-tu/kham-pha' : '/nha-dau-tu'); top() },
+    go: (v: View) => { setView(v); navigate(v === 'profile' ? '/nha-dau-tu/ho-so' : v === 'portfolio' ? '/nha-dau-tu/danh-muc' : v === 'explore' ? '/nha-dau-tu/kham-pha' : v === 'offtake' ? '/nha-dau-tu/bao-tieu' : '/nha-dau-tu'); top() },
     openPosition: (c: string) => { navigate(`/nha-dau-tu/danh-muc/${encodeURIComponent(c)}`); top() },
     open: (c: string) => { navigate(`/nha-dau-tu/lo/${encodeURIComponent(c)}${location.search}`); top() },
     back: () => { navigate(`/nha-dau-tu/kham-pha${location.search}`); top() },
@@ -56,12 +58,13 @@ function InvV2Inner() {
   const items: { v: View; label: string; icon: typeof House }[] = [
     { v: 'home', label: 'Tổng quan', icon: House },
     { v: 'portfolio', label: 'Danh mục', icon: Wallet },
+    { v: 'offtake', label: 'Bao tiêu', icon: Handshake },
     { v: 'explore', label: 'Khám phá lô', icon: Compass },
     { v: 'settle', label: 'Quyết toán', icon: Receipt },
     { v: 'profile', label: 'Hồ sơ & eKYC', icon: UserRound },
   ]
   const active = nav.section
-  const titles: Record<View, string> = { home: `Chào ${fullName}`, explore: 'Khám phá lô', lot: nav.code, settle: 'Quyết toán', profile: 'Hồ sơ & eKYC', portfolio: 'Danh mục', position: 'Chi tiết danh mục' }
+  const titles: Record<View, string> = { home: `Chào ${fullName}`, explore: 'Khám phá lô', lot: nav.code, settle: 'Quyết toán', profile: 'Hồ sơ & eKYC', portfolio: 'Danh mục', position: 'Chi tiết danh mục', offtake: 'Bao tiêu' }
   return (
     <div className="i2">
       <aside className="i2-side">
@@ -88,6 +91,7 @@ function InvV2Inner() {
         {nav.view === 'home' && <><KycStatusCard /><PortfolioOverview open={nav.openPosition} all={() => nav.go('portfolio')} /></>}
         {nav.view === 'portfolio' && <InvestorPortfolio open={nav.openPosition} />}
         {nav.view === 'position' && <PortfolioPosition code={nav.portfolioCode} />}
+        {nav.view === 'offtake' && <InvestorOfftake />}
 
         {nav.view === 'profile' && <div className="account-profile"><section className="iv-card">
           <h3 className="rd-h3">Thông tin nhà đầu tư</h3>

@@ -136,3 +136,11 @@ export function useCancelReservation(code: string) {
     onSuccess: refresh,
   })
 }
+
+export function useMyContributions() {
+  return useQuery({
+    queryKey: fundingKeys.mine,
+    queryFn: async () => (await http.get<Contribution[]>('/api/me/contributions')).data,
+  })
+}
+
