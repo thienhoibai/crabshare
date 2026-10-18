@@ -60,13 +60,14 @@ export default function PreorderPage() {
   const listing = data?.listing
   const pct = listing?.depositPct ?? 15
   const remaining = listing?.remainingPreorderKg ?? 0
-  const max = Math.max(0, Math.floor(remaining))
-  const total = listing ? listing.pricePerKg * qty : 0
+  const max = Math.max(0, Math.round(remaining * 1000) / 1000)
+  const effectiveQty = max > 0 ? Math.min(qty, max) : qty
+  const total = listing ? Math.round(listing.pricePerKg * effectiveQty) : 0
   const deposit = Math.round(total * pct / 100)
 
   const submit = () => {
-    if (!validId || !addressId || !userId || place.isPending || max < 1) return
-    place.mutate({ listingId: validId, quantityKg: qty, addressId }, {
+    if (!validId || !addressId || !userId || place.isPending || max < 0.001) return
+    place.mutate({ listingId: validId, quantityKg: effectiveQty, addressId }, {
       onSuccess: (result) => {
         save(userId, result)
         navigate('/xac-nhan-dat-truoc')
@@ -102,22 +103,26 @@ export default function PreorderPage() {
                 <p className="rd-muted">Lô {listing.batchCode} · {listing.farmName} · còn {formatKg(remaining)} kg theo trần cam kết</p>
                 <label className="po-qty">
                   Số kg
-                  <Qty value={qty} max={Math.max(1, max)} onChange={(v) => setQty(Math.min(Math.max(1, v), Math.max(1, max)))} />
+                  <Qty
+                    value={effectiveQty}
+                    max={Math.max(0.001, max)}
+                    onChange={(v) => setQty(Math.round(Math.min(Math.max(Math.min(1, max || 1), v), Math.max(0.001, max)) * 1000) / 1000)}
+                  />
                 </label>
                 <h3 className="rd-h3">Giao đến</h3>
                 <AddressPicker value={addressId} onChange={setAddressId} />
               </section>
               <aside className="co-card">
                 <dl className="rd-sum">
-                  <dt>Tạm tính ({qty} kg)</dt><dd>{vnd(total)}</dd>
+                  <dt>Tạm tính ({formatKg(effectiveQty)} kg)</dt><dd>{vnd(total)}</dd>
                   <dt>Cọc {pct}%</dt><dd>{vnd(deposit)}</dd>
                   <dt className="rd-sum__total">Thanh toán hôm nay</dt><dd className="rd-sum__total">{vnd(deposit)}</dd>
                 </dl>
                 <p className="rd-muted">Phần còn lại {vnd(total - deposit)} thu khi lô thu hoạch.</p>
                 {place.isError && <p className="co-error" role="alert">{errorMessage(place.error)}</p>}
                 <button type="button" className="rd-btn rd-btn--primary rd-btn--block rd-btn--lg"
-                  disabled={!addressId || place.isPending || max < 1} onClick={submit}>
-                  {place.isPending ? 'Đang đặt trước…' : max < 1 ? 'Hết suất đặt trước' : `Đặt trước · cọc ${vnd(deposit)}`}
+                  disabled={!addressId || place.isPending || max < 0.001} onClick={submit}>
+                  {place.isPending ? 'Đang đặt trước…' : max < 0.001 ? 'Hết suất đặt trước' : `Đặt trước · cọc ${vnd(deposit)}`}
                 </button>
               </aside>
             </div>

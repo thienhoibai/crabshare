@@ -8,7 +8,7 @@ import { vnd } from '../../shared/ui/kit/mock-data'
 import { Shell, TopBar } from '../../shared/ui/kit/kit'
 import { formatKg } from '../store/storeApi'
 import {
-  ORDER_STATUS_LABELS, TIMELINE_LABELS, statusTone, useCancelOrder, useConfirmReceipt, useOrderTracking,
+  ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS, TIMELINE_LABELS, statusTone, useCancelOrder, useConfirmReceipt, useOrderTracking,
   type OrderShipment, type OrderTimelineStep, type OrderTracking,
 } from './orderTrackingApi'
 import {
@@ -855,12 +855,12 @@ function Detail({ orderNo }: { orderNo: string }) {
         {order.payments && order.payments.length > 0 ? (
           order.payments.map((pm) => (
             <p key={pm.paymentRequestId}><Truck size={14} /><span>Thanh toán</span>
-              <b>{ORDER_STATUS_LABELS[pm.status] ?? pm.status} · {pm.referenceCode} · {vnd(pm.amount)}</b>
+              <b>{PAYMENT_STATUS_LABELS[pm.status] ?? pm.status} · {pm.referenceCode} · {vnd(pm.amount)}</b>
             </p>
           ))
         ) : order.payment && (
           <p><Truck size={14} /><span>Thanh toán</span>
-            <b>{ORDER_STATUS_LABELS[order.payment.status] ?? order.payment.status} · {order.payment.referenceCode} · {vnd(order.payment.amount)}</b>
+            <b>{PAYMENT_STATUS_LABELS[order.payment.status] ?? order.payment.status} · {order.payment.referenceCode} · {vnd(order.payment.amount)}</b>
           </p>
         )}
         {order.cancelReason && <p><span>Lý do huỷ</span><b>{order.cancelReason}</b></p>}

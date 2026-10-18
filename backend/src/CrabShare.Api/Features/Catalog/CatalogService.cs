@@ -283,7 +283,7 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
     {
         var query = FilterStore(db.ProductListings, q);
         var total = await query.CountAsync(ct);
-        var rows = await SortStore(query, q.Sort)
+        var rows = await SortStore(query, q.Sort, db.VBatchCommitmentCaps)
             .Skip((q.Page - 1) * q.PageSize).Take(q.PageSize)
             .Select(ToStoreRow)
             .ToListAsync(ct);
@@ -356,12 +356,21 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
         return query;
     }
 
-    public static IQueryable<ProductListing> SortStore(IQueryable<ProductListing> query, StoreSort sort)
+    public static IQueryable<ProductListing> SortStore(
+        IQueryable<ProductListing> query,
+        StoreSort sort,
+        IQueryable<VBatchCommitmentCap>? commitmentCaps = null)
     {
-        var inStockFirst = query.OrderBy(l =>
-            l.Status == "SoldOut"
-            || (l.Batch.Status != "InProduction" && l.StockQtyKg - l.ReservedQtyKg <= 0)
-            || (l.Batch.Status == "InProduction" && l.Status != "Published"));
+        var inStockFirst = commitmentCaps is null
+            ? query.OrderBy(l =>
+                l.Status == "SoldOut"
+                || (l.Batch.Status != "InProduction" && l.StockQtyKg - l.ReservedQtyKg <= 0)
+                || (l.Batch.Status == "InProduction" && l.Status != "Published"))
+            : query.OrderBy(l =>
+                l.Status == "SoldOut"
+                || (l.Batch.Status != "InProduction" && l.StockQtyKg - l.ReservedQtyKg <= 0)
+                || (l.Batch.Status == "InProduction" && (l.Status != "Published"
+                    || !commitmentCaps.Any(v => v.BatchId == l.BatchId && v.RemainingKg >= 0.001m))));
         return sort switch
         {
             StoreSort.PriceAsc => inStockFirst.ThenBy(l => l.CurrentPricePerKg).ThenBy(l => l.ListingId),

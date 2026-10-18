@@ -348,4 +348,30 @@ public class PreorderDatabaseTests(OrderDatabaseFixture fixture) : IClassFixture
         Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
         Assert.Equal("order.batch_not_harvesting", await ErrorCode(res));
     }
+
+    [Fact]
+    public async Task Browse_cua_hang_xep_niem_yet_InProduction_het_tran_xuong_sau_niem_yet_con_hang()
+    {
+        var retailId = await fixture.CreateListingAsync(stockKg: 5, pricePerKg: 777_000);
+        var preInfo = await fixture.CreateInProductionListingAsync(expectedOutputKg: 20, pricePerKg: 777_000); // cap = 12 kg
+        var (customerId, addressId) = await fixture.CreateCustomerAsync();
+        using var client = fixture.Client(customerId);
+
+        using var res = await client.PostAsJsonAsync("/api/preorders", new
+        {
+            listingId = preInfo.ListingId,
+            quantityKg = 12m,
+            addressId,
+        });
+        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
+
+        var page = (await client.GetFromJsonAsync<CrabShare.Api.Common.Paging.PagedResult<StoreListingResponse>>(
+            "/api/listings?minPrice=777000&maxPrice=777000&pageSize=50"))!;
+        var retailIdx = page.Items.ToList().FindIndex(i => i.ListingId == retailId);
+        var preIdx = page.Items.ToList().FindIndex(i => i.ListingId == preInfo.ListingId);
+        Assert.True(retailIdx >= 0 && preIdx >= 0);
+        Assert.True(page.Items[retailIdx].InStock);
+        Assert.False(page.Items[preIdx].InStock);
+        Assert.True(retailIdx < preIdx);
+    }
 }

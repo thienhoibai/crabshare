@@ -122,6 +122,13 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   Expired: 'Hết hạn',
 }
 
+export const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  Pending: 'Chờ chuyển khoản',
+  Paid: 'Đã thanh toán',
+  Expired: 'Hết hạn',
+  Cancelled: 'Đã huỷ',
+}
+
 export const TIMELINE_LABELS: Record<string, string> = {
   placed: 'Đã đặt hàng',
   deposit_paid: 'Đã trả cọc',
