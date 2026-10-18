@@ -17,6 +17,7 @@ public sealed class OrderQueryService(AppDbContext db, ICurrentUser me, TimeProv
 {
     /// <summary>Thứ tự trạng thái trên luồng chính; dùng để biết một mốc đã qua hay chưa.</summary>
     private static readonly string[] Flow = ["PendingPayment", "Paid", "Packed", "Shipping", "Delivered", "Completed"];
+    private static readonly string[] PreOrderFlow = ["PendingPayment", "DepositPaid", "Paid", "Packed", "Shipping", "Delivered", "Completed"];
 
     /// <summary>Khách tự huỷ được khi chưa đóng gói (TL-31); Packed trở đi phải qua khiếu nại/trả hàng.</summary>
     public static bool IsCancellable(string status) => status is "PendingPayment" or "Paid";
@@ -56,19 +57,24 @@ public sealed class OrderQueryService(AppDbContext db, ICurrentUser me, TimeProv
             l.ListingId, l.ProductListing.Title, l.ProductListing.Grade.GradeCode, l.ProductListing.Grade.GradeName,
             l.QuantityKg, (long)l.UnitPrice, OrderService.LineAmount(l.QuantityKg, (long)l.UnitPrice))).ToList();
 
-        // Đơn lẻ có đúng một khoản thu (mã = mã đơn). Ưu tiên khoản đã trả, rồi khoản còn chờ, rồi khoản mới nhất.
-        var request = order.PaymentRequests
-            .OrderBy(r => r.Status == "Paid" ? 0 : r.Status == "Pending" ? 1 : 2)
-            .ThenByDescending(r => r.PaymentRequestId)
-            .FirstOrDefault();
-        var payment = request is null ? null : new OrderTrackingPaymentResponse(
-            request.PaymentRequestId, request.ReferenceCode, PaymentRequestService.EffectiveStatus(request, now),
-            (long)request.Amount, request.ExpiresAt, request.Status == "Paid" ? request.UpdatedAt : null);
+        var paymentViews = order.PaymentRequests
+            .OrderBy(r => r.PaymentRequestId)
+            .Select(r => new OrderTrackingPaymentResponse(
+                r.PaymentRequestId, r.ReferenceCode, PaymentRequestService.EffectiveStatus(r, now),
+                (long)r.Amount, r.ExpiresAt, r.Status == "Paid" ? r.UpdatedAt : null))
+            .ToList();
+        var payment = paymentViews.FirstOrDefault(p => p.Status == "Pending")
+                      ?? paymentViews.LastOrDefault(p => p.Status == "Paid")
+                      ?? paymentViews.LastOrDefault();
 
         return new OrderTrackingResponse(order.OrderNo, order.Batch.BatchCode, order.Batch.Operator.LegalName, order.Status,
             (long)order.TotalAmount, order.PlacedAt, order.RecipientName, order.RecipientPhone, order.ShippingAddress,
             order.CancelledAt, order.CancelReason, IsCancellable(order.Status), lines, payment, Timeline(order),
-            OrderFulfilmentService.CanConfirmReceipt(order.Status, order.ReceivedAt), OrderFulfilmentService.ToShipment(order));
+            OrderFulfilmentService.CanConfirmReceipt(order.Status, order.ReceivedAt), OrderFulfilmentService.ToShipment(order),
+            OrderType: order.OrderType,
+            DepositAmount: order.DepositAmount is { } d ? (long)d : null,
+            BalanceDueAt: order.BalanceDueAt,
+            Payments: paymentViews);
     }
 
     /// <summary>
@@ -77,21 +83,46 @@ public sealed class OrderQueryService(AppDbContext db, ICurrentUser me, TimeProv
     /// </summary>
     public static IReadOnlyList<OrderTimelineStep> Timeline(SalesOrder order)
     {
-        var rank = Array.IndexOf(Flow, order.Status);
-        var steps = new List<OrderTimelineStep>
+        if (order.OrderType == "PreOrder")
+        {
+            var rank = Array.IndexOf(PreOrderFlow, order.Status);
+            var depositPaidAt = order.PaymentRequests
+                .Where(r => r.Purpose == PaymentPurposes.PreOrderDeposit && r.Status == "Paid")
+                .Select(r => (DateTimeOffset?)r.UpdatedAt)
+                .FirstOrDefault();
+            var steps = new List<OrderTimelineStep>
+            {
+                new("placed", order.PlacedAt, true),
+                new("deposit_paid", depositPaidAt, depositPaidAt is not null || rank >= 1),
+                new("paid", order.PaidAt, order.PaidAt is not null || rank >= 2),
+                new("packed", null, rank >= 3),
+                new("shipped", order.ShippedAt, order.ShippedAt is not null || rank >= 4),
+                new("delivered", order.DeliveredAt, order.DeliveredAt is not null || rank >= 5),
+                new("completed", order.CompletedAt, order.CompletedAt is not null || rank >= 6),
+            };
+            if (order.Status is "Cancelled" or "Returned")
+            {
+                steps = steps.Where(s => s.Done).ToList();
+                steps.Add(new(order.Status == "Cancelled" ? "cancelled" : "returned", order.CancelledAt, true));
+            }
+            return steps;
+        }
+
+        var retailRank = Array.IndexOf(Flow, order.Status);
+        var retail = new List<OrderTimelineStep>
         {
             new("placed", order.PlacedAt, true),
-            new("paid", order.PaidAt, order.PaidAt is not null || rank >= 1),
-            new("packed", null, rank >= 2),
-            new("shipped", order.ShippedAt, order.ShippedAt is not null || rank >= 3),
-            new("delivered", order.DeliveredAt, order.DeliveredAt is not null || rank >= 4),
-            new("completed", order.CompletedAt, order.CompletedAt is not null || rank >= 5),
+            new("paid", order.PaidAt, order.PaidAt is not null || retailRank >= 1),
+            new("packed", null, retailRank >= 2),
+            new("shipped", order.ShippedAt, order.ShippedAt is not null || retailRank >= 3),
+            new("delivered", order.DeliveredAt, order.DeliveredAt is not null || retailRank >= 4),
+            new("completed", order.CompletedAt, order.CompletedAt is not null || retailRank >= 5),
         };
         if (order.Status is "Cancelled" or "Returned")
         {
-            steps = steps.Where(s => s.Done).ToList();
-            steps.Add(new(order.Status == "Cancelled" ? "cancelled" : "returned", order.CancelledAt, true));
+            retail = retail.Where(s => s.Done).ToList();
+            retail.Add(new(order.Status == "Cancelled" ? "cancelled" : "returned", order.CancelledAt, true));
         }
-        return steps;
+        return retail;
     }
 }

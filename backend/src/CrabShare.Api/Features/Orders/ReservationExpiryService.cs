@@ -1,4 +1,5 @@
 using CrabShare.Api.Common.Auditing;
+using CrabShare.Api.Features.Payments;
 using CrabShare.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,13 +23,22 @@ public sealed class ReservationExpiryService(AppDbContext db, IAuditLog audit, T
     public async Task<int> ReleaseExpiredAsync(CancellationToken ct)
     {
         var now = AuditChain.Timestamp(clock.GetUtcNow());
-        var orderIds = await db.StockReservations.AsNoTracking()
+        var reservedIds = await db.StockReservations.AsNoTracking()
             .Where(r => r.Status == "Active" && r.ExpiresAt < now && r.OrderLine.SalesOrder.Status == "PendingPayment")
             .Select(r => r.OrderLine.OrderId)
             .Distinct()
-            .OrderBy(id => id)
-            .Take(BatchSize)
             .ToListAsync(ct);
+        var preorderIds = await db.PaymentRequests.AsNoTracking()
+            .Where(r => r.Purpose == PaymentPurposes.PreOrderDeposit
+                        && r.Status == "Pending"
+                        && r.ExpiresAt < now
+                        && r.OrderId != null
+                        && r.Order!.OrderType == "PreOrder"
+                        && r.Order.Status == "PendingPayment")
+            .Select(r => r.OrderId!.Value)
+            .Distinct()
+            .ToListAsync(ct);
+        var orderIds = reservedIds.Union(preorderIds).OrderBy(id => id).Take(BatchSize).ToList();
 
         var cancelled = 0;
         foreach (var orderId in orderIds)

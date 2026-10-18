@@ -90,6 +90,11 @@ public static class FeatureRegistry
         services.AddHostedService<ComplaintEscalationJob>(); // chạy mỗi phút; tắt bằng Orders:ComplaintEscalationJob:Enabled = false
         services.AddScoped<OrderRatingService>();     // NH-12 đánh giá đơn Completed (UC34)
         services.AddScoped<OrderReturnService>();     // NH-12 trả hàng trong hạn → Returned
+        services.AddScoped<PreorderService>();          // NH-13 đặt trước có cọc (UC27)
+        services.AddScoped<IPaymentPurposeHandler, PreOrderDepositHandler>();
+        services.AddScoped<IPaymentPurposeHandler, PreOrderBalanceHandler>();
+        services.AddScoped<PreorderBalanceService>();
+        services.AddHostedService<PreorderBalanceJob>(); // tắt Orders:BalanceJob:Enabled = false
 
         // Khôi
         services.AddScoped<AccountService>();        // Features/Accounts

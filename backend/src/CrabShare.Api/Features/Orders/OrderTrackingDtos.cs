@@ -75,7 +75,11 @@ public sealed record OrderTrackingResponse(
     bool CanConfirmReceipt,
     OrderShipmentResponse? Shipment = null,
     bool CanReturn = false,
-    ReturnRequestInfo? ReturnRequest = null);
+    ReturnRequestInfo? ReturnRequest = null,
+    string OrderType = "Retail",
+    long? DepositAmount = null,
+    DateTimeOffset? BalanceDueAt = null,
+    IReadOnlyList<OrderTrackingPaymentResponse>? Payments = null);
 
 public sealed class CancelOrderRequest
 {
