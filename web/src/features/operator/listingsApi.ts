@@ -68,6 +68,7 @@ export interface ListingOption {
   inStockCount: number
   inStockKg: number
   existingListingId: number | null
+  batchStatus?: string
 }
 
 export interface CreateListingInput {

@@ -823,7 +823,7 @@ function Detail({ orderNo }: { orderNo: string }) {
     <article className="co-card ot-detail" aria-label={`Đơn ${order.orderNo}`}>
       <header className="co-card__head">
         <div>
-          <p className="rd-eyebrow">Lô {order.batchCode} · {order.farmName}</p>
+          <p className="rd-eyebrow">{order.orderType === 'PreOrder' ? 'Đặt trước · ' : ''}Lô {order.batchCode} · {order.farmName}</p>
           <h2 className="rd-h3">Đơn {order.orderNo}</h2>
           <p className="rd-muted">Đặt lúc {formatDateTime(order.placedAt)}</p>
         </div>
@@ -843,10 +843,22 @@ function Detail({ orderNo }: { orderNo: string }) {
         ))}
       </ul>
       <dl className="rd-sum"><dt className="rd-sum__total">Tổng đơn</dt><dd className="rd-sum__total">{vnd(order.totalAmount)}</dd></dl>
+      {order.orderType === 'PreOrder' && (
+        <dl className="rd-sum">
+          <dt>Cọc</dt><dd>{vnd(order.depositAmount ?? 0)}</dd>
+          <dt>Còn lại</dt><dd>{vnd(order.totalAmount - (order.depositAmount ?? 0))}</dd>
+        </dl>
+      )}
 
       <div className="ot-meta">
         <p><MapPin size={14} /><span>Giao đến</span><b>{order.recipientName} · {order.recipientPhone}<br />{order.shippingAddress}</b></p>
-        {order.payment && (
+        {order.payments && order.payments.length > 0 ? (
+          order.payments.map((pm) => (
+            <p key={pm.paymentRequestId}><Truck size={14} /><span>Thanh toán</span>
+              <b>{ORDER_STATUS_LABELS[pm.status] ?? pm.status} · {pm.referenceCode} · {vnd(pm.amount)}</b>
+            </p>
+          ))
+        ) : order.payment && (
           <p><Truck size={14} /><span>Thanh toán</span>
             <b>{ORDER_STATUS_LABELS[order.payment.status] ?? order.payment.status} · {order.payment.referenceCode} · {vnd(order.payment.amount)}</b>
           </p>

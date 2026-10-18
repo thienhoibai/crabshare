@@ -45,6 +45,7 @@ export type Product = {
   img: string
   stock: number
   preorder?: boolean
+  depositPct?: number
   harvest: string
   /** Các trường dưới chỉ có ở sản phẩm lấy từ API cửa hàng; sản phẩm mẫu bỏ trống. */
   listingId?: number

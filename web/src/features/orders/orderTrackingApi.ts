@@ -88,6 +88,10 @@ export interface OrderTracking {
   shipment: OrderShipment | null
   canReturn: boolean
   returnRequest?: ReturnRequestInfo | null
+  orderType?: string
+  depositAmount?: number | null
+  balanceDueAt?: string | null
+  payments?: OrderTrackingPayment[] | null
 }
 
 export interface CancelOrderResult {
@@ -107,6 +111,7 @@ export interface OrderListQuery {
 
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   PendingPayment: 'Chờ chuyển khoản',
+  DepositPaid: 'Đã cọc',
   Paid: 'Đã thanh toán',
   Packed: 'Đã đóng gói',
   Shipping: 'Đang giao',
@@ -119,6 +124,7 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
 
 export const TIMELINE_LABELS: Record<string, string> = {
   placed: 'Đã đặt hàng',
+  deposit_paid: 'Đã trả cọc',
   paid: 'Đã thanh toán',
   packed: 'Đã đóng gói',
   shipped: 'Đang giao',
@@ -131,7 +137,7 @@ export const TIMELINE_LABELS: Record<string, string> = {
 export const statusTone = (status: string) => {
   if (status === 'Cancelled' || status === 'Returned' || status === 'Expired') return 'cancelled'
   if (status === 'Completed' || status === 'Delivered') return 'done'
-  if (status === 'Shipping' || status === 'Packed' || status === 'Paid') return 'progress'
+  if (status === 'Shipping' || status === 'Packed' || status === 'Paid' || status === 'DepositPaid') return 'progress'
   return 'wait'
 }
 

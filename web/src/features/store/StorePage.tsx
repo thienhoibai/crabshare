@@ -132,6 +132,7 @@ function Panel({ kind, onClose, children }: { kind: 'full' | 'sheet' | 'side'; o
 
 function CardV1({ p, onOpen }: { p: Product; onOpen: () => void }) {
   const cart = useCart()
+  const navigate = useNavigate()
   const max = maxQty(p)
   const soldOut = isSoldOut(p)
   return (
@@ -141,11 +142,21 @@ function CardV1({ p, onOpen }: { p: Product; onOpen: () => void }) {
           <img src={small(p.img)} alt="" loading="lazy" />
           <span className="s1-card__top">
             <span className="rd-chip rd-chip--solid">Lô {p.lot}</span>
-            {soldOut ? <span className="rd-tag s1-out">Hết hàng</span> : p.stock < 10 ? <span className="rd-tag s1-low">Còn {formatKg(p.stock)} {p.unit}</span> : null}
+            {p.preorder ? <span className="rd-tag">Đặt trước</span>
+              : soldOut ? <span className="rd-tag s1-out">Hết hàng</span>
+              : p.stock < 10 ? <span className="rd-tag s1-low">Còn {formatKg(p.stock)} {p.unit}</span> : null}
           </span>
         </button>
         {max >= 1 && (
-          <button type="button" className="rd-round s1-card__add" onClick={() => cart.add(p.id, 0, 1, p)} aria-label={`Thêm ${p.name} vào giỏ`}><Plus size={20} /></button>
+          p.preorder && p.listingId
+            ? (
+              <button type="button" className="rd-round s1-card__add" onClick={() => navigate(`/dat-truoc/${p.listingId}`)}
+                aria-label={`Đặt trước ${p.name}`}><Plus size={20} /></button>
+            )
+            : (
+              <button type="button" className="rd-round s1-card__add" onClick={() => cart.add(p.id, 0, 1, p)}
+                aria-label={`Thêm ${p.name} vào giỏ`}><Plus size={20} /></button>
+            )
         )}
       </div>
       <div className="s1-card__meta">
@@ -220,13 +231,16 @@ function ListingReviews({ items, averageStars, ratingCount }: { items: ListingRe
 }
 
 function ListingDetail({ id }: { id: number }) {
+  const navigate = useNavigate()
   const { data, isPending, error } = useStoreListing(id)
   if (isPending) return <p className="s1-state">Đang tải sản phẩm…</p>
   if (error) return <p className="s1-state">{errorMessage(error)}</p>
   const p = toProduct(data.listing, data)
   return (
     <div className="s1-detail">
-      <ProductView key={id} p={p} />
+      <ProductView key={id} p={p} onAdded={() => {
+        if (p.preorder && p.listingId) navigate(`/dat-truoc/${p.listingId}`)
+      }} />
       {data.sellUntil && <p className="s1-state">Hàng cấp đông, bán đến hết ngày {formatDate(data.sellUntil)}.</p>}
       <PriceHistory items={data.priceHistory} />
       <ListingReviews items={data.reviews ?? []} averageStars={p.averageStars} ratingCount={p.ratingCount ?? 0} />

@@ -114,3 +114,9 @@
 }
 .ot-return__chip:hover { border-color: var(--accent, #8b5023); }
 .ot-return__actions { display: flex; gap: 8px; align-items: center; }
+
+.po-qty {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
