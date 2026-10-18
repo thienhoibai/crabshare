@@ -100,7 +100,8 @@ public sealed record ListingOptionResponse(
     string GradeName,
     int InStockCount,
     decimal InStockKg,
-    long? ExistingListingId);
+    long? ExistingListingId,
+    string BatchStatus);
 
 // ---------- Kiểm duyệt (UC24, quản trị) ----------
 
@@ -234,7 +235,12 @@ public sealed record StoreListingResponse(
     string? ImageUrl,
     DateTimeOffset? PublishedAt,
     decimal? AverageStars,
-    int RatingCount);
+    int RatingCount,
+    string BatchStatus,
+    bool IsPreorder,
+    decimal? RemainingPreorderKg,
+    decimal? DepositPct,
+    DateOnly? ExpectedHarvestDate);
 
 public sealed record PublicPriceRevisionResponse(
     long PricePerKg,
