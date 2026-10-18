@@ -168,6 +168,74 @@ public sealed class OrderDatabaseFixture : IAsyncLifetime
         return client;
     }
 
+    public sealed record InProductionListingInfo(
+        long ListingId, long BatchId, long OperatorId, string BatchCode, decimal ExpectedOutputKg, decimal CapKg);
+
+    /// <summary>Niêm yết Published của lô InProduction, tồn 0, trần = expected × 60%.</summary>
+    public async Task<InProductionListingInfo> CreateInProductionListingAsync(
+        decimal expectedOutputKg = 20, long pricePerKg = 400_000, decimal depositPct = 15, string accountStatus = "Open")
+    {
+        var n = Next();
+        var now = DateTimeOffset.UtcNow;
+        return await WithDbAsync(async db =>
+        {
+            var gradeId = await db.ProductGrades.Where(g => g.GradeCode == "L1").Select(g => g.GradeId).SingleAsync();
+            var batch = new Batch
+            {
+                BatchCode = $"BT-PRE-{n:D5}", CrabType = "FatteningMudCrab", Title = $"Lô đặt trước {n}",
+                SeedQuantity = 100, ExpectedOutputKg = expectedOutputKg, CycleDays = 120, RestockCutoffDays = 30,
+                MinViableCapital = 10_000_000, TargetCapital = 20_000_000, MaxCapital = 30_000_000, MinContribution = 1_000_000,
+                OperatorSharePct = 7, FrozenStockCapMonths = 4, OfftakePreorderCapPct = 60, OfftakeDepositPct = depositPct,
+                Status = "InProduction", CreatedAt = now, UpdatedAt = now,
+                Operator = new Operator
+                {
+                    LegalName = $"Trại pre {n}", TaxCode = $"8{n:D9}", BusinessRegNo = $"PRE-{n:D6}", FarmAddress = "Năm Căn, Cà Mau",
+                    ApprovedSlotCapacity = 100, Status = "Approved", CreatedAt = now, UpdatedAt = now,
+                },
+                BatchAccount = new BatchAccount
+                {
+                    ProviderName = "Sandbox", ProviderAccountNo = $"VP{n:D10}", Status = accountStatus,
+                    OpenedAt = now, CreatedAt = now, UpdatedAt = now,
+                },
+            };
+            var listing = new ProductListing
+            {
+                Batch = batch, GradeId = gradeId, Title = $"Cua thịt L1 đặt trước — {batch.BatchCode}", StorageType = "Fresh",
+                CurrentPricePerKg = pricePerKg, StockQtyKg = 0, ReservedQtyKg = 0, Status = "Published",
+                PublishedAt = now, CreatedAt = now, UpdatedAt = now,
+            };
+            listing.PriceHistories.Add(new PriceHistory
+            {
+                PricePerKg = pricePerKg, EffectiveFrom = now, ReasonCode = "Initial", CreatedAt = now,
+                ChangedByNavigation = PriceSetter(n, now),
+            });
+            db.ProductListings.Add(listing);
+            await db.SaveChangesAsync();
+            var capKg = Math.Round(expectedOutputKg * 60m / 100m, 3);
+            return new InProductionListingInfo(listing.ListingId, batch.BatchId, batch.OperatorId, batch.BatchCode, expectedOutputKg, capKg);
+        });
+    }
+
+    public Task SetBatchStatusAsync(long batchId, string status) => WithDbAsync(async db =>
+    {
+        var batch = await db.Batches.SingleAsync(b => b.BatchId == batchId);
+        batch.Status = status;
+        batch.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        return 0;
+    });
+
+    public Task AttachOperatorMemberAsync(long userId, long operatorId) => WithDbAsync(async db =>
+    {
+        var now = DateTimeOffset.UtcNow;
+        db.OperatorMembers.Add(new OperatorMember
+        {
+            UserId = userId, OperatorId = operatorId, MemberRole = "Staff", JoinedAt = now, CreatedAt = now,
+        });
+        await db.SaveChangesAsync();
+        return 0;
+    });
+
     public async Task DisposeAsync()
     {
         if (Factory is not null) await Factory.DisposeAsync();
