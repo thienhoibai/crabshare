@@ -22,6 +22,8 @@ abstract final class Routes {
 
   // Hộ nuôi — 4 tab dưới + màn con
   static const operatorToday = '/o/today';
+  static String slotEvents(String batchCode) =>
+      '/o/slot-events/${Uri.encodeComponent(batchCode)}';
   static const operatorLogs = '/o/logs';
   static const operatorAlerts = '/o/alerts';
   static const flaggedEvidence = '/o/evidence';

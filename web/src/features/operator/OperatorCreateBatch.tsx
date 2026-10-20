@@ -24,7 +24,7 @@ const numericFields: { key: Exclude<keyof BatchRequest, 'title' | 'crabType' | '
   { key: 'seedQuantity', label: 'Số con giống', min: 1, max: 2147483647 },
   { key: 'expectedOutputKg', label: 'Sản lượng dự kiến (kg)', min: 0.001, max: 999999999.999, step: 0.001 },
   { key: 'cycleDays', label: 'Chu kỳ (ngày)', min: 1, max: 32767 },
-  { key: 'restockCutoffDays', label: 'Hạn bổ sung giống (ngày)', min: 1, max: 32767 },
+  { key: 'restockCutoffDays', label: 'Số ngày gợi ý cho hạn thả bù', min: 1, max: 32767 },
   { key: 'minViableCapital', label: 'Vốn tối thiểu khả thi (đồng)', min: 1 },
   { key: 'targetCapital', label: 'Vốn mục tiêu (đồng)', min: 1 },
   { key: 'maxCapital', label: 'Vốn tối đa (đồng)', min: 1 },
@@ -134,7 +134,7 @@ function BatchEditor({ existing }: { existing?: Batch }) {
               <div className="op-field"><label htmlFor="cb-type">Loại cua</label><select id="cb-type" className="op-select" value={form.crabType} onChange={e => setForm({ ...form, crabType: e.target.value as BatchRequest['crabType'] })}>{Object.entries(crabTypes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
             </div></div>
             <div className="op-form__group"><h2 className="rd-h3">Quy mô & vốn</h2><div className="grid gap-4 sm:grid-cols-2">
-              {numericFields.map(({ key, label, min, max, step }) => <div className="op-field" key={key}><label htmlFor={`cb-${key}`}>{label}</label><input id={`cb-${key}`} className="op-input" type="number" required min={min} max={max ?? Number.MAX_SAFE_INTEGER} step={step ?? 1} value={Number.isNaN(form[key]) ? '' : form[key]} onChange={e => setForm({ ...form, [key]: e.target.valueAsNumber })} aria-invalid={!!errors[key]} aria-describedby={errors[key] ? `err-${key}` : undefined} />{errors[key] && <small id={`err-${key}`}>{errors[key]}</small>}</div>)}
+              {numericFields.map(({ key, label, min, max, step }) => <div className="op-field" key={key}><label htmlFor={`cb-${key}`}>{label}</label><input id={`cb-${key}`} className="op-input" type="number" required min={min} max={max ?? Number.MAX_SAFE_INTEGER} step={step ?? 1} value={Number.isNaN(form[key]) ? '' : form[key]} onChange={e => setForm({ ...form, [key]: e.target.valueAsNumber })} aria-invalid={!!errors[key]} aria-describedby={errors[key] ? `err-${key}` : key === 'restockCutoffDays' ? 'restock-suggestion-help' : undefined} />{errors[key] && <small id={`err-${key}`}>{errors[key]}</small>}{key === 'restockCutoffDays' && <small id="restock-suggestion-help">Giá trị gợi ý, chưa kích hoạt chính sách. Chủ hộ nuôi xác nhận cách tính và hạn trong Sự kiện hộp trước khi thả bù.</small>}</div>)}
             </div></div>
             <div className="op-form__group">
               <h2 className="rd-h3">Giá chốt bao tiêu (đồng/kg)</h2>

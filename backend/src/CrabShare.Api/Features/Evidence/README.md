@@ -14,6 +14,7 @@
 ## Endpoint
 
 CS-44 đã triển khai `POST /api/evidence` và mobile chụp ảnh/GPS qua API.
+VI-09 tái sử dụng kênh camera này cho chết/thả bù; multipart tùy chọn `slotEventType=Restocked` cho ảnh thả bù tại hộp Available có cua Dead chưa được thay trong lượt gán cuối của đúng lô. Các hộp trống tùy ý vẫn bị chặn. Kênh chụp thường hỗ trợ Stocked/InProduction/Harvesting; registry sự kiện kiểm tra lại bằng chứng và gắn ảnh trong cùng transaction. Xem [CS-52](../../../../../docs/validation/CS-52-slot-events.md).
 Chi tiết định dạng, migration V007, chính sách ảnh trùng và kiểm thử:
 [CS-44-production-evidence.md](../../../../../docs/validation/CS-44-production-evidence.md).
 CS-50 đã triển khai job yêu cầu ngẫu nhiên, API danh sách và mobile Hôm nay:

@@ -67,6 +67,7 @@ public static class FeatureRegistry
         services.AddScoped<FeeTierService>();         // Configurable fixed fees used by UC08
         services.AddScoped<StockingService>();       // Features/Production — VI-07
         services.AddScoped<ProductionLogService>();  // VI-08
+        services.AddScoped<SlotEventService>();      // VI-09
         // services.AddScoped<HarvestService>();      // Features/Harvest
 
         // Nhân

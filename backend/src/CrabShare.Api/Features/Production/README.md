@@ -20,6 +20,12 @@ Cần áp dụng V014 trước khi chạy API mới. Contract, JSON Bruno, đơn
 | `crab_item` | **một con cua = một dòng** · `Growing` → `Dead` / (thu hoạch) `InStock`… · `replaces_crab_item_id` khi thả bù |
 | `crab_item_event` | lịch sử từng con |
 
+## VI-09 Sự kiện hộp đã triển khai
+
+POST/GET `/api/batches/{code}/slot-events`, GET `slot-event-context` và GET/PUT `slot-event-policy` đã dùng API thật trên web/mobile. Owner/Staff ghi Molted/Mortality/Restocked/Relocated cho Stocked/InProduction/Harvesting; Owner đặt quy tắc có phiên bản cho lô. Trại chọn cách tính hạn và ngưỡng cảnh báo, hệ thống không tự áp các định mức sinh học. Chưa cấu hình ngưỡng thì không tự đánh giá Mortality; thả bù cần cấu hình hạn trước.
+
+Chết/thả bù cần ảnh chụp trực tiếp từ app mobile đúng hộp/lô. Thả bù cùng hộp, chọn rõ cua Dead chưa được thay; chuyển hộp giữ ID cua và lịch sử allocation nguồn/đích. UUID request chống gửi lặp, Serializable + claim có điều kiện + unique DB bảo vệ concurrency. Cần V015, không reset DB. Contract, JSON Bruno, quyết định nghiệp vụ cập nhật theo người dùng và hướng dẫn demo: [CS-52-slot-events.md](../../../../../docs/validation/CS-52-slot-events.md).
+
 ## Endpoint dự kiến
 | Method | Path | Ai gọi | Ghi chú |
 |---|---|---|---|
@@ -33,7 +39,7 @@ Cần áp dụng V014 trước khi chạy API mới. Contract, JSON Bruno, đơn
 
 ## Quy tắc phải giữ
 - Số cua khớp: đang nuôi = đã thả − chết + thả bù (đối chiếu mỗi lần có sự kiện).
-- Thả bù chỉ trước `restock_cutoff_days` (TL-21).
+- Thả bù theo hạn do trại cấu hình tường minh (cách tính + số ngày), cho phép hết ngày hạn UTC+7; kiểm tra cả giờ server để không né hạn bằng nhập lùi. Thông số cũ `restock_cutoff_days` chỉ là gợi ý khi chưa xác nhận cấu hình VI-09.
 - Phân quyền theo lô: nhân viên chỉ ghi cho lô của hộ nuôi mình (`ICurrentUser.RequireOperatorId()`).
 - Ingestion API cần tài liệu đặc tả (Phiếu yêu cầu *ingestion API specification*): viết `docs/ingestion-api.md` khi làm.
 

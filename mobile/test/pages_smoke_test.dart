@@ -12,6 +12,10 @@ import 'package:crabshare_mobile/features/investor/data/investor_repository.dart
 import 'package:crabshare_mobile/features/investor/notifications/notification_repository.dart';
 
 import 'helpers/notification_fakes.dart';
+import 'helpers/slot_event_fixtures.dart';
+
+import 'package:crabshare_mobile/features/operator/slot_events/slot_event_repository.dart';
+import 'package:crabshare_mobile/features/operator/slot_events/slot_events_page.dart';
 
 // Dựng từng màn hình ở khổ điện thoại với dữ liệu mẫu: lỗi tràn layout hay exception sẽ làm test fail.
 // Thêm màn mới thì thêm một dòng vào danh sách `pages` bên dưới.
@@ -35,7 +39,9 @@ import 'package:crabshare_mobile/features/operator/data/alert_repository.dart';
 import 'package:crabshare_mobile/features/operator/data/operator_orders_repository.dart';
 import 'package:crabshare_mobile/features/operator/data/operator_repository.dart';
 import 'package:crabshare_mobile/features/operator/data/api_operator_repository.dart';
+
 import 'helpers/production_fakes.dart';
+
 import 'package:crabshare_mobile/features/operator/data/operator_models.dart';
 import 'package:crabshare_mobile/features/operator/evidence/capture_page.dart';
 import 'package:crabshare_mobile/features/operator/evidence/evidence_repository.dart';
@@ -78,6 +84,7 @@ final smokePages = <String, Widget>{
   'Hộ nuôi · Bằng chứng gắn cờ': const FlaggedEvidencePage(),
   'Hộ nuôi · Giải trình': const EvidenceExplanationPage(id: 1),
   'Hộ nuôi · Hôm nay': const OperatorTodayPage(),
+  'Hộ nuôi · Sự kiện hộp': const SlotEventsPage(batchCode: 'VI09'),
   'Hộ nuôi · Nhật ký': const DailyLogsPage(),
   'Hộ nuôi · Form nhật ký': const DailyLogFormPage(
     initialBatchCode: 'CS-2610-01',
@@ -109,6 +116,9 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
+              slotEventRepositoryProvider.overrideWithValue(
+                ApiSlotEventRepository(slotEventDio()),
+              ),
               operatorRepositoryProvider.overrideWithValue(
                 ApiOperatorRepository(ProductionServer().dio()),
               ),
@@ -171,9 +181,8 @@ void main() {
             child: MaterialApp(
               theme: buildAppTheme(),
               builder: (context, child) => MediaQuery(
-                data: MediaQuery.of(
-                  context,
-                ).copyWith(textScaler: TextScaler.linear(scale)),
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(scale)),
                 child: child!,
               ),
               home: page,
@@ -217,12 +226,10 @@ class _SmokeExplanationRepository implements EvidenceExplanationRepository {
         canExplain: true,
       );
   @override
-  Future<Uint8List> image(
-    int id, {
-    CancelToken? cancelToken,
-  }) async => base64Decode(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jC9sAAAAASUVORK5CYII=',
-  );
+  Future<Uint8List> image(int id, {CancelToken? cancelToken}) async =>
+      base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jC9sAAAAASUVORK5CYII=',
+      );
   @override
   Future<FlaggedEvidence> explain(int id, String text) => get(id);
 }
@@ -241,6 +248,7 @@ class _SmokeEvidenceRepository implements EvidenceRepository {
     required BoxSlot box,
     required EvidencePhoto photo,
     int? captureRequestId,
+    String? slotEventType,
   }) => throw UnimplementedError();
 }
 

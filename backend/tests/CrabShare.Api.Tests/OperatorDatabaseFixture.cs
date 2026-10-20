@@ -35,6 +35,7 @@ public sealed class OperatorDatabaseFixture : IAsyncLifetime
         Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
             .UseSetting("Security:AuthIpPermitLimit", "10000")
             .UseSetting("Seed:Enabled", "false")
+            .UseSetting("Storage:Provider", "Local")
             .UseSetting("Jobs:Enabled", "false")
             .UseSetting("ConnectionStrings:Default", ConnectionString));
     }

@@ -5,6 +5,7 @@ namespace CrabShare.Api.Infrastructure.Storage;
 
 public sealed class StorageOptions
 {
+    public string Provider { get; set; } = "Local";
     /// <summary>Thư mục gốc lưu file (ảnh bằng chứng, hợp đồng PDF...). Đường dẫn tương đối tính từ thư mục chạy API.</summary>
     public string RootPath { get; set; } = "storage";
 }

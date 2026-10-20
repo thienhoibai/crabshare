@@ -48,6 +48,7 @@ public sealed class KycDatabaseFixture : IAsyncLifetime
             .UseSetting("Seed:Enabled", "false")
             .UseSetting("ConnectionStrings:Default", connectionString)
             .UseSetting("Storage:RootPath", StorageRoot)
+            .UseSetting("Storage:Provider", "Local")
             .ConfigureTestServices(KycControllerTests.AddTestAuth));
     }
 

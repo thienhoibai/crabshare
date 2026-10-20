@@ -37,7 +37,23 @@ public static class DependencyInjection
         services.AddHostedService<AlertJobWorker>();
 
         services.Configure<StorageOptions>(config.GetSection("Storage"));
-        services.AddSingleton<IFileStorage, LocalFileStorage>();
+        services.AddSingleton<LocalFileStorage>();
+        var storageProvider = config["Storage:Provider"] ?? "Local";
+        if (storageProvider.Equals("Cloudinary", StringComparison.OrdinalIgnoreCase))
+        {
+            var cloudinary = CloudinaryStorageOptions.Read(config);
+            services.AddSingleton(cloudinary);
+            services.AddHttpClient("CloudinaryStorage", client => client.Timeout = TimeSpan.FromSeconds(60))
+                .RemoveAllLoggers()
+                .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+                { AllowAutoRedirect = false, PooledConnectionLifetime = TimeSpan.FromMinutes(5) });
+            services.AddSingleton<IFileStorage>(sp => new CloudinaryFileStorage(cloudinary,
+                sp.GetRequiredService<LocalFileStorage>(), sp.GetRequiredService<IHttpClientFactory>().CreateClient("CloudinaryStorage"),
+                sp.GetRequiredService<TimeProvider>()));
+        }
+        else if (storageProvider.Equals("Local", StringComparison.OrdinalIgnoreCase))
+            services.AddSingleton<IFileStorage>(sp => sp.GetRequiredService<LocalFileStorage>());
+        else throw new InvalidOperationException("Storage:Provider phải là Local hoặc Cloudinary.");
 
         // Nhật ký kiểm toán dùng chung (TH-02) + job kiểm tra chuỗi băm mỗi 6 giờ
         services.AddScoped<IAuditLog, AuditLogService>();

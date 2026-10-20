@@ -1,5 +1,7 @@
 # Backend — ASP.NET Core .NET 10
 
+Lưu ảnh hiện hỗ trợ Local/Cloudinary qua IFileStorage. Cấu hình local riêng, biến production và cách kiểm tra ảnh có quyền: [docs/cloudinary.md](../docs/cloudinary.md). Không đưa credential vào repository.
+
 ```
 backend/
 ├── CrabShare.sln

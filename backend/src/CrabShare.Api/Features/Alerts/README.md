@@ -3,6 +3,7 @@
 CS-37 đã triển khai service, API hộ nuôi/nhà đầu tư và Web/Mobile; xem
 [hướng dẫn tích hợp và kiểm thử](../../../../../docs/validation/CS-37-alerts.md).
 Ngưỡng trong `Alerts:Thresholds` là cấu hình dev, cần xác nhận với SRS của nhóm.
+VI-09 dùng riêng ngưỡng Mortality do Owner cấu hình theo lô qua `slot-event-policy`; không dùng `Alerts:Thresholds:MortalityPercent` làm định mức sinh học mặc định. Không có cấu hình thì vẫn ghi nhận sự kiện, không tự đánh giá hao hụt. Xem [CS-52](../../../../../docs/validation/CS-52-slot-events.md).
 CS-40 đã triển khai `AlertJob.RunAsync`, worker mỗi 15 phút và API/màn quản trị;
 xem [cấu hình và kiểm thử leo thang](../../../../../docs/validation/CS-40-alert-escalation.md).
 

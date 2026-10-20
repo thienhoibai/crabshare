@@ -72,6 +72,7 @@ class _Evidence implements EvidenceRepository {
     required BoxSlot box,
     required EvidencePhoto photo,
     int? captureRequestId,
+    String? slotEventType,
   }) async {
     uploads++;
     expect(captureRequestId, 50);

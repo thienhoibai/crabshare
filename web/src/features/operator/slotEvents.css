@@ -1,0 +1,13 @@
+.slot-events-workspace, .slot-events-fields, .slot-events-history { display: grid; gap: 16px; min-width: 0; }
+.slot-events-fields { border: 0; padding: 0; margin: 0; }
+.slot-events-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: end; }
+.slot-events-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 16px; }
+.slot-events-context, .slot-events-confirm, .slot-events-record { padding: 16px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; overflow-wrap: anywhere; }
+.slot-events-context { background: var(--surface); }
+.slot-events-confirm { margin-top: 16px; }
+.slot-events-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+.slot-events-check { display: flex; gap: 12px; align-items: center; }
+.slot-events-workspace .op-input, .slot-events-workspace .op-select { min-width: 0; width: 100%; }
+.slot-events-fields:disabled { opacity: .7; }
+.slot-events-workspace h3 { font-weight: 600; }
+@media (max-width: 600px) { .slot-events-grid { grid-template-columns: minmax(0, 1fr); } }
