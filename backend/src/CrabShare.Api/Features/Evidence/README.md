@@ -1,7 +1,7 @@
 # Evidence — Bằng chứng nuôi và thẩm định
 
 **Người làm:** Khôi · **Use case:** UC45 Capture Production Evidence · UC47 Review Flagged Evidence · UC48 Submit Evidence Explanation
-**Phối hợp:** Nhân (TSK-13 — mô hình nhận diện cua, cắm vào qua `ICrabDetector`)
+**Phối hợp:** Nhân (TSK-13 — mô hình nhận diện cua, cắm vào qua `ICrabDetector` / `OnnxCrabDetector`; thiếu file `.onnx` thì `model_version=none`)
 
 ## Bảng
 | Bảng | Cột / trạng thái cần nhớ |

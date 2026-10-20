@@ -32,7 +32,7 @@ Muốn tìm code của một use case: tra bảng dưới → mở đúng thư m
 | Hạng mục | Người làm | Nằm ở đâu |
 |---|---|---|
 | TSK-12 Kiểm định đúng đắn quyết toán (nghiên cứu) | Viên | `backend/src/CrabShare.SettlementEngine`, `backend/tests/CrabShare.SettlementEngine.Tests` |
-| TSK-13 Mô hình nhận diện cua (YOLO → ONNX) | Nhân | `ml/`, tích hợp qua `ICrabDetector` ở `backend/.../Infrastructure/Detection` |
+| TSK-13 Mô hình nhận diện cua (YOLO → ONNX) | Nhân | `ml/` + `OnnxCrabDetector` (`ICrabDetector`); thiếu `.onnx` → `model_version=none` |
 | Nhật ký kiểm toán (append-only), job nền | Thiện | `backend/.../Infrastructure/` |
 | Triển khai, CI, docker | Khôi | `.github/workflows/`, `docker-compose.yml` |
 

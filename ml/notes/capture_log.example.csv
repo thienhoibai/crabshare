@@ -1,0 +1,7 @@
+session_id,date,source,device,box_id,filename,has_crab,lighting,notes
+S1,2026-10-22,iot,Pixel8,B001,iot_20261022_B001_001.jpg,yes,daylight,góc thẳng
+S1,2026-10-22,iot,Pixel8,B001,iot_20261022_B001_002.jpg,yes,daylight,nghiêng trái
+S1,2026-10-22,iot,Pixel8,B001,iot_20261022_B001_003.jpg,yes,daylight,nghiêng phải
+S1,2026-10-22,iot,Pixel8,B001,iot_20261022_B001_004.jpg,yes,shade,gần hơn
+S1,2026-10-22,iot,Pixel8,B050,iot_20261022_B050_001.jpg,no,daylight,hộp trống sau thu hoạch
+S2,2026-10-23,sim,iPhone14,NA,sim_20261023_NA_001.jpg,no,indoor,hộp nhựa + nước mô phỏng
