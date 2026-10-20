@@ -318,7 +318,7 @@ export default function InvestorOfftake() {
                 <input
                   type="number"
                   min="0.001"
-                  step="0.1"
+                  step="any"
                   max="100000"
                   value={qtyKg}
                   onChange={(e) => {
@@ -343,7 +343,7 @@ export default function InvestorOfftake() {
                 <input
                   type="number"
                   min="1"
-                  step="1000"
+                  step="1"
                   value={fixedUnitPrice}
                   onChange={(e) => {
                     const v = e.target.value
