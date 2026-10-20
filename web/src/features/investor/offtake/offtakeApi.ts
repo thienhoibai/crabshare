@@ -29,6 +29,12 @@ export interface OfftakeCommitment {
   payment: OfftakePayment | null
 }
 
+export interface OfftakeGradePrice {
+  gradeCode: string
+  gradeName: string
+  unitPrice: number
+}
+
 export interface OfftakeCap {
   batchCode: string
   expectedOutputKg: number
@@ -38,13 +44,13 @@ export interface OfftakeCap {
   preorderKg: number
   remainingKg: number
   depositPct: number
+  prices: OfftakeGradePrice[]
 }
 
 export interface CreateOfftakeBody {
   contributionId: number
   gradeCode: string
   qtyKg: number
-  fixedUnitPrice: number
 }
 
 export const offtakeKeys = {

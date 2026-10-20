@@ -9,6 +9,9 @@ export interface InvestorBatch {
   fundingOpenAt: string; fundingDeadline: string
   fundingProgress: { confirmedCapital: number; reservedCapital: number; investorCount: number; pctOfTarget: number; percentLabel: string }
   standardCost: { versionNo: number; status: 'Locked'; total: number; items: { category: string; amount: number }[]; lockedAt: string } | null
+  offtakePreorderCapPct?: number
+  offtakeDepositPct?: number
+  offtakePrices?: { gradeCode: string; gradeName: string; unitPrice: number }[]
 }
 interface BatchPage { items: InvestorBatch[]; page: number; pageSize: number; total: number }
 function readBatch(data: InvestorBatch): InvestorBatch {

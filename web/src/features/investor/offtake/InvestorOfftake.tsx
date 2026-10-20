@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { errorMessage } from '../../../shared/api/http'
 import { formatDateTime, formatVnd } from '../../../shared/lib/format'
 import { VietQrBox } from '../../../shared/payments/VietQrBox'
@@ -13,13 +13,6 @@ import {
   type OfftakePayment,
 } from './offtakeApi'
 
-const GRADES = [
-  { code: 'L1', name: 'Cua Nhất (L1 > 500g)' },
-  { code: 'L2', name: 'Cua Nhì (L2 350-500g)' },
-  { code: 'L3', name: 'Cua Ba (L3 250-350g)' },
-  { code: 'L4', name: 'Cua Bốn (L4 150-250g)' },
-  { code: 'SOFT', name: 'Cua Lột (SOFT)' },
-]
 
 function OfftakePaymentSection({ payment }: { payment: OfftakePayment }) {
   const live = usePaymentRequest(payment.paymentRequestId)
@@ -123,9 +116,8 @@ export default function InvestorOfftake() {
   const { data: contributions, isPending: contribsLoading } = useMyContributions()
 
   const [selectedContributionId, setSelectedContributionId] = useState<number | ''>('')
-  const [gradeCode, setGradeCode] = useState(GRADES[0].code)
+  const [gradeCode, setGradeCode] = useState('')
   const [qtyKg, setQtyKg] = useState<number | ''>('')
-  const [fixedUnitPrice, setFixedUnitPrice] = useState<number | ''>(260000)
   const [createdCommitment, setCreatedCommitment] = useState<OfftakeCommitment | null>(null)
 
   const confirmedContributions = contributions?.filter((c) => c.status === 'Confirmed') ?? []
@@ -134,19 +126,29 @@ export default function InvestorOfftake() {
 
   const { data: cap, isPending: capLoading } = useOfftakeCap(batchCode)
   const createOfftake = useCreateOfftake(batchCode)
+  const publishedPrices = cap?.prices ?? []
+  const unitPrice = publishedPrices.find((p) => p.gradeCode === gradeCode)?.unitPrice ?? 0
+
+  useEffect(() => {
+    if (!publishedPrices.length) {
+      setGradeCode('')
+      return
+    }
+    if (!publishedPrices.some((p) => p.gradeCode === gradeCode))
+      setGradeCode(publishedPrices[0].gradeCode)
+  }, [batchCode, publishedPrices, gradeCode])
 
   const qty = typeof qtyKg === 'number' ? qtyKg : 0
-  const price = typeof fixedUnitPrice === 'number' ? fixedUnitPrice : 0
   const depositPct = cap?.depositPct ?? 15
-  const estimatedValue = Math.round(qty * price)
+  const estimatedValue = Math.round(qty * unitPrice)
   const estimatedDeposit = Math.round((estimatedValue * depositPct) / 100)
 
   const canSubmit =
     typeof selectedContributionId === 'number' &&
     selectedContributionId > 0 &&
     !!gradeCode &&
+    unitPrice > 0 &&
     qty > 0 &&
-    price > 0 &&
     !createOfftake.isPending
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -158,7 +160,6 @@ export default function InvestorOfftake() {
         contributionId: selectedContributionId,
         gradeCode,
         qtyKg: qty,
-        fixedUnitPrice: price,
       },
       {
         onSuccess: (data) => {
@@ -291,23 +292,29 @@ export default function InvestorOfftake() {
               <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>
                 Hạng cua cam kết
               </label>
-              <select
-                value={gradeCode}
-                onChange={(e) => setGradeCode(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '12px',
-                  border: '1px solid var(--line)',
-                  background: 'var(--surface)',
-                }}
-              >
-                {GRADES.map((g) => (
-                  <option key={g.code} value={g.code}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
+              {!batchCode ? (
+                <p className="rd-muted">Chọn khoản góp trước.</p>
+              ) : publishedPrices.length === 0 && !capLoading ? (
+                <p className="rd-note" role="alert">Lô này chưa công bố giá bao tiêu theo hạng.</p>
+              ) : (
+                <select
+                  value={gradeCode}
+                  onChange={(e) => setGradeCode(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '12px',
+                    border: '1px solid var(--line)',
+                    background: 'var(--surface)',
+                  }}
+                >
+                  {publishedPrices.map((g) => (
+                    <option key={g.gradeCode} value={g.gradeCode}>
+                      {g.gradeName} — {formatVnd(g.unitPrice)}/kg
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -341,34 +348,31 @@ export default function InvestorOfftake() {
                   Giá chốt (đồng/kg)
                 </label>
                 <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={fixedUnitPrice}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    setFixedUnitPrice(v ? parseInt(v, 10) : '')
-                  }}
-                  placeholder="260000"
-                  required
+                  type="text"
+                  readOnly
+                  value={unitPrice > 0 ? formatVnd(unitPrice) : '—'}
+                  aria-label="Giá chốt bao tiêu theo hạng đã công bố"
                   style={{
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '12px',
                     border: '1px solid var(--line)',
-                    background: 'var(--surface)',
+                    background: '#f8fafc',
+                    color: '#0f172a',
+                    fontWeight: 600,
                   }}
                 />
+                <small className="rd-muted">Lấy từ bảng giá công bố của lô — không nhập tay.</small>
               </div>
             </div>
 
-            {qty > 0 && price > 0 && (
+            {qty > 0 && unitPrice > 0 && (
               <div style={{ padding: '12px 14px', borderRadius: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '13px' }}>
                 <div>Giá trị cam kết: <b>{formatVnd(estimatedValue)}</b></div>
                 <div>
                   Cọc cần chuyển ({depositPct}%): <b style={{ color: 'var(--accent, #ea580c)' }}>{formatVnd(estimatedDeposit)}</b>
                 </div>
-                <small className="rd-muted">Ước tính; server chốt bằng AwayFromZero.</small>
+                <small className="rd-muted">Ước tính; server chốt bằng AwayFromZero. Đổi hạng sẽ đổi giá và cọc.</small>
               </div>
             )}
 
