@@ -24,7 +24,11 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
         var query = db.Batches.AsNoTracking().Include(b => b.Operator).Include(b => b.FeeTier).AsQueryable();
         if (filter.Status is not null) query = query.Where(b => b.Status == filter.Status);
         var page = await query.OrderByDescending(b => b.BatchId).ToPagedAsync(paging, ct);
-        return new(page.Items.Select(b => Response(b, null, [])).ToList(), page.Page, page.PageSize, page.Total);
+        var priceMap = new Dictionary<long, IReadOnlyList<OfftakePriceResponse>>();
+        foreach (var id in page.Items.Select(b => b.BatchId).Distinct())
+            priceMap[id] = await batches.OfftakePricesAsync(id, ct);
+        return new(page.Items.Select(b => Response(b, null, [], priceMap.GetValueOrDefault(b.BatchId, []))).ToList(),
+            page.Page, page.PageSize, page.Total);
     }
     public async Task<AdminBatchResponse> GetAsync(string code, CancellationToken ct)
     {
@@ -77,6 +81,9 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
             throw new BusinessRuleException("batch.invalid_cost_version", "Cần đúng một phiên bản chi phí Submitted mới nhất, chưa có phiên bản Locked.");
         BatchService.ValidateCosts(BatchService.CostItems(cost));
         BatchService.ValidateSchedule(BatchService.CostItems(cost), BatchService.Plans(cost), true);
+        if (!await db.BatchOfftakePrices.AnyAsync(p => p.BatchId == b.BatchId, ct))
+            throw new BusinessRuleException("batch.offtake_price_required",
+                "Lô phải có ít nhất một giá chốt bao tiêu theo hạng trước khi mở gọi vốn (TL-30).");
         var deadlineDate = DateOnly.FromDateTime(req.FundingDeadline!.Value.ToOffset(TimeSpan.FromHours(7)).DateTime);
         if (cost.TranchePlans.Any(p => p.PlannedDate < deadlineDate))
             throw new BusinessRuleException("batch.schedule_before_funding_close", "Lịch chi dự kiến không được trước ngày kết thúc gọi vốn (giờ Việt Nam).");
@@ -88,7 +95,8 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
             (t.MaxCapital == null || b.TargetCapital < t.MaxCapital || (t.MaxInclusive && b.TargetCapital == t.MaxCapital))).ToListAsync(ct);
         if (tiers.Count != 1)
             throw new BusinessRuleException("batch.invalid_fee_tier", tiers.Count == 0 ? "Không có bậc phí có hiệu lực phù hợp với vốn mục tiêu." : "Có nhiều bậc phí có hiệu lực cùng khớp; cần sửa cấu hình trước khi duyệt.");
-        var before = Response(b, cost, []);
+        var offtakePrices = await batches.OfftakePricesAsync(b.BatchId, ct);
+        var before = Response(b, cost, [], offtakePrices);
         var account = await db.BatchAccounts.SingleOrDefaultAsync(a => a.BatchId == b.BatchId, ct);
         var accountCreated = account is null;
         if (account is null)
@@ -128,7 +136,7 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
             UpdatedAt = now
         }).ToList();
         db.DisbursementTranches.AddRange(tranches);
-        var after = Response(b, cost, tranches);
+        var after = Response(b, cost, tranches, offtakePrices);
         await audit.WriteAsync("batch", b.BatchId, "approve", before, after, now, ct);
         if (accountCreated)
             await audit.WriteAsync("batch_account", account!.BatchAccountId, "create", null,
@@ -158,9 +166,16 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
     },ct);
 
     private async Task<AdminBatchResponse> DetailAsync(Batch b, CancellationToken ct)
-        => Response(b, await batches.CostAsync(b.BatchId, ct), await db.DisbursementTranches.Where(t => t.BatchId == b.BatchId).OrderBy(t => t.TrancheNo).ToListAsync(ct));
-    private static AdminBatchResponse Response(Batch b, StandardCostVersion? cost, IReadOnlyList<DisbursementTranche> tranches)
-        => new(BatchService.ToResponse(b, cost, false), new(b.OperatorId, b.Operator.LegalName, b.Operator.FarmAddress, b.Operator.Status),
+    {
+        var cost = await batches.CostAsync(b.BatchId, ct);
+        var prices = await batches.OfftakePricesAsync(b.BatchId, ct);
+        var tranches = await db.DisbursementTranches.Where(t => t.BatchId == b.BatchId).OrderBy(t => t.TrancheNo).ToListAsync(ct);
+        return Response(b, cost, tranches, prices);
+    }
+
+    private static AdminBatchResponse Response(Batch b, StandardCostVersion? cost, IReadOnlyList<DisbursementTranche> tranches,
+        IReadOnlyList<OfftakePriceResponse> offtakePrices)
+        => new(BatchService.ToResponse(b, cost, false, offtakePrices), new(b.OperatorId, b.Operator.LegalName, b.Operator.FarmAddress, b.Operator.Status),
             b.FundingOpenAt, b.FundingDeadline, b.FeeTierId, b.FeeTier?.TierCode, b.PlatformFeeAmount is null ? null : (long)b.PlatformFeeAmount,
             b.RejectionReason, b.ApprovedAt, b.ApprovedBy, tranches.Select(t => new DisbursementResponse(t.TrancheNo, (long)t.PlannedAmount, t.PlannedDate, t.UnlockCondition, t.Status,t.AnchorCode,t.OffsetDays)).ToList());
 }

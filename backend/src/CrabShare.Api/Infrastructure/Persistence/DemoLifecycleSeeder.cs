@@ -204,6 +204,7 @@ internal sealed class DemoLifecycleSeeder
     {
         var b = NewBatch("CS-2610-03", "SoftShellCrab", "Cua lột hộp nhựa Năm Căn — gọi vốn tháng 10", 600, 150m, 60,
             90_000_000, 120_000_000, 150_000_000, Day(-8));
+        SetOfftakePrices(b, ("L1", 280_000), ("L2", 250_000), ("L3", 220_000), ("L4", 190_000), ("SOFT", 350_000));
         Approve(b, Day(-3), Day(11));
         var costs = Costs(b, "Locked", Day(-6), Day(-3),
             new("Seed", "Cua giống chuẩn bị lột 120–150 g/con", 600, "con", 70_000, 1),
@@ -226,6 +227,7 @@ internal sealed class DemoLifecycleSeeder
     {
         var b = NewBatch("CS-2610-02", "RoeCrab", "Cua gạch Năm Căn — gọi vốn tháng 10", 250, 100m, 90,
             45_000_000, 60_000_000, 75_000_000, Day(-6));
+        SetOfftakePrices(b, ("L1", 720_000), ("L2", 600_000), ("L3", 480_000), ("L4", 380_000));
         Approve(b, Day(-4), Day(10));
         var costs = Costs(b, "Locked", Day(-5), Day(-4),
             new("Seed", "Cua gạch giống 180–200 g/con", 250, "con", 56_000, 1),
@@ -248,6 +250,7 @@ internal sealed class DemoLifecycleSeeder
     {
         var b = NewBatch("CS-2611-01", "RoeCrab", "Cua gạch Năm Căn — đợt tháng 11", 250, 100m, 90,
             45_000_000, 60_000_000, 75_000_000, Day(-2));
+        SetOfftakePrices(b, ("L1", 700_000), ("L2", 580_000), ("L3", 460_000), ("L4", 360_000));
         var costs = Costs(b, "Submitted", Day(-1), null,
             new("Seed", "Cua gạch giống 180–200 g/con", 250, "con", 56_000, 1),
             new("Feed", "Thức ăn tháng 1–2", 250, "kg", 25_000, 1),
@@ -281,6 +284,21 @@ internal sealed class DemoLifecycleSeeder
         };
         db.Batches.Add(batch);
         return batch;
+    }
+
+    /// <summary>Giá chốt bao tiêu công khai theo hạng (TL-30). Gắn navigation trước SaveChanges.</summary>
+    private void SetOfftakePrices(Batch b, params (string GradeCode, long UnitPrice)[] rows)
+    {
+        foreach (var (gradeCode, unitPrice) in rows)
+        {
+            b.BatchOfftakePrices.Add(new BatchOfftakePrice
+            {
+                GradeId = grades[gradeCode].GradeId,
+                UnitPrice = unitPrice,
+                CreatedAt = b.CreatedAt,
+                UpdatedAt = b.CreatedAt,
+            });
+        }
     }
 
     /// <summary>Quản trị duyệt: chọn bậc phí theo vốn mục tiêu, mở gọi vốn, mở tài khoản chuyên dùng của lô.</summary>

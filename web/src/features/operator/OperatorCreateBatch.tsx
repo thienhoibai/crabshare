@@ -11,15 +11,16 @@ import OperatorLayout from './OperatorLayout'
 import { OpAside, OpBack, OpBtn, OpHeading, OpNote, OpPanel, crabImg } from './operatorUi'
 import CostScheduleEditor, { scheduleNumbers, hasTiming } from './CostScheduleEditor'
 import { useOperatorApplication } from './operatorsApi'
-import { batchStatuses, costCategories, crabTypes, getBatch, saveBatch, saveStandardCost, submitBatch, type Batch, type BatchRequest, type CostItem, type CostTranche } from './batchesApi'
+import { batchStatuses, costCategories, crabTypes, getBatch, offtakeGradeOptions, saveBatch, saveStandardCost, submitBatch, type Batch, type BatchRequest, type CostItem, type CostTranche } from './batchesApi'
 
 const initial: BatchRequest = { title: 'Lô cua lột tháng 11', crabType: 'SoftShellCrab', seedQuantity: 1500, expectedOutputKg: 300, cycleDays: 45,
-  restockCutoffDays: 10, minViableCapital: 60_000_000, targetCapital: 75_000_000, maxCapital: 90_000_000, minContribution: 1_000_000, operatorSharePct: 7 }
+  restockCutoffDays: 10, minViableCapital: 60_000_000, targetCapital: 75_000_000, maxCapital: 90_000_000, minContribution: 1_000_000, operatorSharePct: 7,
+  offtakePrices: offtakeGradeOptions.map(g => ({ gradeCode: g.code, unitPrice: 0 })) }
 const initialItems: CostItem[] = [
   { category: 'Seed', description: 'Con giống', quantity: 1500, unit: 'con', unitPrice: 20000, trancheNo: 1 },
   { category: 'MortalityReserve', description: 'Dự phòng hao hụt', quantity: 1, unit: 'khoản', unitPrice: 5_000_000, trancheNo: 1 },
 ]
-const numericFields: { key: Exclude<keyof BatchRequest, 'title' | 'crabType'>; label: string; min: number; max?: number; step?: number }[] = [
+const numericFields: { key: Exclude<keyof BatchRequest, 'title' | 'crabType' | 'offtakePrices'>; label: string; min: number; max?: number; step?: number }[] = [
   { key: 'seedQuantity', label: 'Số con giống', min: 1, max: 2147483647 },
   { key: 'expectedOutputKg', label: 'Sản lượng dự kiến (kg)', min: 0.001, max: 999999999.999, step: 0.001 },
   { key: 'cycleDays', label: 'Chu kỳ (ngày)', min: 1, max: 32767 },
@@ -37,7 +38,14 @@ function BatchEditor({ existing }: { existing?: Batch }) {
   const qc = useQueryClient()
   const userId = useAuthStore(s => s.user?.userId)
   const profile = useOperatorApplication()
-  const [form, setForm] = useState<BatchRequest>(existing ?? initial)
+  const [form, setForm] = useState<BatchRequest>(() => {
+    if (!existing) return initial
+    const byCode = new Map((existing.offtakePrices ?? []).map(p => [p.gradeCode, p.unitPrice]))
+    return {
+      ...existing,
+      offtakePrices: offtakeGradeOptions.map(g => ({ gradeCode: g.code, unitPrice: byCode.get(g.code) ?? 0 })),
+    }
+  })
   const [items, setItems] = useState<(CostItem & { key: number })[]>(() => (existing?.standardCost?.items ?? initialItems).map((i, key) => ({ ...i, key })))
   const nextKey = useRef(items.length)
   const [plans, setPlans] = useState<CostTranche[]>(existing?.standardCost?.tranches ?? [])
@@ -51,7 +59,13 @@ function BatchEditor({ existing }: { existing?: Batch }) {
   const total = items.reduce((sum, i) => sum + costAmount(i.quantity, i.unitPrice), 0)
   const mutation = useMutation({
     mutationFn: async (submit: boolean) => {
-      const saved = await saveBatch(code, form)
+      const payload: BatchRequest = {
+        ...form,
+        offtakePrices: (form.offtakePrices ?? [])
+          .filter(p => p.unitPrice > 0)
+          .map(p => ({ gradeCode: p.gradeCode, unitPrice: p.unitPrice })),
+      }
+      const saved = await saveBatch(code, payload)
       // Remember the code before cost/submit: retry must update the same batch after any later failure.
       setCode(saved.batchCode)
       setParams({ code: saved.batchCode }, { replace: true })
@@ -85,6 +99,8 @@ function BatchEditor({ existing }: { existing?: Batch }) {
     for (const { key } of numericFields)
       if (!['expectedOutputKg', 'operatorSharePct'].includes(key) && !Number.isSafeInteger(form[key])) problems[key] = 'Nhập số nguyên trong giới hạn chính xác.'
     if (!form.title.trim()) problems.title = 'Nhập tên lô.'
+    if (submit && !(form.offtakePrices ?? []).some(p => p.unitPrice > 0))
+      problems.offtakePrices = 'Cần khai ít nhất một giá chốt bao tiêu theo hạng trước khi gửi duyệt.'
     if (submit && scheduleNumbers(items).some(n => !plans.some(p => p.trancheNo === n && hasTiming(p) && p.unlockCondition.trim())))
       problems.schedule = 'Chọn mốc, số ngày sau mốc và điều kiện cho từng đợt trước khi gửi duyệt.'
     if (plans.some(p => scheduleNumbers(items).includes(p.trancheNo) && (p.anchorCode || p.offsetDays != null || p.plannedDate || p.unlockCondition.trim()) && (!hasTiming(p) || !p.unlockCondition.trim())))
@@ -120,6 +136,40 @@ function BatchEditor({ existing }: { existing?: Batch }) {
             <div className="op-form__group"><h2 className="rd-h3">Quy mô & vốn</h2><div className="grid gap-4 sm:grid-cols-2">
               {numericFields.map(({ key, label, min, max, step }) => <div className="op-field" key={key}><label htmlFor={`cb-${key}`}>{label}</label><input id={`cb-${key}`} className="op-input" type="number" required min={min} max={max ?? Number.MAX_SAFE_INTEGER} step={step ?? 1} value={Number.isNaN(form[key]) ? '' : form[key]} onChange={e => setForm({ ...form, [key]: e.target.valueAsNumber })} aria-invalid={!!errors[key]} aria-describedby={errors[key] ? `err-${key}` : undefined} />{errors[key] && <small id={`err-${key}`}>{errors[key]}</small>}</div>)}
             </div></div>
+            <div className="op-form__group">
+              <h2 className="rd-h3">Giá chốt bao tiêu (đồng/kg)</h2>
+              <p className="rd-muted text-sm mb-2">Công khai với nhà đầu tư trước khi gọi vốn (TL-30). Chỉ hạng có giá &gt; 0 được lưu. Khóa sau khi gửi duyệt.</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {offtakeGradeOptions.map((g, index) => {
+                  const row = form.offtakePrices?.[index] ?? { gradeCode: g.code, unitPrice: 0 }
+                  return (
+                    <div className="op-field" key={g.code}>
+                      <label htmlFor={`cb-offtake-${g.code}`}>{g.name}</label>
+                      <input
+                        id={`cb-offtake-${g.code}`}
+                        className="op-input"
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={Number.isNaN(row.unitPrice) ? '' : row.unitPrice}
+                        onChange={e => {
+                          const unitPrice = e.target.valueAsNumber
+                          setForm({
+                            ...form,
+                            offtakePrices: offtakeGradeOptions.map((opt, i) =>
+                              i === index
+                                ? { gradeCode: opt.code, unitPrice: Number.isNaN(unitPrice) ? 0 : unitPrice }
+                                : (form.offtakePrices?.[i] ?? { gradeCode: opt.code, unitPrice: 0 })),
+                          })
+                        }}
+                        aria-invalid={!!errors.offtakePrices}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+              {errors.offtakePrices && <small className="text-red-600">{errors.offtakePrices}</small>}
+            </div>
           </fieldset>
         </OpPanel>
         <OpPanel title="Chi phí chuẩn" subtitle="Khấu hao và dự phòng hao hụt không giải ngân theo lịch.">

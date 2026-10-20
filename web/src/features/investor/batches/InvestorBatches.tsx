@@ -61,7 +61,15 @@ export function InvestorBatchDetail({ code }: { code: string }) {
         <dt>Số lượng giống</dt><dd>{b.seedQuantity} con</dd><dt>Sản lượng dự kiến</dt><dd>{b.expectedOutputKg} kg</dd><dt>Chu kỳ nuôi</dt><dd>{b.cycleDays} ngày</dd><dt>Hạn bổ sung giống</dt><dd>{b.restockCutoffDays} ngày</dd>
         <dt>Vốn tối thiểu vận hành</dt><dd>{formatVnd(b.minViableCapital)}</dd><dt>Vốn tối đa</dt><dd>{formatVnd(b.maxCapital)}</dd><dt>Khoản góp tối thiểu</dt><dd>{formatVnd(b.minContribution)}</dd><dt>Tỷ lệ chia của hộ nuôi</dt><dd>{b.operatorSharePct}%</dd>
         <dt>Mở gọi vốn</dt><dd>{formatDateTime(b.fundingOpenAt)}</dd><dt>Hạn gọi vốn</dt><dd>{formatDateTime(b.fundingDeadline)}</dd>
+        {b.offtakeDepositPct != null && <><dt>Tỷ lệ cọc bao tiêu</dt><dd>{b.offtakeDepositPct}%</dd></>}
+        {b.offtakePreorderCapPct != null && <><dt>Trần bao tiêu + đặt trước</dt><dd>{b.offtakePreorderCapPct}%</dd></>}
       </dl></section>
+      {(b.offtakePrices?.length ?? 0) > 0 && (
+        <section className="iv-card"><h2 className="rd-h3">Giá chốt bao tiêu</h2>
+          <dl className="pf-dl">{b.offtakePrices!.map(p => <div key={p.gradeCode}><dt>{p.gradeName}</dt><dd>{formatVnd(p.unitPrice)}/kg</dd></div>)}</dl>
+          <p className="rd-note">Giá công khai trước gọi vốn (TL-30). Đăng ký bao tiêu tại tab Bao tiêu.</p>
+        </section>
+      )}
       <section className="iv-card pf-wide"><h2 className="rd-h3">Chi phí chuẩn đã khóa</h2><p className="rd-muted">Phiên bản {cost.versionNo} · Đã khóa</p><dl className="pf-dl">{cost.items.map((item, index) => <div className="be-cost" key={`${item.category}-${index}`}><dt>{costCategories[item.category as keyof typeof costCategories] ?? item.category}</dt><dd>{formatVnd(item.amount)}</dd></div>)}<dt>Tổng chi phí chuẩn</dt><dd>{formatVnd(cost.total)}</dd></dl><p className="rd-note">Khóa lúc {formatDateTime(cost.lockedAt)}</p></section>
     </div>
   </div>

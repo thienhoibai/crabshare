@@ -58,7 +58,11 @@ public sealed class ReservationExpiryService(AppDbContext db, IAuditLog audit, T
             }
         }
         if (cancelled > 0) log.LogInformation("Đã huỷ {Count} đơn quá hạn thanh toán và trả tồn", cancelled);
-        return cancelled;
+
+        var offtakeExpired = await ExpireOfftakeDepositsAsync(now, ct);
+        if (offtakeExpired > 0)
+            log.LogInformation("Đã huỷ {Count} cam kết bao tiêu quá hạn cọc", offtakeExpired);
+        return cancelled + offtakeExpired;
     }
 
     private async Task<bool> ExpireOrderAsync(long orderId, DateTimeOffset now, CancellationToken ct)
@@ -109,4 +113,66 @@ public sealed class ReservationExpiryService(AppDbContext db, IAuditLog audit, T
             }, now, ct);
         return true;
     }
+
+    private async Task<int> ExpireOfftakeDepositsAsync(DateTimeOffset now, CancellationToken ct)
+    {
+        var ids = await db.PaymentRequests.AsNoTracking()
+            .Where(r => r.Purpose == PaymentPurposes.OfftakeDeposit
+                        && r.Status == "Pending"
+                        && r.ExpiresAt < now
+                        && r.OfftakeId != null
+                        && r.Offtake!.DepositStatus == "Pending"
+                        && r.Offtake.Status == "PendingHarvest")
+            .Select(r => r.OfftakeId!.Value)
+            .Distinct()
+            .OrderBy(id => id)
+            .Take(BatchSize)
+            .ToListAsync(ct);
+
+        var n = 0;
+        foreach (var offtakeId in ids)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                if (await db.InTransactionAsync(() => ExpireOneOfftakeAsync(offtakeId, now, ct), ct)) n++;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Không huỷ được offtake {OfftakeId} quá hạn cọc", offtakeId);
+            }
+        }
+        return n;
+    }
+
+    private async Task<bool> ExpireOneOfftakeAsync(long offtakeId, DateTimeOffset now, CancellationToken ct)
+    {
+        await audit.LockAsync(ct);
+        var offtake = await db.OfftakeCommitments
+            .Include(o => o.PaymentRequests)
+            .SingleOrDefaultAsync(o => o.OfftakeId == offtakeId, ct);
+        if (offtake is null || offtake.Status != "PendingHarvest" || offtake.DepositStatus != "Pending")
+            return false;
+
+        offtake.Status = "Cancelled";
+        offtake.UpdatedAt = now;
+        var expiredRequests = new List<long>();
+        foreach (var request in offtake.PaymentRequests.Where(r => r.Status == "Pending"))
+        {
+            request.Status = "Expired";
+            request.UpdatedAt = now;
+            expiredRequests.Add(request.PaymentRequestId);
+            await audit.WriteAsync("payment_request", request.PaymentRequestId, "expire",
+                new { status = "Pending" },
+                new { status = "Expired", reason = "Quá hạn cọc bao tiêu", offtakeId }, now, ct);
+        }
+        await audit.WriteAsync("offtake_commitment", offtakeId, "cancel_timeout",
+            new { status = "PendingHarvest", depositStatus = "Pending" },
+            new { status = "Cancelled", reason = "payment_timeout", expiredPaymentRequests = expiredRequests },
+            now, ct);
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
 }
+

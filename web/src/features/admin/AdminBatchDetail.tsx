@@ -64,6 +64,16 @@ export default function AdminBatchDetail() {
             <div><dt>Thù lao người nuôi</dt><dd>{b.operatorSharePct}%</dd></div><div><dt>Địa chỉ hộ nuôi</dt><dd>{detail.operator.farmAddress} · {detail.operator.status}</dd></div>
             {detail.platformFeeAmount !== null && <div><dt>Phí nền tảng · {detail.feeTierCode}</dt><dd>{formatVnd(detail.platformFeeAmount)} · hộ nuôi trả ngoài vốn lô</dd></div>}
           </dl></section>
+          <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><h2 className="font-bold mb-4">Giá chốt bao tiêu</h2>
+            {!(b.offtakePrices?.length) ? <p className="text-sm text-slate-500">Chưa khai giá theo hạng — không duyệt được (TL-30).</p> : (
+              <ul className="text-sm space-y-1">{b.offtakePrices.map(p => (
+                <li key={p.gradeCode} className="flex justify-between border-b border-slate-100 py-1">
+                  <span>{p.gradeName ?? p.gradeCode}</span><b>{formatVnd(p.unitPrice)}/kg</b>
+                </li>
+              ))}</ul>
+            )}
+            {b.offtakeDepositPct != null && <p className="text-sm text-slate-500 mt-3">Tỷ lệ cọc lô: {b.offtakeDepositPct}% · Trần cam kết: {b.offtakePreorderCapPct}%</p>}
+          </section>
           <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm min-w-0"><h2 className="font-bold mb-4 flex gap-2"><FileText size={18} /> Chi phí chuẩn</h2>
             {!cost ? <p>Chưa có bảng chi phí chuẩn.</p> : <>
               <p className="mb-3">Phiên bản {cost.versionNo} · <strong>{cost.status}</strong>{cost.lockedAt && ` · Khóa lúc ${formatDateTime(cost.lockedAt)}`}</p>
