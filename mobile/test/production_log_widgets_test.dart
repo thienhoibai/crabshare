@@ -6,6 +6,7 @@ import 'package:crabshare_mobile/core/auth/session.dart';
 import 'package:crabshare_mobile/features/operator/data/operator_repository.dart';
 import 'package:crabshare_mobile/features/operator/logs/daily_log_form_page.dart';
 import 'package:crabshare_mobile/features/operator/logs/daily_logs_page.dart';
+import 'package:crabshare_mobile/features/operator/logs/production_threshold_section.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -14,6 +15,56 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'helpers/production_fakes.dart';
+
+// Dio schedules work on timers even with an in-memory adapter. A frame-only
+// pumpAndSettle can return between the batch response and the threshold request.
+Future<void> pumpUntil(
+  WidgetTester tester,
+  bool Function() isReady, {
+  required String reason,
+}) async {
+  for (var attempt = 0; attempt < 250; attempt++) {
+    await tester.pump(const Duration(milliseconds: 20));
+    if (isReady()) {
+      await tester.pumpAndSettle();
+      return;
+    }
+  }
+  fail('Timed out waiting for $reason');
+}
+
+Future<T> pumpFuture<T>(WidgetTester tester, Future<T> future) async {
+  var completed = false;
+  late T result;
+  Object? failure;
+  StackTrace? failureStack;
+  future.then(
+    (value) {
+      result = value;
+      completed = true;
+    },
+    onError: (Object error, StackTrace stack) {
+      failure = error;
+      failureStack = stack;
+      completed = true;
+    },
+  );
+  await pumpUntil(tester, () => completed, reason: 'provider response');
+  if (failure != null) {
+    Error.throwWithStackTrace(failure!, failureStack!);
+  }
+  return result;
+}
+
+Future<void> waitForConfiguration(WidgetTester tester) => pumpUntil(tester, () {
+  final sections = find.byType(ProductionThresholdSection);
+  if (sections.evaluate().isEmpty) return false;
+  final section = tester.widget<ProductionThresholdSection>(sections);
+  final container = ProviderScope.containerOf(tester.element(sections));
+  return !container
+      .read(productionThresholdsProvider(section.batchCode))
+      .isLoading;
+}, reason: 'batch and water configuration');
 
 Future<void> openForm(
   WidgetTester tester,
@@ -33,7 +84,7 @@ Future<void> openForm(
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  await waitForConfiguration(tester);
 }
 
 Future<void> enterMeasurements(WidgetTester tester) async {
@@ -81,7 +132,12 @@ void main() {
       }
       await tester.ensureVisible(find.byKey(const ValueKey('save-thresholds')));
       await tester.tap(find.byKey(const ValueKey('save-thresholds')));
-      await tester.pumpAndSettle();
+      await pumpUntil(
+        tester,
+        () => find.textContaining('phiên bản 1').evaluate().isNotEmpty,
+        reason: 'saved threshold version',
+      );
+      await waitForConfiguration(tester);
       expect(
         server.requests
             .where((r) => r.method == 'PUT')
@@ -146,8 +202,14 @@ void main() {
     await openForm(tester, server);
     await enterMeasurements(tester);
     await tester.ensureVisible(find.byKey(const ValueKey('save-log')));
-    await tester.tap(find.byKey(const ValueKey('save-log')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('save-log')));
+    await pumpUntil(
+      tester,
+      () => find.text('Lô đã có nhật ký hôm nay.').evaluate().isNotEmpty,
+      reason: 'duplicate log response',
+    );
+    await waitForConfiguration(tester);
     expect(find.text('Lô đã có nhật ký hôm nay.'), findsOneWidget);
     expect(
       tester
@@ -167,6 +229,7 @@ void main() {
     await enterMeasurements(tester);
     await tester.enterText(find.byKey(const ValueKey('log-feedKg')), '1,2345');
     await tester.ensureVisible(find.byKey(const ValueKey('save-log')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('save-log')));
     await tester.pumpAndSettle();
     expect(server.requests.where((r) => r.method == 'POST'), isEmpty);
@@ -188,7 +251,11 @@ void main() {
     );
     server.getThresholdStatus = 503;
     container.invalidate(productionThresholdsProvider('REAL-01'));
-    await tester.pumpAndSettle();
+    await pumpUntil(
+      tester,
+      () => container.read(productionThresholdsProvider('REAL-01')).hasError,
+      reason: 'configuration refetch error',
+    );
     expect(tester.widget<TextFormField>(field).controller!.text, '6,4');
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('save-log')),
@@ -245,7 +312,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('save-thresholds')));
       await tester.pump();
       await tester.scrollUntilVisible(
-        find.byType(ChoiceChip).first,
+        find.byType(ChoiceChip),
         -250,
         scrollable: find.byType(Scrollable).first,
       );
@@ -265,7 +332,12 @@ void main() {
         isNull,
       );
       gate.complete();
-      await tester.pumpAndSettle();
+      await pumpUntil(
+        tester,
+        () => find.textContaining('phiên bản 3').evaluate().isNotEmpty,
+        reason: 'released threshold PUT',
+      );
+      await waitForConfiguration(tester);
     },
   );
 
@@ -279,7 +351,11 @@ void main() {
     server.getThresholdStatus = 503;
     await tester.ensureVisible(find.byKey(const ValueKey('save-thresholds')));
     await tester.tap(find.byKey(const ValueKey('save-thresholds')));
-    await tester.pumpAndSettle();
+    await pumpUntil(
+      tester,
+      () => find.text('Không tải được cấu hình mới.').evaluate().isNotEmpty,
+      reason: 'failed refetch after saving thresholds',
+    );
     expect(find.textContaining('phiên bản 3'), findsWidgets);
     expect(find.text('Không tải được cấu hình mới.'), findsOneWidget);
   });
@@ -296,7 +372,11 @@ void main() {
     await tester.enterText(field, '6,4');
     await tester.ensureVisible(find.byKey(const ValueKey('save-thresholds')));
     await tester.tap(find.byKey(const ValueKey('save-thresholds')));
-    await tester.pumpAndSettle();
+    await pumpUntil(
+      tester,
+      () => find.text('Cấu hình đã thay đổi.').evaluate().isNotEmpty,
+      reason: 'threshold conflict response',
+    );
     expect(find.text('Cấu hình đã thay đổi.'), findsOneWidget);
     expect(tester.widget<TextFormField>(field).controller!.text, '6,4');
     expect(
@@ -414,8 +494,8 @@ void main() {
           subscription.close();
         }
       });
-      await container.read(dailyLogsProvider.future);
-      await container.read(activeBatchesProvider.future);
+      await pumpFuture(tester, container.read(dailyLogsProvider.future));
+      await pumpFuture(tester, container.read(activeBatchesProvider.future));
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
@@ -437,18 +517,34 @@ void main() {
         ),
       );
       await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
+      await waitForConfiguration(tester);
       await enterMeasurements(tester);
       await tester.ensureVisible(find.byKey(const ValueKey('save-log')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('save-log')));
       await tester.pump();
       Navigator.of(tester.element(find.byType(DailyLogFormPage))).pop();
       await tester.pumpAndSettle();
       gate.complete();
-      await tester.pumpAndSettle();
+      await pumpUntil(
+        tester,
+        () =>
+            container.read(dailyLogsProvider).value?.length == 1 &&
+            container.read(todaySummaryProvider).value?.done == 1,
+        reason: 'refresh after closing the form',
+      );
       expect(server.requests.where((r) => r.method == 'POST'), hasLength(1));
-      expect(await container.read(dailyLogsProvider.future), hasLength(1));
-      expect((await container.read(todaySummaryProvider.future)).done, 1);
+      expect(
+        await pumpFuture(tester, container.read(dailyLogsProvider.future)),
+        hasLength(1),
+      );
+      expect(
+        (await pumpFuture(
+          tester,
+          container.read(todaySummaryProvider.future),
+        )).done,
+        1,
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -472,9 +568,9 @@ void main() {
           subscription.close();
         }
       });
-      await container.read(dailyLogsProvider.future);
-      await container.read(todaySummaryProvider.future);
-      await container.read(alertsProvider.future);
+      await pumpFuture(tester, container.read(dailyLogsProvider.future));
+      await pumpFuture(tester, container.read(todaySummaryProvider.future));
+      await pumpFuture(tester, container.read(alertsProvider.future));
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
@@ -496,15 +592,29 @@ void main() {
         ),
       );
       await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
+      await waitForConfiguration(tester);
       await enterMeasurements(tester);
       server.requests.clear();
       await tester.ensureVisible(find.byKey(const ValueKey('save-log')));
-      await tester.tap(find.byKey(const ValueKey('save-log')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('save-log')));
+      await pumpUntil(
+        tester,
+        () => find.byType(DailyLogFormPage).evaluate().isEmpty,
+        reason: 'successful submit navigation',
+      );
       expect(find.textContaining('Đã lưu nhật ký lên máy chủ'), findsOneWidget);
-      expect(await container.read(dailyLogsProvider.future), hasLength(1));
-      expect((await container.read(todaySummaryProvider.future)).done, 1);
+      expect(
+        await pumpFuture(tester, container.read(dailyLogsProvider.future)),
+        hasLength(1),
+      );
+      expect(
+        (await pumpFuture(
+          tester,
+          container.read(todaySummaryProvider.future),
+        )).done,
+        1,
+      );
       expect(server.requests.any((r) => r.path.endsWith('/alerts')), isTrue);
       expect(find.byType(DailyLogFormPage), findsNothing);
     },
