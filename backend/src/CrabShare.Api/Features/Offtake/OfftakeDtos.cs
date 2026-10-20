@@ -14,9 +14,8 @@ public sealed class CreateOfftakeCommitmentRequest
     [Range(typeof(decimal), "0.001", "100000")]
     public decimal QtyKg { get; set; }
 
-    /// <summary>Giá chốt cứng (đồng/kg), số nguyên.</summary>
-    [Range(1, long.MaxValue)]
-    public long FixedUnitPrice { get; set; }
+    /// <summary>Bỏ qua nếu gửi — giá lấy từ batch_offtake_price theo hạng (TL-30).</summary>
+    public long? FixedUnitPrice { get; set; }
 }
 
 /// <summary>Khoản thu cọc — cùng shape field với OrderPaymentResponse / Preorder để web tái dùng VietQrBox.</summary>
@@ -44,6 +43,8 @@ public sealed record OfftakeCommitmentResponse(
     DateTimeOffset CreatedAt,
     OfftakePaymentResponse? Payment);
 
+public sealed record OfftakeGradePriceResponse(string GradeCode, string GradeName, long UnitPrice);
+
 public sealed record OfftakeCapResponse(
     string BatchCode,
     decimal ExpectedOutputKg,
@@ -52,4 +53,5 @@ public sealed record OfftakeCapResponse(
     decimal OfftakeKg,
     decimal PreorderKg,
     decimal RemainingKg,
-    decimal DepositPct);
+    decimal DepositPct,
+    IReadOnlyList<OfftakeGradePriceResponse> Prices);

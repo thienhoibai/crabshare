@@ -36,6 +36,11 @@ public sealed class OfftakeService(
                         .FirstOrDefaultAsync(ct)
                     ?? throw new NotFoundException("batch.not_found", "Không tìm thấy lô.");
         var cap = await db.VBatchCommitmentCaps.AsNoTracking().SingleAsync(v => v.BatchId == batch.BatchId, ct);
+        var prices = await db.BatchOfftakePrices.AsNoTracking()
+            .Where(p => p.BatchId == batch.BatchId)
+            .OrderBy(p => p.Grade.GradeCode)
+            .Select(p => new OfftakeGradePriceResponse(p.Grade.GradeCode, p.Grade.GradeName, (long)p.UnitPrice))
+            .ToListAsync(ct);
         return new OfftakeCapResponse(
             batch.BatchCode,
             batch.ExpectedOutputKg,
@@ -44,7 +49,8 @@ public sealed class OfftakeService(
             cap.OfftakeKg,
             cap.PreorderKg,
             cap.RemainingKg ?? 0,
-            batch.OfftakeDepositPct);
+            batch.OfftakeDepositPct,
+            prices);
     }
 
     public async Task<IReadOnlyList<OfftakeCommitmentResponse>> ListMineAsync(CancellationToken ct)
@@ -99,16 +105,13 @@ public sealed class OfftakeService(
     public Task<OfftakeCommitmentResponse> CreateAsync(string code, CreateOfftakeCommitmentRequest req, CancellationToken ct)
     {
         var qty = NormalizeQty(req.QtyKg);
-        if (req.FixedUnitPrice <= 0)
-            throw new BusinessRuleException("offtake.invalid_price", "Giá chốt phải là số nguyên đồng lớn hơn 0.");
-
         return db.InTransactionAsync(async () =>
         {
             for (var attempt = 1; ; attempt++)
             {
                 try
                 {
-                    return await CreateInsideAsync(code, req.ContributionId, req.GradeCode.Trim(), qty, req.FixedUnitPrice, ct);
+                    return await CreateInsideAsync(code, req.ContributionId, req.GradeCode.Trim(), qty, ct);
                 }
                 catch (DbUpdateException ex) when (attempt < MaxAttempts && IsDuplicateReference(ex))
                 {
@@ -118,7 +121,7 @@ public sealed class OfftakeService(
     }
 
     private async Task<OfftakeCommitmentResponse> CreateInsideAsync(
-        string code, long contributionId, string gradeCode, decimal qtyKg, long unitPrice, CancellationToken ct)
+        string code, long contributionId, string gradeCode, decimal qtyKg, CancellationToken ct)
     {
         var now = AuditChain.Timestamp(clock.GetUtcNow());
         await audit.LockAsync(ct);
@@ -174,6 +177,14 @@ public sealed class OfftakeService(
 
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"SELECT batch_id FROM dbo.batch WITH (UPDLOCK, HOLDLOCK) WHERE batch_id = {batch.BatchId}", ct);
+
+        var publishedPrice = await db.BatchOfftakePrices.AsNoTracking()
+            .Where(p => p.BatchId == batch.BatchId && p.GradeId == grade.GradeId)
+            .Select(p => (long?)p.UnitPrice)
+            .FirstOrDefaultAsync(ct);
+        if (publishedPrice is not { } unitPrice)
+            throw new BusinessRuleException("offtake.grade_price_missing",
+                $"Lô {batch.BatchCode} chưa công bố giá bao tiêu cho hạng {gradeCode}.");
 
         var cap = await db.VBatchCommitmentCaps.AsNoTracking().SingleAsync(v => v.BatchId == batch.BatchId, ct);
         var remainingBefore = cap.RemainingKg ?? 0;

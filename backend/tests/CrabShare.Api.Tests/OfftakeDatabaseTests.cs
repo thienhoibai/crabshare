@@ -107,6 +107,22 @@ public class OfftakeDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtur
         };
         db.Batches.Add(batch);
         await db.SaveChangesAsync();
+
+        var grades = await db.ProductGrades.AsNoTracking()
+            .Where(g => g.GradeCode == "L1" || g.GradeCode == "L2")
+            .ToDictionaryAsync(g => g.GradeCode);
+        db.BatchOfftakePrices.AddRange(
+            new BatchOfftakePrice
+            {
+                BatchId = batch.BatchId, GradeId = grades["L1"].GradeId, UnitPrice = 260_000,
+                CreatedAt = now, UpdatedAt = now,
+            },
+            new BatchOfftakePrice
+            {
+                BatchId = batch.BatchId, GradeId = grades["L2"].GradeId, UnitPrice = 200_000,
+                CreatedAt = now, UpdatedAt = now,
+            });
+        await db.SaveChangesAsync();
         return (code, batch.BatchId);
     }
 
@@ -141,7 +157,6 @@ public class OfftakeDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtur
             contributionId,
             gradeCode = "L1",
             qtyKg = 10m,
-            fixedUnitPrice = 260_000L,
         });
 
         Assert.Equal(HttpStatusCode.Created, res.StatusCode);
@@ -194,7 +209,6 @@ public class OfftakeDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtur
             contributionId,
             gradeCode = "L1",
             qtyKg = 5m,
-            fixedUnitPrice = 260_000L,
         });
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
@@ -213,7 +227,6 @@ public class OfftakeDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtur
             contributionId,
             gradeCode = "L1",
             qtyKg = 25m, // Vượt trần 24kg
-            fixedUnitPrice = 260_000L,
         });
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
@@ -237,7 +250,6 @@ public class OfftakeDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtur
             contributionId,
             gradeCode = "L1",
             qtyKg = 5m,
-            fixedUnitPrice = 260_000L,
         });
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
 
@@ -246,7 +258,6 @@ public class OfftakeDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtur
             contributionId,
             gradeCode = "L2",
             qtyKg = 2m,
-            fixedUnitPrice = 250_000L,
         });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, second.StatusCode);
         Assert.Equal("offtake.already_exists", await ErrorCode(second));
@@ -264,11 +275,49 @@ public class OfftakeDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtur
             contributionId,
             gradeCode = "L1",
             qtyKg = 5m,
-            fixedUnitPrice = 260_000L,
         });
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
         Assert.Equal("offtake.funding_closed", await ErrorCode(res));
+    }
+
+    [Fact]
+    public async Task Create_uses_published_grade_price_not_client_price()
+    {
+        var (client, userId) = await InvestorAsync();
+        var (code, batchId) = await CreateFundingBatchAsync();
+        var contributionId = await CreateConfirmedContributionAsync(batchId, userId);
+
+        // Client gửi giá sai — server phải lấy L2 = 200_000 từ bảng công bố.
+        using var res = await client.PostAsJsonAsync($"/api/batches/{code}/offtake-commitments", new
+        {
+            contributionId,
+            gradeCode = "L2",
+            qtyKg = 10m,
+            fixedUnitPrice = 999_999L,
+        });
+        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
+        var body = (await res.Content.ReadFromJsonAsync<OfftakeCommitmentResponse>())!;
+        Assert.Equal(200_000L, body.FixedUnitPrice);
+        Assert.Equal(2_000_000L, body.CommitmentValue);
+        Assert.Equal(300_000L, body.DepositAmount); // 15% of 2_000_000
+    }
+
+    [Fact]
+    public async Task Create_grade_without_published_price_returns_422()
+    {
+        var (client, userId) = await InvestorAsync();
+        var (code, batchId) = await CreateFundingBatchAsync();
+        var contributionId = await CreateConfirmedContributionAsync(batchId, userId);
+
+        using var res = await client.PostAsJsonAsync($"/api/batches/{code}/offtake-commitments", new
+        {
+            contributionId,
+            gradeCode = "SOFT",
+            qtyKg = 5m,
+        });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
+        Assert.Equal("offtake.grade_price_missing", await ErrorCode(res));
     }
 
     [Fact]
@@ -283,7 +332,6 @@ public class OfftakeDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtur
             contributionId,
             gradeCode = "L1",
             qtyKg = 5m,
-            fixedUnitPrice = 260_000L,
         });
         Assert.Equal(HttpStatusCode.Created, res.StatusCode);
         var body = (await res.Content.ReadFromJsonAsync<OfftakeCommitmentResponse>())!;
@@ -323,7 +371,6 @@ public class OfftakeDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtur
             contributionId,
             gradeCode = "L1",
             qtyKg = 10m,
-            fixedUnitPrice = 260_000L,
         });
         Assert.Equal(HttpStatusCode.Created, res.StatusCode);
         var body = (await res.Content.ReadFromJsonAsync<OfftakeCommitmentResponse>())!;
