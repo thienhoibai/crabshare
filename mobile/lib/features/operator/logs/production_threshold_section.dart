@@ -71,8 +71,9 @@ class _ProductionThresholdSectionState
   Future<void> _save() async {
     if (_saving ||
         !widget.config.canConfigure ||
-        !(_form.currentState?.validate() ?? false))
+        !(_form.currentState?.validate() ?? false)) {
       return;
+    }
     final account = ref.read(productionAccountProvider);
     setState(() {
       _saving = true;
@@ -206,8 +207,9 @@ class _ProductionThresholdSectionState
                             final lower = parseDecimal(
                               _controllers[index - 1].text,
                             );
-                            if (lower != null && parseDecimal(text!)! < lower)
+                            if (lower != null && parseDecimal(text!)! < lower) {
                               return 'Cận trên phải lớn hơn hoặc bằng cận dưới.';
+                            }
                           }
                           return null;
                         },

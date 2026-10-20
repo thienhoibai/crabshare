@@ -46,8 +46,12 @@ class _DailyLogFormPageState extends ConsumerState<DailyLogFormPage> {
   }
 
   Future<void> _save(ProductionThresholds config) async {
-    if (_saving || _configSaving || !config.canRecord || config.current == null)
+    if (_saving ||
+        _configSaving ||
+        !config.canRecord ||
+        config.current == null) {
       return;
+    }
     if (!(_form.currentState?.validate() ?? false)) return;
     final batch = _batchCode;
     if (batch == null) return;

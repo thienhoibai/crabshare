@@ -79,8 +79,9 @@ class ProductionActions {
   Future<void> submitLog(DailyLogInput input) async {
     final account = _ref.read(productionAccountProvider);
     await _ref.read(operatorRepositoryProvider).submitLog(input);
-    if (!_ref.mounted || _ref.read(productionAccountProvider) != account)
+    if (!_ref.mounted || _ref.read(productionAccountProvider) != account) {
       return;
+    }
     _ref.invalidate(dailyLogsProvider);
     _ref.invalidate(activeBatchesProvider);
     _ref.invalidate(todaySummaryProvider);
