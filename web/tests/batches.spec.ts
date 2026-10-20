@@ -9,6 +9,12 @@ async function fillSchedule(page: Page) {
   await expect(page.getByLabel('Điều kiện đợt 1')).toHaveValue('Đủ vốn và hợp đồng hai bên đầy đủ chữ ký')
 }
 
+/** CS-72 / TL-30: gửi duyệt bắt buộc ≥ 1 giá bao tiêu theo hạng. */
+async function fillOfftakePrice(page: Page, unitPrice = '260000') {
+  await page.getByLabel('Cua Nhất (L1)').fill(unitPrice)
+  await expect(page.getByLabel('Cua Nhất (L1)')).toHaveValue(unitPrice)
+}
+
 const profile = { operatorId: 1, legalName: 'HTX VI04', taxCode: '1234567890', businessRegNo: 'VI04', farmAddress: 'Cà Mau', status: 'Approved', memberRole: 'Owner', canEdit: false, canSubmit: false, submittedAt: null }
 const batch = { batchCode: 'B-TEST', operatorId: 1, title: 'Lô thử', crabType: 'SoftShellCrab', seedQuantity: 1500, expectedOutputKg: 300, cycleDays: 45, restockCutoffDays: 10, minViableCapital: 60000000, targetCapital: 75000000, maxCapital: 90000000, minContribution: 1000000, operatorSharePct: 7, status: 'Draft', standardCost: null, canEdit: true, canSubmit: true }
 async function setup(page: Page) {
@@ -46,12 +52,14 @@ test('cost save failure keeps form and code; retry updates same batch before sub
   await page.route('**/api/batches/B-TEST/submit', async route => { sequence.push('submit'); await route.fulfill({ json: { ...batch, status: 'PendingApproval', canEdit: false, canSubmit: false } }) })
   await page.goto('/operator/create-batch')
   await page.getByLabel('Tên lô (tiêu đề gọi vốn)').fill('Lô giữ khi lỗi')
+  await fillOfftakePrice(page)
   await fillSchedule(page)
   await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('Lỗi lưu chi phí thử nghiệm')
   await expect(page.getByLabel('Tên lô (tiêu đề gọi vốn)')).toHaveValue('Lô giữ khi lỗi')
   await expect(page).toHaveURL(/code=B-TEST/)
   expect(sequence).toEqual(['create', 'cost'])
+  await fillOfftakePrice(page)
   await fillSchedule(page)
   await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click()
   await expect(page).toHaveURL(/\/operator\/batch$/)
@@ -107,6 +115,7 @@ test('back after submission shows current status and disables editing cached dra
     await route.fulfill({ json: current })
   })
   await page.goto('/operator/create-batch?code=B-TEST')
+  await fillOfftakePrice(page)
   await fillSchedule(page)
   await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click()
   await expect(page).toHaveURL(/\/operator\/batch$/)
@@ -143,6 +152,7 @@ test('real API creates, saves, reloads and submits from the browser', async ({ p
   await expect(page.getByRole('button', { name: 'Gửi duyệt', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
   await page.screenshot({ path: testInfo.outputPath('batch-mobile.png'), fullPage: true })
+  await fillOfftakePrice(page)
   await fillSchedule(page)
   await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click()
   await expect(page).toHaveURL(/\/operator\/batch$/)
