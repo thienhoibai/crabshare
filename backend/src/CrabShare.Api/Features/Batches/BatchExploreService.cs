@@ -47,7 +47,10 @@ public sealed class BatchExploreService(AppDbContext db, ICurrentUser me, TimePr
         if (query.Status != null) batches = batches.Where(b => b.Status == query.Status);
         if (query.CrabType != null) batches = batches.Where(b => b.CrabType == query.CrabType);
         var page = await Rows(batches.OrderByDescending(b => b.CreatedAt).ThenByDescending(b => b.BatchId)).ToPagedAsync(paging, ct);
-        return new PagedResult<ExploreBatchResponse>(page.Items.Select(row => Response(row, null)).ToList(), page.Page, page.PageSize, page.Total);
+        var priceMap = await LoadOfftakePricesAsync(page.Items.Select(r => r.Batch.BatchId).ToList(), ct);
+        return new PagedResult<ExploreBatchResponse>(
+            page.Items.Select(row => Response(row, null, priceMap.GetValueOrDefault(row.Batch.BatchId, []))).ToList(),
+            page.Page, page.PageSize, page.Total);
     }, ct);
 
     public Task<ExploreBatchResponse> GetAsync(string code, CancellationToken ct) => ReadAsync(async () =>
@@ -60,7 +63,8 @@ public sealed class BatchExploreService(AppDbContext db, ICurrentUser me, TimePr
         var items = cost.StandardCostItems.GroupBy(i => i.Category).OrderBy(g => g.Key)
             .Select(g => new ExploreCostCategory(g.Key, checked((long)g.Sum(i => (decimal)BatchService.Amount(i.Quantity, i.UnitPrice))))).ToList();
         var summary = new ExploreStandardCost(cost.VersionNo, cost.Status, checked((long)items.Sum(i => (decimal)i.Amount)), items, cost.LockedAt);
-        return Response(row, summary);
+        var prices = await LoadOfftakePricesAsync([row.Batch.BatchId], ct);
+        return Response(row, summary, prices.GetValueOrDefault(row.Batch.BatchId, []));
     }, ct);
 
     internal static ExploreFundingProgress Funding(VBatchFundingProgress? view, decimal target)
@@ -72,11 +76,26 @@ public sealed class BatchExploreService(AppDbContext db, ICurrentUser me, TimePr
             percent, percent.ToString("F2", CultureInfo.InvariantCulture).Replace('.', ',') + "%");
     }
 
-    private static ExploreBatchResponse Response(Row row, ExploreStandardCost? cost)
+    private static ExploreBatchResponse Response(Row row, ExploreStandardCost? cost, IReadOnlyList<ExploreOfftakePrice> offtakePrices)
     {
         var b = row.Batch;
         return new(b.BatchCode, b.Title, row.OperatorName, b.CrabType, b.Status, b.SeedQuantity, b.ExpectedOutputKg,
             b.CycleDays, b.RestockCutoffDays, checked((long)b.MinViableCapital), checked((long)b.TargetCapital), checked((long)b.MaxCapital),
-            checked((long)b.MinContribution), b.OperatorSharePct, b.FundingOpenAt, b.FundingDeadline, Funding(row.Progress, b.TargetCapital), cost);
+            checked((long)b.MinContribution), b.OperatorSharePct, b.FundingOpenAt, b.FundingDeadline, Funding(row.Progress, b.TargetCapital), cost,
+            b.OfftakePreorderCapPct, b.OfftakeDepositPct, offtakePrices);
+    }
+
+    private async Task<Dictionary<long, IReadOnlyList<ExploreOfftakePrice>>> LoadOfftakePricesAsync(
+        IReadOnlyList<long> batchIds, CancellationToken ct)
+    {
+        if (batchIds.Count == 0) return new();
+        var rows = await db.BatchOfftakePrices.AsNoTracking()
+            .Where(p => batchIds.Contains(p.BatchId))
+            .Select(p => new { p.BatchId, p.Grade.GradeCode, p.Grade.GradeName, p.UnitPrice })
+            .OrderBy(p => p.GradeCode)
+            .ToListAsync(ct);
+        return rows.GroupBy(r => r.BatchId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<ExploreOfftakePrice>)g
+                .Select(r => new ExploreOfftakePrice(r.GradeCode, r.GradeName, (long)r.UnitPrice)).ToList());
     }
 }

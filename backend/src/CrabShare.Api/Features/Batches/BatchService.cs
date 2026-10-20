@@ -57,7 +57,8 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
             Apply(batch, req);
             db.Batches.Add(batch);
             await db.SaveChangesAsync(ct);
-            var response = ToResponse(batch, null, true);
+            await SyncOfftakePricesAsync(batch, req.OfftakePrices, ct);
+            var response = ToResponse(batch, null, true, await OfftakePricesAsync(batch.BatchId, ct));
             await audit.WriteAsync("batch", batch.BatchId, "create", null, response, ct);
             return response;
         }, ct);
@@ -70,9 +71,10 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
             RequireEditable(batch);
             Validate(req);
             var cost = await CostAsync(batch.BatchId, ct);
-            var before = ToResponse(batch, cost, true);
+            var before = ToResponse(batch, cost, true, await OfftakePricesAsync(batch.BatchId, ct));
             Apply(batch, req);
-            var response = ToResponse(batch, cost, true);
+            await SyncOfftakePricesAsync(batch, req.OfftakePrices, ct);
+            var response = ToResponse(batch, cost, true, await OfftakePricesAsync(batch.BatchId, ct));
             await audit.WriteAsync("batch", batch.BatchId, "update", before, response, ct);
             return response;
         }, ct);
@@ -86,7 +88,8 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
             ValidateCosts(req.Items);
             ValidateSchedule(req.Items, req.Tranches, false);
             var cost = await CostAsync(batch.BatchId, ct);
-            var before = ToResponse(batch, cost, true);
+            var prices = await OfftakePricesAsync(batch.BatchId, ct);
+            var before = ToResponse(batch, cost, true, prices);
             if (cost?.Status is "Locked" or "Approved")
                 throw new BusinessRuleException("batch.cost_locked", "Chi phí đã được duyệt hoặc khóa, không thể sửa.");
             if (cost is null || cost.Status != "Draft")
@@ -141,7 +144,7 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
                 plan.OffsetDays = tranche.OffsetDays;
                 plan.UnlockCondition = tranche.UnlockCondition.Trim();
             }
-            var response = ToResponse(batch, cost, true);
+            var response = ToResponse(batch, cost, true, prices);
             await audit.WriteAsync("batch", batch.BatchId, "standard_cost", before, response, ct);
             return response;
         }, ct);
@@ -168,6 +171,10 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
                 OperatorSharePct = batch.OperatorSharePct
             });
             var cost = await CostAsync(batch.BatchId, ct);
+            var prices = await OfftakePricesAsync(batch.BatchId, ct);
+            if (prices.Count == 0)
+                throw new BusinessRuleException("batch.offtake_price_required",
+                    "Cần khai ít nhất một giá chốt bao tiêu theo hạng trước khi gửi duyệt (TL-30).");
             if (cost is null)
                 throw new BusinessRuleException("batch.mortality_reserve_required", "Cần lưu chi phí chuẩn có khoản dự phòng hao hụt (MortalityReserve) trước khi gửi duyệt.");
             if (cost.Status != "Draft")
@@ -182,13 +189,13 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
                 TrancheNo = i.TrancheNo
             }).ToList());
             ValidateSchedule(CostItems(cost), Plans(cost), true);
-            var before = ToResponse(batch, cost, true);
+            var before = ToResponse(batch, cost, true, prices);
             batch.Status = "PendingApproval";
             batch.UpdatedAt = clock.GetUtcNow();
             cost.Status = "Submitted";
             cost.SubmittedAt = cost.UpdatedAt = batch.UpdatedAt;
             batch.RejectionReason = null;
-            var response = ToResponse(batch, cost, true);
+            var response = ToResponse(batch, cost, true, prices);
             await audit.WriteAsync("batch", batch.BatchId, "submit", before, response, ct);
             return response;
         }, ct);
@@ -197,7 +204,8 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
     {
         var member = await MemberAsync(false, ct);
         var batch = await OwnedAsync(code, member.OperatorId, ct);
-        return ToResponse(batch, await CostAsync(batch.BatchId, ct), member.MemberRole == "Owner");
+        return ToResponse(batch, await CostAsync(batch.BatchId, ct), member.MemberRole == "Owner",
+            await OfftakePricesAsync(batch.BatchId, ct));
     }
 
     public async Task<PagedResult<BatchResponse>> ListMineAsync(BatchListQuery filter, PageQuery paging, CancellationToken ct)
@@ -206,8 +214,10 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
         var query = db.Batches.AsNoTracking().Where(b => b.OperatorId == member.OperatorId);
         if (filter.Status is not null) query = query.Where(b => b.Status == filter.Status);
         var page = await query.OrderByDescending(b => b.BatchId).ToPagedAsync(paging, ct);
+        var priceMap = await OfftakePricesByBatchAsync(page.Items.Select(b => b.BatchId).ToList(), ct);
         // List does not load line items; the editor retrieves the full standard cost by code.
-        return new(page.Items.Select(b => ToResponse(b, null, member.MemberRole == "Owner")).ToList(), page.Page, page.PageSize, page.Total);
+        return new(page.Items.Select(b => ToResponse(b, null, member.MemberRole == "Owner",
+            priceMap.GetValueOrDefault(b.BatchId, []))).ToList(), page.Page, page.PageSize, page.Total);
     }
 
     private async Task<Batch> OwnedAsync(string code, long operatorId, CancellationToken ct)
@@ -300,7 +310,8 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
         }
     }
 
-    internal static BatchResponse ToResponse(Batch b, StandardCostVersion? cost, bool owner)
+    internal static BatchResponse ToResponse(Batch b, StandardCostVersion? cost, bool owner,
+        IReadOnlyList<OfftakePriceResponse>? offtakePrices = null)
     {
         var items = cost?.StandardCostItems.OrderBy(i => i.CostItemId).Select(i => new StandardCostItemResponse(i.Category,
             i.Description, i.Quantity, i.Unit, (long)i.UnitPrice, i.TrancheNo,
@@ -310,6 +321,68 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
             b.OperatorSharePct, b.Status, cost is null ? null : new(cost.VersionNo, cost.Status, items!.Sum(i => i.Amount), items!,
                 cost.TranchePlans.OrderBy(p => p.TrancheNo).Select(p => new CostTrancheResponse(p.TrancheNo, p.PlannedDate, p.UnlockCondition,
                     items!.Where(i => Scheduled(i.Category) && i.TrancheNo == p.TrancheNo).Sum(i => i.Amount), p.AnchorCode, p.OffsetDays)).ToList(), cost.LockedAt),
-            owner && b.Status == "Draft", owner && b.Status == "Draft", b.RejectionReason);
+            owner && b.Status == "Draft", owner && b.Status == "Draft", b.RejectionReason,
+            b.OfftakePreorderCapPct, b.OfftakeDepositPct, offtakePrices ?? []);
+    }
+
+    internal async Task<IReadOnlyList<OfftakePriceResponse>> OfftakePricesAsync(long batchId, CancellationToken ct)
+    {
+        var map = await OfftakePricesByBatchAsync([batchId], ct);
+        return map.GetValueOrDefault(batchId, []);
+    }
+
+    private async Task<Dictionary<long, IReadOnlyList<OfftakePriceResponse>>> OfftakePricesByBatchAsync(
+        IReadOnlyList<long> batchIds, CancellationToken ct)
+    {
+        if (batchIds.Count == 0) return new();
+        var rows = await db.BatchOfftakePrices.AsNoTracking()
+            .Where(p => batchIds.Contains(p.BatchId))
+            .Select(p => new { p.BatchId, p.Grade.GradeCode, p.Grade.GradeName, p.UnitPrice })
+            .OrderBy(p => p.GradeCode)
+            .ToListAsync(ct);
+        return rows.GroupBy(r => r.BatchId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<OfftakePriceResponse>)g
+                .Select(r => new OfftakePriceResponse(r.GradeCode, r.GradeName, (long)r.UnitPrice)).ToList());
+    }
+
+    /// <summary>Thay toàn bộ giá bao tiêu của lô Draft. Chỉ gọi khi RequireEditable đã qua.</summary>
+    private async Task SyncOfftakePricesAsync(Batch batch, List<OfftakePriceRequest>? prices, CancellationToken ct)
+    {
+        if (batch.Status is not ("Draft"))
+            throw new BusinessRuleException("batch.offtake_price_locked",
+                "Giá bao tiêu đã khóa sau khi lô rời Draft (BR-33).");
+
+        var incoming = (prices ?? [])
+            .Where(p => !string.IsNullOrWhiteSpace(p.GradeCode) && p.UnitPrice > 0)
+            .Select(p => new { Code = p.GradeCode.Trim(), p.UnitPrice })
+            .ToList();
+        if (incoming.Select(p => p.Code).Distinct(StringComparer.OrdinalIgnoreCase).Count() != incoming.Count)
+            throw new BusinessRuleException("batch.invalid_data", "Mỗi hạng chỉ được khai một giá bao tiêu.");
+
+        var codes = incoming.Select(p => p.Code).ToList();
+        var grades = await db.ProductGrades.AsNoTracking()
+            .Where(g => codes.Contains(g.GradeCode))
+            .ToDictionaryAsync(g => g.GradeCode, StringComparer.OrdinalIgnoreCase, ct);
+        foreach (var row in incoming)
+        {
+            if (!grades.ContainsKey(row.Code))
+                throw new NotFoundException("offtake.grade_not_found", $"Không tìm thấy hạng {row.Code}.");
+        }
+
+        var existing = await db.BatchOfftakePrices.Where(p => p.BatchId == batch.BatchId).ToListAsync(ct);
+        db.BatchOfftakePrices.RemoveRange(existing);
+        var now = clock.GetUtcNow();
+        foreach (var row in incoming)
+        {
+            db.BatchOfftakePrices.Add(new BatchOfftakePrice
+            {
+                BatchId = batch.BatchId,
+                GradeId = grades[row.Code].GradeId,
+                UnitPrice = row.UnitPrice,
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+        }
+        await db.SaveChangesAsync(ct);
     }
 }

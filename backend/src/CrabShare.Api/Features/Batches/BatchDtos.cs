@@ -17,6 +17,9 @@ public sealed class BatchRequest : IValidatableObject
     [Range(typeof(long), "1", "999999999999999999")] public long MinContribution { get; set; } = 1_000_000;
     [Range(typeof(decimal), "5", "10")] public decimal OperatorSharePct { get; set; } = 7;
 
+    /// <summary>Giá chốt bao tiêu theo hạng (đồng/kg). Chỉ hạng có giá &gt; 0; trùng gradeCode = lỗi.</summary>
+    public List<OfftakePriceRequest> OfftakePrices { get; set; } = [];
+
     public IEnumerable<ValidationResult> Validate(ValidationContext context)
     {
         if (MinViableCapital > TargetCapital || TargetCapital > MaxCapital)
@@ -25,7 +28,18 @@ public sealed class BatchRequest : IValidatableObject
             yield return new("Sản lượng có tối đa 3 chữ số thập phân.", [nameof(ExpectedOutputKg)]);
         if (decimal.Round(OperatorSharePct, 2) != OperatorSharePct)
             yield return new("Thù lao có tối đa 2 chữ số thập phân.", [nameof(OperatorSharePct)]);
+        if (OfftakePrices is null)
+            yield return new("Danh sách giá bao tiêu không hợp lệ.", [nameof(OfftakePrices)]);
+        else if (OfftakePrices.Select(p => p.GradeCode?.Trim().ToUpperInvariant()).Where(c => !string.IsNullOrEmpty(c)).Distinct().Count()
+                 != OfftakePrices.Count(p => !string.IsNullOrWhiteSpace(p.GradeCode)))
+            yield return new("Mỗi hạng chỉ được khai một giá bao tiêu.", [nameof(OfftakePrices)]);
     }
+}
+
+public sealed class OfftakePriceRequest
+{
+    [Required, StringLength(20)] public string GradeCode { get; set; } = "";
+    [Range(typeof(long), "1", "999999999999999999")] public long UnitPrice { get; set; }
 }
 
 public sealed class StandardCostRequest
@@ -91,10 +105,13 @@ public sealed record StandardCostItemResponse(string Category, string Descriptio
 public sealed record CostTrancheResponse(byte TrancheNo, DateOnly? PlannedDate, string UnlockCondition, long Amount, string? AnchorCode, short? OffsetDays);
 public sealed record StandardCostResponse(short VersionNo, string Status, long Total, IReadOnlyList<StandardCostItemResponse> Items,
     IReadOnlyList<CostTrancheResponse> Tranches, DateTimeOffset? LockedAt);
+public sealed record OfftakePriceResponse(string GradeCode, string GradeName, long UnitPrice);
+
 public sealed record BatchResponse(string BatchCode, long OperatorId, string Title, string CrabType, int SeedQuantity,
     decimal ExpectedOutputKg, short CycleDays, short RestockCutoffDays, long MinViableCapital, long TargetCapital,
     long MaxCapital, long MinContribution, decimal OperatorSharePct, string Status, StandardCostResponse? StandardCost,
-    bool CanEdit, bool CanSubmit, string? RejectionReason);
+    bool CanEdit, bool CanSubmit, string? RejectionReason,
+    decimal OfftakePreorderCapPct, decimal OfftakeDepositPct, IReadOnlyList<OfftakePriceResponse> OfftakePrices);
 
 public sealed record BatchOperatorResponse(long OperatorId, string LegalName, string FarmAddress, string Status);
 public sealed record DisbursementResponse(byte TrancheNo, long PlannedAmount, DateOnly? PlannedDate, string UnlockCondition, string Status, string? AnchorCode, short? OffsetDays);
