@@ -37,5 +37,13 @@ public partial class AppDbContext
         modelBuilder.Entity<Entities.Batch>().Ignore(b => b.StandardCostVersion);
         costs.HasOne(c => c.Batch).WithMany().HasForeignKey(c => c.BatchId)
             .HasConstraintName("fk_standard_cost_version_batch_id");
+
+        // ux_slot_active is unique only for open allocations; released allocations remain history.
+        var allocations = modelBuilder.Entity<Entities.SlotAllocation>();
+        var slotRelation = allocations.Metadata.FindNavigation(nameof(Entities.SlotAllocation.Slot))!.ForeignKey;
+        allocations.Metadata.RemoveForeignKey(slotRelation);
+        modelBuilder.Entity<Entities.PhysicalSlot>().Ignore(s => s.SlotAllocation);
+        allocations.HasOne(a => a.Slot).WithMany().HasForeignKey(a => a.SlotId)
+            .OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("fk_slot_allocation_slot_id");
     }
 }

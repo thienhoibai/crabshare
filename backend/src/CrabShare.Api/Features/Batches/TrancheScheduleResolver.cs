@@ -28,7 +28,7 @@ public sealed class TrancheScheduleResolver(AppDbContext db, IAuditLog audit, Ti
         var changed = 0;
         foreach (var t in pending)
         {
-            var ready = FundingReadyAt(t.Batch);
+            var ready = FundingReadiness.ReadyAt(t.Batch);
             if (ready is null || ready > now) continue;
             DateTimeOffset? anchor = t.AnchorCode switch
             {
@@ -49,15 +49,6 @@ public sealed class TrancheScheduleResolver(AppDbContext db, IAuditLog audit, Ti
     }, ct, IsolationLevel.Serializable);
     }
 
-    private static DateTimeOffset? FundingReadyAt(Batch batch)
-    {
-        if (batch.CapitalClosedAt is not { } closed || batch.TotalConfirmedCapital is not { } total || total < batch.MinViableCapital) return null;
-        var confirmed = batch.Contributions.Where(c => c.Status == "Confirmed").ToList();
-        if (confirmed.Count == 0 || confirmed.Sum(c => c.Amount) != total ||
-            confirmed.Any(c => c.InvestmentContract is not { Status: "FullySigned", FullySignedAt: not null })) return null;
-        var lastSigned = confirmed.Max(c => c.InvestmentContract!.FullySignedAt!.Value);
-        return lastSigned > closed ? lastSigned : closed;
-    }
 }
 
 public sealed class TrancheScheduleOptions { public int IntervalSeconds { get; set; } = 60; }

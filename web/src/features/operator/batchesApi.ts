@@ -13,6 +13,7 @@ export type CostItem = { category: keyof typeof costCategories; description: str
 export type CostTranche = { trancheNo: number; plannedDate?: string | null; anchorCode?: 'FundingReady' | 'Stocked' | null; offsetDays?: number | null; unlockCondition: string }
 export type Batch = BatchRequest & {
   batchCode: string; operatorId: number; status: keyof typeof batchStatuses; canEdit: boolean; canSubmit: boolean; rejectionReason?: string | null;
+  canStock?: boolean; stockingBlockedReason?: string | null; stockedAt?: string | null;
   offtakePreorderCapPct?: number; offtakeDepositPct?: number
   standardCost: { versionNo: number; status: string; total: number; items: (CostItem & { amount: number })[]; tranches?: (CostTranche & { amount: number })[]; lockedAt?: string | null } | null
 }
@@ -32,3 +33,7 @@ export const saveBatch = async (code: string | null, request: BatchRequest) =>
   (code ? await http.put<Batch>(path(code), request) : await http.post<Batch>('/api/batches', request)).data
 export const saveStandardCost = async (code: string, items: CostItem[], tranches: CostTranche[] = []) => (await http.put<Batch>(`${path(code)}/standard-cost`, { items, tranches })).data
 export const submitBatch = async (code: string) => (await http.post<Batch>(`${path(code)}/submit`)).data
+export type StockingRange = { from: number; to: number; width: number }
+export type StockingResult = { batchCode: string; createdCrabs: number; status: keyof typeof batchStatuses }
+export const stockBatch = async (code: string, range: StockingRange) =>
+  (await http.post<StockingResult>(`${path(code)}/stocking`, { range })).data

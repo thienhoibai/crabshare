@@ -111,7 +111,12 @@ public sealed record BatchResponse(string BatchCode, long OperatorId, string Tit
     decimal ExpectedOutputKg, short CycleDays, short RestockCutoffDays, long MinViableCapital, long TargetCapital,
     long MaxCapital, long MinContribution, decimal OperatorSharePct, string Status, StandardCostResponse? StandardCost,
     bool CanEdit, bool CanSubmit, string? RejectionReason,
-    decimal OfftakePreorderCapPct, decimal OfftakeDepositPct, IReadOnlyList<OfftakePriceResponse> OfftakePrices);
+    decimal OfftakePreorderCapPct, decimal OfftakeDepositPct, IReadOnlyList<OfftakePriceResponse> OfftakePrices)
+{
+    public bool CanStock { get; init; }
+    public string? StockingBlockedReason { get; init; }
+    public DateTimeOffset? StockedAt { get; init; }
+}
 
 public sealed record BatchOperatorResponse(long OperatorId, string LegalName, string FarmAddress, string Status);
 public sealed record DisbursementResponse(byte TrancheNo, long PlannedAmount, DateOnly? PlannedDate, string UnlockCondition, string Status, string? AnchorCode, short? OffsetDays);

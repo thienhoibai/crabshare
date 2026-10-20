@@ -30,7 +30,7 @@ export default function OperatorBatchStatus() {
       {query.isPending ? <p role="status">Đang tải danh sách lô…</p> : query.isError ?
         <div><div role="alert"><OpNote tone="danger">{errorMessage(query.error)}</OpNote></div><OpBtn disabled={query.isFetching} onClick={() => void query.refetch()}>Thử lại</OpBtn></div> : <>
           <div className="op-panel op-list w-full">
-            {query.data.items.map(batch => <OpRow key={batch.batchCode} href={`/operator/create-batch?code=${encodeURIComponent(batch.batchCode)}`}
+            {query.data.items.map(batch => <OpRow key={batch.batchCode} href={`/operator/batch/detail?code=${encodeURIComponent(batch.batchCode)}`}
               media={crabImg(batch.crabType)} title={batch.title} sub={`${batch.batchCode} · ${crabTypes[batch.crabType]} · ${batch.seedQuantity.toLocaleString('vi-VN')} con giống`}
               mid={<small>Chu kỳ {batch.cycleDays} ngày · Thù lao {batch.operatorSharePct}%</small>}
               end={<><OpBadge tone={tones[batch.status] ?? 'info'}>{batchStatuses[batch.status] ?? batch.status}</OpBadge><small>Vốn {formatVnd(batch.targetCapital)}</small></>} />)}
