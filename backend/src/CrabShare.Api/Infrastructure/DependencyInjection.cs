@@ -49,7 +49,13 @@ public static class DependencyInjection
         services.AddSingleton<IDigitalSigningService, FakeSigningService>();
         services.AddSingleton<IEkycProvider, FakeEkycProvider>();
         services.AddSingleton<IBankNameMatcher, FakeBankNameMatcher>();
-        services.AddSingleton<ICrabDetector, NoopCrabDetector>();
+        services.AddOptions<CrabDetectorOptions>().Bind(config.GetSection(CrabDetectorOptions.Section))
+            .Validate(o => o.InputSize is >= 32 and <= 1280
+                && o.ConfidenceThreshold is >= 0 and <= 1
+                && !string.IsNullOrWhiteSpace(o.ModelVersion)
+                && o.ModelVersion.Length <= 50, "Invalid CrabDetector configuration")
+            .ValidateOnStart();
+        services.AddSingleton<ICrabDetector, OnnxCrabDetector>();
 
         return services;
     }

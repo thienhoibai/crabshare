@@ -1,0 +1,12 @@
+# Bộ dữ liệu nhận diện cua trong ảnh hộp nuôi (TSK-13).
+# Thư mục do scripts/prepare_dataset.py sinh ra; ảnh không commit (xem .gitignore).
+# `path` tương đối với file yaml này: datasets/crab = ml/datasets/crab,
+# đúng thư mục script ghi ra khi chạy từ gốc repo.
+# Trên Colab: đổi `path` thành thư mục trên Drive, ví dụ /content/drive/MyDrive/CrabShare/datasets/crab
+path: datasets/crab
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: crab

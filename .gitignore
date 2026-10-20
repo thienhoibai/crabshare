@@ -28,8 +28,10 @@ mobile/.dart_tool/
 # ===== ML (ảnh và mô hình để trên Drive / GitHub Releases) =====
 ml/datasets/
 ml/runs/
+ml/notes/capture_log.csv
 *.pt
 *.onnx
+!backend/src/CrabShare.Api/models/.gitkeep
 
 # ===== IDE / hệ điều hành =====
 .idea/
