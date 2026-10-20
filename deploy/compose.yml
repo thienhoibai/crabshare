@@ -14,6 +14,10 @@ services:
       Payments__WebhookSecret: ${CRABSHARE_WEBHOOK_SECRET:?Provide a private webhook secret}
       Cors__Origins__0: https://${CRABSHARE_WEB_HOST:?Provide the web hostname}
       Security__KnownProxies__0: 10.77.0.2
+      Storage__Provider: ${CRABSHARE_STORAGE_PROVIDER:-Local}
+      Cloudinary__CloudName: ${CRABSHARE_CLOUDINARY_CLOUD_NAME:-}
+      Cloudinary__ApiKey: ${CRABSHARE_CLOUDINARY_API_KEY:-}
+      Cloudinary__ApiSecret: ${CRABSHARE_CLOUDINARY_API_SECRET:-}
     volumes:
       - uploads:/var/lib/crabshare/storage
       - private-keys:/var/lib/crabshare/keys

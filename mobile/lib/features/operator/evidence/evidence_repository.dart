@@ -105,6 +105,7 @@ abstract interface class EvidenceRepository {
     required BoxSlot box,
     required EvidencePhoto photo,
     int? captureRequestId,
+    String? slotEventType,
   });
 }
 
@@ -150,6 +151,7 @@ class ApiEvidenceRepository implements EvidenceRepository {
     required BoxSlot box,
     required EvidencePhoto photo,
     int? captureRequestId,
+    String? slotEventType,
   }) async {
     final type = photo.contentType;
     final form = FormData.fromMap({
@@ -160,6 +162,7 @@ class ApiEvidenceRepository implements EvidenceRepository {
       'longitude': photo.longitude.toStringAsFixed(6),
       if (captureRequestId != null)
         'captureRequestId': captureRequestId.toString(),
+      'slotEventType': ?slotEventType,
       'image': MultipartFile.fromBytes(
         photo.bytes,
         filename:

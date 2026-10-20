@@ -10,6 +10,7 @@ import { OpBack, OpBadge, OpBtn, OpFacts, OpHeading, OpNote, OpPanel } from './o
 import { batchStatuses, crabTypes, getBatch, type StockingResult } from './batchesApi'
 import { useOperatorApplication } from './operatorsApi'
 import StockingDialog from './StockingDialog'
+import SlotEventsSection from './SlotEventsSection'
 
 export default function OperatorBatchDetail() {
   const [params] = useSearchParams()
@@ -62,6 +63,7 @@ export default function OperatorBatchDetail() {
                 <OpBtn variant="ghost" onClick={() => navigate('/operator/boxes')}>Xem hộp nuôi</OpBtn>
               </div>
             </OpPanel>
+            <SlotEventsSection key={batch.batchCode} code={batch.batchCode} canConfigure={profile.data?.memberRole === 'Owner' && profile.data.status === 'Approved'} />
             {stocking && <StockingDialog key={batch.batchCode} batch={batch} onClose={() => setStocking(false)} onStocked={stocked} />}
           </div>}
   </OperatorLayout>

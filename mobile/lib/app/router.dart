@@ -24,6 +24,7 @@ import '../features/operator/logs/daily_logs_page.dart';
 import '../features/operator/packing/pack_order_page.dart';
 import '../features/operator/packing/pack_orders_page.dart';
 import '../features/operator/today/operator_today_page.dart';
+import '../features/operator/slot_events/slot_events_page.dart';
 import '../features/trace/scan_page.dart';
 import '../features/trace/trace_result_page.dart';
 import '../shared/widgets/nav_shell.dart';
@@ -244,6 +245,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/o/harvest/:batchCode',
         builder: (context, state) =>
             HarvestPage(batchCode: state.pathParameters['batchCode']!),
+      ),
+      GoRoute(
+        path: '/o/slot-events/:batchCode',
+        builder: (context, state) =>
+            SlotEventsPage(batchCode: state.pathParameters['batchCode']!),
       ),
       GoRoute(
         path: Routes.operatorPack,

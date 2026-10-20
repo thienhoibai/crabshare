@@ -13,8 +13,10 @@ public sealed class UploadEvidenceRequest
 {
     [Required, StringLength(30), RegularExpression(@"[\s\S]*\S[\s\S]*")]
     public string BatchCode { get; set; } = "";
-    [Required, StringLength(20), RegularExpression(@"[\s\S]*\S[\s\S]*")]
+    [Required, StringLength(30), RegularExpression(@"[\s\S]*\S[\s\S]*")]
     public string SlotCode { get; set; } = "";
+    // Allows camera evidence before claiming the vacant box for a replacement crab.
+    [RegularExpression("^Restocked$")] public string? SlotEventType { get; set; }
     [Required] public DateTimeOffset? CapturedAt { get; set; }
     [Required, Range(typeof(decimal), "-90", "90")] public decimal? Latitude { get; set; }
     [Required, Range(typeof(decimal), "-180", "180")] public decimal? Longitude { get; set; }

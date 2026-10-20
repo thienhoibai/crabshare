@@ -267,6 +267,12 @@ class _BatchCard extends StatelessWidget {
               label: const Text('Thu hoạch: cân & in tem'),
             ),
           ],
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => context.push(Routes.slotEvents(b.code)),
+            icon: const Icon(Icons.event_note_outlined),
+            label: const Text('Sự kiện hộp'),
+          ),
         ],
       ),
     );
