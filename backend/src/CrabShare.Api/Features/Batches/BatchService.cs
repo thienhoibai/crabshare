@@ -204,8 +204,15 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
     {
         var member = await MemberAsync(false, ct);
         var batch = await OwnedAsync(code, member.OperatorId, ct);
+        await db.Entry(batch).Collection(b => b.Contributions).Query().Include(c => c.InvestmentContract).LoadAsync(ct);
+        var hasRegistry = await db.CrabItems.AnyAsync(c => c.BatchId == batch.BatchId, ct) ||
+            await db.SlotAllocations.AnyAsync(a => a.BatchId == batch.BatchId, ct) ||
+            await db.SlotEvents.AnyAsync(e => e.BatchId == batch.BatchId && e.EventType == "Stocked", ct);
+        var reason = member.MemberRole != "Owner" ? "Chỉ chủ hộ nuôi được ghi nhận thả giống." :
+            !await db.Operators.AnyAsync(o => o.OperatorId == member.OperatorId && o.Status == "Approved", ct) ? "Hộ nuôi cần được duyệt để thả giống." :
+            FundingReadiness.StockingBlockedReason(batch, clock.GetUtcNow(), hasRegistry);
         return ToResponse(batch, await CostAsync(batch.BatchId, ct), member.MemberRole == "Owner",
-            await OfftakePricesAsync(batch.BatchId, ct));
+            await OfftakePricesAsync(batch.BatchId, ct)) with { CanStock = reason is null, StockingBlockedReason = reason, StockedAt = batch.StockedAt };
     }
 
     public async Task<PagedResult<BatchResponse>> ListMineAsync(BatchListQuery filter, PageQuery paging, CancellationToken ct)

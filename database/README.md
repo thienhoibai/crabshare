@@ -58,7 +58,7 @@ rồi chạy API (F5). Mốc thời gian tính lùi từ lúc seed nên dữ li�
 - Mỗi khoản góp Confirmed có hợp đồng FullySigned (người nuôi ký trước, nhà đầu tư ký sau), `payment_request` Paid và `provider_transaction` đã khớp. Mỗi đơn Completed có `payment_request` Paid với mã đối chiếu = `order_no`.
 - `DemoSeedDatabaseTests` kiểm tra các con số trên (chạy cùng `dotnet test`).
 - Mã lô trùng dữ liệu mẫu (mock) của app mobile (`CS-2610-01` đang nuôi, `CS-2610-02/03` gọi vốn, `CS-2609-04` thu hoạch) để khi đổi màn sang API thật không lệch mã.
-- Mỗi lô dùng một dải hộp riêng vì EF đang map `physical_slot ↔ slot_allocation` thành quan hệ một-một (do index UNIQUE có điều kiện `ux_slot_active`), nên chưa dùng lại hộp đã trả trong cùng một DbContext được.
+- Mỗi lô demo dùng một dải hộp riêng. VI-07 đã sửa mapping EF `physical_slot ↔ slot_allocation` trong AppDbContext.Custom thành quan hệ một-nhiều để giữ lịch sử và tái sử dụng hộp đã trả; index `ux_slot_active` vẫn chỉ cho một allocation đang mở trên mỗi hộp.
 - Cần thêm dữ liệu mẫu cho tính năng của mình: bổ sung vào `DemoLifecycleSeeder` (PR riêng).
 
 Để thử camera/GPS của CS-44 trên CSDL dev đã có tài khoản demo:

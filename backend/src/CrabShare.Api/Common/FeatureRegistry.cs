@@ -9,7 +9,7 @@ using CrabShare.Api.Features.Payments;
 using CrabShare.Api.Features.Operators;
 using CrabShare.Api.Features.Boxes;
 using CrabShare.Api.Features.Batches;
-// using CrabShare.Api.Features.Production;
+using CrabShare.Api.Features.Production;
 // using CrabShare.Api.Features.Harvest;
 
 // Nhân
@@ -65,7 +65,7 @@ public static class FeatureRegistry
             .Validate(o=>o.IntervalSeconds>0,"Schedule refresh interval must be positive.").ValidateOnStart();
         services.AddHostedService<TrancheScheduleJob>();
         services.AddScoped<FeeTierService>();         // Configurable fixed fees used by UC08
-        // services.AddScoped<ProductionService>();   // Features/Production
+        services.AddScoped<StockingService>();       // Features/Production — VI-07
         // services.AddScoped<HarvestService>();      // Features/Harvest
 
         // Nhân

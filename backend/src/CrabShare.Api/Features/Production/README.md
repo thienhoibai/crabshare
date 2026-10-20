@@ -17,7 +17,7 @@ Hệ thống **không** điều khiển nước hay thiết bị. Người nuôi
 |---|---|---|---|
 | POST | `/api/batches/{code}/production-logs` | OperatorMember | Nhật ký ngày (`Manual`); kiểm tra hợp lý → gắn cờ; ngoài ngưỡng thì gọi `AlertService` tạo cảnh báo `WaterQuality` |
 | GET | `/api/batches/{code}/production-logs?from=&to=` | OperatorMember, Investor của lô, Admin | |
-| POST | `/api/batches/{code}/stocking` | Operator Owner | Thả giống vào danh sách hộp → `slot_allocation` + `crab_item (Growing)` + `slot_event Stocked`; lô → `Stocked` / `InProduction` |
+| POST | `/api/batches/{code}/stocking` | Operator Owner | **Đã làm VI-07.** Chọn slotCodes hoặc range; tạo allocation/cua/event, ghi audit Funding → Stocked → InProduction trong một transaction. Chi tiết: [vi07-stocking.md](../../../../../docs/validation/vi07-stocking.md). |
 | POST | `/api/batches/{code}/slot-events` | OperatorMember | `{ slotCode, eventType, occurredAt, quantity, note }` · `Mortality` → cua `Dead` (+ cảnh báo hao hụt) · `Restocked` → cua mới thay thế (trước `restock_cutoff_days`) |
 | POST | `/api/ingest/v1/production-logs` | Phần mềm của trại | Header `X-Api-Key` của hộ nuôi · `source = FarmApi` |
 | POST | `/api/ingest/v1/slot-events` | Phần mềm của trại | như trên |
