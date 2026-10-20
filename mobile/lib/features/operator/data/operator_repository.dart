@@ -2,7 +2,11 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api/api_client.dart';
+import '../../../core/auth/session.dart';
 import '../../../shared/models/batch_enums.dart';
+import 'api_operator_repository.dart';
+import 'alert_repository.dart' show alertsProvider;
 import 'operator_models.dart';
 export 'alert_repository.dart' show alertsProvider;
 export '../evidence/capture_requests_repository.dart'
@@ -11,13 +15,17 @@ export 'operator_orders_repository.dart'
     show operatorOrdersProvider, operatorOrdersRepositoryProvider;
 
 /// Hợp đồng dữ liệu của tính năng Hộ nuôi.
-/// Hiện dùng [MockOperatorRepository]; khi backend có endpoint thì viết ApiOperatorRepository
-/// (dùng dioProvider) và đổi một dòng ở operatorRepositoryProvider.
+/// Daily production data is persisted by [ApiOperatorRepository].
 abstract interface class OperatorRepository {
   Future<List<OperatorBatch>> activeBatches();
   Future<TodaySummary> todaySummary();
-  Future<List<DailyLog>> logs();
+  Future<List<DailyLog>> logs({DateTime? from, DateTime? to});
   Future<void> submitLog(DailyLogInput input);
+  Future<ProductionThresholds> thresholds(String batchCode);
+  Future<ProductionThresholdVersion> saveThresholds(
+    String batchCode,
+    ProductionThresholdInput input,
+  );
   Future<List<AlertItem>> alerts();
   Future<void> acknowledgeAlert(int alertId, String note);
   Future<List<BoxSlot>> boxes();
@@ -30,21 +38,73 @@ abstract interface class OperatorRepository {
 }
 
 final operatorRepositoryProvider = Provider<OperatorRepository>(
-  (ref) => MockOperatorRepository(),
+  (ref) => ApiOperatorRepository(ref.watch(dioProvider)),
 );
 
-final activeBatchesProvider = FutureProvider(
-  (ref) => ref.watch(operatorRepositoryProvider).activeBatches(),
-);
-final todaySummaryProvider = FutureProvider(
-  (ref) => ref.watch(operatorRepositoryProvider).todaySummary(),
-);
-final dailyLogsProvider = FutureProvider(
-  (ref) => ref.watch(operatorRepositoryProvider).logs(),
-);
+final productionAccountProvider = Provider((ref) {
+  final session = ref.watch(sessionProvider);
+  return (session.user?.userId, session.user?.operatorId, session.token);
+});
+
+final activeBatchesProvider = FutureProvider<List<OperatorBatch>>((ref) {
+  ref.watch(productionAccountProvider);
+  return ref.watch(operatorRepositoryProvider).activeBatches();
+});
+final todaySummaryProvider = FutureProvider<TodaySummary>((ref) async {
+  ref.watch(productionAccountProvider);
+  return TodaySummary.fromBatches(
+    await ref.watch(activeBatchesProvider.future),
+  );
+});
+final dailyLogsProvider = FutureProvider<List<DailyLog>>((ref) {
+  ref.watch(productionAccountProvider);
+  return ref.watch(operatorRepositoryProvider).logs();
+});
+final productionThresholdsProvider = FutureProvider.autoDispose
+    .family<ProductionThresholds, String>((ref, code) {
+      ref.watch(productionAccountProvider);
+      return ref.watch(operatorRepositoryProvider).thresholds(code);
+    });
 final boxesProvider = FutureProvider(
   (ref) => ref.watch(operatorRepositoryProvider).boxes(),
 );
+
+/// Mutation refresh belongs to the session, so closing a form cannot skip it.
+final productionActionsProvider = Provider(ProductionActions.new);
+
+class ProductionActions {
+  ProductionActions(this._ref);
+  final Ref _ref;
+
+  Future<void> submitLog(DailyLogInput input) async {
+    final account = _ref.read(productionAccountProvider);
+    await _ref.read(operatorRepositoryProvider).submitLog(input);
+    if (!_ref.mounted || _ref.read(productionAccountProvider) != account) {
+      return;
+    }
+    _ref.invalidate(dailyLogsProvider);
+    _ref.invalidate(activeBatchesProvider);
+    _ref.invalidate(todaySummaryProvider);
+    _ref.invalidate(alertsProvider);
+    _ref.invalidate(productionThresholdsProvider(input.batchCode));
+  }
+
+  Future<ProductionThresholdVersion> saveThresholds(
+    String code,
+    ProductionThresholdInput input,
+  ) async {
+    final account = _ref.read(productionAccountProvider);
+    final version = await _ref
+        .read(operatorRepositoryProvider)
+        .saveThresholds(code, input);
+    if (_ref.mounted && _ref.read(productionAccountProvider) == account) {
+      _ref.invalidate(productionThresholdsProvider(code));
+      _ref.invalidate(activeBatchesProvider);
+      _ref.invalidate(todaySummaryProvider);
+    }
+    return version;
+  }
+}
 
 /// Dữ liệu mẫu để dựng giao diện (số liệu ví dụ, không lấy từ backend).
 class MockOperatorRepository implements OperatorRepository {
@@ -104,7 +164,7 @@ class MockOperatorRepository implements OperatorRepository {
       _delay(const TodaySummary(done: 3, total: 5));
 
   @override
-  Future<List<DailyLog>> logs() => _delay([
+  Future<List<DailyLog>> logs({DateTime? from, DateTime? to}) => _delay([
     for (var d = 0; d < 6; d++) ...[
       DailyLog(
         batchCode: 'CS-2610-01',
@@ -132,6 +192,19 @@ class MockOperatorRepository implements OperatorRepository {
 
   @override
   Future<void> submitLog(DailyLogInput input) => _delay(null);
+
+  @override
+  Future<ProductionThresholds> thresholds(String batchCode) => Future.error(
+    UnsupportedError('Sample data has no threshold configuration.'),
+  );
+
+  @override
+  Future<ProductionThresholdVersion> saveThresholds(
+    String batchCode,
+    ProductionThresholdInput input,
+  ) => Future.error(
+    UnsupportedError('Sample data cannot configure thresholds.'),
+  );
 
   @override
   Future<List<AlertItem>> alerts() => _delay([

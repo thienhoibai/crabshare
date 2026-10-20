@@ -15,6 +15,7 @@ import '../../../shared/widgets/segmented_gauge.dart';
 import '../data/operator_models.dart';
 import '../data/operator_repository.dart';
 import '../evidence/capture_requests_section.dart';
+import '../logs/log_thresholds.dart';
 
 /// Tab "Hôm nay" của hộ nuôi — bố cục theo dashboard của mẫu:
 /// đồng hồ việc trong ngày, thanh "+" ghi nhật ký, yêu cầu chụp, thẻ từng lô.
@@ -22,17 +23,20 @@ class OperatorTodayPage extends ConsumerWidget {
   const OperatorTodayPage({super.key});
 
   Future<void> _refresh(WidgetRef ref) async {
+    ref.invalidate(activeBatchesProvider);
     await Future.wait([
-      ref.refresh(todaySummaryProvider.future),
+      ref.read(activeBatchesProvider.future),
       ref.refresh(captureRequestsProvider.future),
-      ref.refresh(activeBatchesProvider.future),
     ]);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(sessionProvider).user;
-    final summary = ref.watch(todaySummaryProvider).value;
+    final summaryState = ref.watch(todaySummaryProvider);
+    final summary = summaryState.isLoading || summaryState.hasError
+        ? null
+        : summaryState.value;
     final batches = ref.watch(activeBatchesProvider);
     final text = Theme.of(context).textTheme;
 
@@ -47,12 +51,14 @@ class OperatorTodayPage extends ConsumerWidget {
             children: [
               GreetingHeader(
                 name: user?.fullName ?? '',
-                subtitle: formatWeekday(DateTime.now()),
+                subtitle: summary?.businessDate == null
+                    ? ''
+                    : formatWeekday(summary!.businessDate!),
                 onBell: () => context.go(Routes.operatorAlerts),
               ),
               const SizedBox(height: 18),
               const Text(
-                'Tiến độ minh hoạ',
+                'Tiến độ nhật ký hôm nay',
                 style: TextStyle(color: AppColors.inkMuted),
               ),
               AppCard(
@@ -77,12 +83,12 @@ class OperatorTodayPage extends ConsumerWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '/ ${summary?.total ?? '—'} việc',
+                                '/ ${summary?.total ?? '—'} lô',
                                 style: text.titleMedium,
                               ),
                             ],
                           ),
-                          Text('Việc cần làm hôm nay', style: text.bodySmall),
+                          Text('Nhật ký đã ghi hôm nay', style: text.bodySmall),
                         ],
                       ),
                     ),
@@ -90,14 +96,21 @@ class OperatorTodayPage extends ConsumerWidget {
                     Text(
                       summary == null
                           ? ''
+                          : summary.total == 0
+                          ? 'Chưa có lô cần ghi nhật ký hôm nay.'
                           : summary.done >= summary.total
-                          ? 'Xong hết việc hôm nay 🎉'
-                          : 'Còn ${summary.total - summary.done} việc: nhật ký, yêu cầu chụp, cảnh báo',
+                          ? 'Đã ghi đủ nhật ký hôm nay.'
+                          : 'Còn ${summary.total - summary.done} lô chưa ghi nhật ký hôm nay.',
                       style: text.bodySmall,
                     ),
                   ],
                 ),
               ),
+              if (summaryState.hasError)
+                ErrorView(
+                  message: apiErrorMessage(summaryState.error!),
+                  onRetry: () => ref.invalidate(activeBatchesProvider),
+                ),
               const SizedBox(height: 14),
               AddBar(
                 label: 'Ghi nhật ký hôm nay',
@@ -110,7 +123,6 @@ class OperatorTodayPage extends ConsumerWidget {
               ),
               const CaptureRequestsSection(),
               const SectionHeader(title: 'Lô đang nuôi'),
-              const DemoNotice(),
               ...batches.when(
                 loading: () => [const LoadingSkeleton(rows: 2)],
                 error: (e, _) => [
@@ -120,6 +132,11 @@ class OperatorTodayPage extends ConsumerWidget {
                   ),
                 ],
                 data: (list) => [
+                  if (list.isEmpty)
+                    const EmptyState(
+                      icon: Icons.water_outlined,
+                      title: 'Chưa có lô đang nuôi',
+                    ),
                   for (final b in list) ...[
                     _BatchCard(batch: b),
                     const SizedBox(height: 12),
@@ -139,9 +156,6 @@ class _BatchCard extends StatelessWidget {
   const _BatchCard({required this.batch});
 
   final OperatorBatch batch;
-
-  String _num(double? v, {int digits = 1}) =>
-      v == null ? '—' : v.toStringAsFixed(digits).replaceAll('.', ',');
 
   @override
   Widget build(BuildContext context) {
@@ -174,12 +188,13 @@ class _BatchCard extends StatelessWidget {
                   ],
                 ),
               ),
-              CircleIconButton(
-                icon: Icons.edit_outlined,
-                size: 40,
-                background: AppColors.background,
-                onTap: () => context.push(Routes.dailyLogFor(b.code)),
-              ),
+              if (b.allowsDailyLog)
+                CircleIconButton(
+                  icon: Icons.edit_outlined,
+                  size: 40,
+                  background: AppColors.background,
+                  onTap: () => context.push(Routes.dailyLogFor(b.code)),
+                ),
             ],
           ),
           const SizedBox(height: 14),
@@ -217,17 +232,25 @@ class _BatchCard extends StatelessWidget {
           const SizedBox(height: 10),
           MetricRow(
             metrics: [
-              Metric('pH', _num(log?.ph)),
-              Metric('°C', _num(log?.waterTempC), color: AppColors.danger),
+              Metric('pH', formatLogNumber(log?.ph)),
               Metric(
-                '‰',
-                _num(log?.salinityPpt, digits: 0),
+                '°C',
+                formatLogNumber(log?.waterTempC),
+                color: AppColors.danger,
+              ),
+              Metric(
+                'ppt',
+                formatLogNumber(log?.salinityPpt),
                 color: const Color(0xFF4C8DD6),
               ),
-              Metric('kg ăn', _num(log?.feedKg), color: AppColors.success),
+              Metric(
+                'kg ăn',
+                formatLogNumber(log?.feedKg, digits: 3),
+                color: AppColors.success,
+              ),
             ],
           ),
-          if (!b.loggedToday) ...[
+          if (b.allowsDailyLog && !b.loggedToday) ...[
             const SizedBox(height: 10),
             const InfoChip(
               icon: Icons.error_outline_rounded,

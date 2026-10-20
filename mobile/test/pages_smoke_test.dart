@@ -34,6 +34,8 @@ import 'package:crabshare_mobile/features/operator/alerts/alerts_page.dart';
 import 'package:crabshare_mobile/features/operator/data/alert_repository.dart';
 import 'package:crabshare_mobile/features/operator/data/operator_orders_repository.dart';
 import 'package:crabshare_mobile/features/operator/data/operator_repository.dart';
+import 'package:crabshare_mobile/features/operator/data/api_operator_repository.dart';
+import 'helpers/production_fakes.dart';
 import 'package:crabshare_mobile/features/operator/data/operator_models.dart';
 import 'package:crabshare_mobile/features/operator/evidence/capture_page.dart';
 import 'package:crabshare_mobile/features/operator/evidence/evidence_repository.dart';
@@ -107,6 +109,9 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
+              operatorRepositoryProvider.overrideWithValue(
+                ApiOperatorRepository(ProductionServer().dio()),
+              ),
               portfolioRepositoryProvider.overrideWithValue(
                 ApiPortfolioRepository(
                   discoveryDio(
@@ -166,8 +171,9 @@ void main() {
             child: MaterialApp(
               theme: buildAppTheme(),
               builder: (context, child) => MediaQuery(
-                data: MediaQuery.of(context)
-                    .copyWith(textScaler: TextScaler.linear(scale)),
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.linear(scale)),
                 child: child!,
               ),
               home: page,
@@ -211,10 +217,12 @@ class _SmokeExplanationRepository implements EvidenceExplanationRepository {
         canExplain: true,
       );
   @override
-  Future<Uint8List> image(int id, {CancelToken? cancelToken}) async =>
-      base64Decode(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jC9sAAAAASUVORK5CYII=',
-      );
+  Future<Uint8List> image(
+    int id, {
+    CancelToken? cancelToken,
+  }) async => base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jC9sAAAAASUVORK5CYII=',
+  );
   @override
   Future<FlaggedEvidence> explain(int id, String text) => get(id);
 }
