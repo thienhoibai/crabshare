@@ -9,6 +9,7 @@ import '../../../shared/widgets/app_ui.dart';
 import '../../../shared/widgets/nav_shell.dart';
 import '../data/operator_models.dart';
 import '../data/operator_repository.dart';
+import 'log_thresholds.dart';
 
 /// Tab "Nhật ký": các bản ghi ngày (pH, nhiệt độ nước, độ mặn, thức ăn) theo từng lô.
 class DailyLogsPage extends ConsumerWidget {
@@ -32,7 +33,6 @@ class DailyLogsPage extends ConsumerWidget {
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: 14),
-              const DemoNotice(),
               if (list.isEmpty)
                 const EmptyState(
                   icon: Icons.edit_note_rounded,
@@ -60,9 +60,6 @@ class _LogCard extends StatelessWidget {
 
   final DailyLog log;
 
-  String _num(double? v, {int digits = 1}) =>
-      v == null ? '—' : v.toStringAsFixed(digits).replaceAll('.', ',');
-
   @override
   Widget build(BuildContext context) {
     final flagged = log.flag != PlausibilityFlag.ok;
@@ -88,17 +85,52 @@ class _LogCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            spacing: 16,
+            runSpacing: 12,
             children: [
-              _Value(label: 'pH', value: _num(log.ph)),
-              _Value(label: 'Nhiệt độ °C', value: _num(log.waterTempC)),
+              _Value(label: 'pH', value: formatLogNumber(log.ph)),
               _Value(
-                label: 'Độ mặn ‰',
-                value: _num(log.salinityPpt, digits: 0),
+                label: 'Nhiệt độ °C',
+                value: formatLogNumber(log.waterTempC),
               ),
-              _Value(label: 'Thức ăn kg', value: _num(log.feedKg)),
+              _Value(
+                label: 'Độ mặn ppt',
+                value: formatLogNumber(log.salinityPpt),
+              ),
+              _Value(
+                label: 'Thức ăn kg',
+                value: formatLogNumber(log.feedKg, digits: 3),
+              ),
             ],
           ),
+          const SizedBox(height: 12),
+          Text(
+            'Nguồn ${log.source} · ${log.recordedBy == null ? 'Chưa có người ghi' : 'Người ghi #${log.recordedBy}'}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (log.recordedAt != null)
+            Text(
+              'Lưu lúc ${formatTime(log.recordedAt!)} ${formatDate(log.recordedAt!)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          const SizedBox(height: 6),
+          if (log.thresholdsApplied case final thresholds?) ...[
+            Text(
+              'Ngưỡng áp dụng · phiên bản ${log.thresholdVersion}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            Text(
+              'pH ${ValueRange(thresholds.phMin, thresholds.phMax).format()} · '
+              '${ValueRange(thresholds.waterTempMinC, thresholds.waterTempMaxC).format()} °C · '
+              '${ValueRange(thresholds.salinityMinPpt, thresholds.salinityMaxPpt).format()} ppt',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ] else
+            Text(
+              'Chưa có phiên bản ngưỡng · dữ liệu lịch sử',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           if (log.note != null) ...[
             const SizedBox(height: 10),
             Text(log.note!, style: Theme.of(context).textTheme.bodySmall),
@@ -117,7 +149,8 @@ class _Value extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
+    return SizedBox(
+      width: 125,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

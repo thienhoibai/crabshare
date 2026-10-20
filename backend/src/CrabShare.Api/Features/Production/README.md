@@ -4,6 +4,14 @@
 
 Hệ thống **không** điều khiển nước hay thiết bị. Người nuôi **tự điền** (hoặc phần mềm của trại gửi qua API): nhiệt độ nước, độ mặn, pH, lượng thức ăn, ghi chú, và sự kiện của từng hộp.
 
+## VI-08 Nhật ký ngày đã triển khai
+
+POST/GET `/api/batches/{code}/production-logs` và GET `/api/operators/me/production-logs` dùng API thật cho web/mobile. Owner của Operator đặt riêng ngưỡng nước cho mỗi lô qua GET/PUT `/api/batches/{code}/production-thresholds`; không dùng các ngưỡng dev làm tiêu chuẩn nuôi. Cần cấu hình trước lần ghi đầu, mỗi thay đổi tạo phiên bản và nhật ký giữ phiên bản đã áp dụng.
+
+Owner/Staff ghi nhật ký Manual cho lô InProduction/Harvesting thuộc Operator Approved, chỉ hôm nay UTC+7 từ server. Số đo ngoài khoảng vẫn lưu với OutOfRange và tạo WaterQuality qua AlertService trong cùng transaction. Unique hiện có bảo vệ một bản/lô/ngày/nguồn; ghi trùng trả 409. GET `/api/operators/me/production-batches` trả lô Stocked/InProduction/Harvesting cùng số cua Growing và trạng thái ghi nhật ký, giữ lô Harvesting cho màn Thu hoạch.
+
+Cần áp dụng V014 trước khi chạy API mới. Contract, JSON Bruno, đơn vị, quyền, quy tắc tạm VI-08 và cách demo: [CS-48-production-logs.md](../../../../../docs/validation/CS-48-production-logs.md). Các endpoint ingestion, slot-events và timeline trong bảng kế hoạch dưới đây vẫn ngoài phạm vi VI-08.
+
 ## Bảng
 | Bảng | Cột / trạng thái cần nhớ |
 |---|---|

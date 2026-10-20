@@ -1,4 +1,6 @@
 import '../../../shared/models/batch_enums.dart';
+import 'production_thresholds.dart';
+export 'production_thresholds.dart';
 
 /// Lô đang chạy của hộ nuôi (màn "Hôm nay").
 class OperatorBatch {
@@ -13,6 +15,8 @@ class OperatorBatch {
     required this.loggedToday,
     this.dayOfCycle,
     this.latestLog,
+    this.canRecord = false,
+    this.businessDate,
   });
 
   final String code;
@@ -25,6 +29,30 @@ class OperatorBatch {
   final bool loggedToday;
   final int? dayOfCycle;
   final DailyLog? latestLog;
+  final bool canRecord;
+  final DateTime? businessDate;
+
+  bool get allowsDailyLog =>
+      status == BatchStatus.inProduction || status == BatchStatus.harvesting;
+
+  factory OperatorBatch.fromJson(Map<String, dynamic> json) => OperatorBatch(
+    code: json['batchCode'] as String,
+    title: json['title'] as String,
+    crabType: CrabType.fromApi(json['crabType'] as String),
+    status: BatchStatus.fromApi(json['status'] as String),
+    cycleDays: json['cycleDays'] as int,
+    seedQuantity: json['seedQuantity'] as int,
+    aliveCount: json['aliveCount'] as int,
+    dayOfCycle: json['dayOfCycle'] as int?,
+    loggedToday: json['loggedToday'] as bool,
+    canRecord: json['canRecord'] as bool,
+    businessDate: DateTime.parse(json['businessDate'] as String),
+    latestLog: json['latestLog'] == null
+        ? null
+        : DailyLog.fromJson(
+            Map<String, dynamic>.from(json['latestLog'] as Map),
+          ),
+  );
 
   double get survivalRate => seedQuantity == 0 ? 0 : aliveCount / seedQuantity;
 }
@@ -52,6 +80,11 @@ class DailyLog {
     this.note,
     this.flag = PlausibilityFlag.ok,
     this.recordedAt,
+    this.id,
+    this.source = 'Manual',
+    this.recordedBy,
+    this.thresholdVersion,
+    this.thresholdsApplied,
   });
 
   final String batchCode;
@@ -63,28 +96,55 @@ class DailyLog {
   final String? note;
   final PlausibilityFlag flag;
   final DateTime? recordedAt;
+  final int? id;
+  final String source;
+  final int? recordedBy;
+  final int? thresholdVersion;
+  final ProductionThresholdVersion? thresholdsApplied;
+
+  factory DailyLog.fromJson(Map<String, dynamic> json) => DailyLog(
+    id: json['id'] as int,
+    batchCode: json['batchCode'] as String,
+    logDate: DateTime.parse(json['logDate'] as String),
+    ph: (json['ph'] as num?)?.toDouble(),
+    waterTempC: (json['waterTempC'] as num?)?.toDouble(),
+    salinityPpt: (json['salinityPpt'] as num?)?.toDouble(),
+    feedKg: (json['feedKg'] as num?)?.toDouble(),
+    note: json['note'] as String?,
+    source: json['source'] as String,
+    flag: PlausibilityFlag.values.firstWhere(
+      (value) => value.apiValue == json['plausibilityFlag'],
+    ),
+    recordedBy: json['recordedBy'] as int?,
+    recordedAt: DateTime.parse(json['createdAt'] as String).toLocal(),
+    thresholdVersion: json['thresholdVersion'] as int?,
+    thresholdsApplied: json['thresholdsApplied'] == null
+        ? null
+        : ProductionThresholdVersion.fromJson(
+            Map<String, dynamic>.from(json['thresholdsApplied'] as Map),
+          ),
+  );
 }
 
-/// Dữ liệu gửi lên khi lưu nhật ký (POST /api/production-logs — xem backend Features/Production).
+/// Measurements only; the server owns date, source, actor and evaluation.
 class DailyLogInput {
   const DailyLogInput({
     required this.batchCode,
-    this.waterTempC,
-    this.salinityPpt,
-    this.ph,
-    this.feedKg,
+    required this.waterTempC,
+    required this.salinityPpt,
+    required this.ph,
+    required this.feedKg,
     this.note,
   });
 
   final String batchCode;
-  final double? waterTempC;
-  final double? salinityPpt;
-  final double? ph;
-  final double? feedKg;
+  final double waterTempC;
+  final double salinityPpt;
+  final double ph;
+  final double feedKg;
   final String? note;
 
   Map<String, dynamic> toJson() => {
-    'batchCode': batchCode,
     'waterTempC': waterTempC,
     'salinityPpt': salinityPpt,
     'ph': ph,
@@ -253,9 +313,25 @@ class BoxEvidenceSummary {
 }
 
 class TodaySummary {
-  const TodaySummary({required this.done, required this.total});
+  const TodaySummary({
+    required this.done,
+    required this.total,
+    this.businessDate,
+  });
   final int done;
   final int total;
+  final DateTime? businessDate;
+
+  factory TodaySummary.fromBatches(List<OperatorBatch> batches) {
+    final dailyBatches = batches
+        .where((batch) => batch.allowsDailyLog)
+        .toList();
+    return TodaySummary(
+      done: dailyBatches.where((batch) => batch.loggedToday).length,
+      total: dailyBatches.length,
+      businessDate: batches.isEmpty ? null : batches.first.businessDate,
+    );
+  }
 }
 
 /// Một con cua đã cân lúc thu hoạch, kèm tem đã in.
