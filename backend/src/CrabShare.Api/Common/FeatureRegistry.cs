@@ -10,7 +10,7 @@ using CrabShare.Api.Features.Operators;
 using CrabShare.Api.Features.Boxes;
 using CrabShare.Api.Features.Batches;
 using CrabShare.Api.Features.Production;
-// using CrabShare.Api.Features.Harvest;
+using CrabShare.Api.Features.Harvest;
 
 // Nhân
 using CrabShare.Api.Common.Alerts;
@@ -69,7 +69,8 @@ public static class FeatureRegistry
         services.AddScoped<ProductionLogService>();  // VI-08
         services.AddScoped<SlotEventService>();      // VI-09
         services.AddScoped<TimelineService>();       // VI-11
-        // services.AddScoped<HarvestService>();      // Features/Harvest
+        services.AddScoped<HarvestService>();        // CS-71
+        services.AddSingleton<IHarvestTagCodeGenerator, HarvestTagCodeGenerator>();
 
         // Nhân
         services.AddScoped<CatalogService>();

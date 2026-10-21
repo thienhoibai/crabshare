@@ -16,6 +16,8 @@ CS-44 đã bổ sung phần đọc `GET /api/boxes` để mobile chọn hộp th
 phân trang gồm `slotCode`, `status`, `batchCode` (null khi không có lô đang nuôi
 được gán). CRUD/đánh số hộp thuộc CS-29; gán hộp thuộc Production.
 
+CS-71: thêm bộ lọc tùy chọn `batchCode` (tối đa 20 ký tự) trên allocation đang mở, và giữ `batchCode` cho hộp của lô `Harvesting`. Web/mobile có thể lấy đúng hộp còn cua của lô đang thu hoạch qua `GET /api/boxes?status=Occupied&batchCode=...` với phân trang hiện có.
+
 `latestEvidence` (nullable) trả `{ id, receivedAt, reviewStatus }` của ảnh chụp
 trong app mới nhất thuộc lô và lượt gán hiện tại. Mobile dùng dữ liệu này để
 đánh dấu Đã gửi / Theo dõi / Cần kiểm tra / Chụp lại. Đây là trạng thái bằng
