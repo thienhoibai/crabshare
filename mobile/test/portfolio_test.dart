@@ -1,6 +1,7 @@
 import 'package:crabshare_mobile/features/investor/notifications/notification_repository.dart';
 
 import 'helpers/notification_fakes.dart';
+import 'helpers/timeline_fakes.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -12,6 +13,7 @@ import 'package:crabshare_mobile/app/theme/app_theme.dart';
 import 'package:crabshare_mobile/core/auth/session.dart';
 import 'package:crabshare_mobile/features/investor/data/investor_models.dart';
 import 'package:crabshare_mobile/features/investor/data/portfolio_repository.dart';
+import 'package:crabshare_mobile/features/investor/data/timeline_repository.dart';
 import 'package:crabshare_mobile/features/investor/home/investor_home_page.dart';
 import 'package:crabshare_mobile/features/investor/kyc/kyc_repository.dart';
 import 'package:crabshare_mobile/features/investor/portfolio/portfolio_detail_page.dart';
@@ -187,6 +189,7 @@ Future<void> _showHome(WidgetTester tester, _Repo repo) async {
     ProviderScope(
       overrides: [
         notificationPollIntervalProvider.overrideWithValue(null),
+        timelineRepositoryProvider.overrideWithValue(EmptyTimelineRepository()),
         notificationRepositoryProvider.overrideWithValue(
           EmptyNotificationRepository(),
         ),
@@ -287,7 +290,14 @@ void main() {
       expect(find.text('Chi tiết danh mục'), findsOneWidget);
       expect(find.text('Vốn đã chốt'), findsOneWidget);
       final contract = find.text('Hợp đồng CT-61 · Đã đủ chữ ký');
-      await tester.scrollUntilVisible(contract, 300);
+      await tester.scrollUntilVisible(
+        contract,
+        300,
+        scrollable: find.descendant(
+          of: find.byType(ListView),
+          matching: find.byType(Scrollable),
+        ).first,
+      );
       await tester.pumpAndSettle();
       expect(contract, findsOneWidget);
       expect(tester.takeException(), isNull);
