@@ -22,13 +22,20 @@
 | POST | `/api/batches/{code}/contributions` | Investor | **Đã làm.** `{ amount }` → 201 `Reserved`, `expires_at` = min(now + `Funding:ReservationMinutes` (30), `funding_deadline`) (TL-17 §6.1). Lỗi 422: `funding.kyc_required`, `funding.risk_ack_required`, `funding.not_open`, `funding.below_min_contribution`, `funding.over_max_capital`; 409 `funding.reservation_exists` (mỗi người một chỗ đang giữ / lô). Ghi audit |
 | DELETE | `/api/contributions/{id}` | Investor | **Đã làm.** Huỷ khoản đang giữ chỗ, chưa trả tiền → `Expired` (CSDL không có trạng thái Cancelled), yêu cầu thanh toán Pending → `Cancelled`. Ghi audit |
 | POST | `/api/contributions/{id}/payment-requests` | Investor | **Đã làm (TH-05).** Mã VietQR cho khoản `Reserved` còn hạn của chính mình → 201, mã đối chiếu `GV` + 11 ký tự, hết hạn cùng giữ chỗ. Còn mã `Pending` chưa hết hạn thì trả lại đúng mã đó (200), không sinh mã mới. Lỗi: 403 `contribution.not_owner`; 422 `contribution.not_payable`, `funding.not_open`, `funding.batch_account_unavailable`. Ghi audit (`payment_request` / `create`) |
-| GET | `/api/me/contributions` | Investor | **Đã làm.** Các khoản góp của tôi (giữ chỗ quá hạn hiện `Expired` ngay, job TH-07 sẽ đổi hẳn) |
+| GET | `/api/me/contributions` | Investor | **Đã làm.** Các khoản góp của tôi (giữ chỗ quá hạn mà job chưa kịp chạy vẫn hiện `Expired` ngay) |
+| GET | `/api/admin/funding/batches` | PlatformAdmin | **Đã làm (TH-07).** Vốn vào theo lô `Funding`/`Cancelled`: đã xác nhận, đang giữ chỗ, tối thiểu/mục tiêu/trần, `stage` (`Scheduled`, `Open`, `AwaitingClose`, `CapitalClosed`, `Cancelled`), số lệnh hoàn và số lệnh hoàn chưa xong |
+| POST | `/api/admin/funding/close-due` | PlatformAdmin | **Đã làm (TH-07).** Chạy ngay một lượt của job (để demo khỏi chờ 1 phút) → `FundingCloseResult` |
 
 Chống vượt trần: trong một transaction, khoá chuỗi audit (`IAuditLog.LockAsync`) rồi khoá dòng lô `UPDLOCK, HOLDLOCK`, cộng Confirmed + Reserved còn hạn rồi mới thêm. Test `FundingDatabaseTests`: 5 người giữ chỗ 3 tr cùng lúc vào lô trần 10 tr → đúng 3 người được.
 
-Job nền:
-- Hết hạn giữ chỗ → `Expired`.
-- Tới `funding_deadline`: đủ `min_viable_capital` → chụp `capital_share`, ghi `total_confirmed_capital`; không đủ → lô `Cancelled` + tạo lệnh hoàn tiền (`payment_instruction` loại `Refund`, module Payments).
+Job nền **(đã làm, TH-07)**: `FundingCloseJob` chạy mỗi phút, việc thật ở `FundingCloseService.RunAsync` (TL-17 §6 bước 6–8, BR-06). Tắt riêng bằng `Funding:CloseJob:Enabled = false`.
+- Giữ chỗ quá `expires_at` → `Expired` (audit `contribution/expire`); mã VietQR góp vốn còn `Pending` của nó → `Expired`.
+- Lô `Funding` chưa chốt, tới `funding_deadline` **hoặc** vốn xác nhận đã bằng `max_capital` (chốt sớm, TL-17 bước 7): khoá chuỗi audit rồi khoá dòng lô, ép hết hạn mọi giữ chỗ còn lại, rồi
+  - đủ `min_viable_capital` → chụp `capital_share` (gộp theo nhà đầu tư; trigger BR-09 cấm sửa về sau), ghi `total_confirmed_capital`, `capital_closed_at`; lô **vẫn ở `Funding`** tới khi thả giống (`Batches/FundingReadiness`). Audit `batch/close_capital`. Đã chốt thì `IsOpen` = false: không nhận giữ chỗ nữa dù chưa tới hạn.
+  - thiếu → lô `Cancelled` (audit `batch/cancel_underfunded`), `RefundService` lập lệnh hoàn 100% cho từng khoản `Confirmed` (`Refund`/`Created`, gắn `contribution_id`); mã VietQR góp vốn còn `Pending` của lô → `Cancelled`. Khoản góp chỉ chuyển `Refunded` khi trung gian báo lệnh hoàn thành công (TH-10). Cam kết bao tiêu và cọc của lô huỷ **không** xử lý ở đây (thuộc module Offtake, NH-14).
+- Job và webhook tiền về đều khoá chuỗi audit trước nên chạy lần lượt: mỗi khoản giữ chỗ đi tới đúng một trạng thái cuối. Chạy lại không chụp/hoàn trùng.
+- Test `FundingCloseDatabaseTests`: hết hạn giữ chỗ; quá hạn đủ vốn → `capital_share`; quá hạn thiếu vốn → `Cancelled` + 2 lệnh hoàn; đủ trần → chốt sớm và chặn giữ chỗ mới; màn admin.
+- Demo: sửa `funding_deadline` của lô seed `Funding` về quá khứ rồi bấm "Chạy chốt vốn ngay" ở AdminFinance (hoặc chờ 1 phút).
 
 ## Quy tắc phải giữ
 - Phải `Verified` (Accounts) **và** đã xác nhận rủi ro bản đang Active trước khi giữ chỗ (TL-09).

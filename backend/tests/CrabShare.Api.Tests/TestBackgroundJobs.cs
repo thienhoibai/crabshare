@@ -19,4 +19,8 @@ internal static class TestBackgroundJobs
     // NH-10: job hoàn tất đơn chạy mỗi phút; test gọi OrderCompletionService trực tiếp nên tắt lịch nền.
     [ModuleInitializer]
     internal static void DisableOrderCompletionJob() => Environment.SetEnvironmentVariable("Orders__CompletionJob__Enabled", "false");
+
+    // TH-07: job chốt vốn chạy mỗi phút; test gọi FundingCloseService trực tiếp nên tắt lịch nền.
+    [ModuleInitializer]
+    internal static void DisableFundingCloseJob() => Environment.SetEnvironmentVariable("Funding__CloseJob__Enabled", "false");
 }

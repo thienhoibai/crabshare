@@ -76,7 +76,7 @@ Handler chạy **bên trong** transaction của webhook, sau khi `payment_reques
 | POST | `/api/batches/{code}/tranches/{no}/request` | Operator Owner | UC18: xin giải ngân đợt `no`; kiểm tra điều kiện mốc + bằng chứng (TL-03) |
 | POST | `/api/admin/tranches/{id}/release` · `/block` · `/need-explanation` | PlatformAdmin | Duyệt → tạo `payment_instruction` loại `Disbursement` |
 | GET | `/api/admin/payments/unmatched` | PlatformAdmin | Giao dịch không khớp / trả trễ |
-| GET | `/api/admin/payment-instructions?type=&status=` | PlatformAdmin | UC40 đối soát chi trả |
+| GET | `/api/admin/payment-instructions?type=&status=&batchCode=` | PlatformAdmin | **Đã làm (TH-07).** UC40 đối soát chi trả: lệnh chi mới nhất trước (tối đa 200), kèm lô, người nhận (nhà đầu tư / người nhận đơn / hộ nuôi), số đợt giải ngân, ghi chú (`PaymentInstructionQueryService`) |
 | POST | `/api/admin/payment-instructions/{id}/send` | PlatformAdmin | Gửi lệnh qua `IPaymentGateway.SendPayoutAsync` (bản giả) |
 
 ## Quy tắc phải giữ
@@ -85,7 +85,7 @@ Handler chạy **bên trong** transaction của webhook, sau khi `payment_reques
 - Mọi lệnh chi ghi `audit_log`.
 
 ## Màn hình
-- Web: `admin/AdminFinance.tsx`, nút xin giải ngân trong `operator/OperatorBatchDetail.tsx`.
+- Web: `admin/AdminFinance.tsx` (tab Gọi vốn = `AdminFundingPanel`, tab Lệnh chi = `AdminInstructionsPanel`, dữ liệu thật từ TH-07; tab Quyết toán còn dữ liệu mẫu), nút xin giải ngân trong `operator/OperatorBatchDetail.tsx`.
 
 ## Tài liệu
 TL-02 Mô hình giữ tiền · TL-03 Cơ chế giải ngân theo mốc · TL-10 Đối soát giao dịch và chống trùng lặp · TL-07 Nghĩa vụ thuế.

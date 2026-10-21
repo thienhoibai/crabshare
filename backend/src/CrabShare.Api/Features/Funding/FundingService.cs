@@ -70,7 +70,7 @@ public sealed class FundingService(
     {
         var now = clock.GetUtcNow();
         var batches = await db.Batches.AsNoTracking()
-            .Where(b => b.Status == "Funding" && b.FundingOpenAt <= now && b.FundingDeadline > now)
+            .Where(b => b.Status == "Funding" && b.CapitalClosedAt == null && b.FundingOpenAt <= now && b.FundingDeadline > now)
             .OrderBy(b => b.FundingDeadline)
             .Select(b => new
             {
@@ -271,8 +271,9 @@ public sealed class FundingService(
         return await db.RiskAcknowledgements.AnyAsync(a => a.InvestorId == investorId && a.RiskDisclosureId == rd.RiskDisclosureId, ct);
     }
 
+    /// <summary>Đã chốt vốn (job TH-07, kể cả chốt sớm khi đủ max_capital) thì không nhận giữ chỗ nữa dù chưa tới hạn.</summary>
     private static bool IsOpen(Batch batch, DateTimeOffset now)
-        => batch.Status == "Funding" && batch.FundingOpenAt <= now && batch.FundingDeadline > now;
+        => batch.Status == "Funding" && batch.CapitalClosedAt == null && batch.FundingOpenAt <= now && batch.FundingDeadline > now;
 
     /// <summary>Khoản đang giữ chỗ mà đã quá hạn hiển thị là Expired ngay (job TH-07 sẽ đổi hẳn trong CSDL).</summary>
     private static ContributionResponse ToResponse(Contribution c, Batch batch, DateTimeOffset now) => new(
