@@ -73,11 +73,14 @@ Handler chạy **bên trong** transaction của webhook, sau khi `payment_reques
 | POST | `/api/contributions/{id}/payment-requests` | Investor | **Đã làm (TH-05)**, ở `Features/Funding` |
 | POST | `/api/webhooks/payment-provider` | Trung gian thanh toán | **Đã làm (TH-06).** Chữ ký HMAC `X-Signature`; **idempotent** theo `provider_txn_id`; khớp `reference_code` → `payment_request.Paid` → `IPaymentPurposeHandler` (contribution `Confirmed`; đơn `Paid` và cọc `Held` do NH-06/NH-14 cài); trả trễ → `LatePayment` + lệnh hoàn |
 | POST | `/api/dev/payments/simulate` | Chỉ môi trường Development | **Đã làm (TH-06).** Giả lập "khách đã chuyển khoản" để demo (gọi lại đúng luồng webhook) |
-| POST | `/api/batches/{code}/tranches/{no}/request` | Operator Owner | UC18: xin giải ngân đợt `no`; kiểm tra điều kiện mốc + bằng chứng (TL-03) |
-| POST | `/api/admin/tranches/{id}/release` · `/block` · `/need-explanation` | PlatformAdmin | Duyệt → tạo `payment_instruction` loại `Disbursement` |
-| GET | `/api/admin/payments/unmatched` | PlatformAdmin | Giao dịch không khớp / trả trễ |
+| GET | `/api/operator/tranches` | OperatorMember | **Đã làm (TH-10).** Các đợt của lô thuộc hộ nuôi tôi + `canRequest`, `blockedReason` (vì sao chưa xin được), trạng thái lệnh chi |
+| POST | `/api/batches/{code}/tranches/{no}/request` | Operator Owner | **Đã làm (TH-10).** UC18: xin giải ngân đợt `no` (`Planned`/`NeedsExplanation` → `Requested`). Điều kiện mốc (TL-03 §6.2, `DisbursementService.GateAsync`): đợt trước đã `Released`; đã tới `planned_date`; **đợt 1** lô đã chốt đủ vốn + mọi hợp đồng đủ chữ ký (`FundingReadiness`); **đợt 2+** đã thả giống, có bằng chứng `Accepted`/`Watch` kể từ đợt trước, không còn bằng chứng `Flagged`; **đợt 3+** thêm `expected_harvest_date`. Chưa đạt → 422 `tranche.not_eligible` kèm lý do; Staff → 403 `tranche.owner_only`. Audit `disbursement_tranche/request` |
+| GET | `/api/admin/tranches?status=` | PlatformAdmin | **Đã làm (TH-10).** Mặc định các đợt `Requested`, `NeedsExplanation` |
+| POST | `/api/admin/tranches/{id}/release` | PlatformAdmin | **Đã làm (TH-10).** Kiểm tra lại điều kiện mốc → `Released` + `payment_instruction` `Disbursement`/`Created` tới tài khoản nhận tiền `Active` của hộ nuôi (không có → 422 `payment.no_payout_account`) |
+| POST | `/api/admin/tranches/{id}/need-explanation` · `/block` | PlatformAdmin | **Đã làm (TH-10).** Body `{ reason }` (5–300 ký tự). Giải trình: `Requested` → `NeedsExplanation`, hạn 72 giờ, người nuôi xin lại sau khi bổ sung (TL-03 §6.4). Dừng chi: `Requested`/`NeedsExplanation` → `Blocked`. Audit kèm lý do |
+| GET | `/api/admin/payments/unmatched` | PlatformAdmin | **Đã làm (TH-10).** Giao dịch tiền vào `Unmatched` / `LatePayment` (tối đa 200), kèm khoản thu gần khớp |
 | GET | `/api/admin/payment-instructions?type=&status=&batchCode=` | PlatformAdmin | **Đã làm (TH-07).** UC40 đối soát chi trả: lệnh chi mới nhất trước (tối đa 200), kèm lô, người nhận (nhà đầu tư / người nhận đơn / hộ nuôi), số đợt giải ngân, ghi chú (`PaymentInstructionQueryService`) |
-| POST | `/api/admin/payment-instructions/{id}/send` | PlatformAdmin | Gửi lệnh qua `IPaymentGateway.SendPayoutAsync` (bản giả) |
+| POST | `/api/admin/payment-instructions/{id}/send` | PlatformAdmin | **Đã làm (TH-10).** Lệnh `Created`/`Failed` → `IPaymentGateway.SendPayoutAsync` (mã tham chiếu `CHI{id:8}`). Sandbox chấp nhận → `Succeeded` + một dòng `provider_transaction` chiều `Out` (`Matched`, gắn `instruction_id`); từ chối → `Failed`, gửi lại được; đã gửi → 409. Người nhận: tài khoản trên lệnh; hoàn vốn góp → tài khoản nhận tiền của nhà đầu tư, chưa có thì trả về tài khoản đã chuyển. Hoàn 100% vốn của lô `Cancelled` thành công → khoản góp `Refunded` + `refunded_at`. Lệnh hoàn của đơn hàng chỉ đổi trạng thái lệnh, không sửa đơn (module Orders). Audit `payment_instruction/send` |
 
 ## Quy tắc phải giữ
 - Webhook gửi lặp lại **không** được ghi trùng (NFR Integrity) — kiểm tra `provider_txn_id` trước khi ghi, và dựa vào unique `uq_provider_transaction_provider_txn_id` cho trường hợp hai webhook chạy sát nhau: bắt lỗi unique coi như đã xử lý, trả `Duplicate`.
@@ -85,7 +88,9 @@ Handler chạy **bên trong** transaction của webhook, sau khi `payment_reques
 - Mọi lệnh chi ghi `audit_log`.
 
 ## Màn hình
-- Web: `admin/AdminFinance.tsx` (tab Gọi vốn = `AdminFundingPanel`, tab Lệnh chi = `AdminInstructionsPanel`, dữ liệu thật từ TH-07; tab Quyết toán còn dữ liệu mẫu), nút xin giải ngân trong `operator/OperatorBatchDetail.tsx`.
+- Web: `admin/AdminFinance.tsx` — tab Gọi vốn (`AdminFundingPanel`, TH-07), Giải ngân (`AdminTranchesPanel`, TH-10), Lệnh chi (`AdminInstructionsPanel` + nút Gửi lệnh), Đối soát (`AdminUnmatchedPanel`), Hợp đồng (TH-09); tab Quyết toán còn dữ liệu mẫu.
+- Người nuôi xin giải ngân ở trang riêng `operator/OperatorDisbursements.tsx` (`/operator/disbursements`, menu "Xin giải ngân"), không sửa trang chi tiết lô của module Batches.
+- Test `DisbursementDatabaseTests`: xin → duyệt → gửi → `Succeeded` + giao dịch Out; Staff không xin được; đợt 2 cần thả giống + bằng chứng; giải trình rồi dừng chi; danh sách không khớp; hoàn vốn lô huỷ → `Refunded`.
 
 ## Tài liệu
 TL-02 Mô hình giữ tiền · TL-03 Cơ chế giải ngân theo mốc · TL-10 Đối soát giao dịch và chống trùng lặp · TL-07 Nghĩa vụ thuế.
