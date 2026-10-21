@@ -61,6 +61,7 @@ public static class FeatureRegistry
         services.AddScoped<IPaymentPurposeHandler, ContributionPaymentHandler>(); // tiền góp vốn về → Confirmed
         services.AddOptions<PaymentOptions>().BindConfiguration(PaymentOptions.Section);
         services.AddScoped<SettlementService>();      // Features/Settlement — TH-12 tính quyết toán
+        services.AddScoped<SettlementReviewService>(); // TH-13 công bố, sao kê, góp ý trong hạn
 
         // Viên
         services.AddScoped<OperatorService>();        // Features/Operators
