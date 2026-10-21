@@ -206,3 +206,73 @@ public class SettlementDatabaseTests(FundingDatabaseFixture fixture) : Settlemen
         Assert.Equal("settlement.batch_not_ready", await ErrorCode(notReady));
     }
 }
+
+/// <summary>
+/// TH-13: công bố + sao kê + góp ý trong hạn. Hoàn thành khi: góp ý sau hạn → 422; nhà đầu tư không xem được dòng của người khác.
+/// </summary>
+[Trait("Category", "Database")]
+public class SettlementReviewDatabaseTests(FundingDatabaseFixture fixture) : SettlementTestBase(fixture), IClassFixture<FundingDatabaseFixture>
+{
+    [Fact]
+    public async Task Published_statement_shows_investors_only_their_line_and_feedback_follows_the_window()
+    {
+        var (investorA, a) = await UserAsync("Nhà đầu tư A13", "Investor");
+        var (investorB, b) = await UserAsync("Nhà đầu tư B13", "Investor");
+        var (_, code, _) = await HarvestedBatchAsync(120_000_000, 100_000_000, [(a, 70_000_000), (b, 30_000_000)]);
+        var (admin, _) = await AdminAsync();
+        var (owner, _) = await UserAsync("Chủ hộ nuôi 13", extraRole: Roles.OperatorMember, memberRole: "Owner");
+        var (stranger, _) = await UserAsync("Người ngoài 13", "Investor");
+        var draft = await CalculateAsync(admin, code);
+
+        // Bản nháp chỉ admin thấy
+        Assert.Equal(HttpStatusCode.NotFound, (await investorA.GetAsync($"/api/settlements/{draft.SettlementId}")).StatusCode);
+
+        var proposed = await admin.PostAsJsonAsync($"/api/admin/settlements/{draft.SettlementId}/propose", new { feedbackDays = 7 });
+        Assert.Equal(HttpStatusCode.OK, proposed.StatusCode);
+        var published = (await proposed.Content.ReadFromJsonAsync<SettlementResponse>())!;
+        Assert.Equal("Proposed", published.Status);
+        Assert.True(published.FeedbackDeadline >= published.ProposedAt!.Value.AddDays(7));
+        Assert.Equal("settlement.not_draft", await ErrorCode(await admin.PostAsJsonAsync($"/api/admin/settlements/{draft.SettlementId}/propose", new { feedbackDays = 7 })));
+
+        // Nhà đầu tư A: tổng + đúng một dòng của mình
+        var mine = (await investorA.GetFromJsonAsync<SettlementResponse>($"/api/settlements/{draft.SettlementId}"))!;
+        var line = Assert.Single(mine.Lines);
+        Assert.Equal(a, line.InvestorId);
+        Assert.True(line.IsMine);
+        Assert.Equal(published.RevenuePool, mine.RevenuePool);
+        Assert.DoesNotContain(mine.Lines, l => l.InvestorId == b);
+        // Người nuôi xem đủ dòng; người ngoài không thấy bảng
+        Assert.Equal(2, (await owner.GetFromJsonAsync<SettlementResponse>($"/api/settlements/{draft.SettlementId}"))!.Lines.Count);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync($"/api/settlements/{draft.SettlementId}")).StatusCode);
+        Assert.Contains((await investorB.GetFromJsonAsync<List<SettlementSummary>>("/api/me/settlements"))!, x => x.SettlementId == draft.SettlementId && x.FeedbackOpen);
+
+        // Góp ý trong hạn → Disputed; admin trả lời → về Proposed
+        var feedback = await investorA.PostAsJsonAsync($"/api/settlements/{draft.SettlementId}/feedback", new { content = "Đơn OD-123 giao ngày 10/10 chưa thấy trong doanh thu." });
+        Assert.Equal(HttpStatusCode.OK, feedback.StatusCode);
+        var disputed = (await feedback.Content.ReadFromJsonAsync<SettlementResponse>())!;
+        Assert.Equal("Disputed", disputed.Status);
+        var feedbackId = Assert.Single(disputed.Feedback).FeedbackId;
+        var bView = (await investorB.GetFromJsonAsync<SettlementResponse>($"/api/settlements/{draft.SettlementId}"))!;
+        Assert.Empty(bView.Feedback); // không thấy góp ý của người khác
+        var answered = (await (await admin.PostAsJsonAsync($"/api/admin/settlement-feedback/{feedbackId}/answer",
+            new { response = "Đơn đó bị trả hàng nên không tính doanh thu.", unresolved = false })).Content.ReadFromJsonAsync<SettlementResponse>())!;
+        Assert.Equal("Proposed", answered.Status);
+        Assert.Equal("Answered", Assert.Single(answered.Feedback).Status);
+
+        // Hết hạn góp ý → 422
+        await using (var db = Fixture.OpenDb())
+        {
+            var now = DateTimeOffset.UtcNow;
+            await db.Settlements.Where(s => s.SettlementId == draft.SettlementId).ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.ProposedAt, now.AddDays(-8)).SetProperty(x => x.FeedbackDeadline, now.AddDays(-1)));
+        }
+        var late = await investorB.PostAsJsonAsync($"/api/settlements/{draft.SettlementId}/feedback", new { content = "Tôi muốn xem lại khoản chi phí thức ăn." });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, late.StatusCode);
+        Assert.Equal("settlement.feedback_closed", await ErrorCode(late));
+
+        await using var check = Fixture.OpenDb();
+        foreach (var action in new[] { "propose" })
+            Assert.True(await check.AuditLogs.AnyAsync(x => x.EntityType == "settlement" && x.EntityId == draft.SettlementId && x.ActionType == action));
+        Assert.True(await check.AuditLogs.AnyAsync(x => x.EntityType == "settlement_feedback" && x.EntityId == feedbackId && x.ActionType == "answer"));
+    }
+}

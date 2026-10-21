@@ -1,4 +1,4 @@
-/* Cổng nhà đầu tư bản 2. Quyết toán mẫu thuộc task Settlement. */
+/* Cổng nhà đầu tư bản 2. Tab Quyết toán là sao kê thật (TH-13). */
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { ArrowLeft, Compass, FileSignature, Handshake, House, Receipt, Wallet, ShoppingBag, UserRound } from 'lucide-react'
@@ -9,9 +9,9 @@ import InvestorBatches, { InvestorBatchDetail } from './batches/InvestorBatches'
 import InvestorPortfolio, { PortfolioOverview, PortfolioPosition } from './portfolio/InvestorPortfolio'
 import InvestorOfftake from './offtake/InvestorOfftake'
 import InvestorContracts from './contracts/InvestorContracts'
+import InvestorSettlements from './settlement/InvestorSettlements'
 import NotificationBell from './notifications/NotificationBell'
-import { closedPayout2610, vnd } from '../../shared/ui/kit/mock-data'
-import { Logo, SettlementCard, Shell } from '../../shared/ui/kit/kit'
+import { Logo, Shell } from '../../shared/ui/kit/kit'
 import './investor.css'
 
 /* ---------- điều hướng trong một bản ---------- */
@@ -108,19 +108,7 @@ function InvV2Inner() {
         {nav.view === 'explore' && <InvestorBatches open={nav.open} />}
         {nav.view === 'lot' && <InvestorBatchDetail code={nav.code} />}
 
-        {nav.view === 'settle' && (
-          <div className="i2-grid">
-            <section className="iv-card i2-wide">
-              <h3 className="rd-h3">L2611-01 · chờ bạn soát</h3>
-              <SettlementCard />
-            </section>
-            <section className="iv-card">
-              <h3 className="rd-h3">Đã xong</h3>
-              <div className="i2-done"><span><b>L2610-03</b><small>Cua gạch · góp 15 triệu</small></span><b>{vnd(closedPayout2610)}</b></div>
-              <p className="rd-note">Tiền đã chuyển về tài khoản ngân hàng của bạn.</p>
-            </section>
-          </div>
-        )}
+        {nav.view === 'settle' && <InvestorSettlements />}
       </main>
     </div>
   )

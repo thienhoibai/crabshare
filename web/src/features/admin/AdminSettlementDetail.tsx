@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { ArrowLeft, Calculator } from 'lucide-react'
+import { ArrowLeft, Calculator, Megaphone, MessagesSquare } from 'lucide-react'
 import AdminLayout from './AdminLayout'
 import { errorMessage } from '../../shared/api/http'
 import { formatDateTime } from '../../shared/lib/format'
+import { SettlementFeedbackList } from '../../shared/settlement/SettlementFeedbackList'
 import { SettlementStatement } from '../../shared/settlement/SettlementStatement'
-import { settlementStatuses, useAdminSettlement, useCalculateSettlement } from '../../shared/settlement/settlementApi'
+import { settlementStatuses, useAdminSettlement, useCalculateSettlement, useProposeSettlement } from '../../shared/settlement/settlementApi'
 
 /** UC38 (TH-12) — bảng quyết toán của một lô: tính / tính lại bản nháp và xem đủ mọi dòng. */
 export default function AdminSettlementDetail() {
@@ -14,7 +15,9 @@ export default function AdminSettlementDetail() {
   const code = params.get('code') ?? ''
   const query = useAdminSettlement(id)
   const calculate = useCalculateSettlement()
+  const propose = useProposeSettlement()
   const [taxPct, setTaxPct] = useState('0')
+  const [days, setDays] = useState('7')
   const s = query.data
   const batchCode = s?.batchCode ?? code
   const editable = !s || ['Draft', 'Proposed', 'Disputed'].includes(s.status)
@@ -59,6 +62,21 @@ export default function AdminSettlementDetail() {
             </button>
           </form>}
           {s && !editable && <p className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-sm">Bảng đã duyệt lúc {formatDateTime(s.approvedAt)} nên không tính lại được (BR-30).</p>}
+          {s?.status === 'Draft' && <form className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-3"
+            onSubmit={e => { e.preventDefault(); propose.mutate({ id: s.settlementId, feedbackDays: Number(days) || 7 }) }}>
+            <h2 className="font-bold flex gap-2"><Megaphone size={18} /> Công bố bảng quyết toán</h2>
+            <p className="text-sm text-slate-500">Nhà đầu tư của lô và người nuôi xem được bảng; nhà đầu tư góp ý trong hạn trước khi duyệt (TL-14).</p>
+            <label className="block text-sm">Số ngày nhận góp ý
+              <input className="w-full border border-slate-300 rounded-lg p-2 mt-1" type="number" min={7} max={14} value={days} onChange={e => setDays(e.target.value)} />
+            </label>
+            {propose.isError && <p className="text-sm text-red-700" role="alert">{errorMessage(propose.error)}</p>}
+            <button className="w-full bg-slate-900 text-white rounded-lg p-2.5 font-bold disabled:opacity-50" disabled={propose.isPending}>{propose.isPending ? 'Đang công bố…' : 'Công bố'}</button>
+          </form>}
+          {s && s.status !== 'Draft' && <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-3">
+            <h2 className="font-bold flex gap-2"><MessagesSquare size={18} /> Góp ý của nhà đầu tư</h2>
+            {s.feedbackDeadline && <p className="text-sm text-slate-500">Công bố {formatDateTime(s.proposedAt)} · hạn góp ý {formatDateTime(s.feedbackDeadline)}</p>}
+            <SettlementFeedbackList s={s} canAnswer />
+          </section>}
         </aside>
       </div>
     </AdminLayout>

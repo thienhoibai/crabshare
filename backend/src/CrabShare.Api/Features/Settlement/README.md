@@ -29,13 +29,21 @@ Cách tính (`CrabShare.SettlementEngine/SettlementCalculator`, lõi thuần, c�
 - Mỗi lô **một** bảng (`uq_settlement_batch_id`): "bản sửa" là tính lại trên cùng dòng, tăng `revision_no`, chỉ trước khi duyệt; sau duyệt trigger `trg_settlement_locked` / `trg_settlement_line_locked` khoá số liệu (BR-30).
 - Test: `SettlementCalculatorTests` (ví dụ + bất biến) và `SettlementDatabaseTests` (Pool dương khớp đồng, Pool âm có trần, lỗ vượt vốn, 100 nhà đầu tư < 10 giây, quyền admin, lô chưa thu hoạch).
 
+## Đã làm (TH-13) — công bố, sao kê, góp ý trong hạn
+| Method | Path | Ai gọi | Ghi chú |
+|---|---|---|---|
+| POST | `/api/admin/settlements/{id}/propose` | PlatformAdmin | UC37: `Draft` → `Proposed`, `proposed_at`, `feedback_deadline` = + `feedbackDays` (7–14, mặc định 7; CHECK CSDL ≥ 7 ngày). Không phải nháp → 422 `settlement.not_draft`. Audit `settlement/propose` |
+| GET | `/api/settlements/{id}` | Nhà đầu tư của lô, người nuôi của lô, admin | UC35 sao kê. Nhà đầu tư thấy tổng + **đúng dòng và góp ý của mình**; người nuôi, admin thấy đủ. Bản nháp và người ngoài → 404 |
+| POST | `/api/settlements/{id}/feedback` | Nhà đầu tư của lô | UC36: `{ content }` 10–1.000 ký tự, kèm căn cứ. Chỉ khi `Proposed`/`Disputed` và chưa quá `feedback_deadline`, ngược lại 422 `settlement.feedback_closed`. Bảng → `Disputed`. Audit `settlement_feedback/create` |
+| POST | `/api/admin/settlement-feedback/{id}/answer` | PlatformAdmin | `{ response, unresolved }` → `Answered` hoặc `Unresolved` (hai bên chưa thống nhất: vẫn chốt được, kèm ghi chú công khai — TL-14 Bước 4). Hết góp ý `Open` → bảng về `Proposed`. Audit `settlement_feedback/answer` |
+| GET | `/api/me/settlements` | Investor | Bảng đã công bố của các lô tôi góp vốn, kèm số thực nhận của tôi |
+| GET | `/api/operator/settlements` | OperatorMember | Bảng đã công bố của các lô thuộc hộ nuôi tôi |
+
+Điều chỉnh số liệu sau góp ý: admin **tính lại** (lần tính mới, về `Draft`) rồi công bố lại → cửa sổ mới. Test `SettlementReviewDatabaseTests`.
+
 ## Endpoint dự kiến
 | Method | Path | Ai gọi | Ghi chú |
 |---|---|---|---|
-| POST | `/api/admin/settlements/{id}/propose` | PlatformAdmin | UC37 công bố, đặt `feedback_deadline` |
-| GET | `/api/settlements/{id}` | Investor của lô, Operator, Admin | UC35 sao kê: tổng + dòng của chính mình |
-| POST | `/api/settlements/{id}/feedback` | Investor của lô | UC36, chỉ trong hạn |
-| POST | `/api/admin/settlement-feedback/{id}/answer` | PlatformAdmin | |
 | POST | `/api/admin/settlements/{id}/approve` | PlatformAdmin | UC39 → tạo `payment_instruction` loại `Payout` cho từng dòng; quyết toán đã duyệt **không sửa được** |
 
 ## Quy tắc phải giữ
@@ -52,7 +60,7 @@ Cách tính (`CrabShare.SettlementEngine/SettlementCalculator`, lõi thuần, c�
 Đã có entity tương ứng trong `Infrastructure/Persistence/Entities` (chỉ đọc).
 
 ## Màn hình
-- Web: `admin/AdminFinance.tsx`, `admin/AdminSettlementDetail.tsx`, `operator/OperatorSettlement.tsx`, tab Sao kê trong `investor/`.
+- Web: tab Quyết toán của `admin/AdminFinance.tsx` (`AdminSettlementsPanel`), `admin/AdminSettlementDetail.tsx` (tính / tính lại, công bố, trả lời góp ý), `operator/OperatorSettlement.tsx` (xem bảng + góp ý, chỉ đọc), tab Quyết toán của cổng nhà đầu tư (`investor/settlement/InvestorSettlements.tsx`: sao kê + form góp ý). Dùng chung `shared/settlement/` (`SettlementStatement`, `SettlementFeedbackList`, `settlementApi`).
 - Mobile (nếu kịp): xem sao kê trong chi tiết lô của nhà đầu tư.
 
 ## Tài liệu

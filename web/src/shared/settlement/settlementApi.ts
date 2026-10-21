@@ -68,3 +68,47 @@ function useSettlementAction<TArgs>(call: (args: TArgs) => Promise<Settlement>) 
 /** UC38: tính (hoặc tính lại) bảng nháp với tỷ lệ khấu trừ thuế người nuôi khai. */
 export const useCalculateSettlement = () => useSettlementAction(async ({ code, taxWithholdingPct }: { code: string; taxWithholdingPct: number }) =>
   (await http.post<Settlement>(`/api/admin/batches/${encodeURIComponent(code)}/settlements`, { taxWithholdingPct })).data)
+
+// ---------- TH-13: công bố, sao kê, góp ý ----------
+
+export type SettlementSummary = {
+  settlementId: number; batchCode: string; batchTitle: string; status: SettlementStatus; revisionNo: number; revenuePool: number
+  myNetPayout: number | null; feedbackDeadline: string | null; feedbackOpen: boolean; openFeedback: number
+}
+
+/** UC35: sao kê cho các bên của lô (nhà đầu tư chỉ nhận dòng của mình). */
+export function useSettlement(id: number | null) {
+  return useQuery({
+    queryKey: [...settlementKeys.one(id ?? 0), 'party'],
+    queryFn: async () => (await http.get<Settlement>(`/api/settlements/${id}`)).data,
+    enabled: id !== null, retry: false,
+  })
+}
+
+export function useMySettlements() {
+  return useQuery({ queryKey: [...settlementKeys.root, 'mine'], queryFn: async () => (await http.get<SettlementSummary[]>('/api/me/settlements')).data })
+}
+
+export function useOperatorSettlements() {
+  return useQuery({ queryKey: [...settlementKeys.root, 'operator'], queryFn: async () => (await http.get<SettlementSummary[]>('/api/operator/settlements')).data })
+}
+
+/** UC37: công bố bảng nháp, mở cửa sổ góp ý (7–14 ngày). */
+export const useProposeSettlement = () => useSettlementAction(async ({ id, feedbackDays }: { id: number; feedbackDays: number }) =>
+  (await http.post<Settlement>(`/api/admin/settlements/${id}/propose`, { feedbackDays })).data)
+
+export const useAnswerFeedback = () => useSettlementAction(async ({ feedbackId, response, unresolved }: { feedbackId: number; response: string; unresolved: boolean }) =>
+  (await http.post<Settlement>(`/api/admin/settlement-feedback/${feedbackId}/answer`, { response, unresolved })).data)
+
+/** UC36: góp ý trong hạn, kèm căn cứ. */
+export function useSendFeedback() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    retry: false,
+    mutationFn: async ({ id, content }: { id: number; content: string }) => (await http.post<Settlement>(`/api/settlements/${id}/feedback`, { content })).data,
+    onSuccess: async (s) => {
+      queryClient.setQueryData([...settlementKeys.one(s.settlementId), 'party'], s)
+      await queryClient.invalidateQueries({ queryKey: settlementKeys.root })
+    },
+  })
+}
