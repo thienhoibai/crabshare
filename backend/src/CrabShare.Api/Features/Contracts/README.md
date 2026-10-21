@@ -28,10 +28,14 @@ Cách làm:
 - Hợp đồng do seeder tạo (lô demo) chỉ có dòng trong CSDL, không có file PDF: mở file của chúng báo `contract.file_missing`.
 - Test `ContractDatabaseTests`: ký đúng/sai thứ tự, Staff không ký được, mã băm từng phiên bản, file cuối = file nháp + các chữ ký nối sau, người ngoài 404, giữ chỗ hết hạn → `Void`, font đủ dấu.
 
-## Còn làm (TH-09)
+## Đã làm (TH-09)
 | Method | Path | Ai gọi | Ghi chú |
 |---|---|---|---|
-| POST | `/api/contracts/{id}/offline-upload` | Admin | UC15: tải bản ký tay đã scan → `signing_method = OfflineUpload` |
+| POST | `/api/contracts/{id}/offline-upload` | PlatformAdmin | UC15 (TL-19 §3.3, đường dự phòng): multipart `file` (PDF bắt đầu bằng `%PDF-`, ≤ 10 MB) + `confirmedBothSigned=true` (admin xác nhận đã đối chiếu đủ chữ ký hai bên — hệ thống không kiểm tra chữ ký tay). Lưu nguyên byte, băm SHA-256 ngay → `FullySigned`, `signing_method = OfflineUpload`, `final_hash`, `final_file_uri`. Lỗi: 422 `contract.confirm_signatures`, `contract.file_type`, `contract.file_size`, `contract.void`, `contract.contribution_inactive`; 409 `contract.already_signed` (đã đủ chữ ký thì phải lập phiên bản mới). Audit `investment_contract/offline_upload` (mã băm, kích thước, người tải, mã băm bản trước) |
+| GET | `/api/me/contracts` | Investor | Tab Hợp đồng: **chỉ** hợp đồng của các khoản góp của tôi |
+| GET | `/api/admin/batches/{code}/contracts` | PlatformAdmin | Kho hợp đồng của một lô |
+
+Test `ContractDatabaseTests.Admin_uploads_offline_signed_scan_and_investor_sees_only_own_contracts`.
 
 ## Quy tắc phải giữ
 - Sai thứ tự ký → 422 `contract.wrong_signing_order`.
@@ -41,6 +45,7 @@ Cách làm:
 
 ## Màn hình
 - Web: `operator/OperatorContract.tsx` (danh sách + xem PDF + ký, menu "Hợp đồng góp vốn"), màn 3 "Ký hợp đồng" trong `investor/funding/ContributePage.tsx`; dùng chung `shared/contracts/` (`ContractViewer`, `contractsApi`). Màn 3 không chặn chuyển tiền: nhà đầu tư ký sau khi người nuôi ký (trang tự hỏi lại 5 giây/lần).
+- TH-09: tab **Hợp đồng** trong cổng nhà đầu tư (`/nha-dau-tu/hop-dong`, `investor/contracts/InvestorContracts.tsx`: danh sách + xem + ký tiếp); admin xem / tải / tải bản ký tay ở tab **Hợp đồng** của AdminFinance (`admin/AdminBatchContracts.tsx`, chọn mã lô).
 
 ## Tài liệu
 TL-19 Hiệu lực hợp đồng · TL-16 Đơn vị góp vốn và cách ghi quyền lợi · TL-18 Sở hữu đàn cua và uỷ quyền nuôi giữ.

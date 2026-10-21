@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router';
 import AdminLayout from './AdminLayout';
 import AdminFundingPanel from './AdminFundingPanel';
 import AdminInstructionsPanel from './AdminInstructionsPanel';
+import AdminBatchContracts from './AdminBatchContracts';
 
 // Bảng quyết toán còn là dữ liệu mẫu: làm thật ở TH-12 / TH-13 / TH-14.
 const pendingSettlements = [
@@ -13,6 +14,7 @@ const pendingSettlements = [
 const tabs = [
   { id: 'funding', label: 'Gọi vốn' },
   { id: 'instructions', label: 'Lệnh chi' },
+  { id: 'contracts', label: 'Hợp đồng' },
   { id: 'settlement', label: 'Quyết toán' },
 ] as const;
 type Tab = typeof tabs[number]['id'];
@@ -39,6 +41,7 @@ export default function AdminFinance() {
 
       {tab === 'funding' && <AdminFundingPanel />}
       {tab === 'instructions' && <AdminInstructionsPanel />}
+      {tab === 'contracts' && <AdminBatchContracts />}
       {tab === 'settlement' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-200 bg-slate-50">

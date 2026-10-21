@@ -173,7 +173,83 @@ public sealed class ContractService(
             .ThenByDescending(r => r.CreatedAt).ToList();
     }
 
-    // ---------- Dùng chung (cũng dùng ở TH-09) ----------
+    // ---------- Ký ngoài hệ thống + kho hợp đồng (TH-09, UC15) ----------
+
+    public const long MaxOfflineFileBytes = 10 * 1024 * 1024;
+
+    /// <summary>
+    /// Đường dự phòng (TL-19 §3.3): hai bên ký ngoài hệ thống (tay rồi scan, hoặc tự ký số), admin tải đúng file cuối lên.
+    /// Lưu nguyên byte, băm SHA-256 ngay khi nhận → FullySigned, signing_method = OfflineUpload. Hệ thống không kiểm tra chữ ký tay
+    /// trong bản scan, nên admin phải xác nhận đã đối chiếu đủ chữ ký hai bên (<paramref name="confirmedBothSigned"/>).
+    /// </summary>
+    public Task<ContractResponse> UploadOfflineAsync(long contractId, Stream file, long length, string? contentType, bool confirmedBothSigned,
+        CancellationToken ct) => db.InTransactionAsync(async () =>
+    {
+        if (!me.IsInRole(Roles.PlatformAdmin))
+            throw new ForbiddenException("contract.admin_only", "Chỉ quản trị viên tải được bản hợp đồng ký ngoài hệ thống.");
+        if (!confirmedBothSigned)
+            throw new BusinessRuleException("contract.confirm_signatures", "Hãy xác nhận đã đối chiếu bản scan có đủ chữ ký của hai bên.");
+        if (length <= 0 || length > MaxOfflineFileBytes)
+            throw new BusinessRuleException("contract.file_size", "File hợp đồng phải là PDF từ 1 byte tới 10 MB.");
+        using var buffer = new MemoryStream();
+        await file.CopyToAsync(buffer, ct);
+        var pdf = buffer.ToArray();
+        if (contentType is not "application/pdf" || pdf.Length < 5 || !pdf.AsSpan(0, 5).SequenceEqual("%PDF-"u8))
+            throw new BusinessRuleException("contract.file_type", "Chỉ nhận file PDF (bản scan hoặc bản đã ký số).");
+
+        await audit.LockAsync(ct);
+        var contract = await db.InvestmentContracts
+            .Include(c => c.ContractSignatures)
+            .Include(c => c.Contribution)
+            .SingleOrDefaultAsync(c => c.ContractId == contractId, ct)
+            ?? throw ContractNotFound();
+        var now = Now();
+        if (contract.Status == ContractStatuses.Void)
+            throw new BusinessRuleException("contract.void", "Hợp đồng đã huỷ (khoản góp hết hạn hoặc lô huỷ).");
+        if (contract.Status == ContractStatuses.FullySigned)
+            throw new ConflictException("contract.already_signed", "Hợp đồng đã đủ chữ ký; muốn thay phải lập phụ lục hoặc phiên bản mới (TL-19).");
+        if (!IsActive(contract.Contribution, now))
+            throw new BusinessRuleException("contract.contribution_inactive", "Khoản góp đã hết hạn giữ chỗ hoặc đã hoàn tiền.");
+
+        var stored = await files.SaveAsync(contract.ContractNo, pdf, ct);
+        var before = new { contract.Status, contract.SigningMethod };
+        contract.SigningMethod = ContractStatuses.OfflineUpload;
+        contract.Status = ContractStatuses.FullySigned;
+        contract.FinalHash = stored.Sha256;
+        contract.FinalFileUri = stored.Uri;
+        contract.FullySignedAt = now;
+        contract.UpdatedAt = now;
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("investment_contract", contract.ContractId, "offline_upload", before, new
+        {
+            contract.Status, contract.SigningMethod, finalHash = stored.Sha256, sizeBytes = pdf.Length, receivedAt = now,
+            uploadedBy = me.UserId, confirmedBothSigned, previousHash = CurrentHashBefore(contract),
+        }, now, ct);
+        return await DescribeAsync(contract.ContractId, ct);
+    }, ct);
+
+    /// <summary>Tab Hợp đồng của cổng nhà đầu tư: chỉ hợp đồng của các khoản góp của chính tôi.</summary>
+    public async Task<IReadOnlyList<ContractSummary>> ListMineAsync(CancellationToken ct)
+    {
+        if (!me.IsInRole(Roles.Investor))
+            throw new ForbiddenException("auth.investor_only", "Chỉ nhà đầu tư mới có hợp đồng góp vốn.");
+        var userId = me.UserId;
+        return await SummaryQuery(db.InvestmentContracts.Where(c => c.Contribution.InvestorId == userId)).ToListAsync(ct);
+    }
+
+    /// <summary>Kho hợp đồng của một lô cho admin.</summary>
+    public async Task<IReadOnlyList<ContractSummary>> ListForBatchAsync(string batchCode, CancellationToken ct)
+    {
+        if (!await db.Batches.AnyAsync(b => b.BatchCode == batchCode, ct))
+            throw new NotFoundException("batch.not_found", "Không tìm thấy lô.");
+        return await SummaryQuery(db.InvestmentContracts.Where(c => c.Contribution.Batch.BatchCode == batchCode)).ToListAsync(ct);
+    }
+
+    /// <summary>Mã băm bản trước khi thay bằng bản tải lên (bản nháp hoặc bản người nuôi đã ký số).</summary>
+    private static string CurrentHashBefore(InvestmentContract c)
+        => c.ContractSignatures.OrderByDescending(s => s.SigningOrder).Select(s => s.SignedHash).FirstOrDefault() ?? c.DraftHash;
+
+    // ---------- Dùng chung ----------
 
     internal static IQueryable<ContractSummary> SummaryQuery(IQueryable<InvestmentContract> contracts) => contracts
         .OrderByDescending(c => c.ContractId)
