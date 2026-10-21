@@ -1,50 +1,49 @@
-import { CheckCircle2, AlertTriangle, ArrowRightLeft, DollarSign } from 'lucide-react';
+import { CheckCircle2, AlertTriangle } from 'lucide-react';
+import { useSearchParams } from 'react-router';
 import AdminLayout from './AdminLayout';
+import AdminFundingPanel from './AdminFundingPanel';
+import AdminInstructionsPanel from './AdminInstructionsPanel';
 
+// Bảng quyết toán còn là dữ liệu mẫu: làm thật ở TH-12 / TH-13 / TH-14.
 const pendingSettlements = [
   { id: 'BATCH-2026-10B', name: 'Lô Cua Gạch 10B', revenue: '150,000,000 ₫', status: 'ready', date: '25/09/2026' },
   { id: 'BATCH-2026-09A', name: 'Lô Cua Lột 09A', revenue: '85,000,000 ₫', status: 'processing', date: '22/09/2026' },
 ];
 
-const withdrawalRequests = [
-  { id: 'WD-001', user: 'Trần Thị B', role: 'Investor', amount: '25,000,000 ₫', bank: 'Vietcombank', status: 'pending' },
-  { id: 'WD-002', user: 'Trại Cần Giờ 01', role: 'Operator', amount: '60,000,000 ₫', bank: 'MB Bank', status: 'pending' },
-];
+const tabs = [
+  { id: 'funding', label: 'Gọi vốn' },
+  { id: 'instructions', label: 'Lệnh chi' },
+  { id: 'settlement', label: 'Quyết toán' },
+] as const;
+type Tab = typeof tabs[number]['id'];
 
 export default function AdminFinance() {
+  const [params, setParams] = useSearchParams();
+  const tab: Tab = tabs.some(t => t.id === params.get('tab')) ? params.get('tab') as Tab : 'funding';
+
   return (
     <AdminLayout activeTab="finance">
       <header className="mb-6">
         <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Đối soát & Tài chính</h1>
-        <p className="text-sm text-slate-500 mt-1">Quản lý chia sẻ doanh thu (Revenue Pool) và xử lý giao dịch Rút/Nạp.</p>
+        <p className="text-sm text-slate-500 mt-1">Tiền nằm ở tài khoản chuyên dùng của từng lô do trung gian thanh toán giữ; nền tảng chỉ phát lệnh chi và đối soát.</p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Ví Nền tảng (Platform Pool)</p>
-            <h3 className="text-3xl font-extrabold text-slate-900">4,250,000,000 <span className="text-sm font-medium text-slate-500">₫</span></h3>
-          </div>
-          <div className="w-12 h-12 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
-            <DollarSign className="w-6 h-6" />
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Doanh thu chờ đối soát</p>
-            <h3 className="text-3xl font-extrabold text-slate-900">235,000,000 <span className="text-sm font-medium text-slate-500">₫</span></h3>
-          </div>
-          <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
-            <ArrowRightLeft className="w-6 h-6" />
-          </div>
-        </div>
+      <div role="tablist" aria-label="Mục tài chính" className="flex gap-1 border-b border-slate-200 mb-6">
+        {tabs.map(t => (
+          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setParams({ tab: t.id }, { replace: true })}
+            className={`px-4 py-2 text-sm font-bold border-b-2 -mb-px ${tab === t.id ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      <div className="space-y-6">
-        {/* Settlement Section */}
+      {tab === 'funding' && <AdminFundingPanel />}
+      {tab === 'instructions' && <AdminInstructionsPanel />}
+      {tab === 'settlement' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-200 bg-slate-50">
-            <h2 className="font-bold text-slate-900">1. Các Lô chờ Đối soát Doanh thu (Settlement)</h2>
+            <h2 className="font-bold text-slate-900">Các Lô chờ Đối soát Doanh thu (Settlement)</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Dữ liệu mẫu, chưa nối API.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -89,46 +88,7 @@ export default function AdminFinance() {
             </table>
           </div>
         </div>
-
-        {/* Withdrawal Section */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-200 bg-slate-50">
-            <h2 className="font-bold text-slate-900">2. Yêu cầu Rút tiền (Withdrawals)</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-white border-b border-slate-100 text-slate-500">
-                <tr>
-                  <th className="p-4 font-bold">Mã GD</th>
-                  <th className="p-4 font-bold">Người yêu cầu</th>
-                  <th className="p-4 font-bold">Số tiền rút</th>
-                  <th className="p-4 font-bold">Ngân hàng thụ hưởng</th>
-                  <th className="p-4 font-bold text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {withdrawalRequests.map(item => (
-                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-4 font-semibold text-slate-900">{item.id}</td>
-                    <td className="p-4">
-                      <div className="font-bold text-slate-700">{item.user}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">{item.role}</div>
-                    </td>
-                    <td className="p-4 font-mono font-medium text-slate-900">{item.amount}</td>
-                    <td className="p-4 text-slate-600">{item.bank}</td>
-                    <td className="p-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded transition-colors">Từ chối</button>
-                        <button onClick={() => alert('Đã duyệt chuyển khoản!')} className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition-colors">Duyệt chi</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+      )}
     </AdminLayout>
   );
 }

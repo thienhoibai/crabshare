@@ -44,11 +44,15 @@ public static class FeatureRegistry
         services.AddScoped<FundingService>();         // Features/Funding
         services.AddSingleton<RiskDisclosureDocuments>();
         services.AddOptions<FundingOptions>().BindConfiguration("Funding");
+        services.AddScoped<FundingCloseService>();    // TH-07 hết hạn giữ chỗ, chốt vốn hoặc huỷ lô + hoàn tiền
+        services.AddScoped<FundingAdminService>();    // TH-07 bảng vốn vào theo lô (AdminFinance)
+        services.AddHostedService<FundingCloseJob>(); // chạy mỗi phút; tắt bằng Funding:CloseJob:Enabled = false
         // services.AddScoped<ContractService>();     // Features/Contracts
         // services.AddScoped<PaymentService>();      // Features/Payments
         services.AddScoped<PaymentRequestService>();  // Features/Payments — VietQR dùng chung (TH-05)
         services.AddScoped<PaymentWebhookService>();  // Features/Payments — webhook báo có + giả lập (TH-06)
         services.AddScoped<RefundService>();          // lệnh hoàn tiền dùng chung (TH-06, NH-07, NH-11, TH-07)
+        services.AddScoped<PaymentInstructionQueryService>(); // UC40 danh sách lệnh chi cho admin (TH-07, TH-10)
         services.AddScoped<IPaymentPurposeHandler, ContributionPaymentHandler>(); // tiền góp vốn về → Confirmed
         services.AddOptions<PaymentOptions>().BindConfiguration(PaymentOptions.Section);
         // services.AddScoped<SettlementService>();   // Features/Settlement
