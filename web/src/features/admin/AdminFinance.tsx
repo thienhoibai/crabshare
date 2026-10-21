@@ -1,9 +1,14 @@
-import { CheckCircle2, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Send } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { errorMessage } from '../../shared/api/http';
 import { useSearchParams } from 'react-router';
 import AdminLayout from './AdminLayout';
 import AdminFundingPanel from './AdminFundingPanel';
 import AdminInstructionsPanel from './AdminInstructionsPanel';
 import AdminBatchContracts from './AdminBatchContracts';
+import AdminTranchesPanel from './AdminTranchesPanel';
+import AdminUnmatchedPanel from './AdminUnmatchedPanel';
+import { sendPaymentInstruction, type PaymentInstruction } from './financeApi';
 
 // Bảng quyết toán còn là dữ liệu mẫu: làm thật ở TH-12 / TH-13 / TH-14.
 const pendingSettlements = [
@@ -13,11 +18,34 @@ const pendingSettlements = [
 
 const tabs = [
   { id: 'funding', label: 'Gọi vốn' },
+  { id: 'tranches', label: 'Giải ngân' },
   { id: 'instructions', label: 'Lệnh chi' },
+  { id: 'reconcile', label: 'Đối soát' },
   { id: 'contracts', label: 'Hợp đồng' },
   { id: 'settlement', label: 'Quyết toán' },
 ] as const;
 type Tab = typeof tabs[number]['id'];
+
+/** UC40 — gửi lệnh chi qua cổng thanh toán (TH-10); chỉ lệnh Chờ gửi hoặc Thất bại. */
+function SendInstructionButton({ instruction }: { instruction: PaymentInstruction }) {
+  const qc = useQueryClient();
+  const send = useMutation({
+    mutationFn: () => sendPaymentInstruction(instruction.instructionId),
+    onSuccess: async () => {
+      await Promise.all([qc.invalidateQueries({ queryKey: ['admin-instructions'] }), qc.invalidateQueries({ queryKey: ['admin-tranches'] }), qc.invalidateQueries({ queryKey: ['admin-funding'] })]);
+    },
+  });
+  if (instruction.status !== 'Created' && instruction.status !== 'Failed') return null;
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded disabled:opacity-50 whitespace-nowrap"
+        disabled={send.isPending} onClick={() => send.mutate()}>
+        <Send className="w-3.5 h-3.5" /> {send.isPending ? 'Đang gửi…' : instruction.status === 'Failed' ? 'Gửi lại' : 'Gửi lệnh'}
+      </button>
+      {send.isError && <span className="text-xs text-red-700" role="alert">{errorMessage(send.error)}</span>}
+    </div>
+  );
+}
 
 export default function AdminFinance() {
   const [params, setParams] = useSearchParams();
@@ -40,7 +68,9 @@ export default function AdminFinance() {
       </div>
 
       {tab === 'funding' && <AdminFundingPanel />}
-      {tab === 'instructions' && <AdminInstructionsPanel />}
+      {tab === 'tranches' && <AdminTranchesPanel />}
+      {tab === 'instructions' && <AdminInstructionsPanel actions={i => <SendInstructionButton instruction={i} />} />}
+      {tab === 'reconcile' && <AdminUnmatchedPanel />}
       {tab === 'contracts' && <AdminBatchContracts />}
       {tab === 'settlement' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

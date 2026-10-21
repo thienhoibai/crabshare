@@ -56,6 +56,8 @@ public static class FeatureRegistry
         services.AddScoped<PaymentWebhookService>();  // Features/Payments — webhook báo có + giả lập (TH-06)
         services.AddScoped<RefundService>();          // lệnh hoàn tiền dùng chung (TH-06, NH-07, NH-11, TH-07)
         services.AddScoped<PaymentInstructionQueryService>(); // UC40 danh sách lệnh chi cho admin (TH-07, TH-10)
+        services.AddScoped<DisbursementService>();    // TH-10 giải ngân theo mốc (UC18)
+        services.AddScoped<PayoutSendService>();      // TH-10 gửi lệnh chi + đối soát (UC40)
         services.AddScoped<IPaymentPurposeHandler, ContributionPaymentHandler>(); // tiền góp vốn về → Confirmed
         services.AddOptions<PaymentOptions>().BindConfiguration(PaymentOptions.Section);
         // services.AddScoped<SettlementService>();   // Features/Settlement

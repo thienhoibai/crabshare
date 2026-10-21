@@ -32,6 +32,7 @@ const OperatorKyc = lazy(() => import('../features/operator/OperatorKyc'))
 const OperatorRegistration = lazy(() => import('../features/operator/OperatorRegistration'))
 const OperatorCreateBatch = lazy(() => import('../features/operator/OperatorCreateBatch'))
 const OperatorContract = lazy(() => import('../features/operator/OperatorContract'))
+const OperatorDisbursements = lazy(() => import('../features/operator/OperatorDisbursements'))
 const OperatorHarvest = lazy(() => import('../features/operator/OperatorHarvest'))
 const OperatorSettlement = lazy(() => import('../features/operator/OperatorSettlement'))
 const OperatorFarmMap = lazy(() => import('../features/operator/OperatorFarmMap'))
@@ -129,6 +130,7 @@ export const router = createBrowserRouter([
           { path: '/operator/payout-account', element: page(OperatorPayoutAccount) },
           { path: '/operator/create-batch', element: page(OperatorCreateBatch) },
           { path: '/operator/contract', element: page(OperatorContract) },
+          { path: '/operator/disbursements', element: page(OperatorDisbursements) },
           { path: '/operator/harvest', element: page(OperatorHarvest) },
           { path: '/operator/settlement', element: page(OperatorSettlement) },
           { path: '/operator/boxes', element: page(OperatorFarmMap) },
