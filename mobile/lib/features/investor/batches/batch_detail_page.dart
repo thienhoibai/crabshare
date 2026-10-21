@@ -29,7 +29,8 @@ class BatchDetailPage extends ConsumerWidget {
       body: AppRefreshIndicator(
         onRefresh: () async {
           ref.read(timelineRefreshProvider.notifier).refresh();
-          await ref.refresh(batchDetailProvider(code).future);
+          ref.invalidate(batchDetailProvider(code));
+          await ref.read(batchDetailProvider(code).future);
         },
         child: batch.when(
           loading: () => SafeArea(

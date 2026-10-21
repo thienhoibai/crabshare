@@ -17,7 +17,7 @@ class ApiTimelineRepository implements TimelineRepository {
   Future<TimelinePage> timeline(String code, {String? before, CancelToken? cancelToken}) async {
     final response = await dio.get<Map<String, dynamic>>(
       '/api/batches/${Uri.encodeComponent(code)}/timeline',
-      queryParameters: {'days': 7, if (before != null) 'before': before},
+      queryParameters: {'days': 7, 'before': ?before},
       cancelToken: cancelToken,
     );
     final page = TimelinePage.fromJson(response.data!);
