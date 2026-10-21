@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
@@ -8,6 +6,7 @@ import '../../../shared/models/batch_enums.dart';
 import 'api_operator_repository.dart';
 import 'alert_repository.dart' show alertsProvider;
 import 'operator_models.dart';
+import '../harvest/harvest_models.dart';
 export 'alert_repository.dart' show alertsProvider;
 export '../evidence/capture_requests_repository.dart'
     show captureRequestsProvider;
@@ -30,10 +29,14 @@ abstract interface class OperatorRepository {
   Future<void> acknowledgeAlert(int alertId, String note);
   Future<List<BoxSlot>> boxes();
 
-  /// Ghi một con cua đã cân → backend xếp hạng, tạo crab_tag và gửi lệnh in. Trả về mã tem.
-  Future<String> recordHarvestedCrab({
-    required String batchCode,
+  /// Server records the individual and returns its immutable grade/tag snapshot.
+  Future<HarvestedCrab> recordHarvestedCrab({
+    required int harvestId,
+    required String requestId,
+    required String slotCode,
+    required int expectedCrabItemId,
     required int weightG,
+    required ShellCondition shellCondition,
   });
 }
 
@@ -109,7 +112,6 @@ class ProductionActions {
 /// Dữ liệu mẫu để dựng giao diện (số liệu ví dụ, không lấy từ backend).
 class MockOperatorRepository implements OperatorRepository {
   static final _now = DateTime.now();
-  static final _random = Random();
 
   Future<T> _delay<T>(T value) =>
       Future.delayed(const Duration(milliseconds: 300), () => value);
@@ -259,13 +261,13 @@ class MockOperatorRepository implements OperatorRepository {
   ]);
 
   @override
-  Future<String> recordHarvestedCrab({
-    required String batchCode,
+  Future<HarvestedCrab> recordHarvestedCrab({
+    required int harvestId,
+    required String requestId,
+    required String slotCode,
+    required int expectedCrabItemId,
     required int weightG,
-  }) {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    final code =
-        'CS${List.generate(10, (_) => chars[_random.nextInt(chars.length)]).join()}'; // CHAR(12) như crab_tag.tag_code
-    return _delay(code);
-  }
+    required ShellCondition shellCondition,
+  }) =>
+      Future.error(UnsupportedError('Harvest recording requires the server.'));
 }

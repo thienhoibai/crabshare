@@ -3,12 +3,14 @@ import 'package:dio/dio.dart';
 import 'alert_repository.dart';
 import 'operator_models.dart';
 import 'operator_repository.dart';
+import '../harvest/harvest_models.dart';
+import '../harvest/harvest_repository.dart';
 
 class ApiOperatorRepository implements OperatorRepository {
   ApiOperatorRepository(this.dio);
 
   final Dio dio;
-  // Keep the two unrelated features on their existing implementation.
+  // Keep unrelated box consumers on their existing implementation.
   final OperatorRepository _legacyFeatures = MockOperatorRepository();
 
   Future<List<T>> _allPages<T>(
@@ -92,12 +94,22 @@ class ApiOperatorRepository implements OperatorRepository {
   Future<List<BoxSlot>> boxes() => _legacyFeatures.boxes();
 
   @override
-  Future<String> recordHarvestedCrab({
-    required String batchCode,
+  Future<HarvestedCrab> recordHarvestedCrab({
+    required int harvestId,
+    required String requestId,
+    required String slotCode,
+    required int expectedCrabItemId,
     required int weightG,
-  }) => _legacyFeatures.recordHarvestedCrab(
-    batchCode: batchCode,
-    weightG: weightG,
+    required ShellCondition shellCondition,
+  }) => ApiHarvestRepository(dio).record(
+    HarvestInput(
+      harvestId: harvestId,
+      requestId: requestId,
+      slotCode: slotCode,
+      expectedCrabItemId: expectedCrabItemId,
+      weightG: weightG,
+      shellCondition: shellCondition,
+    ),
   );
 
   static String _date(DateTime value) =>

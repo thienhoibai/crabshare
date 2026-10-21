@@ -32,6 +32,7 @@ public sealed class BoxListQuery
 {
     [RegularExpression("^(Available|Occupied|Maintenance)$")] public string? Status { get; set; }
     [MaxLength(30)] public string? Search { get; set; }
+    [MaxLength(20)] public string? BatchCode { get; set; }
 }
 
 public sealed record BoxEvidenceResponse(long Id, DateTimeOffset ReceivedAt, string ReviewStatus);

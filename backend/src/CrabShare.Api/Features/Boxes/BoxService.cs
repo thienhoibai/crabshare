@@ -32,6 +32,12 @@ public sealed class BoxService(AppDbContext db, ICurrentUser me, TimeProvider cl
         var member = await MemberAsync(false, ct);
         var boxes = db.PhysicalSlots.AsNoTracking().Where(b => b.OperatorId == member.OperatorId);
         if (!string.IsNullOrEmpty(query.Status)) boxes = boxes.Where(b => b.Status == query.Status);
+        if (!string.IsNullOrWhiteSpace(query.BatchCode))
+        {
+            var batchCode = query.BatchCode.Trim();
+            boxes = boxes.Where(b => db.SlotAllocations.Any(a => a.SlotId == b.SlotId && a.ReleasedAt == null && a.Batch.BatchCode == batchCode
+                && (a.Batch.Status == "InProduction" || a.Batch.Status == "Stocked" || a.Batch.Status == "Harvesting")));
+        }
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var search = query.Search.Trim();
@@ -41,7 +47,7 @@ public sealed class BoxService(AppDbContext db, ICurrentUser me, TimeProvider cl
         {
             Slot = b,
             Allocation = db.SlotAllocations.Where(a => a.SlotId == b.SlotId && a.ReleasedAt == null
-                && (a.Batch.Status == "InProduction" || a.Batch.Status == "Stocked"))
+                && (a.Batch.Status == "InProduction" || a.Batch.Status == "Stocked" || a.Batch.Status == "Harvesting"))
                 .OrderByDescending(a => a.AllocatedAt)
                 .Select(a => new { a.BatchId, a.Batch.BatchCode, a.AllocatedAt }).FirstOrDefault(),
         });

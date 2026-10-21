@@ -41,6 +41,9 @@ import 'package:crabshare_mobile/features/operator/data/operator_repository.dart
 import 'package:crabshare_mobile/features/operator/data/api_operator_repository.dart';
 
 import 'helpers/production_fakes.dart';
+import 'helpers/harvest_fakes.dart';
+
+import 'package:crabshare_mobile/features/operator/harvest/harvest_repository.dart';
 
 import 'package:crabshare_mobile/features/operator/data/operator_models.dart';
 import 'package:crabshare_mobile/features/operator/evidence/capture_page.dart';
@@ -116,6 +119,9 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
+              harvestRepositoryProvider.overrideWithValue(
+                ApiHarvestRepository(HarvestServer().dio()),
+              ),
               slotEventRepositoryProvider.overrideWithValue(
                 ApiSlotEventRepository(slotEventDio()),
               ),

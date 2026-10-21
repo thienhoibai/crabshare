@@ -24,6 +24,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'helpers/discovery_fakes.dart';
 import 'helpers/notification_fakes.dart';
+import 'helpers/harvest_fakes.dart';
 import 'pages_smoke_test.dart' show smokePages;
 
 const _user = AppUser(
@@ -60,55 +61,24 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() => initializeDateFormatting('vi_VN'));
   testWidgets(
-    'harvest demo rows fit small screens and camera failures stay handled',
+    'harvest server history fits small screens without a false activation action',
     (tester) async {
       tester.view.physicalSize = const Size(320, 568);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
+      final server = HarvestServer()..records = [harvestRecordJson()];
       await tester.pumpWidget(
-        _app(
-          const HarvestPage(batchCode: 'CS-2609-04'),
-          discoveryDio((_) => jsonResponse({})),
-        ),
+        _app(const HarvestPage(batchCode: 'REAL-01'), server.dio()),
       );
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.scrollUntilVisible(
-        find.byType(TextField),
-        150,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.enterText(find.byType(TextField), '420');
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
-        find.text('Tạo tem minh hoạ'),
-        150,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.tap(find.text('Tạo tem minh hoạ'));
-      await tester.pump(const Duration(milliseconds: 500));
-      ScaffoldMessenger.of(tester.element(find.byType(HarvestPage)))
-          .clearSnackBars();
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.text('Ảnh minh hoạ'),
+        find.textContaining('Tem: 23456789ABCD'),
         150,
         scrollable: find.byType(Scrollable).first,
       );
       await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      const cameraChannel = MethodChannel('plugins.flutter.io/image_picker');
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(
-            cameraChannel,
-            (_) async => throw PlatformException(code: 'camera_access_denied'),
-          );
-      addTearDown(
-        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(cameraChannel, null),
-      );
-      await tester.tap(find.text('Ảnh minh hoạ'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Không mở được camera.'), findsOneWidget);
+      expect(find.textContaining('SOFT'), findsWidgets);
+      expect(find.text('Ảnh minh hoạ'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },
@@ -202,6 +172,7 @@ void main() {
     'Hộ nuôi · Đóng gói đơn',
     'Hộ nuôi · Quét tem đóng gói',
     'Hộ nuôi · Hôm nay',
+    'Hộ nuôi · Thu hoạch',
   };
   for (final MapEntry(key: name, value: page) in smokePages.entries) {
     testWidgets(

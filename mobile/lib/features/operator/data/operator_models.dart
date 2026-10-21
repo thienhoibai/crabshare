@@ -333,25 +333,3 @@ class TodaySummary {
     );
   }
 }
-
-/// Một con cua đã cân lúc thu hoạch, kèm tem đã in.
-class HarvestedCrab {
-  const HarvestedCrab({
-    required this.tagCode,
-    required this.weightG,
-    required this.gradeCode,
-    this.activated = false,
-  });
-
-  final String tagCode;
-  final int weightG;
-  final String gradeCode;
-  final bool activated;
-
-  HarvestedCrab activate() => HarvestedCrab(
-    tagCode: tagCode,
-    weightG: weightG,
-    gradeCode: gradeCode,
-    activated: true,
-  );
-}

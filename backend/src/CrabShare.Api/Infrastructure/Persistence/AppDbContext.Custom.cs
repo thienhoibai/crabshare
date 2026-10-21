@@ -18,6 +18,7 @@ public partial class AppDbContext
         ConfigureBatchOfftakePrice(modelBuilder);
         ConfigureProduction(modelBuilder);
         ConfigureSlotEvents(modelBuilder);
+        ConfigureHarvest(modelBuilder);
         // Ví dụ: modelBuilder.Entity<Entities.Batch>().HasQueryFilter(b => b.Status != "Cancelled");
 
         // Hai người đổi giá cùng lúc: lần lưu sau bị từ chối thay vì ghi "giá cũ" sai vào lịch sử giá
