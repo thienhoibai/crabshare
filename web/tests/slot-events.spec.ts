@@ -4,6 +4,7 @@ const code = 'VI09-TEST'
 const policy = { id: 1, versionNo: 1, restockCutoffBasis: 'AfterStocking', restockCutoffDays: 12, mortalityWindowHours: null, mortalityThresholdPercent: null, mortalitySeverity: null, mortalityAckWithinHours: null, createdBy: 1, createdAt: '2026-10-20T01:00:00Z' }
 const event = { id: 9, batchCode: code, slotCode: '0001', eventType: 'Molted', occurredAt: '2026-10-20T08:00:00+07:00', quantity: 1, note: 'Theo dõi hộp', crabItemId: 10, itemUuid: 'CRAB-10', destinationSlotCode: null, replacesCrabItemId: null, evidenceId: null, actorId: 1, aliveCount: 2 }
 async function setup(page: Page, options: { emptyPolicy?: boolean; staff?: boolean; dead?: boolean; noEvidence?: boolean } = {}) {
+  await page.route(`**/api/batches/${code}/timeline?*`, route => route.fulfill({ json: { batchCode: code, timeZone: 'Asia/Ho_Chi_Minh', groups: [], hasMore: false, nextBefore: null } }))
   await page.addInitScript(() => localStorage.setItem('crabshare-auth', JSON.stringify({ state: { token: 'test-token', expiresAt: '2099-01-01T00:00:00Z', user: { userId: 1, fullName: 'Viên', email: 'test@local', status: 'Active', roles: ['OperatorMember'], operatorId: 1 } }, version: 0 })))
   const state = { current: options.emptyPolicy ? null as typeof policy | null : policy, events: [] as typeof event[], aliveCount: 2, contexts: 0, batches: 0, boxes: [] as string[] }
   await page.route('**/api/operators/me', route => route.fulfill({ json: { operatorId: 1, legalName: 'Trại thử', status: 'Approved', memberRole: options.staff ? 'Staff' : 'Owner' } }))

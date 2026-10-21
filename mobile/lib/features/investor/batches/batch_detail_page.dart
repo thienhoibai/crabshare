@@ -12,6 +12,8 @@ import '../../../shared/models/batch_enums.dart';
 import '../../../shared/widgets/app_ui.dart';
 import '../data/investor_models.dart';
 import '../data/investor_repository.dart';
+import '../data/timeline_repository.dart';
+import 'batch_timeline.dart';
 
 /// Chi tiết lô: điều khoản công bố, chi phí đã khóa và tiến độ gọi vốn từ API.
 /// Không hiển thị lợi suất kỳ vọng (TL-05 §8, BR-49).
@@ -25,7 +27,10 @@ class BatchDetailPage extends ConsumerWidget {
     final batch = ref.watch(batchDetailProvider(code));
     return Scaffold(
       body: AppRefreshIndicator(
-        onRefresh: () => ref.refresh(batchDetailProvider(code).future),
+        onRefresh: () async {
+          ref.read(timelineRefreshProvider.notifier).refresh();
+          await ref.refresh(batchDetailProvider(code).future);
+        },
         child: batch.when(
           loading: () => SafeArea(
             child: ListView(
@@ -174,6 +179,7 @@ class _Body extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                     _FundingCard(batch: b),
+                    BatchTimeline(code: b.code),
                     _PublishedTerms(batch: b),
                     const SectionHeader(title: 'Tiến trình lô'),
                     _Timeline(current: b.status),

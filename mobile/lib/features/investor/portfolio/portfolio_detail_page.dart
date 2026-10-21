@@ -7,6 +7,8 @@ import '../../../core/format/dates.dart';
 import '../../../core/format/money.dart';
 import '../../../shared/widgets/app_ui.dart';
 import '../data/portfolio_repository.dart';
+import '../data/timeline_repository.dart';
+import '../batches/batch_timeline.dart';
 
 const _paymentStates = {
   'Confirmed': 'Đã xác nhận',
@@ -33,7 +35,10 @@ class InvestorPortfolioDetailPage extends ConsumerWidget {
     return Scaffold(
       body: SafeArea(
         child: AppRefreshIndicator(
-          onRefresh: () => ref.refresh(provider.future),
+          onRefresh: () async {
+            ref.read(timelineRefreshProvider.notifier).refresh();
+            await ref.refresh(provider.future);
+          },
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
@@ -126,6 +131,7 @@ class InvestorPortfolioDetailPage extends ConsumerWidget {
                         ],
                       ),
                     ),
+                    BatchTimeline(code: b.code),
                     const SectionHeader(title: 'Lịch sử khoản góp'),
                     if (detail.contributions.isEmpty)
                       Text('Chưa có lịch sử khoản góp.', style: text.bodySmall),
