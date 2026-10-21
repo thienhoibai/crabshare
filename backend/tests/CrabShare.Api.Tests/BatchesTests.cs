@@ -38,6 +38,8 @@ public class BatchesTests(OperatorDatabaseFixture fixture) : IClassFixture<Opera
         ["expectedOutputKg"] = 300, ["cycleDays"] = 45, ["restockCutoffDays"] = 10,
         ["minViableCapital"] = 60_000_000, ["targetCapital"] = 75_000_000,
         ["maxCapital"] = 90_000_000, ["minContribution"] = 1_000_000, ["operatorSharePct"] = 7,
+        // CS-72 / TL-30: gửi duyệt cần ít nhất một giá chốt bao tiêu theo hạng; PUT lô cũng ghi lại danh sách giá này
+        ["offtakePrices"] = new[] { new { gradeCode = "L1", unitPrice = 260_000 } },
     };
     private static object Costs(string category = "MortalityReserve", int? tranche = 1) => new { items = new[]
     { new { category, description = "Dự phòng", quantity = 1.5m, unit = "đợt", unitPrice = 1001, trancheNo = tranche } }, total = 1 };
