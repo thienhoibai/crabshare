@@ -231,4 +231,31 @@ public class DisbursementDatabaseTests(FundingDatabaseFixture fixture) : IClassF
         Assert.Equal("Refunded", contribution.Status);
         Assert.NotNull(contribution.RefundedAt);
     }
+    /// <summary>TH-15: không giải ngân vượt số vốn đã chốt.</summary>
+    [Fact]
+    public async Task Release_cannot_exceed_locked_capital()
+    {
+        var (batchId, code, _) = await ReadyBatchAsync();
+        var (owner, _) = await OwnerAsync();
+        (await owner.PutAsJsonAsync("/api/me/payout-account?ownerType=Operator",
+            new { bankCode = "VCB", accountNo = "0123456789", accountHolderName = "HTX Test góp vốn" })).EnsureSuccessStatusCode();
+        var (admin, _) = await UserAsync("Admin TH-15", Roles.PlatformAdmin);
+        await using (var db = fixture.OpenDb())
+            await db.DisbursementTranches.Where(t => t.BatchId == batchId && t.TrancheNo == 1).ExecuteUpdateAsync(u => u.SetProperty(t => t.PlannedAmount, 7_000_000m));
+        var requested = (await (await owner.PostAsync($"/api/batches/{code}/tranches/1/request", null)).Content.ReadFromJsonAsync<TrancheResponse>())!;
+        var release = await admin.PostAsync($"/api/admin/tranches/{requested.TrancheId}/release", null);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, release.StatusCode);
+        Assert.Equal("payment.insufficient_capital", await ErrorCode(release));
+    }
+
+    /// <summary>TH-15 (TL-10): cổng sandbox idempotent theo mã tham chiếu — gửi lại không sinh giao dịch thứ hai.</summary>
+    [Fact]
+    public async Task Sandbox_gateway_is_idempotent_by_reference()
+    {
+        var gateway = new CrabShare.Api.Infrastructure.Payments.FakePaymentGateway();
+        var request = new CrabShare.Api.Infrastructure.Payments.PayoutRequest("SBX1", "VCB", "0123", "A", 1_000, "CHI00000042");
+        var first = await gateway.SendPayoutAsync(request, CancellationToken.None);
+        var again = await gateway.SendPayoutAsync(request, CancellationToken.None);
+        Assert.Equal(first.ProviderTransactionId, again.ProviderTransactionId);
+    }
 }

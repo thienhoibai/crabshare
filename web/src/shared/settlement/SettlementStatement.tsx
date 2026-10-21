@@ -1,4 +1,4 @@
-import { formatVnd } from '../lib/format'
+import { formatDateTime, formatVnd } from '../lib/format'
 import type { Settlement } from './settlementApi'
 import './settlement.css'
 
@@ -45,6 +45,13 @@ export function SettlementStatement({ s }: { s: Settlement }) {
           {s.lines.length > 1 && <tfoot><tr><th>Tổng {s.investorCount} nhà đầu tư</th><td>{formatVnd(s.totalCapital)}</td><td>{formatVnd(s.lines.reduce((a, l) => a + l.profitShare, 0))}</td><td /><td>{formatVnd(s.taxTotal)}</td><td><b>{formatVnd(s.totalNetPayout)}</b></td></tr></tfoot>}
         </table>
       </div>
+      {s.auditAnchors.length > 0 && (
+        <div className="st-anchors">
+          <b>Mã neo nhật ký kiểm toán</b>
+          <span className="st-note">Lưu lại các mã này: khi có tranh chấp, đối chiếu với chuỗi nhật ký tính lại từ dữ liệu (TL-08).</span>
+          <ul>{s.auditAnchors.map(x => <li key={x.auditId}>{x.milestone} · {formatDateTime(x.occurredAt)} · <code>{x.rowHash}</code></li>)}</ul>
+        </div>
+      )}
       <p className="st-note">Phần chia tính theo số vốn đã chốt, làm tròn tới đồng bằng phương pháp largest-remainder: tổng các dòng khớp đúng phần chia. {s.taxNotice}</p>
     </div>
   )

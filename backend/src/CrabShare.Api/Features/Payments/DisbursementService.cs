@@ -88,6 +88,13 @@ public sealed class DisbursementService(AppDbContext db, ICurrentUser me, IAudit
             .OrderByDescending(p => p.PayoutAccountId)
             .FirstOrDefaultAsync(ct)
             ?? throw new BusinessRuleException("payment.no_payout_account", "Hộ nuôi chưa có tài khoản nhận tiền đang dùng.");
+        // TH-15: không giải ngân vượt số vốn đã chốt (lô chốt ở mức vốn khả thi thấp hơn chi phí chuẩn thì đợt sau có thể không đủ tiền)
+        var disbursed = await db.PaymentInstructions
+            .Where(i => i.BatchAccountId == account.BatchAccountId && i.InstructionType == "Disbursement" && i.Status != "Failed")
+            .SumAsync(i => (decimal?)i.Amount, ct) ?? 0;
+        if (disbursed + tranche.PlannedAmount > (batch.TotalConfirmedCapital ?? 0))
+            throw new BusinessRuleException("payment.insufficient_capital",
+                $"Tổng giải ngân sẽ vượt số vốn đã chốt ({(batch.TotalConfirmedCapital ?? 0):N0} đ); cần xử lý theo luồng thanh lý hoặc điều chỉnh quy mô (TL-03, TL-17).");
 
         var instruction = new PaymentInstruction
         {

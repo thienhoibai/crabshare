@@ -141,6 +141,12 @@ public sealed class SettlementService(AppDbContext db, ICurrentUser me, IAuditLo
             .Where(i => i.SettlementLineId != null && lineIds.Contains(i.SettlementLineId.Value))
             .Select(i => new { i.SettlementLineId, i.InstructionId, i.Status })
             .ToListAsync(ct);
+        var anchors = await db.AuditLogs.AsNoTracking()
+            .Where(a => (a.EntityType == "batch" && a.EntityId == s.BatchId && (a.ActionType == "close_capital" || a.ActionType == "close"))
+                        || (a.EntityType == "settlement" && a.EntityId == s.SettlementId && a.ActionType == "approve"))
+            .OrderBy(a => a.AuditId)
+            .Select(a => new { a.ActionType, a.EntityType, a.OccurredAt, a.AuditId, a.RowHash })
+            .ToListAsync(ct);
         var userId = me.IsAuthenticated ? me.UserId : 0;
         var pool = (long)s.RevenuePool;
         var distributable = pool > 0 ? pool - (long)s.OperatorRemuneration : pool;
@@ -167,7 +173,10 @@ public sealed class SettlementService(AppDbContext db, ICurrentUser me, IAuditLo
             s.SettlementLines.Sum(l => (long)l.CapitalReturn), s.SettlementLines.Sum(l => (long)l.NetPayout), s.SettlementLines.Count,
             s.ProposedAt, s.FeedbackDeadline, s.ApprovedAt, s.CreatedAt, s.UpdatedAt, lines, feedback,
             $"Khoản khấu trừ thuế do người nuôi {s.Batch.Operator.LegalName} (MST {s.Batch.Operator.TaxCode}) khai thay và nộp thay theo hợp đồng của lô. "
-            + "Con số trên bảng là số tham khảo; số chính thức do bên có nghĩa vụ kê khai xác định.");
+            + "Con số trên bảng là số tham khảo; số chính thức do bên có nghĩa vụ kê khai xác định.",
+            anchors.Select(a => new AuditAnchorResponse(
+                a.ActionType switch { "close_capital" => "Chốt vốn", "approve" => "Duyệt quyết toán", _ => "Đóng lô" },
+                a.OccurredAt, a.AuditId, a.RowHash)).ToList());
     }
 
     internal static string InvestorName(Investor investor)

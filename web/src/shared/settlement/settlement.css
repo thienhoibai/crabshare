@@ -25,3 +25,6 @@
 .st-feedback__form button { font-weight: 700; font-size: 13px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line, #cbd5e1); background: transparent; cursor: pointer; }
 .st-link { justify-self: start; background: none; border: 0; padding: 0; color: #dc2626; font-weight: 700; cursor: pointer; font-size: 13px; }
 .st-error { color: #b91c1c; font-size: 13px; }
+.st-anchors { display: grid; gap: 4px; font-size: 13px; padding: 10px 12px; border: 1px dashed var(--line, #cbd5e1); border-radius: 10px; }
+.st-anchors ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; font-size: 12px; }
+.st-anchors code { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; overflow-wrap: anywhere; }

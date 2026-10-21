@@ -46,6 +46,10 @@ public sealed class FakePaymentGateway : IPaymentGateway, IBatchAccountProvision
         return Task.FromResult(new VietQrPayment(r.ReferenceCode, content, r.Amount, r.ExpiresAt));
     }
 
+    /// <summary>
+    /// Idempotent theo <see cref="PayoutRequest.Reference"/> như trung gian thật (TL-10: khoá idempotency): gửi lại cùng mã tham chiếu
+    /// (ví dụ EF chạy lại transaction khi kết nối chập chờn) nhận lại đúng mã giao dịch cũ, không sinh giao dịch thứ hai.
+    /// </summary>
     public Task<PayoutResult> SendPayoutAsync(PayoutRequest r, CancellationToken ct) =>
-        Task.FromResult(new PayoutResult(true, $"FAKE-{Guid.NewGuid():N}"[..20], null));
+        Task.FromResult(new PayoutResult(true, $"FAKE-OUT-{r.Reference}", null));
 }

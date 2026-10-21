@@ -34,7 +34,14 @@ public sealed record SettlementResponse(
     decimal OperatorSharePct, long OperatorRemuneration, long Distributable, long DepreciationAmount, long TaxTotal, long UncoveredLoss,
     long ReconciliationDifference, long TotalCapital, long TotalNetPayout, int InvestorCount,
     DateTimeOffset? ProposedAt, DateTimeOffset? FeedbackDeadline, DateTimeOffset? ApprovedAt, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
-    IReadOnlyList<SettlementLineResponse> Lines, IReadOnlyList<SettlementFeedbackResponse> Feedback, string TaxNotice);
+    IReadOnlyList<SettlementLineResponse> Lines, IReadOnlyList<SettlementFeedbackResponse> Feedback, string TaxNotice,
+    IReadOnlyList<AuditAnchorResponse> AuditAnchors);
+
+/// <summary>
+/// Mã neo nhật ký kiểm toán tại một mốc bắt buộc (TL-08 §6.4: chốt vốn, duyệt quyết toán, đóng lô): <c>row_hash</c> của dòng audit ghi mốc đó,
+/// bao trùm toàn bộ chuỗi trước nó. Các bên lưu lại để sau này đối chiếu với chuỗi tính lại từ dữ liệu.
+/// </summary>
+public sealed record AuditAnchorResponse(string Milestone, DateTimeOffset OccurredAt, long AuditId, string RowHash);
 
 /// <summary>Một lô ở giai đoạn thu hoạch / quyết toán cho AdminFinance, kèm bảng quyết toán nếu đã tính.</summary>
 public sealed record AdminSettlementSummary(
