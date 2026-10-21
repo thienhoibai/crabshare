@@ -3,7 +3,7 @@ using CrabShare.Api.Features.Auth;
 using CrabShare.Api.Features.Funding;
 using CrabShare.Api.Features.Contracts;
 using CrabShare.Api.Features.Payments;
-// using CrabShare.Api.Features.Settlement;
+using CrabShare.Api.Features.Settlement;
 
 // Viên
 using CrabShare.Api.Features.Operators;
@@ -60,7 +60,7 @@ public static class FeatureRegistry
         services.AddScoped<PayoutSendService>();      // TH-10 gửi lệnh chi + đối soát (UC40)
         services.AddScoped<IPaymentPurposeHandler, ContributionPaymentHandler>(); // tiền góp vốn về → Confirmed
         services.AddOptions<PaymentOptions>().BindConfiguration(PaymentOptions.Section);
-        // services.AddScoped<SettlementService>();   // Features/Settlement
+        services.AddScoped<SettlementService>();      // Features/Settlement — TH-12 tính quyết toán
 
         // Viên
         services.AddScoped<OperatorService>();        // Features/Operators

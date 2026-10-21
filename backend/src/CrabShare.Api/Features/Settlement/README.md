@@ -13,10 +13,25 @@ Pool > 0 → trích thù lao người nuôi (`operator_share_pct`), phần còn 
 | `settlement_line` | mỗi nhà đầu tư một dòng: `capital_return`, `profit_share`, `tax_withheld`, `net_payout` (CHECK = capital + profit − tax), `in_kind_qty_kg` |
 | `settlement_feedback` | ý kiến của nhà đầu tư trong hạn: `Open`, `Answered`, `Withdrawn`, `Unresolved` |
 
+## Đã làm (TH-12) — tính quyết toán
+| Method | Path | Ai gọi | Ghi chú |
+|---|---|---|---|
+| GET | `/api/admin/settlements` | PlatformAdmin | Lô `Harvesting` / `Settlement` / `Closed` kèm bảng quyết toán nếu đã tính (tab Quyết toán của AdminFinance) |
+| POST | `/api/admin/batches/{code}/settlements` | PlatformAdmin | UC38 tính bản nháp, body `{ taxWithholdingPct }` (tỷ lệ người nuôi khai, 0–35, 0 = chưa khai). Lần đầu → 201, lô `Harvesting` → `Settlement` (audit `batch/start_settlement`); tính lại khi còn `Draft`/`Proposed`/`Disputed` → 200, `revision_no` + 1, thay toàn bộ dòng, về `Draft` (phải công bố lại). Đã duyệt → 409 `settlement.locked`. Lỗi 422: `settlement.batch_not_ready`, `settlement.no_capital_shares`, `settlement.no_locked_cost`. Audit `settlement/calculate`·`recalculate` (đủ số liệu, nguồn doanh thu, từng dòng) |
+| GET | `/api/admin/settlements/{id}` | PlatformAdmin | Bảng đầy đủ: nguồn doanh thu, chi phí khoá, Pool, thù lao, phần chia, khấu hao, từng dòng, góp ý |
+
+Cách tính (`CrabShare.SettlementEngine/SettlementCalculator`, lõi thuần, có test FsCheck):
+- Doanh thu thực thu = `v_batch_actual_revenue.actual_revenue` (đơn `Completed` + cọc bị mất − hoàn tiền khiếu nại), âm thì lấy 0. Chi phí = tổng các dòng của bảng chi phí chuẩn `Locked`, làm tròn từng dòng như `Batches/BatchService`. `depreciation_amount` = phần khấu hao trong đó.
+- Pool = doanh thu − chi phí (CHECK `ck_settlement_pool`). Thù lao = `operator_share_pct` × Pool, **làm tròn xuống**, chỉ khi Pool > 0.
+- Phần chia = Pool − thù lao (Pool dương) hoặc Pool (âm), chia theo `capital_share` bằng `LargestRemainderAllocator` → tổng dòng = phần chia đúng tới đồng (`v_settlement_reconciliation.difference = 0`).
+- Pool âm: lỗ chia theo vốn, mỗi người tối đa bằng vốn góp; phần vượt trần của người đã chạm trần chia lại cho người còn dư địa (lặp). Lỗ vượt tổng vốn của mọi nhà đầu tư (`uncoveredLoss`) không chia cho nhà đầu tư — chỉ xảy ra khi doanh thu + tổng vốn < chi phí.
+- Khấu trừ thuế = tỷ lệ người nuôi khai × phần chia dương, làm tròn xuống (TL-07: nền tảng không tự khấu trừ, bảng hiển thị số trước thuế / khấu trừ / sau thuế và ghi chú ai có nghĩa vụ).
+- Mỗi lô **một** bảng (`uq_settlement_batch_id`): "bản sửa" là tính lại trên cùng dòng, tăng `revision_no`, chỉ trước khi duyệt; sau duyệt trigger `trg_settlement_locked` / `trg_settlement_line_locked` khoá số liệu (BR-30).
+- Test: `SettlementCalculatorTests` (ví dụ + bất biến) và `SettlementDatabaseTests` (Pool dương khớp đồng, Pool âm có trần, lỗ vượt vốn, 100 nhà đầu tư < 10 giây, quyền admin, lô chưa thu hoạch).
+
 ## Endpoint dự kiến
 | Method | Path | Ai gọi | Ghi chú |
 |---|---|---|---|
-| POST | `/api/admin/batches/{code}/settlements` | PlatformAdmin | UC38 tính bản nháp: doanh thu từ đơn `Completed`, chi phí khoá, pool, thù lao, chia theo `capital_share` bằng `LargestRemainderAllocator`, thuế (TL-07) |
 | POST | `/api/admin/settlements/{id}/propose` | PlatformAdmin | UC37 công bố, đặt `feedback_deadline` |
 | GET | `/api/settlements/{id}` | Investor của lô, Operator, Admin | UC35 sao kê: tổng + dòng của chính mình |
 | POST | `/api/settlements/{id}/feedback` | Investor của lô | UC36, chỉ trong hạn |
