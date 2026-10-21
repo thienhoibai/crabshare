@@ -12,7 +12,7 @@ namespace CrabShare.Api.Features.Funding;
 /// 2. Lô <c>Funding</c> tới <c>funding_deadline</c> (hoặc đã nhận đủ <c>max_capital</c>, TL-17 bước 7): ép hết hạn mọi giữ chỗ còn lại, rồi
 ///    - vốn đã xác nhận ≥ <c>min_viable_capital</c> → chụp <c>capital_share</c> từng nhà đầu tư, ghi <c>total_confirmed_capital</c> + <c>capital_closed_at</c>
 ///      (lô vẫn ở <c>Funding</c> tới khi thả giống, xem <c>Batches/FundingReadiness</c>);
-///    - thiếu → lô <c>Cancelled</c>, lập lệnh hoàn 100% từng khoản <c>Confirmed</c> qua <see cref="RefundService"/>, huỷ cam kết bao tiêu và hoàn cọc đã giữ.
+///    - thiếu → lô <c>Cancelled</c>, lập lệnh hoàn 100% từng khoản <c>Confirmed</c> qua <see cref="RefundService"/>, huỷ mã VietQR góp vốn còn chờ.
 /// Mỗi bước chạy trong transaction có khoá chuỗi audit. Webhook tiền về cũng khoá chuỗi audit trước, nên job và webhook chạy lần lượt:
 /// một khoản giữ chỗ chỉ đi tới đúng một trạng thái cuối (TL-17 §7).
 /// </summary>
@@ -153,31 +153,12 @@ public sealed class FundingCloseService(AppDbContext db, IAuditLog audit, TimePr
             refundCount++;
         }
 
-        // Cam kết bao tiêu gắn với lô huỷ: huỷ cam kết, hoàn cọc đã giữ (TL-30)
-        var offtakes = await db.OfftakeCommitments
-            .Where(o => o.BatchId == batch.BatchId && (o.Status == "PendingHarvest" || o.Status == "WindowOpen"))
-            .ToListAsync(ct);
-        foreach (var offtake in offtakes)
-        {
-            var before = new { offtake.Status, offtake.DepositStatus };
-            long? refundInstructionId = null;
-            if (offtake.DepositStatus == "Held")
-            {
-                var refund = await refunds.CreateRefundAsync(account.BatchAccountId, offtake.DepositAmount, offtake.ContributionId, null,
-                    $"Hoàn cọc bao tiêu #{offtake.OfftakeId}: lô {batch.BatchCode} huỷ", now, ct);
-                refundInstructionId = refund.InstructionId;
-                offtake.DepositStatus = "Refunded";
-                refundCount++;
-            }
-            offtake.Status = "Cancelled";
-            offtake.UpdatedAt = now;
-            await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("offtake_commitment", offtake.OfftakeId, "cancel", before,
-                new { offtake.Status, offtake.DepositStatus, reason = "batch_cancelled", refundInstructionId }, now, ct);
-        }
+        // Cam kết bao tiêu và cọc của lô huỷ thuộc module Offtake (NH-14), không xử lý ở đây.
 
-        // Mã VietQR còn chờ của lô (góp vốn, cọc bao tiêu) không còn hiệu lực
-        foreach (var request in await db.PaymentRequests.Where(r => r.BatchAccountId == account.BatchAccountId && r.Status == "Pending").ToListAsync(ct))
+        // Mã VietQR góp vốn còn chờ của lô không còn hiệu lực
+        foreach (var request in await db.PaymentRequests
+                     .Where(r => r.BatchAccountId == account.BatchAccountId && r.Purpose == PaymentPurposes.Contribution && r.Status == "Pending")
+                     .ToListAsync(ct))
         {
             request.Status = "Cancelled";
             request.UpdatedAt = now;
