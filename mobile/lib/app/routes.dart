@@ -26,6 +26,7 @@ abstract final class Routes {
       '/o/slot-events/${Uri.encodeComponent(batchCode)}';
   static const operatorLogs = '/o/logs';
   static const operatorAlerts = '/o/alerts';
+  static const operatorTags = '/o/tags';
   static const flaggedEvidence = '/o/evidence';
   static String evidenceExplanation(int id) => '$flaggedEvidence/$id';
   static const operatorAccount = '/o/account';
@@ -34,6 +35,8 @@ abstract final class Routes {
       '$dailyLogNew?batch=$batchCode';
   static const capture = '/o/capture';
   static String captureBox(String slotCode) => '$capture?slot=$slotCode';
+  static String captureTag(String tagCode) =>
+      Uri(path: capture, queryParameters: {'tagCode': tagCode}).toString();
   static String captureRequest({
     required int id,
     required String slotCode,

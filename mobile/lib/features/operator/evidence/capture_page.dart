@@ -13,6 +13,7 @@ import '../data/operator_models.dart';
 import 'evidence_camera.dart';
 import 'evidence_repository.dart';
 import 'capture_requests_repository.dart';
+import '../tags/tag_repository.dart';
 
 class CapturePage extends ConsumerStatefulWidget {
   const CapturePage({
@@ -21,11 +22,13 @@ class CapturePage extends ConsumerStatefulWidget {
     this.captureRequestId,
     this.requestBatchCode,
     this.requestDueAt,
+    this.tagCode,
   });
   final String? initialSlot;
   final int? captureRequestId;
   final String? requestBatchCode;
   final DateTime? requestDueAt;
+  final String? tagCode;
   @override
   ConsumerState<CapturePage> createState() => _CapturePageState();
 }
@@ -38,6 +41,10 @@ class _CapturePageState extends ConsumerState<CapturePage> {
   String? _error;
   bool _capturing = false;
   bool _sending = false;
+  bool _activating = false;
+  String? _activationStatus;
+  String? _activationError;
+  bool get _tagMode => widget.tagCode != null;
   bool get _busy => _capturing || _sending;
   Timer? _requestTimer;
   bool get _requestExpired =>
@@ -131,6 +138,75 @@ class _CapturePageState extends ConsumerState<CapturePage> {
     }
   }
 
+  Future<void> _sendTag() async {
+    if (_busy || _photo == null || widget.tagCode == null) return;
+    final userId = ref.read(sessionProvider).user?.userId;
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      final result = await ref
+          .read(evidenceRepositoryProvider)
+          .uploadForTag(tagCode: widget.tagCode!, photo: _photo!);
+      if (!mounted || ref.read(sessionProvider).user?.userId != userId) return;
+      setState(() {
+        _result = result;
+        _photo = null;
+        _activationStatus = null;
+        _activationError = null;
+      });
+    } catch (error) {
+      if (mounted && ref.read(sessionProvider).user?.userId == userId) {
+        setState(() => _error = apiErrorMessage(error));
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _activateTag() async {
+    final result = _result;
+    final code = widget.tagCode;
+    if (_activating ||
+        result == null ||
+        result.reviewStatus != 'Accepted' ||
+        code == null) {
+      return;
+    }
+    final session = ref.read(sessionProvider);
+    setState(() {
+      _activating = true;
+      _activationError = null;
+    });
+    try {
+      final lifecycle = await ref
+          .read(tagRepositoryProvider)
+          .activate(code, result.id);
+      if (!mounted ||
+          ref.read(sessionProvider).user?.userId != session.user?.userId ||
+          ref.read(sessionProvider).token != session.token) {
+        return;
+      }
+      setState(() => _activationStatus = lifecycle.status);
+      ref.invalidate(printedTagsProvider);
+      try {
+        final currentSession = ref.read(sessionProvider);
+        await ref.read(printedTagsProvider((currentSession, 1)).future);
+      } catch (_) {
+        // Activation succeeded; the tag list will show its own retry state.
+      }
+    } catch (error) {
+      if (mounted &&
+          ref.read(sessionProvider).user?.userId == session.user?.userId &&
+          ref.read(sessionProvider).token == session.token) {
+        setState(() => _activationError = apiErrorMessage(error));
+      }
+    } finally {
+      if (mounted) setState(() => _activating = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen(sessionProvider.select((session) => session.user?.userId), (
@@ -143,10 +219,15 @@ class _CapturePageState extends ConsumerState<CapturePage> {
           _result = null;
           _slot = null;
           _error = null;
+          _activating = false;
+          _activationStatus = null;
+          _activationError = null;
         });
       }
     });
-    final boxes = ref.watch(captureBoxesProvider);
+    final boxes = _tagMode
+        ? const AsyncData<List<BoxSlot>>([])
+        : ref.watch(captureBoxesProvider);
     final list = boxes.isLoading || boxes.hasError
         ? const <BoxSlot>[]
         : boxes.value ?? const <BoxSlot>[];
@@ -173,7 +254,21 @@ class _CapturePageState extends ConsumerState<CapturePage> {
         .where((box) => box.slotCode.contains(_search.text.trim()))
         .toList();
     return Scaffold(
-      bottomNavigationBar: selected == null
+      bottomNavigationBar: _tagMode
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+                child: _TagCaptureSheet(
+                  tagCode: widget.tagCode!,
+                  photo: _photo,
+                  busy: _busy,
+                  capturing: _capturing,
+                  onShoot: _takePhoto,
+                  onSend: _sendTag,
+                ),
+              ),
+            )
+          : selected == null
           ? null
           : SafeArea(
               child: Padding(
@@ -191,7 +286,9 @@ class _CapturePageState extends ConsumerState<CapturePage> {
             ),
       body: SafeArea(
         child: AppRefreshIndicator(
-          onRefresh: () => ref.refresh(captureBoxesProvider.future),
+          onRefresh: () => _tagMode
+              ? Future<void>.value()
+              : ref.refresh(captureBoxesProvider.future),
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
@@ -201,7 +298,11 @@ class _CapturePageState extends ConsumerState<CapturePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SubPageHeader(title: 'Chụp bằng chứng'),
+                      SubPageHeader(
+                        title: _tagMode
+                            ? 'Xác nhận tem ${widget.tagCode}'
+                            : 'Chụp bằng chứng',
+                      ),
                       const SizedBox(height: 14),
                       if (widget.captureRequestId != null) ...[
                         Text(
@@ -226,7 +327,9 @@ class _CapturePageState extends ConsumerState<CapturePage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Số hộp phải rõ trong ảnh',
+                              _tagMode
+                                  ? 'Chụp cua gắn tem này'
+                                  : 'Số hộp phải rõ trong ảnh',
                               style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(color: Colors.white),
                             ),
@@ -242,16 +345,17 @@ class _CapturePageState extends ConsumerState<CapturePage> {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      TextField(
-                        controller: _search,
-                        enabled: !_busy,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.search_rounded),
-                          hintText: 'Tìm số hộp (0014, 0143…)',
+                      if (!_tagMode)
+                        TextField(
+                          controller: _search,
+                          enabled: !_busy,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.search_rounded),
+                            hintText: 'Tìm số hộp (0014, 0143…)',
+                          ),
+                          onChanged: (_) => setState(() {}),
                         ),
-                        onChanged: (_) => setState(() {}),
-                      ),
                       const SizedBox(height: 12),
                       if (_error != null) ...[
                         Text(
@@ -272,22 +376,56 @@ class _CapturePageState extends ConsumerState<CapturePage> {
                       ],
                       if (_result != null) ...[
                         _ResultCard(result: _result!),
+                        if (_tagMode) ...[
+                          const SizedBox(height: 8),
+                          if (_result!.reviewStatus == 'Watch' ||
+                              _result!.reviewStatus == 'Flagged')
+                            const Text(
+                              'Đang chờ người thẩm định. Tem chưa được kích hoạt.',
+                            ),
+                          if (_result!.reviewStatus == 'Accepted' &&
+                              _activationStatus == null)
+                            FilledButton.icon(
+                              onPressed: _activating ? null : _activateTag,
+                              icon: const Icon(Icons.verified_outlined),
+                              label: Text(
+                                _activating
+                                    ? 'Đang kích hoạt…'
+                                    : 'Kích hoạt tem',
+                              ),
+                            ),
+                          if (_activationStatus != null)
+                            Text(
+                              'Tem đã kích hoạt · bằng chứng #${_result!.id}',
+                              style: const TextStyle(color: AppColors.success),
+                            ),
+                          if (_activationError != null)
+                            Text(
+                              _activationError!,
+                              style: const TextStyle(color: AppColors.danger),
+                            ),
+                        ],
                         const SizedBox(height: 14),
                       ],
-                      if (boxes.isLoading) const LoadingSkeleton(rows: 1),
-                      if (boxes.hasError)
+                      if (!_tagMode && boxes.isLoading)
+                        const LoadingSkeleton(rows: 1),
+                      if (!_tagMode && boxes.hasError)
                         ErrorView(
                           message: apiErrorMessage(boxes.error!),
                           onRetry: () => ref.invalidate(captureBoxesProvider),
                         ),
-                      if (boxes.hasValue && visible.isEmpty)
+                      if (_tagMode)
+                        const Text(
+                          'Ảnh sẽ được gắn với mã tem; thời gian chụp và vị trí GPS được gửi cùng bằng chứng.',
+                        ),
+                      if (!_tagMode && boxes.hasValue && visible.isEmpty)
                         const EmptyState(
                           icon: Icons.inventory_2_outlined,
                           title: 'Chưa có hộp phù hợp',
                           message:
                               'Chỉ hiện hộp đang được gán cho lô đang nuôi.',
                         ),
-                      if (boxes.hasValue && visible.isNotEmpty)
+                      if (!_tagMode && boxes.hasValue && visible.isNotEmpty)
                         SectionHeader(
                           title: 'Chọn hộp đang nuôi',
                           actionLabel: '${visible.length}',
@@ -296,32 +434,34 @@ class _CapturePageState extends ConsumerState<CapturePage> {
                   ),
                 ),
               ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                sliver: SliverGrid(
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final box = visible[index];
-                    final selected = box.slotCode == _slot;
-                    return _BoxTile(
-                      box: box,
-                      selected: selected,
-                      onTap: _busy || _requestExpired || _requestFinished
-                          ? null
-                          : () => setState(() {
-                              _slot = box.slotCode;
-                              _photo = null;
-                              _error = null;
-                            }),
-                    );
-                  }, childCount: visible.length),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    childAspectRatio: 0.9,
+              if (!_tagMode)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  sliver: SliverGrid(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final box = visible[index];
+                      final selected = box.slotCode == _slot;
+                      return _BoxTile(
+                        box: box,
+                        selected: selected,
+                        onTap: _busy || _requestExpired || _requestFinished
+                            ? null
+                            : () => setState(() {
+                                _slot = box.slotCode;
+                                _photo = null;
+                                _error = null;
+                              }),
+                      );
+                    }, childCount: visible.length),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          mainAxisSpacing: 10,
+                          crossAxisSpacing: 10,
+                          childAspectRatio: 0.9,
+                        ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -518,6 +658,84 @@ class _CaptureSheet extends StatelessWidget {
             child: Text(
               '${_evidenceLabel(box.latestEvidence!.reviewStatus)} · ${formatTime(box.latestEvidence!.receivedAt)} ${formatDayMonth(box.latestEvidence!.receivedAt)}',
               style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class _TagCaptureSheet extends StatelessWidget {
+  const _TagCaptureSheet({
+    required this.tagCode,
+    required this.photo,
+    required this.busy,
+    required this.capturing,
+    required this.onShoot,
+    required this.onSend,
+  });
+  final String tagCode;
+  final EvidencePhoto? photo;
+  final bool busy;
+  final bool capturing;
+  final VoidCallback onShoot;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) => AppCard(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: photo == null
+                  ? Container(
+                      width: 56,
+                      height: 56,
+                      color: AppColors.surfaceMuted,
+                      child: const Icon(Icons.photo_camera_outlined),
+                    )
+                  : Image.memory(
+                      photo!.bytes,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                    ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Tem $tagCode',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            SizedBox(
+              width: 130,
+              child: FilledButton(
+                onPressed: busy
+                    ? null
+                    : photo == null
+                    ? onShoot
+                    : onSend,
+                child: Text(
+                  busy
+                      ? (capturing ? 'Đang chụp…' : 'Đang gửi…')
+                      : photo == null
+                      ? 'Chụp'
+                      : 'Gửi ảnh',
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (photo != null)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: busy ? null : onShoot,
+              child: const Text('Chụp lại'),
             ),
           ),
       ],

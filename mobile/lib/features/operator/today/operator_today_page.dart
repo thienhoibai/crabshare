@@ -121,6 +121,11 @@ class OperatorTodayPage extends ConsumerWidget {
                 label: 'Đóng gói đơn — quét tem',
                 onTap: () => context.push(Routes.operatorPack),
               ),
+              const SizedBox(height: 10),
+              AddBar(
+                label: 'Quản lý tem đã in',
+                onTap: () => context.push(Routes.operatorTags),
+              ),
               const CaptureRequestsSection(),
               const SectionHeader(title: 'Lô đang nuôi'),
               ...batches.when(

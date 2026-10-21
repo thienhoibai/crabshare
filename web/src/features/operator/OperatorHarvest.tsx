@@ -27,7 +27,7 @@ function BatchList() {
   const [status, setStatus] = useState('Harvesting')
   const [page, setPage] = useState(1)
   const batches = useQuery({ queryKey: ['harvest-batches', userId, status, page], queryFn: ({ signal }) => listBatches(status, page, signal), retry: false })
-  return <><OpHeading eyebrow="Thu hoạch" title="Thu hoạch từng cá thể" description="Chọn lô để mở đợt, cân từng con và cấp tem truy xuất." action={<a className="rd-btn rd-btn--ghost" href="/operator/listings"><Store size={16} /> Niêm yết sản phẩm</a>} />
+  return <><OpHeading eyebrow="Thu hoạch" title="Thu hoạch từng cá thể" description="Chọn lô để mở đợt, cân từng con và cấp tem truy xuất." action={<><a className="rd-btn rd-btn--ghost" href="/operator/tags">Quản lý tem</a><a className="rd-btn rd-btn--ghost" href="/operator/listings"><Store size={16} /> Niêm yết sản phẩm</a></>} />
     <div className="op-field"><label htmlFor="harvest-batch-status">Trạng thái lô</label><select id="harvest-batch-status" className="op-select" value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}><option value="Harvesting">Đang thu hoạch</option><option value="InProduction">Đang sản xuất</option></select></div>
     {batches.isPending && <p role="status">Đang tải lô nuôi…</p>}
     {batches.isError && <div role="alert">{errorMessage(batches.error)} <OpBtn variant="ghost" onClick={() => void batches.refetch()}>Tải lại lô</OpBtn></div>}

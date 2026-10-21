@@ -88,6 +88,12 @@ class _Evidence implements EvidenceRepository {
       captureRequestStatus: 'Fulfilled',
     );
   }
+
+  @override
+  Future<EvidenceResult> uploadForTag({
+    required String tagCode,
+    required EvidencePhoto photo,
+  }) => throw UnimplementedError();
 }
 
 class _Camera implements EvidenceCamera {

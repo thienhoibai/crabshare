@@ -256,6 +256,12 @@ class _SmokeEvidenceRepository implements EvidenceRepository {
     int? captureRequestId,
     String? slotEventType,
   }) => throw UnimplementedError();
+
+  @override
+  Future<EvidenceResult> uploadForTag({
+    required String tagCode,
+    required EvidencePhoto photo,
+  }) => throw UnimplementedError();
 }
 
 class _SmokeCaptureRequests implements CaptureRequestsRepository {

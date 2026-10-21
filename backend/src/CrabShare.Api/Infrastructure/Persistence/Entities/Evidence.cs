@@ -26,6 +26,8 @@ public partial class Evidence
     /// </summary>
     public long? CaptureRequestId { get; set; }
 
+    public long? CrabItemId { get; set; }
+
     /// <summary>
     /// Giá trị: Photo, Video, Invoice
     /// </summary>
@@ -77,6 +79,8 @@ public partial class Evidence
     public virtual Batch Batch { get; set; } = null!;
 
     public virtual CaptureRequest? CaptureRequest { get; set; }
+
+    public virtual CrabItem? CrabItem { get; set; }
 
     public virtual ICollection<CrabItemEvent> CrabItemEvents { get; set; } = new List<CrabItemEvent>();
 

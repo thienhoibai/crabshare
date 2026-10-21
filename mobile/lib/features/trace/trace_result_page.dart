@@ -6,7 +6,7 @@ import '../../core/format/dates.dart';
 import '../../shared/widgets/app_ui.dart';
 import 'trace_repository.dart';
 
-/// Kết quả quét tem: hộ nuôi, lô, số hộp, khối lượng, hạng và chuỗi sự kiện từ hộp tới đơn hàng.
+/// Kết quả tra cứu công khai theo mã tem.
 class TraceResultPage extends ConsumerWidget {
   const TraceResultPage({super.key, required this.tagCode});
 
@@ -27,113 +27,76 @@ class TraceResultPage extends ConsumerWidget {
             children: [
               const SubPageHeader(title: 'Truy xuất nguồn gốc'),
               const SizedBox(height: 16),
-              const DemoNotice(),
-              Stack(
-                children: [
-                  RoundedImage(
-                    t.crabType.image,
-                    height: 200,
-                    width: double.infinity,
-                    radius: AppRadius.card,
-                  ),
-                  Positioned(
-                    left: 12,
-                    top: 12,
-                    child: InfoChip(
-                      icon: Icons.qr_code_2_rounded,
-                      label: t.tagCode,
-                    ),
-                  ),
-                  const Positioned(
-                    right: 12,
-                    bottom: 12,
-                    child: InfoChip(
-                      icon: Icons.verified_rounded,
-                      label: 'Tem minh hoạ',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
               AppCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(t.tagCode, style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 8),
                     Text(
-                      '${t.crabType.label} · hạng ${t.gradeCode} · ${t.weightG} g',
-                      style: Theme.of(context).textTheme.titleLarge,
+                      [
+                        _crabTypeLabel(t.crabType),
+                        if ((t.gradeName ?? t.gradeCode)?.isNotEmpty ?? false) t.gradeName ?? t.gradeCode!,
+                        if (t.weightG != null) '${t.weightG} g',
+                      ].join(' · '),
+                      style: Theme.of(context).textTheme.bodyLarge,
                     ),
                     const SizedBox(height: 12),
-                    _Row(
-                      icon: Icons.storefront_outlined,
-                      label: 'Hộ nuôi',
-                      value: t.operatorName,
-                    ),
-                    _Row(
-                      icon: Icons.inventory_2_outlined,
-                      label: 'Lô',
-                      value: t.batchCode,
-                    ),
-                    _Row(
-                      icon: Icons.grid_view_rounded,
-                      label: 'Hộp nuôi',
-                      value: 'Số ${t.slotCode}',
-                    ),
+                    _Row(icon: Icons.storefront_outlined, label: 'Hộ nuôi', value: t.operatorName),
+                    _Row(icon: Icons.location_on_outlined, label: 'Địa chỉ', value: t.farmAddress),
+                    _Row(icon: Icons.inventory_2_outlined, label: 'Lô', value: t.batchCode),
+                    _Row(icon: Icons.grid_view_rounded, label: 'Hộp nuôi', value: 'Số ${t.slotCode}'),
+                    _Row(icon: Icons.info_outline, label: 'Trạng thái', value: _statusLabel(t.itemStatus)),
+                    _Row(icon: Icons.event_outlined, label: 'Ngày thả giống', value: formatDate(t.stockedAt)),
+                    if (t.harvestedAt != null)
+                      _Row(icon: Icons.sailing_outlined, label: 'Ngày thu hoạch', value: formatDate(t.harvestedAt!)),
                   ],
                 ),
               ),
               const SectionHeader(title: 'Hành trình'),
               AppCard(
-                child: Column(
-                  children: [
-                    for (final (i, e) in t.events.indexed)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                child: t.events.isEmpty
+                    ? const Text('Chưa có sự kiện truy xuất.')
+                    : Column(
                         children: [
-                          Column(
-                            children: [
-                              Container(
-                                width: 14,
-                                height: 14,
-                                margin: const EdgeInsets.only(top: 3),
-                                decoration: BoxDecoration(
-                                  color: i == t.events.length - 1
-                                      ? AppColors.accent
-                                      : AppColors.ink,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              if (i < t.events.length - 1)
-                                Container(
-                                  width: 2,
-                                  height: 40,
-                                  color: AppColors.surfaceMuted,
-                                ),
-                            ],
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
+                          for (final (i, event) in t.events.indexed)
+                            Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  '${e.title} · ${formatDate(e.at)}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
+                                Column(
+                                  children: [
+                                    Container(
+                                      width: 14,
+                                      height: 14,
+                                      margin: const EdgeInsets.only(top: 3),
+                                      decoration: BoxDecoration(
+                                        color: i == t.events.length - 1 ? AppColors.accent : AppColors.ink,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    if (i < t.events.length - 1)
+                                      Container(width: 2, height: 40, color: AppColors.surfaceMuted),
+                                  ],
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${_eventLabel(event.eventType)} · ${formatDate(event.occurredAt)}',
+                                        style: const TextStyle(fontWeight: FontWeight.w700),
+                                      ),
+                                      if (event.note != null && event.note!.trim().isNotEmpty)
+                                        Text(event.note!, style: Theme.of(context).textTheme.bodySmall),
+                                      const SizedBox(height: 12),
+                                    ],
                                   ),
                                 ),
-                                Text(
-                                  e.detail,
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                                const SizedBox(height: 12),
                               ],
                             ),
-                          ),
                         ],
                       ),
-                  ],
-                ),
               ),
             ],
           ),
@@ -141,6 +104,27 @@ class TraceResultPage extends ConsumerWidget {
       ),
     );
   }
+
+  static String _crabTypeLabel(String value) => switch (value) {
+    'FatteningMudCrab' => 'Cua thịt',
+    'RoeCrab' => 'Cua gạch',
+    'SoftShellCrab' => 'Cua lột',
+    _ => value,
+  };
+
+  static String _statusLabel(String value) => switch (value) {
+    'Harvested' => 'Đã thu hoạch',
+    'Stocked' => 'Đang nuôi',
+    _ => value,
+  };
+
+  static String _eventLabel(String value) => switch (value) {
+    'Stocking' => 'Thả giống',
+    'Harvest' => 'Thu hoạch',
+    'TagActivated' => 'Kích hoạt tem',
+    'Packing' => 'Đóng gói',
+    _ => value,
+  };
 }
 
 class _Row extends StatelessWidget {
@@ -151,26 +135,24 @@ class _Row extends StatelessWidget {
   final String value;
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: AppColors.accentText),
-          const SizedBox(width: 10),
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      children: [
+        Icon(icon, size: 20, color: AppColors.accentText),
+        const SizedBox(width: 10),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
 }

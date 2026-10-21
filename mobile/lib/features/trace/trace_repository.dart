@@ -1,67 +1,98 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../shared/models/batch_enums.dart';
+import '../../core/api/api_client.dart';
 
-/// Kết quả tra cứu một tem: cua thuộc lô nào, nuôi ở hộp số mấy, cân bao nhiêu, đi tới đơn nào.
-/// Không trả ảnh nuôi — người mua chỉ cần biết nguồn gốc (quyết định của nhóm về trang truy xuất).
 class TraceResult {
   const TraceResult({
     required this.tagCode,
-    required this.crabType,
-    required this.gradeCode,
-    required this.weightG,
-    required this.operatorName,
     required this.batchCode,
+    required this.crabType,
+    required this.itemUuid,
+    required this.itemStatus,
+    required this.weightG,
+    required this.gradeCode,
+    required this.gradeName,
+    required this.stockedAt,
+    required this.harvestedAt,
+    required this.operatorName,
+    required this.farmAddress,
     required this.slotCode,
     required this.events,
   });
 
   final String tagCode;
-  final CrabType crabType;
-  final String gradeCode;
-  final int weightG;
-  final String operatorName;
   final String batchCode;
+  final String crabType;
+  final String itemUuid;
+  final String itemStatus;
+  final int? weightG;
+  final String? gradeCode;
+  final String? gradeName;
+  final DateTime stockedAt;
+  final DateTime? harvestedAt;
+  final String operatorName;
+  final String farmAddress;
   final String slotCode;
   final List<TraceEvent> events;
+
+  factory TraceResult.fromJson(Map<String, dynamic> json) => TraceResult(
+    tagCode: json['tagCode'] as String,
+    batchCode: json['batchCode'] as String,
+    crabType: json['crabType'] as String,
+    itemUuid: json['itemUuid'] as String,
+    itemStatus: json['itemStatus'] as String,
+    weightG: (json['weightG'] as num?)?.toInt(),
+    gradeCode: json['gradeCode'] as String?,
+    gradeName: json['gradeName'] as String?,
+    stockedAt: DateTime.parse(json['stockedAt'] as String).toLocal(),
+    harvestedAt: json['harvestedAt'] == null
+        ? null
+        : DateTime.parse(json['harvestedAt'] as String).toLocal(),
+    operatorName: json['operatorName'] as String,
+    farmAddress: json['farmAddress'] as String,
+    slotCode: json['slotCode'] as String,
+    events: (json['events'] as List<dynamic>? ?? const [])
+        .map((event) => TraceEvent.fromJson(Map<String, dynamic>.from(event as Map)))
+        .toList(growable: false),
+  );
 }
 
 class TraceEvent {
-  const TraceEvent(this.at, this.title, this.detail);
-  final DateTime at;
-  final String title;
-  final String detail;
+  const TraceEvent({required this.eventType, required this.occurredAt, this.note});
+
+  final String eventType;
+  final DateTime occurredAt;
+  final String? note;
+
+  factory TraceEvent.fromJson(Map<String, dynamic> json) => TraceEvent(
+    eventType: json['eventType'] as String,
+    occurredAt: DateTime.parse(json['occurredAt'] as String).toLocal(),
+    note: json['note'] as String?,
+  );
 }
 
-/// Endpoint công khai: GET /api/trace/{tagCode} (backend Features/Harvest). Hiện dùng dữ liệu mẫu.
 abstract interface class TraceRepository {
   Future<TraceResult> lookup(String tagCode);
 }
 
-final traceRepositoryProvider = Provider<TraceRepository>((ref) => MockTraceRepository());
-final traceProvider = FutureProvider.family<TraceResult, String>((ref, tag) => ref.watch(traceRepositoryProvider).lookup(tag));
+class ApiTraceRepository implements TraceRepository {
+  ApiTraceRepository(this.dio);
 
-class MockTraceRepository implements TraceRepository {
+  final Dio dio;
+
   @override
   Future<TraceResult> lookup(String tagCode) async {
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    if (tagCode.length != 12) throw ArgumentError('Mã tem gồm 12 ký tự.');
-    final now = DateTime.now();
-    return TraceResult(
-      tagCode: tagCode.toUpperCase(),
-      crabType: CrabType.fattening,
-      gradeCode: 'L2',
-      weightG: 420,
-      operatorName: 'HTX Nuôi cua Năm Căn',
-      batchCode: 'CS-2609-04',
-      slotCode: '1214',
-      events: [
-        TraceEvent(now.subtract(const Duration(days: 92)), 'Thả giống', 'Vào hộp 1214, lô CS-2609-04'),
-        TraceEvent(now.subtract(const Duration(days: 60)), 'Lột xác', 'Ghi nhận tại hộp 1214'),
-        TraceEvent(now.subtract(const Duration(days: 2)), 'Thu hoạch', 'Cân 420 g, hạng L2'),
-        TraceEvent(now.subtract(const Duration(days: 2)), 'Gắn tem', 'Tem in tại trại, kích hoạt bằng ảnh xác nhận'),
-        TraceEvent(now.subtract(const Duration(days: 1)), 'Đóng gói', 'Quét tem khi đóng gói đơn hàng'),
-      ],
+    final response = await dio.get<Map<String, dynamic>>(
+      '/api/trace/${Uri.encodeComponent(tagCode)}',
     );
+    return TraceResult.fromJson(response.data!);
   }
 }
+
+final traceRepositoryProvider = Provider.autoDispose<TraceRepository>(
+  (ref) => ApiTraceRepository(ref.watch(dioProvider)),
+);
+final traceProvider = FutureProvider.autoDispose.family<TraceResult, String>(
+  (ref, tagCode) => ref.watch(traceRepositoryProvider).lookup(tagCode),
+);

@@ -44,6 +44,7 @@ const OperatorEvidence = lazy(() => import('../features/operator/OperatorEvidenc
 const OperatorListings = lazy(() => import('../features/operator/OperatorListings'))
 const OperatorMembers = lazy(() => import('../features/operator/OperatorMembers'))
 const OperatorOrders = lazy(() => import('../features/operator/OperatorOrders'))
+const OperatorTags = lazy(() => import('../features/operator/OperatorTags'))
 
 const AdminDashboard = lazy(() => import('../features/admin/AdminDashboard'))
 const AdminAuditLog = lazy(() => import('../features/admin/AdminAuditLog'))
@@ -132,6 +133,7 @@ export const router = createBrowserRouter([
           { path: '/operator/contract', element: page(OperatorContract) },
           { path: '/operator/disbursements', element: page(OperatorDisbursements) },
           { path: '/operator/harvest', element: page(OperatorHarvest) },
+          { path: '/operator/tags', element: page(OperatorTags) },
           { path: '/operator/settlement', element: page(OperatorSettlement) },
           { path: '/operator/boxes', element: page(OperatorFarmMap) },
           { path: '/operator/log', element: page(OperatorDailyLog) },

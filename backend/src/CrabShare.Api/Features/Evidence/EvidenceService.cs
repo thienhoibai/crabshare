@@ -15,7 +15,7 @@ public sealed class EvidenceService(AppDbContext db, ICurrentUser me, EvidenceAc
     EvidenceImageProcessor images, IFileStorage storage, ICrabDetector detector, IOptions<EvidenceOptions> options,
     TimeProvider clock, ILogger<EvidenceService> logger)
 {
-    private sealed record CaptureContext(long BatchId, long SlotId, string BatchCode, string SlotCode);
+    private sealed record CaptureContext(long BatchId, long SlotId, string BatchCode, string SlotCode, long? CrabItemId = null);
 
     public async Task<EvidenceResponse> UploadAsync(UploadEvidenceRequest request, CancellationToken ct)
     {
@@ -67,6 +67,7 @@ public sealed class EvidenceService(AppDbContext db, ICurrentUser me, EvidenceAc
                 var evidence = new Infrastructure.Persistence.Entities.Evidence
                 {
                     BatchId = context.BatchId, SlotId = context.SlotId, CaptureRequestId = request.CaptureRequestId,
+                    CrabItemId = context.CrabItemId,
                     MediaType = "Photo", Source = "InAppCapture", FileUri = stored.Uri, Sha256 = image.Sha256,
                     PerceptualHash = image.PerceptualHash, CapturedAt = capturedAt, ReceivedAt = receivedAt,
                     Latitude = Math.Round(request.Latitude!.Value, 6), Longitude = Math.Round(request.Longitude!.Value, 6),
@@ -91,7 +92,7 @@ public sealed class EvidenceService(AppDbContext db, ICurrentUser me, EvidenceAc
                 }
                 await db.SaveChangesAsync(ct);
                 AppendAudit("Evidence", evidence.EvidenceId, "UploadEvidence", null,
-                    AuditChain.Snapshot(new { evidence.BatchId, evidence.SlotId, evidence.CaptureRequestId, evidence.Source,
+                    AuditChain.Snapshot(new { evidence.BatchId, evidence.SlotId, evidence.CrabItemId, evidence.CaptureRequestId, evidence.Source,
                         evidence.Sha256, evidence.PerceptualHash, evidence.CapturedAt, evidence.ReceivedAt,
                         evidence.Latitude, evidence.Longitude, evidence.RiskScore, evidence.ReviewStatus,
                         DuplicateMatch = match, Detection = detection }), previous, receivedAt);
@@ -127,6 +128,22 @@ public sealed class EvidenceService(AppDbContext db, ICurrentUser me, EvidenceAc
     private async Task<CaptureContext> RequireContextAsync(UploadEvidenceRequest request, DateTimeOffset receivedAt, CancellationToken ct)
     {
         var operatorId = await access.RequireOperatorAsync(ct);
+        if (!string.IsNullOrWhiteSpace(request.TagCode))
+        {
+            if (request.CaptureRequestId is not null || request.SlotEventType is not null)
+                throw new AppException(400, "evidence.tag_context_invalid", "Không thể kết hợp tem với yêu cầu chụp hoặc sự kiện thả bù.");
+            var tag = await db.CrabTags.AsNoTracking()
+                .Include(t => t.CrabItem).ThenInclude(c => c.Batch).ThenInclude(b => b.Operator)
+                .Include(t => t.CrabItem).ThenInclude(c => c.SlotAllocation).ThenInclude(a => a.Slot)
+                .SingleOrDefaultAsync(t => t.TagCode == request.TagCode.Trim() && t.CrabItem.Batch.OperatorId == operatorId, ct)
+                ?? throw new NotFoundException("evidence.tag_not_found", "Không tìm thấy tem của hộ nuôi.");
+            if (tag.Status != "Printed" || tag.CrabItem.Batch.Operator.Status != "Approved")
+                throw new BusinessRuleException("evidence.tag_inactive", "Chỉ chụp xác nhận cho tem đã in thuộc hộ nuôi đang được duyệt.");
+            return new(tag.CrabItem.BatchId, tag.CrabItem.SlotAllocation.SlotId, tag.CrabItem.Batch.BatchCode,
+                tag.CrabItem.SlotAllocation.Slot.SlotCode, tag.CrabItemId);
+        }
+        if (string.IsNullOrWhiteSpace(request.BatchCode) || string.IsNullOrWhiteSpace(request.SlotCode))
+            throw new AppException(400, "evidence.metadata_required", "Cần có lô, hộp hoặc mã tem, ảnh, thời gian chụp và vị trí hợp lệ.");
         var batch = await db.Batches.AsNoTracking().Include(b => b.Operator)
             .SingleOrDefaultAsync(b => b.BatchCode == request.BatchCode.Trim() && b.OperatorId == operatorId, ct)
             ?? throw new NotFoundException("evidence.batch_not_found", "Không tìm thấy lô của hộ nuôi.");
@@ -198,7 +215,7 @@ public sealed class EvidenceService(AppDbContext db, ICurrentUser me, EvidenceAc
             new(detection.CrabDetected, detection.Confidence, detection.ModelVersion), e.CaptureRequestId, e.CaptureRequest?.Status);
     private static void Validate(UploadEvidenceRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.BatchCode) || string.IsNullOrWhiteSpace(request.SlotCode) || request.Image is null
+        if ((string.IsNullOrWhiteSpace(request.TagCode) && (string.IsNullOrWhiteSpace(request.BatchCode) || string.IsNullOrWhiteSpace(request.SlotCode))) || request.Image is null
             || request.CapturedAt is null || request.Latitude is null || request.Longitude is null
             || request.Latitude is < -90 or > 90 || request.Longitude is < -180 or > 180)
             throw new AppException(400, "evidence.metadata_required", "Cần có lô, hộp, ảnh, thời gian chụp và vị trí hợp lệ.");

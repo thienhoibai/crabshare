@@ -1,7 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/routes.dart';
 import '../../../core/api/api_client.dart';
 import '../../../shared/widgets/app_ui.dart';
 import '../data/operator_repository.dart';
@@ -446,9 +448,6 @@ class _HarvestBodyState extends ConsumerState<_HarvestBody> {
                 _history(selectedId),
               ],
               const SizedBox(height: 16),
-              const Text(
-                'Tem được ghi nhận ở trạng thái do máy chủ trả về. Chức năng kích hoạt tem chưa được tích hợp.',
-              ),
             ],
           ),
         ),
@@ -652,6 +651,12 @@ class _HarvestBodyState extends ConsumerState<_HarvestBody> {
             child: const Text('Mở truy xuất'),
           ),
         ],
+        if (item.tagCode != null)
+          TextButton.icon(
+            onPressed: () => context.push(Routes.operatorTags),
+            icon: const Icon(Icons.local_offer_outlined),
+            label: const Text('Quản lý tem đã in'),
+          ),
       ],
     ),
   );
