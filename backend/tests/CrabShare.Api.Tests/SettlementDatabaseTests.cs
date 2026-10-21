@@ -276,3 +276,85 @@ public class SettlementReviewDatabaseTests(FundingDatabaseFixture fixture) : Set
         Assert.True(await check.AuditLogs.AnyAsync(x => x.EntityType == "settlement_feedback" && x.EntityId == feedbackId && x.ActionType == "answer"));
     }
 }
+
+/// <summary>
+/// TH-14: duyệt quyết toán + phát lệnh chi trả + đóng lô. Hoàn thành khi: lô đi hết Settlement → Closed; mọi bước có audit;
+/// bảng đã duyệt không sửa được (trigger trg_settlement_locked).
+/// </summary>
+[Trait("Category", "Database")]
+public class SettlementPayoutDatabaseTests(FundingDatabaseFixture fixture) : SettlementTestBase(fixture), IClassFixture<FundingDatabaseFixture>
+{
+    [Fact]
+    public async Task Approved_settlement_pays_tax_operator_and_investors_then_closes_the_batch()
+    {
+        var (investorA, a) = await UserAsync("Nhà đầu tư Chi A", "Investor");
+        var (investorB, b) = await UserAsync("Nhà đầu tư Chi B", "Investor");
+        (await investorA.PutAsJsonAsync("/api/me/payout-account?ownerType=Investor", new { bankCode = "VCB", accountNo = "1000" + Random.Shared.Next(100000, 999999), accountHolderName = "Nhà đầu tư Chi A" })).EnsureSuccessStatusCode();
+        (await investorB.PutAsJsonAsync("/api/me/payout-account?ownerType=Investor", new { bankCode = "ACB", accountNo = "2000" + Random.Shared.Next(100000, 999999), accountHolderName = "Nhà đầu tư Chi B" })).EnsureSuccessStatusCode();
+        var (owner, _) = await UserAsync("Chủ hộ nuôi Chi", extraRole: Roles.OperatorMember, memberRole: "Owner");
+        var ownerAccount = await owner.PutAsJsonAsync("/api/me/payout-account?ownerType=Operator", new { bankCode = "VCB", accountNo = "0123456789", accountHolderName = "HTX Test góp vốn" });
+        Assert.True(ownerAccount.IsSuccessStatusCode || ownerAccount.StatusCode == HttpStatusCode.Conflict, await ownerAccount.Content.ReadAsStringAsync());
+        var (batchId, code, accountId) = await HarvestedBatchAsync(150_000_000, 100_000_000, [(a, 60_000_000), (b, 40_000_000)]);
+        var (admin, _) = await AdminAsync();
+        var draft = await CalculateAsync(admin, code, taxPct: 5);
+        (await admin.PostAsJsonAsync($"/api/admin/settlements/{draft.SettlementId}/propose", new { feedbackDays = 7 })).EnsureSuccessStatusCode();
+
+        // Chưa hết hạn góp ý → chưa duyệt được
+        var early = await admin.PostAsync($"/api/admin/settlements/{draft.SettlementId}/approve", null);
+        Assert.Equal("settlement.window_open", await ErrorCode(early));
+
+        // Demo: kết thúc hạn góp ý (chỉ Development), rồi duyệt
+        (await admin.PostAsync($"/api/dev/settlements/{draft.SettlementId}/end-feedback-window", null)).EnsureSuccessStatusCode();
+        var approved = await admin.PostAsync($"/api/admin/settlements/{draft.SettlementId}/approve", null);
+        Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
+        var s = (await approved.Content.ReadFromJsonAsync<SettlementResponse>())!;
+        Assert.Equal("Approved", s.Status);
+        Assert.NotNull(s.ApprovedAt);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync($"/api/admin/batches/{code}/settlements", new { taxWithholdingPct = 0 })).StatusCode);
+
+        await using (var db = Fixture.OpenDb())
+        {
+            var instructions = await db.PaymentInstructions.Where(i => i.BatchAccountId == accountId).OrderBy(i => i.InstructionId).ToListAsync();
+            Assert.Equal(["TaxPayment", "Payout", "Payout", "Payout"], instructions.Select(i => i.InstructionType));
+            Assert.Equal(s.TaxTotal, instructions[0].Amount);
+            Assert.Equal(s.OperatorRemuneration + s.DepreciationAmount, instructions[1].Amount);
+            Assert.Equal(s.TotalNetPayout, instructions.Where(i => i.SettlementLineId != null).Sum(i => i.Amount));
+            // Trigger BR-30: số liệu bảng đã duyệt không sửa được kể cả bằng SQL trực tiếp
+            await Assert.ThrowsAnyAsync<Exception>(() => db.Settlements.Where(x => x.SettlementId == s.SettlementId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.TaxTotal, 0)));
+        }
+
+        var paid = await admin.PostAsync($"/api/admin/settlements/{draft.SettlementId}/send-payouts", null);
+        Assert.Equal(HttpStatusCode.OK, paid.StatusCode);
+        var closed = (await paid.Content.ReadFromJsonAsync<SettlementResponse>())!;
+        Assert.Equal("Closed", closed.Status);
+        Assert.Equal("Closed", closed.BatchStatus);
+        Assert.All(closed.Lines, l => Assert.Equal("Succeeded", l.PayoutStatus));
+
+        await using var check = Fixture.OpenDb();
+        var batch = await check.Batches.SingleAsync(x => x.BatchId == batchId);
+        Assert.Equal("Closed", batch.Status);
+        Assert.NotNull(batch.ClosedAt);
+        Assert.Equal(4, await check.ProviderTransactions.CountAsync(t => t.BatchAccountId == accountId && t.Direction == "Out"));
+        foreach (var action in new[] { "calculate", "propose", "approve", "paid_out", "close" })
+            Assert.True(await check.AuditLogs.AnyAsync(x => x.EntityType == "settlement" && x.EntityId == s.SettlementId && x.ActionType == action), action);
+        Assert.True(await check.AuditLogs.AnyAsync(x => x.EntityType == "batch" && x.EntityId == batchId && x.ActionType == "close"));
+        // Nhà đầu tư xem bảng đã đóng, đúng dòng của mình đã chi
+        var mine = (await investorA.GetFromJsonAsync<SettlementResponse>($"/api/settlements/{s.SettlementId}"))!;
+        Assert.Equal("Succeeded", Assert.Single(mine.Lines).PayoutStatus);
+    }
+
+    [Fact]
+    public async Task Open_feedback_blocks_approval()
+    {
+        var (investor, a) = await UserAsync("Nhà đầu tư góp ý", "Investor");
+        var (_, code, _) = await HarvestedBatchAsync(120_000_000, 100_000_000, [(a, 50_000_000)]);
+        var (admin, _) = await AdminAsync();
+        var draft = await CalculateAsync(admin, code);
+        Assert.Equal("settlement.not_proposed", await ErrorCode(await admin.PostAsync($"/api/admin/settlements/{draft.SettlementId}/approve", null)));
+        (await admin.PostAsJsonAsync($"/api/admin/settlements/{draft.SettlementId}/propose", new { feedbackDays = 7 })).EnsureSuccessStatusCode();
+        (await investor.PostAsJsonAsync($"/api/settlements/{draft.SettlementId}/feedback", new { content = "Tôi cần xem chứng từ chi phí thức ăn tháng 9." })).EnsureSuccessStatusCode();
+        (await admin.PostAsync($"/api/dev/settlements/{draft.SettlementId}/end-feedback-window", null)).EnsureSuccessStatusCode();
+        Assert.Equal("settlement.open_feedback", await ErrorCode(await admin.PostAsync($"/api/admin/settlements/{draft.SettlementId}/approve", null)));
+    }
+}

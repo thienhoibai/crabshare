@@ -41,15 +41,23 @@ Cách tính (`CrabShare.SettlementEngine/SettlementCalculator`, lõi thuần, c�
 
 Điều chỉnh số liệu sau góp ý: admin **tính lại** (lần tính mới, về `Draft`) rồi công bố lại → cửa sổ mới. Test `SettlementReviewDatabaseTests`.
 
-## Endpoint dự kiến
+## Đã làm (TH-14) — duyệt, chi trả, đóng lô
 | Method | Path | Ai gọi | Ghi chú |
 |---|---|---|---|
-| POST | `/api/admin/settlements/{id}/approve` | PlatformAdmin | UC39 → tạo `payment_instruction` loại `Payout` cho từng dòng; quyết toán đã duyệt **không sửa được** |
+| POST | `/api/admin/settlements/{id}/approve` | PlatformAdmin | UC39. Điều kiện: đã công bố (`settlement.not_proposed`), đã quá `feedback_deadline` (`settlement.window_open`), không còn góp ý `Open` (`settlement.open_feedback`; `Unresolved` thì vẫn chốt được), tài khoản lô `Open`. → `Approved`, `approved_by`/`approved_at` (trigger khoá số liệu, BR-30). Lập lệnh chi `Created` theo thứ tự TL-14 §6.6: **TaxPayment** = `tax_total` (người nuôi khai thay, đi thẳng kho bạc); **Payout người nuôi** = thù lao + khấu hao, tới tài khoản nhận tiền `Active` của hộ nuôi; **Payout từng nhà đầu tư** = `net_payout`, gắn `settlement_line_id`. Audit `settlement/approve` + từng `payment_instruction/create` |
+| POST | `/api/admin/settlements/{id}/send-payouts` | PlatformAdmin | Gửi mọi lệnh `Payout`/`TaxPayment` còn `Created`/`Failed` của lô qua `PayoutSendService` (mỗi lệnh một transaction, ghi giao dịch Out). Nhà đầu tư thêm tài khoản nhận tiền sau lúc duyệt thì lấy tài khoản đang dùng lúc gửi |
+| POST | `/api/dev/settlements/{id}/end-feedback-window` | PlatformAdmin, **chỉ Development** | Kết thúc hạn góp ý ngay (dời `proposed_at` và `feedback_deadline` về quá khứ, giữ CHECK ≥ 7 ngày) để demo đầu-cuối; ngoài Development trả 404. Audit `settlement/dev_end_feedback_window` |
+
+Đóng lô (`SettlementClosing.CloseIfPaidAsync`, TL-14 Bước 6 + §6.6): mỗi lần một lệnh chi gắn dòng quyết toán thành công, nếu mọi dòng có `net_payout` > 0 đã có lệnh `Succeeded` → bảng `PaidOut` → lô `Closed` (+ `closed_at`) → bảng `Closed`. Dòng thuế và khoản của người nuôi **không** chặn việc đóng lô. Lô lỗ hết vốn (không ai nhận gì) đóng ngay khi duyệt.
+
+Còn mở: dự phòng hao hụt (`MortalityReserve`) chưa giải ngân vẫn nằm trong tài khoản lô sau quyết toán — chờ chốt cách xử lý theo TL-11/TL-21; đợt giải ngân bị dừng chi (`Blocked`) chưa có luồng hoàn vốn chưa chi (thanh lý sớm, TL-03 §6.4).
+
+Test `SettlementPayoutDatabaseTests`: chưa hết hạn → 422; duyệt → 4 lệnh chi đúng thứ tự và số tiền; tính lại sau duyệt → 409; sửa số liệu bằng SQL bị trigger chặn; gửi → mọi dòng `Succeeded`, bảng và lô `Closed`, đủ audit; góp ý mở chặn duyệt.
 
 ## Quy tắc phải giữ
 - Tổng các khoản chia = Revenue Pool **đúng tới 1 đồng** (NFR Accuracy) — dùng `CrabShare.SettlementEngine`, không tự làm tròn trong service.
 - Lô 100 nhà đầu tư, 2.000 hộp tính xong trong 10 giây (NFR Performance) — viết test hiệu năng.
-- Mọi thay đổi ghi `audit_log`; muốn sửa sau khi duyệt thì tạo `revision_no` mới.
+- Mọi thay đổi ghi `audit_log`. Mỗi lô một bảng: sửa trước khi duyệt = tính lại (tăng `revision_no`); sau khi duyệt không sửa được.
 
 ## View có sẵn trong CSDL
 | View | Dùng cho |

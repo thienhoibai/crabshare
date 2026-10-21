@@ -9,8 +9,16 @@ namespace CrabShare.Api.Features.Settlement;
 [Route("api/admin")]
 [Authorize(Policy = Policies.Admin)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class AdminSettlementsController(SettlementService settlements) : ControllerBase
+public sealed class AdminSettlementsController(SettlementService settlements, SettlementPayoutService payouts) : ControllerBase
 {
+    [HttpPost("settlements/{id:long}/approve")]
+    [EndpointSummary("UC39 — Duyệt (hết hạn góp ý, không còn góp ý mở) → khoá số liệu, lập lệnh chi: thuế khai thay, người nuôi, từng nhà đầu tư")]
+    public async Task<ActionResult<SettlementResponse>> Approve(long id, CancellationToken ct) => Ok(await payouts.ApproveAsync(id, ct));
+
+    [HttpPost("settlements/{id:long}/send-payouts")]
+    [EndpointSummary("UC39 — Gửi mọi lệnh chi quyết toán còn chờ; nhà đầu tư nhận đủ → bảng PaidOut, lô Closed")]
+    public async Task<ActionResult<SettlementResponse>> SendPayouts(long id, CancellationToken ct) => Ok(await payouts.SendPayoutsAsync(id, ct));
+
     [HttpGet("settlements")]
     [EndpointSummary("Lô đang thu hoạch / chờ quyết toán / đã đóng, kèm bảng quyết toán nếu đã tính")]
     public async Task<ActionResult<IReadOnlyList<AdminSettlementSummary>>> List(CancellationToken ct) => Ok(await settlements.ListForAdminAsync(ct));
