@@ -330,6 +330,9 @@ public class SettlementPayoutDatabaseTests(FundingDatabaseFixture fixture) : Set
         Assert.Equal("Closed", closed.Status);
         Assert.Equal("Closed", closed.BatchStatus);
         Assert.All(closed.Lines, l => Assert.Equal("Succeeded", l.PayoutStatus));
+        // TL-08 §6.4: mã neo nhật ký ở mốc duyệt và đóng lô
+        Assert.Equal(["Duyệt quyết toán", "Đóng lô"], closed.AuditAnchors.Select(x => x.Milestone));
+        Assert.All(closed.AuditAnchors, x => Assert.Equal(64, x.RowHash.Length));
 
         await using var check = Fixture.OpenDb();
         var batch = await check.Batches.SingleAsync(x => x.BatchId == batchId);

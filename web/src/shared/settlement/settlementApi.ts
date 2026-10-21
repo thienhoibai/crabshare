@@ -21,6 +21,8 @@ export type Settlement = {
   depreciationAmount: number; taxTotal: number; uncoveredLoss: number; reconciliationDifference: number; totalCapital: number
   totalNetPayout: number; investorCount: number; proposedAt: string | null; feedbackDeadline: string | null; approvedAt: string | null
   createdAt: string; updatedAt: string; lines: SettlementLine[]; feedback: SettlementFeedback[]; taxNotice: string
+  /** Mã neo nhật ký kiểm toán tại các mốc chốt vốn, duyệt quyết toán, đóng lô (TL-08 §6.4). */
+  auditAnchors: { milestone: string; occurredAt: string; auditId: number; rowHash: string }[]
 }
 
 export type AdminSettlementSummary = {
