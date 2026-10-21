@@ -12,6 +12,7 @@ const detail = (position = item()): PortfolioDetail => ({ position,
   latestProduction: { logDate: '2026-10-14', ph: 7.8, waterTempC: 28, salinityPpt: 15, feedKg: 2, source: 'Manual', plausibilityFlag: 'Ok', verifiedAt: null },
 })
 async function signIn(page: Page, role = 'Investor') {
+  await page.route('**/api/batches/*/timeline?*', r => r.fulfill({ json: { batchCode: new URL(r.request().url()).pathname.split('/')[3], timeZone: 'Asia/Ho_Chi_Minh', groups: [], hasMore: false, nextBefore: null } }))
   await page.addInitScript((roles) => localStorage.setItem('crabshare-auth', JSON.stringify({ state: {
     token: 'portfolio-token', expiresAt: '2099-01-01T00:00:00Z', user: { userId: 61, fullName: 'Khôi', email: 'portfolio@test.local', roles: [roles], status: 'Active', phone: null, operatorId: null },
   }, version: 0 })), role)
@@ -29,6 +30,7 @@ test('overview reads real capital and links to the private portfolio detail', as
   await page.getByRole('button', { name: 'Xem lô CS61-REAL-01', exact: true }).click()
   await expect(page).toHaveURL(/\/danh-muc\/CS61-REAL-01$/)
   await expect(page.getByRole('heading', { name: 'Chi tiết danh mục' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Nhật trình sản xuất' }).getByText('Nhật trình đang chờ những ghi nhận đầu tiên')).toBeVisible()
   await expect(page.getByText('Hợp đồng CT-61 · Đã đủ chữ ký')).toBeVisible()
   await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', String(44 / 90 * 100))
   await expect(page.getByText('Chưa có quyết toán được duyệt.')).toBeVisible()

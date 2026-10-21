@@ -6,6 +6,7 @@ import { crabTypes, costCategories } from '../../operator/batchesApi'
 import { useInvestorBatch, useInvestorBatches, type InvestorBatch } from './batchesApi'
 import '../portfolio/portfolio.css'
 import './batches.css'
+import BatchTimeline from '../../timeline/BatchTimeline'
 
 const states: Record<string, string> = { Funding: 'Đang gọi vốn', Cancelled: 'Đã hủy', Stocked: 'Đã thả giống', InProduction: 'Đang nuôi', Harvesting: 'Đang thu hoạch', Settlement: 'Đang quyết toán', Closed: 'Đã đóng' }
 function Failure({ error, retry }: { error: unknown; retry: () => void }) {
@@ -55,6 +56,7 @@ export function InvestorBatchDetail({ code }: { code: string }) {
   const b = query.data; const cost = b.standardCost!
   return <div className="be-layout">
     <section className="iv-card"><span className="pf-state">{states[b.status] ?? b.status}</span><h2 className="rd-h3">{b.title}</h2><p className="rd-muted">{b.operatorName} · {crabTypes[b.crabType as keyof typeof crabTypes] ?? b.crabType}</p></section>
+    <BatchTimeline code={code} />
     <div className="i2-grid">
       <section className="iv-card"><h2 className="rd-h3">Tiến độ gọi vốn</h2><FundingProgress batch={b} /><dl className="pf-dl"><dt>Vốn đã xác nhận</dt><dd>{formatVnd(b.fundingProgress.confirmedCapital)}</dd><dt>Vốn đang giữ chỗ</dt><dd>{formatVnd(b.fundingProgress.reservedCapital)}</dd><dt>Nhà đầu tư</dt><dd>{b.fundingProgress.investorCount}</dd><dt>Mục tiêu</dt><dd>{formatVnd(b.targetCapital)}</dd></dl><p className="rd-note">Tiến độ theo vốn đã xác nhận. Vốn giữ chỗ được hiển thị riêng.</p></section>
       <section className="iv-card"><h2 className="rd-h3">Điều khoản đã công bố</h2><dl className="pf-dl">

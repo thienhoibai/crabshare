@@ -11,6 +11,7 @@ import { batchStatuses, crabTypes, getBatch, type StockingResult } from './batch
 import { useOperatorApplication } from './operatorsApi'
 import StockingDialog from './StockingDialog'
 import SlotEventsSection from './SlotEventsSection'
+import BatchTimeline from '../timeline/BatchTimeline'
 
 export default function OperatorBatchDetail() {
   const [params] = useSearchParams()
@@ -63,6 +64,7 @@ export default function OperatorBatchDetail() {
                 <OpBtn variant="ghost" onClick={() => navigate('/operator/boxes')}>Xem hộp nuôi</OpBtn>
               </div>
             </OpPanel>
+            <BatchTimeline code={batch.batchCode} />
             <SlotEventsSection key={batch.batchCode} code={batch.batchCode} canConfigure={profile.data?.memberRole === 'Owner' && profile.data.status === 'Approved'} />
             {stocking && <StockingDialog key={batch.batchCode} batch={batch} onClose={() => setStocking(false)} onStocked={stocked} />}
           </div>}

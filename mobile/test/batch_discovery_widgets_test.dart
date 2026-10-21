@@ -6,6 +6,7 @@ import 'package:crabshare_mobile/core/auth/session.dart';
 import 'package:crabshare_mobile/features/investor/batches/batch_detail_page.dart';
 import 'package:crabshare_mobile/features/investor/batches/batch_explore_page.dart';
 import 'package:crabshare_mobile/features/investor/data/investor_repository.dart';
+import 'package:crabshare_mobile/features/investor/data/timeline_repository.dart';
 import 'package:crabshare_mobile/shared/models/batch_enums.dart';
 import 'package:crabshare_mobile/shared/widgets/app_ui.dart';
 import 'package:dio/dio.dart';
@@ -16,6 +17,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'helpers/discovery_fakes.dart';
+import 'helpers/timeline_fakes.dart';
 
 SessionState discoverySession(int id) => SessionState(
   token: 'test',
@@ -62,6 +64,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           sessionProvider.overrideWith(DiscoverySessionController.new),
+          timelineRepositoryProvider.overrideWithValue(EmptyTimelineRepository()),
           dioProvider.overrideWithValue(dio),
         ],
       );
@@ -92,6 +95,7 @@ void main() {
       ProviderScope(
         overrides: [
           sessionProvider.overrideWith(DiscoverySessionController.new),
+          timelineRepositoryProvider.overrideWithValue(EmptyTimelineRepository()),
           dioProvider.overrideWithValue(dio),
         ],
         child: MaterialApp(
@@ -101,7 +105,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Tiến trình lô'), 250);
+    await tester.scrollUntilVisible(
+      find.text('Tiến trình lô'),
+      250,
+      scrollable: find.descendant(
+        of: find.byType(ListView),
+        matching: find.byType(Scrollable),
+      ).first,
+    );
     expect(find.text('Đã huỷ'), findsWidgets);
     expect(find.text('Đang quyết toán'), findsNothing);
     expect(find.text('Đã đóng'), findsNothing);
@@ -136,6 +147,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         sessionProvider.overrideWith(DiscoverySessionController.new),
+        timelineRepositoryProvider.overrideWithValue(EmptyTimelineRepository()),
         dioProvider.overrideWithValue(dio),
       ],
     );
@@ -207,6 +219,7 @@ void main() {
         ProviderScope(
           overrides: [
             sessionProvider.overrideWith(DiscoverySessionController.new),
+            timelineRepositoryProvider.overrideWithValue(EmptyTimelineRepository()),
             dioProvider.overrideWithValue(dio),
           ],
           child: MaterialApp.router(
@@ -220,10 +233,18 @@ void main() {
       await tester.tap(find.text('Lô đã công bố'));
       await tester.pumpAndSettle();
       expect(paths, contains('/api/batches/CS42'));
-      await tester.scrollUntilVisible(find.text('33,33% mục tiêu'), 250);
+      final detailScroll = find.descendant(
+        of: find.byType(ListView),
+        matching: find.byType(Scrollable),
+      ).first;
+      await tester.scrollUntilVisible(
+        find.text('33,33% mục tiêu'), 250, scrollable: detailScroll,
+      );
       expect(find.text('33,33% mục tiêu'), findsOneWidget);
       expect(find.textContaining('ROI'), findsNothing);
-      await tester.scrollUntilVisible(find.text('Chi phí chuẩn đã khóa'), 250);
+      await tester.scrollUntilVisible(
+        find.text('Chi phí chuẩn đã khóa'), 250, scrollable: detailScroll,
+      );
       expect(find.text('Chi phí chuẩn đã khóa'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
@@ -238,6 +259,7 @@ void main() {
       ProviderScope(
         overrides: [
           sessionProvider.overrideWith(DiscoverySessionController.new),
+          timelineRepositoryProvider.overrideWithValue(EmptyTimelineRepository()),
           dioProvider.overrideWithValue(dio),
         ],
         child: MaterialApp(
