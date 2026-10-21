@@ -18,6 +18,13 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
     /// <summary>Đích "trả về đúng tài khoản đã chuyển" khi người nhận chưa khai tài khoản nhận tiền (chỉ dùng với hoàn tiền, bản sandbox).</summary>
     private static readonly (string Bank, string Account, string Name) OriginalSender = ("SOURCE", "ORIGINAL-SENDER", "Tài khoản đã chuyển tiền");
 
+    /// <summary>Đích của lệnh nộp thuế người nuôi khai thay (TL-14 §6.6): tài khoản thu ngân sách tại kho bạc (bản sandbox).</summary>
+    private static readonly (string Bank, string Account, string Name) StateTreasury = ("KBNN", "THU-NGAN-SACH", "Kho bạc Nhà nước — thu ngân sách");
+
+    private Task<PayoutAccount?> ActivePayoutOfUserAsync(long userId, CancellationToken ct) => db.PayoutAccounts.AsNoTracking()
+        .Where(p => p.OwnerUserId == userId && p.Status == "Active")
+        .OrderByDescending(p => p.PayoutAccountId).FirstOrDefaultAsync(ct);
+
     public Task<PaymentInstructionResponse> SendAsync(long instructionId, CancellationToken ct) => db.InTransactionAsync(async () =>
     {
         await audit.LockAsync(ct);
@@ -34,12 +41,15 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
 
         var payout = instruction.PayoutAccount;
         if (payout is null && instruction.InstructionType == "Refund" && instruction.Contribution is { } refunded)
-            payout = await db.PayoutAccounts.AsNoTracking()
-                .Where(p => p.OwnerUserId == refunded.InvestorId && p.Status == "Active")
-                .OrderByDescending(p => p.PayoutAccountId).FirstOrDefaultAsync(ct);
-        if (payout is null && instruction.InstructionType != "Refund")
-            throw new BusinessRuleException("payment.no_payout_account", "Lệnh chi chưa có tài khoản nhận tiền.");
-        var (bank, accountNo, name) = payout is null ? OriginalSender : (payout.BankCode, payout.AccountNo, payout.AccountHolderName);
+            payout = await ActivePayoutOfUserAsync(refunded.InvestorId, ct);
+        // Chi trả quyết toán (TH-14): nhà đầu tư thêm tài khoản nhận tiền sau lúc duyệt thì lấy tài khoản đang dùng lúc gửi
+        if (payout is null && instruction is { InstructionType: "Payout", SettlementLineId: { } lineId })
+            payout = await ActivePayoutOfUserAsync(
+                await db.SettlementLines.Where(l => l.SettlementLineId == lineId).Select(l => l.InvestorId).SingleAsync(ct), ct);
+        if (payout is null && instruction.InstructionType is not ("Refund" or "TaxPayment"))
+            throw new BusinessRuleException("payment.no_payout_account", "Người nhận chưa có tài khoản nhận tiền đang dùng.");
+        var (bank, accountNo, name) = payout is not null ? (payout.BankCode, payout.AccountNo, payout.AccountHolderName)
+            : instruction.InstructionType == "TaxPayment" ? StateTreasury : OriginalSender;
 
         var reference = $"CHI{instruction.InstructionId:D8}";
         var now = Now();
@@ -80,6 +90,10 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
             await audit.WriteAsync("contribution", contribution.ContributionId, "refund", new { status = "Confirmed" },
                 new { status = contribution.Status, refundedAt = now, instruction.InstructionId }, now, ct);
         }
+
+        // Khoản chi cuối cùng của nhà đầu tư đã tới tay → bảng quyết toán PaidOut, lô Closed (TH-14, TL-14 Bước 6)
+        if (result.Accepted && instruction.SettlementLineId is not null)
+            await Settlement.SettlementClosing.CloseIfPaidAsync(db, audit, instruction.BatchAccount.BatchId, now, ct);
 
         return await db.PaymentInstructions.AsNoTracking().Where(i => i.InstructionId == instructionId)
             .Select(PaymentInstructionQueryService.Projection).SingleAsync(ct);

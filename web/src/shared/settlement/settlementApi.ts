@@ -112,3 +112,17 @@ export function useSendFeedback() {
     },
   })
 }
+
+// ---------- TH-14: duyệt, chi trả, đóng lô ----------
+
+/** UC39: duyệt sau hạn góp ý → khoá số liệu, lập lệnh chi (thuế khai thay, người nuôi, từng nhà đầu tư). */
+export const useApproveSettlement = () => useSettlementAction(async (id: number) =>
+  (await http.post<Settlement>(`/api/admin/settlements/${id}/approve`)).data)
+
+/** Gửi mọi lệnh chi quyết toán còn chờ; nhà đầu tư nhận đủ thì lô tự đóng. */
+export const useSendSettlementPayouts = () => useSettlementAction(async (id: number) =>
+  (await http.post<Settlement>(`/api/admin/settlements/${id}/send-payouts`)).data)
+
+/** Chỉ khi chạy dev: kết thúc hạn góp ý ngay để demo đầu-cuối (API trả 404 ngoài Development). */
+export const useEndFeedbackWindowForDemo = () => useSettlementAction(async (id: number) =>
+  (await http.post<Settlement>(`/api/dev/settlements/${id}/end-feedback-window`)).data)
