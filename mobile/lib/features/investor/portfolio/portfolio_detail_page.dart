@@ -37,7 +37,8 @@ class InvestorPortfolioDetailPage extends ConsumerWidget {
         child: AppRefreshIndicator(
           onRefresh: () async {
             ref.read(timelineRefreshProvider.notifier).refresh();
-            await ref.refresh(provider.future);
+            ref.invalidate(provider);
+            await ref.read(provider.future);
           },
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
