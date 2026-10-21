@@ -24,6 +24,7 @@ const navGroups = [
     items: [
       { id: 'register', href: '/operator/register', icon: ClipboardSignature, label: 'Đăng ký hộ nuôi' },
       { id: 'kyc', href: '/operator/kyc', icon: ClipboardSignature, label: 'Hồ sơ & eKYC' },
+      { id: 'contract', href: '/operator/contract', icon: ClipboardSignature, label: 'Hợp đồng góp vốn' },
     ],
   },
   {

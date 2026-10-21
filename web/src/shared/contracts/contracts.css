@@ -1,0 +1,27 @@
+/* Xem hợp đồng góp vốn (ContractViewer) — dùng biến màu của theme đang bao quanh (--line, --muted, --input…) */
+.ct { display: grid; gap: 14px; min-width: 0; }
+.ct-notice { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 12px;
+  background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; font-size: 13px; line-height: 1.45; }
+.ct-notice svg { flex: none; margin-top: 1px; }
+.ct-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 0; }
+.ct-meta div { padding: 10px 12px; border: 1px solid var(--line, #e5e7eb); border-radius: 12px; min-width: 0; }
+.ct-meta dt { font-size: 12px; color: var(--muted, #6b7280); }
+.ct-meta dd { margin: 2px 0 0; font-weight: 700; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.ct-status--FullySigned { color: #047857; }
+.ct-status--Void { color: #b91c1c; }
+.ct-status--Draft, .ct-status--OperatorSigned { color: #b45309; }
+.ct-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ct-steps li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--line, #e5e7eb); color: var(--muted, #6b7280); }
+.ct-steps li > div { display: grid; gap: 1px; min-width: 0; }
+.ct-steps li b { color: var(--ink, inherit); font-size: 14px; }
+.ct-steps li span { font-size: 14px; }
+.ct-steps li small { font-size: 12px; }
+.ct-steps li.is-done { color: #047857; border-color: #a7f3d0; background: #ecfdf5; }
+.ct-steps li.is-on { color: #b45309; border-color: #fcd34d; background: #fffbeb; }
+.ct-pdf { width: 100%; border: 1px solid var(--line, #e5e7eb); border-radius: 12px; background: #fff; }
+.ct-download { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; font-weight: 600; width: fit-content; }
+.ct-hash { font-size: 12px; color: var(--muted, #6b7280); margin: 0; }
+.ct-hash code { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; overflow-wrap: anywhere; }
+.ct-error { color: #b91c1c; font-size: 14px; margin: 0; }
+.ct-muted { color: var(--muted, #6b7280); font-size: 14px; margin: 0; }

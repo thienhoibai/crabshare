@@ -1,11 +1,13 @@
 /* Luồng góp vốn ≤ 5 màn (Phiếu, Usability): Rủi ro → Số tiền & giữ chỗ → Hợp đồng → Chuyển tiền → Xong.
-   Màn 1–2 (TH-04) và 4–5 (TH-05) chạy với API thật. Màn 3 chờ ký số (TH-08).
+   Màn 1–2 (TH-04), 3 (TH-08, hợp đồng ký số) và 4–5 (TH-05) chạy với API thật.
    Không hiển thị lợi suất kỳ vọng ở bất kỳ đâu (TL-05 §8, BR-49). */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
 import { ArrowLeft, Check, Clock, FileSignature, Hourglass, QrCode, ShieldCheck, Wallet } from 'lucide-react'
 import { errorMessage } from '../../../shared/api/http'
 import { formatDate, formatDateTime, formatVnd } from '../../../shared/lib/format'
+import { ContractViewer } from '../../../shared/contracts/ContractViewer'
+import { useContract, useCreateContract, useSignContract } from '../../../shared/contracts/contractsApi'
 import { usePaymentRequest } from '../../../shared/payments/paymentsApi'
 import { SimulatePaymentButton } from '../../../shared/payments/SimulatePaymentButton'
 import { VietQrBox } from '../../../shared/payments/VietQrBox'
@@ -82,7 +84,7 @@ function ContributeFlow({ code }: { code: string }) {
     <Frame code={code} title={`${b.title} · ${b.operatorName}`} aside={pill} step={current}>
       {current === 0 && <RiskStep code={code} onDone={() => setStep(1)} />}
       {current === 1 && <AmountStep b={b} reservation={reservation} countdown={countdown} onNext={() => setStep(2)} />}
-      {current === 2 && <ContractStep b={b} onBack={() => setStep(1)} onNext={() => setStep(3)} />}
+      {current === 2 && <ContractStep b={b} reservation={reservation} onBack={() => setStep(1)} onNext={() => setStep(3)} />}
       {current === 3 && (
         <PaymentStep reservation={reservation} payment={payment} onCreated={setPayment} onExpire={() => void refetch()}
           onBack={() => setStep(2)} onTransferred={() => setStep(4)} onReserveAgain={() => setStep(1)} />
@@ -270,18 +272,43 @@ function AmountStep({ b, reservation, countdown, onNext }: { b: FundingBatch; re
   )
 }
 
-/* ---------- Màn 3: hợp đồng (TH-08) ---------- */
-function ContractStep({ b, onBack, onNext }: { b: FundingBatch; onBack: () => void; onNext: () => void }) {
+/* ---------- Màn 3: hợp đồng (TH-08) — lập từ mẫu, người nuôi ký trước, bạn ký sau trên đúng file đó ---------- */
+function ContractStep({ b, reservation, onBack, onNext }: { b: FundingBatch; reservation: Contribution | null; onBack: () => void; onNext: () => void }) {
+  const create = useCreateContract()
+  const sign = useSignContract()
+  // Vào màn là lập (hoặc lấy lại) hợp đồng; StrictMode chạy effect hai lần nên nhớ đã gọi cho khoản góp nào
+  const asked = useRef<number | null>(null)
+  const { mutate } = create
+  useEffect(() => {
+    if (reservation && asked.current !== reservation.contributionId) {
+      asked.current = reservation.contributionId
+      mutate(reservation.contributionId)
+    }
+  }, [reservation, mutate])
+  const contract = useContract(create.data?.contractId ?? null, 'Operator')
+  const c = contract.data ?? create.data
+
   return (
     <>
-      <StepHead icon={<FileSignature size={20} />} title="Ký hợp đồng hợp tác" sub={`Hợp đồng giữa bạn và ${b.operatorName}. CrabShare không là một bên.`} />
-      <div className="cf-soon">
-        <b>Đang làm ở task TH-08</b>
-        <p>Ký số theo thứ tự: người nuôi ký trước, bạn ký sau. Bản demo hiện bỏ qua bước này.</p>
-      </div>
+      <StepHead icon={<FileSignature size={20} />} title="Ký hợp đồng hợp tác" sub={`Hợp đồng giữa bạn và ${b.operatorName}. CrabShare chỉ điều phối việc ký, không là một bên.`} />
+      {!reservation && <p className="cf-error">Khoản giữ chỗ đã hết hạn. Quay lại để giữ chỗ mới.</p>}
+      {reservation && create.isPending && <p className="rd-muted">Đang lập hợp đồng từ mẫu…</p>}
+      {create.isError && <p className="cf-error">{errorMessage(create.error)}</p>}
+      {c && (
+        <>
+          <ContractViewer contract={c} onSign={() => sign.mutate(c.contractId)} signing={sign.isPending}
+            signError={sign.isError ? errorMessage(sign.error) : null} pdfHeight={420} />
+          {c.nextSigner === 'Operator' && (
+            <div className="cf-soon">
+              <b>Người nuôi ký trước</b>
+              <p>Bạn vẫn chuyển tiền được ngay để giữ phần vốn. Khi người nuôi ký xong, trang này tự hiện nút ký cho bạn; bạn cũng có thể ký sau ở mục Hợp đồng của cổng nhà đầu tư. Hợp đồng phải đủ hai chữ ký trước khi thả giống.</p>
+            </div>
+          )}
+        </>
+      )}
       <footer className="cf-foot">
         <button type="button" className="rd-btn rd-btn--ghost" onClick={onBack}>Quay lại</button>
-        <button type="button" className="rd-btn rd-btn--primary rd-btn--lg" onClick={onNext}>Tiếp tục</button>
+        <button type="button" className="rd-btn rd-btn--primary rd-btn--lg" disabled={!reservation} onClick={onNext}>Tiếp tục chuyển tiền</button>
       </footer>
     </>
   )
