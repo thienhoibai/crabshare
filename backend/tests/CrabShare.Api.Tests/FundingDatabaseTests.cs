@@ -57,12 +57,17 @@ public sealed class FundingDatabaseFixture : IAsyncLifetime
         Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
             .UseSetting("Security:AuthIpPermitLimit", "10000")
             .UseSetting("Seed:Enabled", "false")
+            .UseSetting("Storage:Provider", "Local")
+            .UseSetting("Storage:RootPath", storageRoot) // file hợp đồng PDF của test không lẫn vào storage của bản dev
             .UseSetting("ConnectionStrings:Default", ConnectionString));
     }
+
+    private readonly string storageRoot = Path.Combine(Path.GetTempPath(), $"crabshare-funding-tests-{Guid.NewGuid():N}");
 
     public async Task DisposeAsync()
     {
         if (Factory is not null) await Factory.DisposeAsync();
+        if (Directory.Exists(storageRoot)) Directory.Delete(storageRoot, recursive: true);
         SqlConnection.ClearAllPools();
         await using var master = new SqlConnection(Master);
         await master.OpenAsync();

@@ -2,6 +2,7 @@ using System.Globalization;
 using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Errors;
+using CrabShare.Api.Features.Contracts;
 using CrabShare.Api.Features.Payments;
 using CrabShare.Api.Infrastructure.Persistence;
 using CrabShare.Api.Infrastructure.Persistence.Entities;
@@ -181,6 +182,7 @@ public sealed class FundingService(
             }
             await audit.WriteAsync("contribution", contributionId, "cancel_reservation", new { status = "Reserved" },
                 new { status = "Expired", reason = "Nhà đầu tư huỷ giữ chỗ" }, now, ct);
+            await ContractVoiding.VoidUnsignedAsync(db, audit, [contributionId], "Nhà đầu tư huỷ giữ chỗ", now, ct);
         }, ct);
 
     // ---------- Chuyển tiền ----------

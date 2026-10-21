@@ -1,4 +1,5 @@
 using CrabShare.Api.Common.Auditing;
+using CrabShare.Api.Features.Contracts;
 using CrabShare.Api.Features.Payments;
 using CrabShare.Api.Infrastructure.Persistence;
 using CrabShare.Api.Infrastructure.Persistence.Entities;
@@ -135,6 +136,9 @@ public sealed class FundingCloseService(AppDbContext db, IAuditLog audit, TimePr
             refundCount = confirmed.Count,
         }, now, ct);
 
+        // Hợp đồng chưa đủ chữ ký của lô huỷ không còn ký tiếp được; bản đã đủ chữ ký giữ làm hồ sơ
+        await ContractVoiding.VoidUnsignedAsync(db, audit, confirmed.Select(c => c.ContributionId).ToList(), "Lô huỷ vì không đạt vốn tối thiểu", now, ct);
+
         var account = batch.BatchAccount;
         if (account is null)
         {
@@ -186,6 +190,7 @@ public sealed class FundingCloseService(AppDbContext db, IAuditLog audit, TimePr
         {
             status = "Expired", reason, contribution.ExpiresAt, expiredPaymentRequests = requests.Select(r => r.ReferenceCode),
         }, now, ct);
+        await ContractVoiding.VoidUnsignedAsync(db, audit, [contribution.ContributionId], reason, now, ct);
     }
 
     private DateTimeOffset Now() => AuditChain.Timestamp(clock.GetUtcNow());

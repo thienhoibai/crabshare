@@ -1,7 +1,7 @@
 // Thiện
 using CrabShare.Api.Features.Auth;
 using CrabShare.Api.Features.Funding;
-// using CrabShare.Api.Features.Contracts;
+using CrabShare.Api.Features.Contracts;
 using CrabShare.Api.Features.Payments;
 // using CrabShare.Api.Features.Settlement;
 
@@ -47,7 +47,10 @@ public static class FeatureRegistry
         services.AddScoped<FundingCloseService>();    // TH-07 hết hạn giữ chỗ, chốt vốn hoặc huỷ lô + hoàn tiền
         services.AddScoped<FundingAdminService>();    // TH-07 bảng vốn vào theo lô (AdminFinance)
         services.AddHostedService<FundingCloseJob>(); // chạy mỗi phút; tắt bằng Funding:CloseJob:Enabled = false
-        // services.AddScoped<ContractService>();     // Features/Contracts
+        services.AddScoped<ContractService>();        // Features/Contracts — TH-08 sinh từ mẫu + ký số theo thứ tự
+        services.AddSingleton<ContractTemplateDocuments>();
+        services.AddSingleton<ContractPdfRenderer>();
+        services.AddSingleton<ContractFileStore>();
         // services.AddScoped<PaymentService>();      // Features/Payments
         services.AddScoped<PaymentRequestService>();  // Features/Payments — VietQR dùng chung (TH-05)
         services.AddScoped<PaymentWebhookService>();  // Features/Payments — webhook báo có + giả lập (TH-06)

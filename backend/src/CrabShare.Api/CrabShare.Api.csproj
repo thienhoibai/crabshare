@@ -29,6 +29,8 @@
   <ItemGroup>
     <!-- Toàn văn bản công bố rủi ro / mẫu hợp đồng; API đọc và so SHA-256 với content_hash trong CSDL (V002) -->
     <Content Include="..\..\..\database\reference\*.md" Link="Reference\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Font dựng PDF hợp đồng (Plus Jakarta Sans, OFL, có dấu tiếng Việt): bản sao font của web đặt trong project vì ảnh Docker chỉ copy backend/ -->
+    <Content Include="Reference\Fonts\*.ttf;Reference\Fonts\OFL-Plus-Jakarta-Sans.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
