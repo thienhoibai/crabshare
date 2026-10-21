@@ -150,7 +150,9 @@ public class BatchReviewTests(OperatorDatabaseFixture fixture) : IClassFixture<O
             targetCapital = target,
             maxCapital = target,
             minContribution = 1_000_000,
-            operatorSharePct = 7
+            operatorSharePct = 7,
+            // CS-72 / TL-30: gửi duyệt cần ít nhất một giá chốt bao tiêu theo hạng
+            offtakePrices = new[] { new { gradeCode = "L1", unitPrice = 260_000 } }
         });
         created.EnsureSuccessStatusCode();
         var code = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("batchCode").GetString()!;
