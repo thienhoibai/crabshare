@@ -36,6 +36,29 @@ public sealed class ContractsController(ContractService contracts) : ControllerB
     [EndpointSummary("UC14 — Ký phần của tôi: chủ hộ nuôi ký trước, nhà đầu tư ký sau (sai thứ tự → 422 contract.wrong_signing_order)")]
     public async Task<ActionResult<ContractResponse>> Sign(long id, CancellationToken ct) => Ok(await contracts.SignAsync(id, ct));
 
+    [HttpPost("contracts/{id:long}/offline-upload")]
+    [Authorize(Policy = Policies.Admin)]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(ContractService.MaxOfflineFileBytes + 64 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = ContractService.MaxOfflineFileBytes)]
+    [EndpointSummary("UC15 — Tải bản hợp đồng đã ký ngoài hệ thống (PDF ≤ 10 MB, confirmedBothSigned = true) → FullySigned, OfflineUpload")]
+    public async Task<ActionResult<ContractResponse>> OfflineUpload(long id, IFormFile file, [FromForm] bool confirmedBothSigned, CancellationToken ct)
+    {
+        await using var stream = file.OpenReadStream();
+        return Ok(await contracts.UploadOfflineAsync(id, stream, file.Length, file.ContentType, confirmedBothSigned, ct));
+    }
+
+    [HttpGet("me/contracts")]
+    [Authorize(Policy = Policies.Investor)]
+    [EndpointSummary("Hợp đồng của các khoản góp của tôi (tab Hợp đồng trong cổng nhà đầu tư)")]
+    public async Task<ActionResult<IReadOnlyList<ContractSummary>>> Mine(CancellationToken ct) => Ok(await contracts.ListMineAsync(ct));
+
+    [HttpGet("admin/batches/{code}/contracts")]
+    [Authorize(Policy = Policies.Admin)]
+    [EndpointSummary("Kho hợp đồng của một lô (admin xem / tải)")]
+    public async Task<ActionResult<IReadOnlyList<ContractSummary>>> BatchContracts(string code, CancellationToken ct)
+        => Ok(await contracts.ListForBatchAsync(code, ct));
+
     [HttpGet("operator/contracts")]
     [Authorize(Policy = Policies.Operator)]
     [EndpointSummary("Hợp đồng các lô của hộ nuôi tôi: chờ ký trước")]

@@ -197,6 +197,68 @@ public class ContractDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtu
         Assert.Equal(ContractStatuses.Void, (await check.InvestmentContracts.SingleAsync(c => c.ContractId == contract.ContractId)).Status);
     }
 
+    private async Task<HttpClient> AdminAsync()
+    {
+        var email = await RegisterAsync("Customer", "Quản trị TH-09");
+        await using (var db = fixture.OpenDb())
+        {
+            var userId = await db.AppUsers.Where(u => u.Email == email).Select(u => u.UserId).SingleAsync();
+            db.AppUserRoles.Add(new AppUserRole { UserId = userId, RoleCode = Roles.PlatformAdmin, GrantedAt = DateTimeOffset.UtcNow, CreatedAt = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync();
+        }
+        return (await LoginAsync(email)).Client;
+    }
+
+    private static MultipartFormDataContent Scan(byte[] bytes, string contentType = "application/pdf", bool confirmed = true)
+    {
+        var file = new ByteArrayContent(bytes);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        return new MultipartFormDataContent { { file, "file", "ban-scan.pdf" }, { new StringContent(confirmed ? "true" : "false"), "confirmedBothSigned" } };
+    }
+
+    /// <summary>TH-09: tải bản ký tay đã scan → FullySigned (OfflineUpload), có audit; NĐT chỉ thấy hợp đồng của mình.</summary>
+    [Fact]
+    public async Task Admin_uploads_offline_signed_scan_and_investor_sees_only_own_contracts()
+    {
+        var code = await FundingBatchAsync();
+        var (investor, _) = await InvestorAsync();
+        var contributionId = await ReserveAsync(investor, code);
+        var contract = (await (await investor.PostAsync($"/api/contributions/{contributionId}/contract", null)).Content.ReadFromJsonAsync<ContractResponse>())!;
+        var admin = await AdminAsync();
+        var scan = "%PDF-1.4\n% ban scan hop dong ky tay\n%%EOF\n"u8.ToArray();
+
+        // Chưa xác nhận đối chiếu chữ ký, sai loại file, người không phải admin → từ chối
+        var unconfirmed = await admin.PostAsync($"/api/contracts/{contract.ContractId}/offline-upload", Scan(scan, confirmed: false));
+        Assert.Equal("contract.confirm_signatures", await ErrorCode(unconfirmed));
+        var notPdf = await admin.PostAsync($"/api/contracts/{contract.ContractId}/offline-upload", Scan("hello"u8.ToArray(), "image/png"));
+        Assert.Equal("contract.file_type", await ErrorCode(notPdf));
+        Assert.Equal(HttpStatusCode.Forbidden, (await investor.PostAsync($"/api/contracts/{contract.ContractId}/offline-upload", Scan(scan))).StatusCode);
+
+        var uploaded = await admin.PostAsync($"/api/contracts/{contract.ContractId}/offline-upload", Scan(scan));
+        Assert.Equal(HttpStatusCode.OK, uploaded.StatusCode);
+        var final = (await uploaded.Content.ReadFromJsonAsync<ContractResponse>())!;
+        Assert.Equal(ContractStatuses.FullySigned, final.Status);
+        Assert.Equal(ContractStatuses.OfflineUpload, final.SigningMethod);
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(scan)), final.FinalHash);
+        Assert.Null(final.NextSigner);
+        Assert.Equal(scan, await investor.GetByteArrayAsync($"/api/contracts/{contract.ContractId}/file"));
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsync($"/api/contracts/{contract.ContractId}/offline-upload", Scan(scan))).StatusCode);
+        await using (var db = fixture.OpenDb())
+            Assert.True(await db.AuditLogs.AnyAsync(a => a.EntityType == "investment_contract" && a.EntityId == contract.ContractId && a.ActionType == "offline_upload"));
+
+        // Kho hợp đồng: admin xem theo lô; nhà đầu tư chỉ thấy hợp đồng của chính mình
+        var (other, _) = await InvestorAsync("Nhà đầu tư khác");
+        var otherContribution = await ReserveAsync(other, code, 1_000_000);
+        (await other.PostAsync($"/api/contributions/{otherContribution}/contract", null)).EnsureSuccessStatusCode();
+        var vault = (await admin.GetFromJsonAsync<List<ContractSummary>>($"/api/admin/batches/{code}/contracts"))!;
+        Assert.Equal(2, vault.Count);
+        var mine = (await investor.GetFromJsonAsync<List<ContractSummary>>("/api/me/contracts"))!;
+        Assert.Equal([contract.ContractId], mine.Select(c => c.ContractId));
+        var theirs = (await other.GetFromJsonAsync<List<ContractSummary>>("/api/me/contracts"))!;
+        Assert.DoesNotContain(theirs, c => c.ContractId == contract.ContractId);
+        Assert.Equal(HttpStatusCode.Forbidden, (await investor.GetAsync($"/api/admin/batches/{code}/contracts")).StatusCode);
+    }
+
     [Fact]
     public async Task Only_the_contribution_owner_can_create_its_contract()
     {

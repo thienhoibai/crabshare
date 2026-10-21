@@ -68,6 +68,38 @@ export function useOperatorContracts() {
   return useQuery({ queryKey: contractKeys.operator, queryFn: async () => (await http.get<ContractSummary[]>('/api/operator/contracts')).data })
 }
 
+/** Tab Hợp đồng của cổng nhà đầu tư (TH-09): chỉ hợp đồng của tôi. */
+export function useMyContracts() {
+  return useQuery({ queryKey: [...contractKeys.root, 'mine'], queryFn: async () => (await http.get<ContractSummary[]>('/api/me/contracts')).data })
+}
+
+/** Kho hợp đồng của một lô cho admin (TH-09). */
+export function useBatchContracts(batchCode: string) {
+  return useQuery({
+    queryKey: [...contractKeys.root, 'batch', batchCode],
+    queryFn: async () => (await http.get<ContractSummary[]>(`/api/admin/batches/${encodeURIComponent(batchCode)}/contracts`)).data,
+    enabled: batchCode.length > 0,
+  })
+}
+
+/** UC15: admin tải bản đã ký ngoài hệ thống (PDF) sau khi xác nhận đã đối chiếu đủ chữ ký hai bên. */
+export function useUploadOfflineContract() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    retry: false,
+    mutationFn: async ({ contractId, file }: { contractId: number; file: File }) => {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('confirmedBothSigned', 'true')
+      return (await http.post<Contract>(`/api/contracts/${contractId}/offline-upload`, form)).data
+    },
+    onSuccess: async (contract) => {
+      queryClient.setQueryData(contractKeys.one(contract.contractId), contract)
+      await queryClient.invalidateQueries({ queryKey: contractKeys.root })
+    },
+  })
+}
+
 /**
  * File PDF hiện hành dưới dạng blob URL (cần gửi kèm JWT nên không mở thẳng đường dẫn API).
  * Tải lại khi mã băm đổi (sau mỗi chữ ký); thu hồi URL cũ để không rò bộ nhớ.
