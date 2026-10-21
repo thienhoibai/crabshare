@@ -12,7 +12,8 @@ public sealed class EvidenceAccess(AppDbContext db, ICurrentUser me)
         if (!me.IsInRole(Roles.OperatorMember) || !await db.AppUsers.AnyAsync(u => u.UserId == me.UserId && u.Status == "Active", ct)
             || !await db.AppUserRoles.AnyAsync(r => r.UserId == me.UserId && r.RoleCode == Roles.OperatorMember, ct)) throw Denied();
         var member = await db.OperatorMembers.AsNoTracking().SingleOrDefaultAsync(m => m.UserId == me.UserId, ct);
-        if (member is null || (me.OperatorId is { } claimed && claimed != member.OperatorId)) throw Denied();
+        if (member is null || member.MemberRole is not ("Owner" or "Staff")
+            || (me.OperatorId is { } claimed && claimed != member.OperatorId)) throw Denied();
         return member.OperatorId;
     }
     private static ForbiddenException Denied() => new("evidence.access_denied", "Bạn không có quyền gửi bằng chứng cho hộ nuôi này.");

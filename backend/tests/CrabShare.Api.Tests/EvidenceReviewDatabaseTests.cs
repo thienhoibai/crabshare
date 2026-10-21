@@ -130,7 +130,7 @@ public class EvidenceReviewDatabaseTests(KycDatabaseFixture fixture) : IClassFix
         await Chain();
     }
     [Theory]
-    [InlineData("Accepted")] [InlineData("Rejected")] [InlineData("Watch")]
+    [InlineData("Accepted")] [InlineData("Rejected")]
     public async Task Only_flagged_evidence_can_receive_a_new_verdict(string status)
     {
         var test = await Setup(); await Db(async db => { (await db.Evidences.SingleAsync(e => e.EvidenceId == test.Evidence)).ReviewStatus = status; await db.SaveChangesAsync(); return true; });
@@ -138,6 +138,16 @@ public class EvidenceReviewDatabaseTests(KycDatabaseFixture fixture) : IClassFix
         Assert.False((await client.GetFromJsonAsync<ReviewEvidenceDetail>($"/api/review/evidence/{test.Evidence}"))!.CanReview);
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync($"/api/review/evidence/{test.Evidence}/verdict", new { verdict = "Pass", note = "Checked" })).StatusCode);
         Assert.False(await Db(db => db.EvidenceReviews.AnyAsync(r => r.EvidenceId == test.Evidence)));
+    }
+    [Fact]
+    public async Task Watch_evidence_can_be_decided_by_a_reviewer()
+    {
+        var test = await Setup();
+        await Db(async db => { (await db.Evidences.SingleAsync(e => e.EvidenceId == test.Evidence)).ReviewStatus = "Watch"; await db.SaveChangesAsync(); return true; });
+        using var client = Client(test.Reviewer);
+        var response = await client.PostAsJsonAsync($"/api/review/evidence/{test.Evidence}/verdict", new { verdict = "Pass", note = "Watch reviewed" });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Accepted", (await response.Content.ReadFromJsonAsync<ReviewEvidenceDetail>())!.Evidence.ReviewStatus);
     }
     [Fact]
     public async Task Concurrent_final_verdicts_have_one_winner_and_one_conflict()

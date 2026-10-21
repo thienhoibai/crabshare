@@ -24,6 +24,7 @@ import '../features/operator/logs/daily_logs_page.dart';
 import '../features/operator/packing/pack_order_page.dart';
 import '../features/operator/packing/pack_orders_page.dart';
 import '../features/operator/today/operator_today_page.dart';
+import '../features/operator/tags/tags_page.dart';
 import '../features/operator/slot_events/slot_events_page.dart';
 import '../features/trace/scan_page.dart';
 import '../features/trace/trace_result_page.dart';
@@ -219,6 +220,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: Routes.operatorTags,
+        builder: (context, state) => const TagsPage(),
+      ),
+      GoRoute(
         path: Routes.flaggedEvidence,
         builder: (context, state) => const FlaggedEvidencePage(),
       ),
@@ -232,6 +237,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: Routes.capture,
         builder: (context, state) => CapturePage(
           initialSlot: state.uri.queryParameters['slot'],
+          tagCode: state.uri.queryParameters['tagCode'],
           captureRequestId: state.uri.queryParameters.containsKey('requestId')
               ? int.tryParse(state.uri.queryParameters['requestId']!) ?? -1
               : null,

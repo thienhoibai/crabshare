@@ -123,6 +123,12 @@ class _Repository implements EvidenceRepository {
     );
     return saved;
   }
+
+  @override
+  Future<EvidenceResult> uploadForTag({
+    required String tagCode,
+    required EvidencePhoto photo,
+  }) => throw UnimplementedError();
 }
 
 class _Adapter implements HttpClientAdapter {

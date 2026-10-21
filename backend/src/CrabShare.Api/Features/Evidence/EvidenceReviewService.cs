@@ -98,8 +98,9 @@ public sealed class EvidenceReviewService(AppDbContext db, ICurrentUser me, Evid
             && u.AppUserRoles.Any(r => r.RoleCode == Roles.EvidenceReviewer), ct))
             throw new ForbiddenException("evidence.reviewer_required", "Chỉ kiểm định viên đang có quyền mới được thẩm định bằng chứng.");
     }
-    private bool CanReview(Infrastructure.Persistence.Entities.Evidence e, EvidenceReview? mine) => e.ReviewStatus == "Flagged"
-        && (mine == null || (mine.Verdict == "NeedMoreEvidence" && e.ExplainedAt > mine.ReviewedAt));
+    private bool CanReview(Infrastructure.Persistence.Entities.Evidence e, EvidenceReview? mine) => e.ReviewStatus == "Watch"
+        ? mine == null
+        : e.ReviewStatus == "Flagged" && (mine == null || (mine.Verdict == "NeedMoreEvidence" && e.ExplainedAt > mine.ReviewedAt));
     private ReviewEvidenceDetail Detail(Infrastructure.Persistence.Entities.Evidence e) => new(
         new(e.EvidenceId, e.Batch.BatchCode, e.Batch.Title, e.Batch.Operator.LegalName, e.Slot?.SlotCode, e.MediaType, e.ReviewStatus, e.RiskScore, e.ReceivedAt),
         e.Source, e.CapturedAt, e.Latitude, e.Longitude, e.Sha256, e.PerceptualHash, e.Explanation, e.ExplainedAt,

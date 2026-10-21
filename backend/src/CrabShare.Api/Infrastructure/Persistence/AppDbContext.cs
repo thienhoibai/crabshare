@@ -1146,6 +1146,8 @@ public partial class AppDbContext : DbContext
 
             entity.HasIndex(e => e.CaptureRequestId, "ix_evidence_capture_request_id");
 
+            entity.HasIndex(e => e.CrabItemId, "ix_evidence_crab_item_id");
+
             entity.HasIndex(e => e.PerceptualHash, "ix_evidence_perceptual_hash");
 
             entity.HasIndex(e => e.Sha256, "ix_evidence_sha256");
@@ -1161,6 +1163,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.CaptureRequestId)
                 .HasComment("Yêu cầu chụp đột xuất mà ảnh này đáp ứng")
                 .HasColumnName("capture_request_id");
+            entity.Property(e => e.CrabItemId).HasColumnName("crab_item_id");
             entity.Property(e => e.CapturedAt)
                 .HasPrecision(3)
                 .HasColumnName("captured_at");
@@ -1235,6 +1238,10 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.CaptureRequest).WithMany(p => p.Evidences)
                 .HasForeignKey(d => d.CaptureRequestId)
                 .HasConstraintName("fk_evidence_capture_request_id");
+
+            entity.HasOne(d => d.CrabItem).WithMany()
+                .HasForeignKey(d => d.CrabItemId)
+                .HasConstraintName("fk_evidence_crab_item_id");
 
             entity.HasOne(d => d.SlotEvent).WithMany(p => p.Evidences)
                 .HasForeignKey(d => d.SlotEventId)

@@ -14,7 +14,7 @@ Chi tiết contract, JSON Bruno, migration và kiểm chứng: [CS-71-harvest.md
 - V016 bổ sung vòng đời, request chống lặp và snapshot bất biến; unique mã tem và một tem Printed/Active mỗi cá thể; collision retry tối đa 5 transaction đầy đủ.
 - NH-15 chưa triển khai: lưu mốc `batch.harvest_started_at` khi lô lần đầu chuyển Harvesting, không tự đặt hạn hay đổi cam kết sang WindowOpen. API trại, kích hoạt tem và phần cứng in chưa thuộc CS-71.
 
-Các endpoint kích hoạt/thay tem/truy xuất ở phần dưới vẫn là định hướng cho task tiếp theo; CS-71 chỉ trả đường dẫn QR hiện có và tem Printed.
+CS-74 / VI-15 bổ sung backend cho danh sách/in tem, ảnh xác nhận, kích hoạt thủ công, hủy/thay tem và truy xuất theo trạng thái Active. Web/mobile và phần cứng máy in vẫn làm ở phase tiếp theo.
 
 **Người làm:** Viên · **Use case:** UC22 Declare Harvest · UC46 Print and Activate Crab Tag · UC33 Trace Crab by Tag Scan
 
@@ -35,10 +35,68 @@ Tem **in lúc thu hoạch** bằng máy in nhãn của trại, dán lên con cua
 |---|---|---|---|
 | POST | `/api/batches/{code}/harvests` | Operator Owner | UC22 mở đợt thu hoạch; lô → `Harvesting` |
 | POST | `/api/harvests/{id}/crabs` | OperatorMember | CS-71: `{ requestId, slotCode, expectedCrabItemId, weightG, shellCondition }` → `product_grade` → cá thể hiện có InStock → tem Printed → mã tem + đường dẫn QR |
-| POST | `/api/tags/{tagCode}/activate` | OperatorMember | UC46: ảnh xác nhận (đi qua Evidence) → `Active` |
-| POST | `/api/tags/{tagCode}/void` | Operator Owner | `{ reason }` → in lại tem mới |
+| GET | `/api/tags?status=Printed&page=1&pageSize=20` | Operator Owner/Staff | Danh sách tem theo trang, giới hạn hộ nuôi hiện tại |
+| GET | `/api/tags/{tagCode}/label` | Operator Owner/Staff | Trả `{tagCode,traceUrl}`; URL lấy từ `Trace:PublicBaseUrl`; không đổi trạng thái |
+| POST | `/api/evidence` | Operator Owner/Staff | Multipart KH-07; gửi thêm `tagCode` để ảnh sau thu hoạch dùng lại pipeline ảnh, lưu trữ, nhận diện, trùng lặp và chấm rủi ro. Không gửi `batchCode`/`slotCode` khi dùng `tagCode` |
+| POST | `/api/review/evidence/{id}/verdict` | Evidence Reviewer | `{verdict:"Pass"|"Fail"|"NeedMoreEvidence",note}`; `Watch` có thể được reviewer quyết định thủ công. Operator không tự đổi trạng thái |
+| POST | `/api/tags/{tagCode}/activate` | Operator Owner/Staff | `{evidenceId}`; chỉ Evidence `Accepted`, `Photo`, `InAppCapture`, đúng crab/batch mới kích hoạt. Replay cùng evidence là idempotent |
+| POST | `/api/tags/{tagCode}/void` | Operator Owner | `{reason}`; thay tag Printed/Active của crab `InStock`, tạo tag Printed mới |
 | POST | `/api/harvests/{id}/complete` | Operator Owner | CS-71: `{ expectedRevision }` → chốt đợt Completed, giữ tổng cân hiện có; không đóng lô hoặc cộng tồn lần hai. Phần mở rộng VI-16 làm sau. |
-| GET | `/api/trace/{tagCode}` | **Công khai** | UC33: hộ nuôi, lô, **số hộp**, ngày thả, ngày thu hoạch, hạng, khối lượng, chuỗi sự kiện tới đơn hàng; ghi `tag_scan` |
+| GET | `/api/trace/{tagCode}` | **Công khai** | Chỉ trả thông tin truy xuất khi tag `Active`; `Printed` chưa kích hoạt và `Void` không trả dữ liệu cua. Cache tắt. |
+
+### Bruno examples
+
+```http
+GET {{baseUrl}}/api/tags?status=Printed&page=1&pageSize=20
+Authorization: Bearer {{operatorToken}}
+```
+
+```http
+GET {{baseUrl}}/api/tags/{{tagCode}}/label
+Authorization: Bearer {{operatorToken}}
+```
+
+```http
+POST {{baseUrl}}/api/evidence
+Authorization: Bearer {{operatorToken}}
+Content-Type: multipart/form-data
+
+tagCode={{tagCode}}
+capturedAt=2026-10-21T12:00:00+07:00
+latitude=10.123456
+longitude=106.654321
+image=@./confirmation.jpg
+```
+
+```http
+POST {{baseUrl}}/api/review/evidence/{{evidenceId}}/verdict
+Authorization: Bearer {{reviewerToken}}
+Content-Type: application/json
+
+{"verdict":"Pass","note":"Đã đối chiếu cua và tem trong ảnh"}
+```
+
+```http
+POST {{baseUrl}}/api/tags/{{tagCode}}/activate
+Authorization: Bearer {{operatorToken}}
+Content-Type: application/json
+
+{"evidenceId":123}
+```
+
+```http
+POST {{baseUrl}}/api/tags/{{tagCode}}/void
+Authorization: Bearer {{operatorOwnerToken}}
+Content-Type: application/json
+
+{"reason":"Tem in sai"}
+```
+
+```http
+GET {{baseUrl}}/api/trace/{{tagCode}}
+```
+
+`Watch` và `Flagged` cần reviewer quyết định trước khi kích hoạt. Thay tem sau khi cua đã `Packed`/`Delivered` đang được ghi TODO; phase này trả conflict. Không tích hợp/kiểm tra máy in vật lý.
 
 ## Quy tắc phải giữ
 - Mã tem 12 ký tự, không trùng, không đoán được (tránh ký tự dễ nhầm 0/O, 1/I).

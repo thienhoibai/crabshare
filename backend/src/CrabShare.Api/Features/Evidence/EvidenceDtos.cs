@@ -11,10 +11,12 @@ public static class EvidenceUploadLimits
 
 public sealed class UploadEvidenceRequest
 {
-    [Required, StringLength(30), RegularExpression(@"[\s\S]*\S[\s\S]*")]
-    public string BatchCode { get; set; } = "";
-    [Required, StringLength(30), RegularExpression(@"[\s\S]*\S[\s\S]*")]
-    public string SlotCode { get; set; } = "";
+    [StringLength(30), RegularExpression(@"[\s\S]*\S[\s\S]*")]
+    public string? BatchCode { get; set; }
+    [StringLength(30), RegularExpression(@"[\s\S]*\S[\s\S]*")]
+    public string? SlotCode { get; set; }
+    [StringLength(30), RegularExpression(@"[\s\S]*\S[\s\S]*")]
+    public string? TagCode { get; set; }
     // Allows camera evidence before claiming the vacant box for a replacement crab.
     [RegularExpression("^Restocked$")] public string? SlotEventType { get; set; }
     [Required] public DateTimeOffset? CapturedAt { get; set; }

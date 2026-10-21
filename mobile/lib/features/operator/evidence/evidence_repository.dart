@@ -107,6 +107,11 @@ abstract interface class EvidenceRepository {
     int? captureRequestId,
     String? slotEventType,
   });
+
+  Future<EvidenceResult> uploadForTag({
+    required String tagCode,
+    required EvidencePhoto photo,
+  });
 }
 
 class ApiEvidenceRepository implements EvidenceRepository {
@@ -163,6 +168,35 @@ class ApiEvidenceRepository implements EvidenceRepository {
       if (captureRequestId != null)
         'captureRequestId': captureRequestId.toString(),
       'slotEventType': ?slotEventType,
+      'image': MultipartFile.fromBytes(
+        photo.bytes,
+        filename:
+            'capture.${type == 'image/jpeg' ? 'jpg' : type.split('/').last}',
+        contentType: DioMediaType.parse(type),
+      ),
+    });
+    final response = await dio.post<Map<String, dynamic>>(
+      '/api/evidence',
+      data: form,
+      options: Options(
+        sendTimeout: const Duration(seconds: 60),
+        receiveTimeout: const Duration(seconds: 90),
+      ),
+    );
+    return EvidenceResult.fromJson(response.data!);
+  }
+
+  @override
+  Future<EvidenceResult> uploadForTag({
+    required String tagCode,
+    required EvidencePhoto photo,
+  }) async {
+    final type = photo.contentType;
+    final form = FormData.fromMap({
+      'tagCode': tagCode,
+      'capturedAt': photo.capturedAt.toUtc().toIso8601String(),
+      'latitude': photo.latitude.toStringAsFixed(6),
+      'longitude': photo.longitude.toStringAsFixed(6),
       'image': MultipartFile.fromBytes(
         photo.bytes,
         filename:

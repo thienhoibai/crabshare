@@ -82,6 +82,10 @@ public static class FeatureRegistry
         services.AddScoped<TimelineService>();       // VI-11
         services.AddScoped<HarvestService>();        // CS-71
         services.AddSingleton<IHarvestTagCodeGenerator, HarvestTagCodeGenerator>();
+        services.AddScoped<TagsService>();            // CS-74 / VI-15
+        services.AddScoped<TraceService>();
+        services.AddOptions<TraceOptions>().BindConfiguration("Trace").Validate(o => Uri.TryCreate(o.PublicBaseUrl, UriKind.Absolute, out var uri)
+            && uri.Scheme is "https" or "http", "Trace:PublicBaseUrl must be an absolute HTTP(S) URL.").ValidateOnStart();
 
         // Nhân
         services.AddScoped<CatalogService>();

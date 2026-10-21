@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  Bell, BellRing, ClipboardSignature, DollarSign, Flag, Home, LayoutGrid, LogOut, Menu, Monitor, NotebookPen, Package, Smartphone, Store, Users, X,
+  Bell, BellRing, ClipboardSignature, DollarSign, Flag, Home, LayoutGrid, LogOut, Menu, Monitor, NotebookPen, Package, QrCode, Smartphone, Store, Users, X,
 } from 'lucide-react'
 import { Logo, Shell } from '../../shared/ui/kit/kit'
 import { useAuthStore } from '../../shared/auth/authStore'
@@ -31,6 +31,7 @@ const navGroups = [
     label: 'Thu hoạch & tiền',
     items: [
       { id: 'harvest', href: '/operator/harvest', icon: Package, label: 'Thu hoạch & đóng gói' },
+      { id: 'tags', href: '/operator/tags', icon: QrCode, label: 'Tem truy xuất' },
       { id: 'listings', href: '/operator/listings', icon: Store, label: 'Niêm yết sản phẩm' },
       { id: 'disbursements', href: '/operator/disbursements', icon: DollarSign, label: 'Xin giải ngân' },
       { id: 'settlement', href: '/operator/settlement', icon: DollarSign, label: 'Đối soát doanh thu' },
@@ -53,6 +54,7 @@ const tabs = [
   { id: 'batch', href: '/operator/batch', icon: LayoutGrid, label: 'Lô nuôi' },
   { id: 'boxes', href: '/operator/boxes', icon: Package, label: 'Hộp nuôi' },
   { id: 'harvest', href: '/operator/harvest', icon: Package, label: 'Thu hoạch' },
+  { id: 'tags', href: '/operator/tags', icon: QrCode, label: 'Tem' },
 ]
 
 const devices: Record<string, { name: string; w: number; h: number }> = {
