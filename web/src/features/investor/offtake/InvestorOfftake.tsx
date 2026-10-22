@@ -1,24 +1,67 @@
 import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router'
 import { errorMessage } from '../../../shared/api/http'
 import { formatDateTime, formatVnd } from '../../../shared/lib/format'
 import { VietQrBox } from '../../../shared/payments/VietQrBox'
 import { SimulatePaymentButton } from '../../../shared/payments/SimulatePaymentButton'
 import { usePaymentRequest, type PaymentStatus } from '../../../shared/payments/paymentsApi'
+import { useAddresses } from '../../accounts/paymentProfilesApi'
 import { useMyContributions } from '../funding/fundingApi'
 import {
   useMyOfftakes,
   useOfftakeCap,
   useCreateOfftake,
+  useClaimOfftake,
+  offtakeKeys,
   type OfftakeCommitment,
   type OfftakePayment,
 } from './offtakeApi'
 
+const STATUS_LABEL: Record<string, string> = {
+  PendingHarvest: 'Chờ thu hoạch',
+  WindowOpen: 'Cửa sổ ưu tiên',
+  Fulfilled: 'Đã nhận hàng',
+  Expired: 'Hết cửa sổ',
+  Cancelled: 'Đã huỷ',
+}
+
+const DEPOSIT_LABEL: Record<string, string> = {
+  Pending: 'Chờ cọc',
+  Held: 'Đã giữ',
+  Applied: 'Đã trừ vào tiền hàng',
+  Forfeited: 'Mất cọc',
+  Refunded: 'Đã hoàn',
+}
+
+function useCountdown(expiresAt?: string | null) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!expiresAt) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [expiresAt])
+  if (!expiresAt) return null
+  const ms = new Date(expiresAt).getTime() - now
+  if (ms <= 0) return 'Đã hết giờ'
+  const total = Math.floor(ms / 1000)
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  return `${h} giờ ${String(m).padStart(2, '0')} phút ${String(s).padStart(2, '0')} giây`
+}
+
 
 function OfftakePaymentSection({ payment }: { payment: OfftakePayment }) {
+  const qc = useQueryClient()
   const live = usePaymentRequest(payment.paymentRequestId)
   const req = live.data
   const status = (req?.status ?? 'Pending') as PaymentStatus
   const paymentData = req ?? payment
+  useEffect(() => {
+    if (status !== 'Paid') return
+    void qc.invalidateQueries({ queryKey: offtakeKeys.mine })
+  }, [status, qc])
 
   return (
     <div style={{ marginTop: '12px', padding: '16px', background: 'rgba(255, 91, 36, 0.05)', borderRadius: '16px', border: '1px solid rgba(255, 91, 36, 0.2)' }}>
@@ -32,9 +75,41 @@ function OfftakePaymentSection({ payment }: { payment: OfftakePayment }) {
   )
 }
 
+function depositTone(status: string) {
+  if (status === 'Held' || status === 'Applied') return { background: '#dcfce7', color: '#166534' }
+  if (status === 'Refunded') return { background: '#dbeafe', color: '#1e40af' }
+  if (status === 'Forfeited') return { background: '#fee2e2', color: '#991b1b' }
+  return { background: '#fef9c3', color: '#854d0e' }
+}
+
+function statusTone(status: string) {
+  if (status === 'Cancelled' || status === 'Expired') return { background: '#fee2e2', color: '#991b1b' }
+  if (status === 'Fulfilled') return { background: '#dcfce7', color: '#166534' }
+  if (status === 'WindowOpen') return { background: '#e0e7ff', color: '#3730a3' }
+  return { background: '#fef9c3', color: '#854d0e' }
+}
+
 function OfftakeItem({ item }: { item: OfftakeCommitment }) {
   const [showQr, setShowQr] = useState(false)
-  const isPendingDeposit = item.depositStatus === 'Pending'
+  const [addressId, setAddressId] = useState<number | ''>('')
+  const addresses = useAddresses()
+  const claim = useClaimOfftake()
+  const claimed = claim.data?.offtakeId === item.offtakeId ? claim.data : null
+  const view = claimed && !item.orderId ? claimed : item
+  const countdown = useCountdown(view.status === 'WindowOpen' ? view.windowExpiresAt : null)
+  const windowStillOpen = view.status === 'WindowOpen' && countdown !== 'Đã hết giờ'
+  const isPendingDeposit = view.depositStatus === 'Pending'
+  const canClaim = windowStillOpen && view.depositStatus === 'Held' && !view.orderId
+  const balanceDue = view.status === 'WindowOpen' && view.depositStatus === 'Held' && !!view.orderId && !!view.payment
+  const depositStyle = depositTone(view.depositStatus)
+  const commitmentStyle = statusTone(view.status)
+
+  useEffect(() => {
+    const list = addresses.data ?? []
+    if (!list.length) return
+    if (list.some((a) => a.addressId === addressId)) return
+    setAddressId((list.find((a) => a.isDefault) ?? list[0]).addressId)
+  }, [addresses.data, addressId])
 
   return (
     <div
@@ -60,11 +135,11 @@ function OfftakeItem({ item }: { item: OfftakeCommitment }) {
               borderRadius: '999px',
               fontSize: '12px',
               fontWeight: 600,
-              background: item.depositStatus === 'Held' ? '#dcfce7' : '#fef9c3',
-              color: item.depositStatus === 'Held' ? '#166534' : '#854d0e',
+              background: depositStyle.background,
+              color: depositStyle.color,
             }}
           >
-            Cọc: {item.depositStatus === 'Held' ? 'Đã giữ (Held)' : item.depositStatus}
+            Cọc: {DEPOSIT_LABEL[view.depositStatus] ?? view.depositStatus}
           </span>
           <span
             style={{
@@ -72,11 +147,11 @@ function OfftakeItem({ item }: { item: OfftakeCommitment }) {
               borderRadius: '999px',
               fontSize: '12px',
               fontWeight: 600,
-              background: item.status === 'Cancelled' ? '#fee2e2' : '#e0e7ff',
-              color: item.status === 'Cancelled' ? '#991b1b' : '#3730a3',
+              background: commitmentStyle.background,
+              color: commitmentStyle.color,
             }}
           >
-            {item.status === 'PendingHarvest' ? 'Chờ thu hoạch' : item.status}
+            {STATUS_LABEL[view.status] ?? view.status}
           </span>
         </div>
       </div>
@@ -106,6 +181,66 @@ function OfftakeItem({ item }: { item: OfftakeCommitment }) {
 
       {isPendingDeposit && item.payment && showQr && (
         <OfftakePaymentSection payment={item.payment} />
+      )}
+
+      {item.status === 'WindowOpen' && countdown && (
+        <div style={{ fontSize: '14px' }}>
+          Cửa sổ ưu tiên còn: <b>{countdown}</b>
+          {item.windowExpiresAt && <span className="rd-muted"> · hết hạn {formatDateTime(item.windowExpiresAt)}</span>}
+        </div>
+      )}
+
+      {canClaim && (
+        <div style={{ display: 'grid', gap: '8px' }}>
+          {(addresses.data ?? []).length === 0 ? (
+            <p className="rd-muted" style={{ margin: 0 }}>
+              Cần địa chỉ nhận hàng trước khi nhận cua.{' '}
+              <Link to="/tai-khoan/dia-chi">Thêm địa chỉ</Link>
+            </p>
+          ) : (
+            <label style={{ display: 'grid', gap: '4px', fontSize: '13px' }}>
+              Địa chỉ nhận hàng
+              <select value={addressId} onChange={(e) => setAddressId(Number(e.target.value))}>
+                {(addresses.data ?? []).map((a) => (
+                  <option key={a.addressId} value={a.addressId}>
+                    {a.recipientName} — {a.addressLine}, {a.province}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <button
+            type="button"
+            className="rd-btn rd-btn--primary"
+            disabled={claim.isPending || typeof addressId !== 'number'}
+            onClick={() => {
+              if (typeof addressId !== 'number') return
+              claim.mutate({ offtakeId: item.offtakeId, addressId })
+            }}
+          >
+            {claim.isPending ? 'Đang nhận hàng…' : 'Nhận hàng ưu tiên'}
+          </button>
+          {claim.isError && <p className="rd-note" role="alert">{errorMessage(claim.error)}</p>}
+        </div>
+      )}
+
+      {balanceDue && view.payment && (
+        <div>
+          <div style={{ fontSize: '13px' }}>
+            Đơn <b>{view.orderNo}</b> · còn phải trả <b>{formatVnd(view.payment.amount)}</b> (đã trừ cọc {formatVnd(view.depositAmount)})
+          </div>
+          <OfftakePaymentSection payment={view.payment} />
+        </div>
+      )}
+
+      {view.depositStatus === 'Forfeited' && view.status === 'Cancelled' && (
+        <p className="rd-muted" style={{ margin: 0 }}>Bạn đã huỷ đơn sau khi thanh toán phần còn lại. Tiền cọc được cộng vào doanh thu của lô.</p>
+      )}
+      {view.depositStatus === 'Forfeited' && view.status !== 'Cancelled' && (
+        <p className="rd-muted" style={{ margin: 0 }}>Hết cửa sổ chưa thanh toán. Cọc được cộng vào doanh thu của lô, phần hàng chưa nhận mở bán trên gian hàng.</p>
+      )}
+      {view.depositStatus === 'Refunded' && (
+        <p className="rd-muted" style={{ margin: 0 }}>Cọc được hoàn 100% vì lô huỷ hoặc không đủ hàng để giao.</p>
       )}
     </div>
   )

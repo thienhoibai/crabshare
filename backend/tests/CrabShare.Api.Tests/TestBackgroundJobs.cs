@@ -23,4 +23,8 @@ internal static class TestBackgroundJobs
     // TH-07: job chốt vốn chạy mỗi phút; test gọi FundingCloseService trực tiếp nên tắt lịch nền.
     [ModuleInitializer]
     internal static void DisableFundingCloseJob() => Environment.SetEnvironmentVariable("Funding__CloseJob__Enabled", "false");
+
+    // NH-15: job cửa sổ bao tiêu chạy mỗi phút; test gọi OfftakeWindowService trực tiếp nên tắt lịch nền.
+    [ModuleInitializer]
+    internal static void DisableOfftakeWindowJob() => Environment.SetEnvironmentVariable("Offtake__WindowJob__Enabled", "false");
 }

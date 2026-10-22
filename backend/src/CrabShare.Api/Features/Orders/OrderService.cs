@@ -128,7 +128,13 @@ public sealed class OrderService(
             {
                 var affected = await db.ProductListings
                     .Where(l => l.ListingId == listingId && l.Status == "Published" && l.HiddenAt == null
-                                && l.StockQtyKg - l.ReservedQtyKg >= quantityKg)
+                                && l.StockQtyKg - l.ReservedQtyKg >= quantityKg
+                                    + (l.StorageType == "Fresh"
+                                        ? (db.OfftakeCommitments.Where(o => o.BatchId == l.BatchId && o.GradeId == l.GradeId
+                                              && o.Status == "WindowOpen" && o.DepositStatus == "Held"
+                                              && !o.SalesOrders.Any(s => s.Status != "Cancelled"))
+                                            .Sum(o => (decimal?)o.CommittedQtyKg) ?? 0m)
+                                        : 0m))
                     .ExecuteUpdateAsync(s => s.SetProperty(l => l.ReservedQtyKg, l => l.ReservedQtyKg + quantityKg), ct);
                 if (affected == 0)
                     throw new ConflictException("order.insufficient_stock",

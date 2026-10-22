@@ -7,7 +7,7 @@ namespace CrabShare.Api.Features.Offtake;
 [ApiController]
 [Route("api")]
 [Authorize(Policy = Policies.Investor)]
-public sealed class OfftakeController(OfftakeService offtake) : ControllerBase
+public sealed class OfftakeController(OfftakeService offtake, OfftakeClaimService claims) : ControllerBase
 {
     [HttpPost("batches/{code}/offtake-commitments")]
     [EndpointSummary("UC13 — Đăng ký cam kết bao tiêu + QR cọc OfftakeDeposit (BT)")]
@@ -21,6 +21,11 @@ public sealed class OfftakeController(OfftakeService offtake) : ControllerBase
     [EndpointSummary("Các cam kết bao tiêu của tôi")]
     public async Task<ActionResult<IReadOnlyList<OfftakeCommitmentResponse>>> Mine(CancellationToken ct)
         => Ok(await offtake.ListMineAsync(ct));
+
+    [HttpPost("offtake-commitments/{id:long}/claim")]
+    [EndpointSummary("UC23 — Nhận hàng bao tiêu trong cửa sổ ưu tiên, tạo đơn Offtake trừ cọc")]
+    public async Task<ActionResult<OfftakeCommitmentResponse>> Claim(long id, ClaimOfftakeRequest req, CancellationToken ct)
+        => Ok(await claims.ClaimAsync(id, req, ct));
 
     [HttpGet("batches/{code}/offtake-cap")]
     [EndpointSummary("Trần bao tiêu + đặt trước còn lại của lô (đọc view)")]
