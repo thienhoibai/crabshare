@@ -443,6 +443,14 @@ class _HarvestBodyState extends ConsumerState<_HarvestBody> {
                   error: (error, _) => [_message(apiErrorMessage(error))],
                   data: (session) => [
                     Text('${session.displayName} · ${session.statusLabel}'),
+                    if (session.status == 'Completed') ...[
+                      const SizedBox(height: 8),
+                      const Text('Tổng hợp theo hạng cua'),
+                      if (session.gradeSummaries.isEmpty)
+                        const Text('Đợt này không có cua được ghi nhận.'),
+                      for (final grade in session.gradeSummaries)
+                        Text('${grade.gradeName} (${grade.gradeCode}) · ${grade.crabCount} con · ${grade.totalWeightKg.toStringAsFixed(3)} kg'),
+                    ],
                   ],
                 ),
                 _history(selectedId),

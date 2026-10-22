@@ -6,6 +6,7 @@ using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Errors;
 using CrabShare.Api.Features.Batches;
+using CrabShare.Api.Features.Catalog;
 using CrabShare.Api.Infrastructure.Persistence;
 using CrabShare.Api.Infrastructure.Persistence.Entities;
 using Microsoft.Data.SqlClient;
@@ -15,7 +16,7 @@ using HarvestSession = CrabShare.Api.Infrastructure.Persistence.Entities.Harvest
 namespace CrabShare.Api.Features.Harvest;
 
 public sealed partial class HarvestService(AppDbContext db, ICurrentUser me, TimeProvider clock, IAuditLog audit,
-    IHarvestTagCodeGenerator tagCodes)
+    IHarvestTagCodeGenerator tagCodes, CatalogService catalog)
 {
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static string Hash(object value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value))));
@@ -147,13 +148,22 @@ public sealed partial class HarvestService(AppDbContext db, ICurrentUser me, Tim
         return WriteAsync(async () =>
         {
             var member = await MemberAsync(true, ct); var (session, batch) = await SessionAsync(id, member.OperatorId, true, ct);
-            if (session.LifecycleStatus == "Completed") return Response(session, batch, member, true);
+            if (session.LifecycleStatus == "Completed")
+            {
+                var completedSummaries = await GradeSummariesAsync([id], ct);
+                return Response(session, batch, member, true) with { GradeSummaries = completedSummaries[id] };
+            }
             EnsureOpen(session, batch);
             if (session.RevisionNo != request.ExpectedRevision) throw Conflict("harvest_changed");
-            var before = Response(session, batch, member, true);
+            var summaries = await GradeSummariesAsync([id], ct);
+            var gradeSummaries = summaries[id];
+            var before = Response(session, batch, member, true) with { GradeSummaries = gradeSummaries };
+            session.HarvestedCount = gradeSummaries.Sum(g => g.CrabCount);
+            session.TotalWeightKg = gradeSummaries.Sum(g => g.TotalWeightKg);
+            await catalog.SyncHarvestStockAsync(batch.BatchId, ct);
             session.LifecycleStatus = "Completed"; session.CompletedAt = AuditChain.Timestamp(clock.GetUtcNow()); session.CompletedBy = me.UserId;
             session.RevisionNo = checked(session.RevisionNo + 1);
-            var response = Response(session, batch, member, true);
+            var response = Response(session, batch, member, true) with { GradeSummaries = gradeSummaries };
             await audit.WriteAsync("harvest", id, "complete", before, response, ct); return response;
         }, ct);
     }

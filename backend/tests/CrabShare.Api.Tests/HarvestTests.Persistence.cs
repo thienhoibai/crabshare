@@ -10,6 +10,65 @@ namespace CrabShare.Api.Tests;
 public partial class HarvestTests
 {
     [Fact]
+    public async Task Complete_syncs_existing_listing_stock_and_returns_grade_summary_once()
+    {
+        var farm = await Setup(); using var client = Client(farm.UserId);
+        var second = await AddCrab(farm, "0002");
+        var harvest = await Start(client, farm); var id = harvest.GetProperty("id").GetInt64();
+        await Record(client, id, RecordInput(farm, 250));
+        await Record(client, id, RecordInput(second, 500));
+        var listingIds = await Db(async db =>
+        {
+            var grades = await db.ProductGrades.Where(g => g.GradeCode == "L1" || g.GradeCode == "L3").ToDictionaryAsync(g => g.GradeCode, g => g.GradeId);
+            var l3 = new ProductListing { BatchId = farm.BatchId, GradeId = grades["L3"], Title = "L3", StorageType = "Fresh", CurrentPricePerKg = 1, StockQtyKg = 0, ReservedQtyKg = 0, Status = "Draft", CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow };
+            var l1 = new ProductListing { BatchId = farm.BatchId, GradeId = grades["L1"], Title = "L1", StorageType = "Fresh", CurrentPricePerKg = 1, StockQtyKg = 0, ReservedQtyKg = 0, Status = "Draft", CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow };
+            db.ProductListings.AddRange(l3, l1); await db.SaveChangesAsync(); return new { l3.ListingId, L1 = l1.ListingId };
+        });
+
+        var current = await client.GetFromJsonAsync<JsonElement>($"/api/harvests/{id}");
+        var completionBody = new { expectedRevision = current.GetProperty("revision").GetInt32() };
+        var concurrent = await Task.WhenAll(
+            client.PostAsJsonAsync($"/api/harvests/{id}/complete", completionBody),
+            client.PostAsJsonAsync($"/api/harvests/{id}/complete", completionBody));
+        var completed = await Success(concurrent[0]);
+        await Success(concurrent[1]);
+        Assert.Equal(2, completed.GetProperty("harvestedCount").GetInt32());
+        Assert.Equal(0.750m, completed.GetProperty("totalWeightKg").GetDecimal());
+        var summaries = completed.GetProperty("gradeSummaries").EnumerateArray().ToDictionary(x => x.GetProperty("gradeCode").GetString()!);
+        Assert.Equal(1, summaries["L3"].GetProperty("crabCount").GetInt32());
+        Assert.Equal(0.250m, summaries["L3"].GetProperty("totalWeightKg").GetDecimal());
+        Assert.Equal(1, summaries["L1"].GetProperty("crabCount").GetInt32());
+        Assert.Equal(0.500m, summaries["L1"].GetProperty("totalWeightKg").GetDecimal());
+        Assert.Equal(0.250m, await Db(db => db.ProductListings.Where(l => l.ListingId == listingIds.ListingId).Select(l => l.StockQtyKg).SingleAsync()));
+        Assert.Equal(0.500m, await Db(db => db.ProductListings.Where(l => l.ListingId == listingIds.L1).Select(l => l.StockQtyKg).SingleAsync()));
+
+        await Complete(client, completed);
+        Assert.Equal(0.250m, await Db(db => db.ProductListings.Where(l => l.ListingId == listingIds.ListingId).Select(l => l.StockQtyKg).SingleAsync()));
+    }
+
+    [Fact]
+    public async Task Complete_rolls_back_when_reconciled_stock_would_fall_below_reservations()
+    {
+        var farm = await Setup(); using var client = Client(farm.UserId);
+        var harvest = await Start(client, farm); var id = harvest.GetProperty("id").GetInt64();
+        await Record(client, id, RecordInput(farm));
+        var listingId = await Db(async db =>
+        {
+            var gradeId = await db.ProductGrades.Where(g => g.GradeCode == "L3").Select(g => g.GradeId).SingleAsync();
+            var listing = new ProductListing { BatchId = farm.BatchId, GradeId = gradeId, Title = "L3", StorageType = "Fresh", CurrentPricePerKg = 1, StockQtyKg = 0.250m, ReservedQtyKg = 0.250m, Status = "Published", CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow };
+            db.ProductListings.Add(listing);
+            (await db.CrabItems.SingleAsync(c => c.CrabItemId == farm.CrabId)).Status = "Packed";
+            await db.SaveChangesAsync(); return listing.ListingId;
+        });
+        var current = await client.GetFromJsonAsync<JsonElement>($"/api/harvests/{id}");
+
+        await Failure(await client.PostAsJsonAsync($"/api/harvests/{id}/complete", new { expectedRevision = current.GetProperty("revision").GetInt32() }), HttpStatusCode.UnprocessableEntity);
+
+        Assert.Equal("Open", (await client.GetFromJsonAsync<JsonElement>($"/api/harvests/{id}")).GetProperty("status").GetString());
+        Assert.Equal(0.250m, await Db(db => db.ProductListings.Where(l => l.ListingId == listingId).Select(l => l.StockQtyKg).SingleAsync()));
+    }
+
+    [Fact]
     public async Task Record_replay_after_completion_slot_reuse_and_tag_change_returns_original_snapshot()
     {
         var farm = await Setup(); using var client = Client(farm.UserId); var harvest = await Start(client, farm); var id = harvest.GetProperty("id").GetInt64(); var input = RecordInput(farm);

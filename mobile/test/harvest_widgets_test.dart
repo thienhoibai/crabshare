@@ -196,6 +196,8 @@ void main() {
         {'expectedRevision': 2},
       );
       expect(server.active, isFalse);
+      await reveal(tester, find.textContaining('Cua mềm (SOFT) · 1 con · 0.250 kg'));
+      expect(find.text('Tổng hợp theo hạng cua'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     },
   );

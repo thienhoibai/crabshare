@@ -40,6 +40,9 @@ class HarvestSession {
       completedBy = json['completedBy'] as int?,
       harvestedCount = json['harvestedCount'] as int,
       totalWeightKg = (json['totalWeightKg'] as num).toDouble(),
+      gradeSummaries = (json['gradeSummaries'] as List? ?? const [])
+          .map((item) => HarvestGradeSummary.fromJson(Map<String, dynamic>.from(item as Map)))
+          .toList(),
       revision = json['revision'] as int,
       canRecord = json['canRecord'] as bool,
       canComplete = json['canComplete'] as bool;
@@ -49,6 +52,7 @@ class HarvestSession {
   final String? name, note;
   final DateTime? startedAt, completedAt;
   final double totalWeightKg;
+  final List<HarvestGradeSummary> gradeSummaries;
   final bool canRecord, canComplete;
   String get displayName => name?.isNotEmpty == true ? name! : 'Đợt #$id';
   String get statusLabel => switch (status) {
@@ -56,6 +60,17 @@ class HarvestSession {
     'Completed' => 'Đã chốt',
     _ => 'Lịch sử chưa xác định',
   };
+}
+
+class HarvestGradeSummary {
+  HarvestGradeSummary.fromJson(Map<String, dynamic> json)
+    : gradeCode = json['gradeCode'] as String,
+      gradeName = json['gradeName'] as String,
+      crabCount = json['crabCount'] as int,
+      totalWeightKg = (json['totalWeightKg'] as num).toDouble();
+  final String gradeCode, gradeName;
+  final int crabCount;
+  final double totalWeightKg;
 }
 
 class HarvestCrab {
