@@ -14,8 +14,8 @@ public sealed class ActivateTagRequest { [Range(1, long.MaxValue)] public long E
 public sealed class VoidTagRequest { [Required, StringLength(300, MinimumLength = 1)] public string Reason { get; set; } = ""; }
 public sealed record TagLifecycleResponse(long TagId, string TagCode, string Status, long? ActivationEvidenceId, DateTimeOffset? ActivatedAt);
 public sealed record TagVoidResponse(TagLifecycleResponse VoidedTag, TagListItem ReplacementTag);
-public sealed record TraceEventResponse(string EventType, DateTimeOffset OccurredAt, string? Note);
-public sealed record TraceResponse(string TagCode, string BatchCode, string CrabType, Guid ItemUuid, string ItemStatus,
+public sealed record TraceEventResponse(string EventType, DateTimeOffset OccurredAt);
+public sealed record TraceResponse(string TagCode, string BatchCode, string CrabType, string ItemStatus,
     short? WeightG, string? GradeCode, string? GradeName, DateTimeOffset StockedAt, DateTimeOffset? HarvestedAt,
-    string OperatorName, string FarmAddress, string SlotCode, IReadOnlyList<TraceEventResponse> Events);
+    string SlotCode, IReadOnlyList<TraceEventResponse> Events);
 public sealed class TraceOptions { public string PublicBaseUrl { get; set; } = ""; }
