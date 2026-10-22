@@ -85,6 +85,8 @@ public sealed class OrderCancellationService(AppDbContext db, ICurrentUser me, I
             var refund = await refunds.CreateRefundAsync(paid.BatchAccountId, paid.Amount, null, order.OrderId,
                 $"Hoàn tiền huỷ đơn {order.OrderNo}: {reason}", now, ct);
             refundInstructionId = refund.InstructionId;
+            if (order.OrderType == "Offtake" && order.OfftakeId is long offtakeId)
+                await ForfeitOfftakeDepositAsync(offtakeId, order.OrderNo, now, ct);
         }
 
         await audit.WriteAsync("sales_order", order.OrderId, CustomerCancelAction,
@@ -97,5 +99,23 @@ public sealed class OrderCancellationService(AppDbContext db, ICurrentUser me, I
             }, now, ct);
 
         return new CancelOrderResponse(order.OrderNo, "Cancelled", now, reason, released.Sum(r => r.QuantityKg), refundInstructionId);
+    }
+
+    /// <summary>
+    /// Khách đã trả phần còn lại rồi tự huỷ: hoàn khoản OfftakePayment ở trên, cọc thì mất (TL-30, lỗi bên mua)
+    /// và phải vào doanh thu lô. Để Applied thì tiền nằm trong tài khoản lô nhưng không vào revenue, cũng không hoàn.
+    /// </summary>
+    private async Task ForfeitOfftakeDepositAsync(long offtakeId, string orderNo, DateTimeOffset now, CancellationToken ct)
+    {
+        var offtake = await db.OfftakeCommitments.SingleOrDefaultAsync(o => o.OfftakeId == offtakeId, ct);
+        if (offtake is not { DepositStatus: "Applied" }) return;
+        offtake.DepositStatus = "Forfeited";
+        offtake.Status = "Cancelled";
+        offtake.UpdatedAt = now;
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("offtake_commitment", offtake.OfftakeId, "forfeit_deposit",
+            new { status = "Fulfilled", depositStatus = "Applied" },
+            new { status = "Cancelled", depositStatus = "Forfeited", orderNo, reason = "Huỷ đơn sau khi đã thanh toán phần còn lại" },
+            now, ct);
     }
 }

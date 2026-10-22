@@ -21,7 +21,7 @@ Nhà đầu tư bao tiêu cam kết mua một lượng cua (kg, hạng) với gi
 | GET | `/api/me/offtake-commitments` | Investor | |
 | POST | `/api/offtake-commitments/{id}/claim` | Investor | UC23: trong cửa sổ ưu tiên → tạo `sales_order` loại `Offtake` (trừ cọc) |
 
-Job `OfftakeWindowJob`: lô `Harvesting` và cọc `Held` → `WindowOpen` 48 giờ. Hết hạn mà đã có hàng tươi nhưng chưa thanh toán → `Expired` + cọc `Forfeited` (view doanh thu đã cộng). Hết hạn mà không đủ hàng, hoặc lô `Cancelled` → hoàn 100% (`Refunded`). Kg cửa sổ chưa nhận bị trừ khỏi tồn bán lẻ; hết hạn hoặc sau khi giữ chỗ của đơn được trả thì kg về gian hàng.
+Job `OfftakeWindowJob`: lô `Harvesting` và cọc `Held` → `WindowOpen` 48 giờ. Hết hạn mà đã có hàng tươi nhưng chưa thanh toán → `Expired` + cọc `Forfeited` (view doanh thu đã cộng). Hết hạn mà không đủ hàng, hoặc lô `Cancelled` → hoàn 100% (`Refunded`). Khách đã trả phần còn lại rồi tự huỷ đơn thì hoàn khoản đó và cọc chuyển `Forfeited`. Job hết hạn giữ chỗ đơn thường không huỷ đơn Offtake — cửa sổ bao tiêu tự đóng. Giá chốt không ghi vào `price_history` công khai. Kg cửa sổ chưa nhận bị trừ khỏi tồn bán lẻ; hết hạn hoặc sau khi giữ chỗ của đơn được trả thì kg về gian hàng.
 
 ## Quy tắc phải giữ
 - **Cấm** hộ nuôi (hoặc bên liên quan) bao tiêu lô của chính mình → 422 `offtake.related_party`.

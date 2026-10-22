@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router'
 import { errorMessage } from '../../../shared/api/http'
 import { formatDateTime, formatVnd } from '../../../shared/lib/format'
 import { VietQrBox } from '../../../shared/payments/VietQrBox'
@@ -12,6 +13,7 @@ import {
   useOfftakeCap,
   useCreateOfftake,
   useClaimOfftake,
+  offtakeKeys,
   type OfftakeCommitment,
   type OfftakePayment,
 } from './offtakeApi'
@@ -51,10 +53,15 @@ function useCountdown(expiresAt?: string | null) {
 
 
 function OfftakePaymentSection({ payment }: { payment: OfftakePayment }) {
+  const qc = useQueryClient()
   const live = usePaymentRequest(payment.paymentRequestId)
   const req = live.data
   const status = (req?.status ?? 'Pending') as PaymentStatus
   const paymentData = req ?? payment
+  useEffect(() => {
+    if (status !== 'Paid') return
+    void qc.invalidateQueries({ queryKey: offtakeKeys.mine })
+  }, [status, qc])
 
   return (
     <div style={{ marginTop: '12px', padding: '16px', background: 'rgba(255, 91, 36, 0.05)', borderRadius: '16px', border: '1px solid rgba(255, 91, 36, 0.2)' }}>
@@ -68,15 +75,34 @@ function OfftakePaymentSection({ payment }: { payment: OfftakePayment }) {
   )
 }
 
+function depositTone(status: string) {
+  if (status === 'Held' || status === 'Applied') return { background: '#dcfce7', color: '#166534' }
+  if (status === 'Refunded') return { background: '#dbeafe', color: '#1e40af' }
+  if (status === 'Forfeited') return { background: '#fee2e2', color: '#991b1b' }
+  return { background: '#fef9c3', color: '#854d0e' }
+}
+
+function statusTone(status: string) {
+  if (status === 'Cancelled' || status === 'Expired') return { background: '#fee2e2', color: '#991b1b' }
+  if (status === 'Fulfilled') return { background: '#dcfce7', color: '#166534' }
+  if (status === 'WindowOpen') return { background: '#e0e7ff', color: '#3730a3' }
+  return { background: '#fef9c3', color: '#854d0e' }
+}
+
 function OfftakeItem({ item }: { item: OfftakeCommitment }) {
   const [showQr, setShowQr] = useState(false)
   const [addressId, setAddressId] = useState<number | ''>('')
   const addresses = useAddresses()
   const claim = useClaimOfftake()
-  const countdown = useCountdown(item.status === 'WindowOpen' ? item.windowExpiresAt : null)
-  const isPendingDeposit = item.depositStatus === 'Pending'
-  const canClaim = item.status === 'WindowOpen' && item.depositStatus === 'Held' && !item.orderId
-  const balanceDue = item.status === 'WindowOpen' && item.depositStatus === 'Held' && !!item.orderId && !!item.payment
+  const claimed = claim.data?.offtakeId === item.offtakeId ? claim.data : null
+  const view = claimed && !item.orderId ? claimed : item
+  const countdown = useCountdown(view.status === 'WindowOpen' ? view.windowExpiresAt : null)
+  const windowStillOpen = view.status === 'WindowOpen' && countdown !== 'Đã hết giờ'
+  const isPendingDeposit = view.depositStatus === 'Pending'
+  const canClaim = windowStillOpen && view.depositStatus === 'Held' && !view.orderId
+  const balanceDue = view.status === 'WindowOpen' && view.depositStatus === 'Held' && !!view.orderId && !!view.payment
+  const depositStyle = depositTone(view.depositStatus)
+  const commitmentStyle = statusTone(view.status)
 
   useEffect(() => {
     const list = addresses.data ?? []
@@ -109,11 +135,11 @@ function OfftakeItem({ item }: { item: OfftakeCommitment }) {
               borderRadius: '999px',
               fontSize: '12px',
               fontWeight: 600,
-              background: item.depositStatus === 'Held' ? '#dcfce7' : '#fef9c3',
-              color: item.depositStatus === 'Held' ? '#166534' : '#854d0e',
+              background: depositStyle.background,
+              color: depositStyle.color,
             }}
           >
-            Cọc: {DEPOSIT_LABEL[item.depositStatus] ?? item.depositStatus}
+            Cọc: {DEPOSIT_LABEL[view.depositStatus] ?? view.depositStatus}
           </span>
           <span
             style={{
@@ -121,11 +147,11 @@ function OfftakeItem({ item }: { item: OfftakeCommitment }) {
               borderRadius: '999px',
               fontSize: '12px',
               fontWeight: 600,
-              background: item.status === 'Cancelled' ? '#fee2e2' : '#e0e7ff',
-              color: item.status === 'Cancelled' ? '#991b1b' : '#3730a3',
+              background: commitmentStyle.background,
+              color: commitmentStyle.color,
             }}
           >
-            {STATUS_LABEL[item.status] ?? item.status}
+            {STATUS_LABEL[view.status] ?? view.status}
           </span>
         </div>
       </div>
@@ -198,19 +224,22 @@ function OfftakeItem({ item }: { item: OfftakeCommitment }) {
         </div>
       )}
 
-      {balanceDue && item.payment && (
+      {balanceDue && view.payment && (
         <div>
           <div style={{ fontSize: '13px' }}>
-            Đơn <b>{item.orderNo}</b> · còn phải trả <b>{formatVnd(item.payment.amount)}</b> (đã trừ cọc {formatVnd(item.depositAmount)})
+            Đơn <b>{view.orderNo}</b> · còn phải trả <b>{formatVnd(view.payment.amount)}</b> (đã trừ cọc {formatVnd(view.depositAmount)})
           </div>
-          <OfftakePaymentSection payment={item.payment} />
+          <OfftakePaymentSection payment={view.payment} />
         </div>
       )}
 
-      {item.depositStatus === 'Forfeited' && (
+      {view.depositStatus === 'Forfeited' && view.status === 'Cancelled' && (
+        <p className="rd-muted" style={{ margin: 0 }}>Bạn đã huỷ đơn sau khi thanh toán phần còn lại. Tiền cọc được cộng vào doanh thu của lô.</p>
+      )}
+      {view.depositStatus === 'Forfeited' && view.status !== 'Cancelled' && (
         <p className="rd-muted" style={{ margin: 0 }}>Hết cửa sổ chưa thanh toán. Cọc được cộng vào doanh thu của lô, phần hàng chưa nhận mở bán trên gian hàng.</p>
       )}
-      {item.depositStatus === 'Refunded' && (
+      {view.depositStatus === 'Refunded' && (
         <p className="rd-muted" style={{ margin: 0 }}>Cọc được hoàn 100% vì lô huỷ hoặc không đủ hàng để giao.</p>
       )}
     </div>

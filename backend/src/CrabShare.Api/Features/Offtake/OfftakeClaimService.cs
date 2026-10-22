@@ -87,7 +87,7 @@ public sealed class OfftakeClaimService(
         var revision = await db.PriceHistories.AsNoTracking()
                            .Where(h => h.ListingId == listing.ListingId)
                            .OrderByDescending(h => h.EffectiveFrom).ThenByDescending(h => h.PriceHistoryId)
-                           .Select(h => new { h.PriceHistoryId, h.PricePerKg })
+                           .Select(h => h.PriceHistoryId)
                            .FirstAsync(ct);
         var unitPrice = (long)offtake.FixedUnitPrice;
         var gross = OrderService.LineAmount(qty, unitPrice);
@@ -96,11 +96,8 @@ public sealed class OfftakeClaimService(
         if (gross <= 0 || balance < 1)
             throw new BusinessRuleException("offtake.balance_invalid", "Số tiền hàng sau khi trừ cọc không hợp lệ.");
 
-        // Đơn giữ giá chốt của hợp đồng (TL-30), không lấy giá bán lẻ trên gian hàng.
-        // price_history_id chỉ để thỏa khóa ngoại dòng đơn; đơn giá dòng là fixed_unit_price.
-        var contractRevision = revision.PricePerKg == unitPrice
-            ? revision.PriceHistoryId
-            : await AddContractPriceAsync(listing, revision.PricePerKg, unitPrice, investorId, now, ct);
+        // Đơn giữ giá chốt của hợp đồng (TL-30). Không thêm price_history: bản ghi đó hiện trên gian hàng
+        // và sẽ bị hiểu là một lần đổi giá bán lẻ. price_history_id chỉ để thỏa khóa ngoại dòng đơn.
 
         var shipping = $"{address.AddressLine}, {address.Province}";
         var order = new SalesOrder
@@ -127,7 +124,7 @@ public sealed class OfftakeClaimService(
             ListingId = listing.ListingId,
             QuantityKg = qty,
             UnitPrice = unitPrice,
-            PriceHistoryId = contractRevision,
+            PriceHistoryId = revision,
             CreatedAt = now,
             StockReservation = new StockReservation
             {
@@ -152,25 +149,6 @@ public sealed class OfftakeClaimService(
         return ToResponse(offtake, order, new OfftakePaymentResponse(
             payment.Qr.ReferenceCode, account.ProviderAccountNo, balance, payment.Qr.QrContent,
             payment.Qr.ExpiresAt, payment.Request.PaymentRequestId));
-    }
-
-    private async Task<long> AddContractPriceAsync(ProductListing listing, decimal retailPrice, long unitPrice, long actorId, DateTimeOffset now, CancellationToken ct)
-    {
-        var row = new PriceHistory
-        {
-            ListingId = listing.ListingId,
-            PricePerKg = unitPrice,
-            EffectiveFrom = listing.CreatedAt.AddSeconds(-1),
-            ChangedBy = actorId,
-            FlaggedAbnormal = false,
-            CreatedAt = now,
-            PreviousPricePerKg = retailPrice,
-            ReasonCode = "Other",
-            Note = "Giá chốt bao tiêu, không phải giá bán lẻ trên gian hàng",
-        };
-        db.PriceHistories.Add(row);
-        await db.SaveChangesAsync(ct);
-        return row.PriceHistoryId;
     }
 
     private static OfftakeCommitmentResponse Describe(OfftakeCommitment offtake, SalesOrder order)

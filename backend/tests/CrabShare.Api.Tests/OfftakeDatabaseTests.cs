@@ -522,6 +522,86 @@ public class OfftakeDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtur
         var retail = await check.ProductListings.AsNoTracking().SingleAsync(l => l.BatchId == batchId);
         Assert.Equal(300_000m, retail.CurrentPricePerKg);
         Assert.Equal(10m, retail.ReservedQtyKg);
+        Assert.Equal(1, await check.PriceHistories.CountAsync(h => h.ListingId == retail.ListingId));
+    }
+
+    [Fact]
+    public async Task Reservation_expiry_leaves_offtake_order_for_the_window_job()
+    {
+        var (client, userId, offtakeId, _, batchId) = await HeldCommitmentAsync();
+        var addressId = await AddressAsync(userId);
+        await FreshListingAsync(batchId, userId, 20m);
+        await using (var db = fixture.OpenDb())
+            await db.Batches.Where(b => b.BatchId == batchId).ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, "Harvesting"));
+        using (var scope = fixture.Factory.Services.CreateScope())
+            Assert.True(await Windows(scope).OpenWindowsAsync(CancellationToken.None) >= 1);
+
+        using var claimed = await client.PostAsJsonAsync($"/api/offtake-commitments/{offtakeId}/claim", new { addressId });
+        Assert.Equal(HttpStatusCode.OK, claimed.StatusCode);
+        var body = (await claimed.Content.ReadFromJsonAsync<OfftakeCommitmentResponse>())!;
+
+        await using (var db = fixture.OpenDb())
+        {
+            var past = DateTimeOffset.UtcNow.AddMinutes(-1);
+            var orderId = await db.SalesOrders.Where(o => o.OrderNo == body.OrderNo).Select(o => o.OrderId).SingleAsync();
+            var lineIds = await db.OrderLines.Where(l => l.OrderId == orderId).Select(l => l.OrderLineId).ToListAsync();
+            await db.OfftakeCommitments.Where(o => o.OfftakeId == offtakeId).ExecuteUpdateAsync(s => s
+                .SetProperty(o => o.WindowOpensAt, past.AddHours(-1))
+                .SetProperty(o => o.WindowExpiresAt, past));
+            await db.StockReservations.Where(r => lineIds.Contains(r.OrderLineId)).ExecuteUpdateAsync(s => s.SetProperty(r => r.ExpiresAt, past));
+        }
+
+        using (var scope = fixture.Factory.Services.CreateScope())
+        {
+            var expiry = scope.ServiceProvider.GetRequiredService<ReservationExpiryService>();
+            await expiry.ReleaseExpiredAsync(CancellationToken.None);
+        }
+
+        await using (var mid = fixture.OpenDb())
+        {
+            var order = await mid.SalesOrders.AsNoTracking().SingleAsync(o => o.OrderNo == body.OrderNo);
+            Assert.Equal("PendingPayment", order.Status);
+        }
+
+        using (var scope = fixture.Factory.Services.CreateScope())
+            Assert.True(await Windows(scope).CloseExpiredAsync(CancellationToken.None) >= 1);
+
+        await using var check = fixture.OpenDb();
+        var offtake = await check.OfftakeCommitments.AsNoTracking().SingleAsync(o => o.OfftakeId == offtakeId);
+        Assert.Equal("Expired", offtake.Status);
+        Assert.Equal("Forfeited", offtake.DepositStatus);
+        var closed = await check.SalesOrders.AsNoTracking().SingleAsync(o => o.OrderNo == body.OrderNo);
+        Assert.Equal("Cancelled", closed.Status);
+    }
+
+    [Fact]
+    public async Task Cancelling_a_paid_offtake_order_refunds_the_balance_and_forfeits_the_deposit()
+    {
+        var (client, userId, offtakeId, _, batchId) = await HeldCommitmentAsync();
+        var addressId = await AddressAsync(userId);
+        await FreshListingAsync(batchId, userId, 20m);
+        await using (var db = fixture.OpenDb())
+            await db.Batches.Where(b => b.BatchId == batchId).ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, "Harvesting"));
+        using (var scope = fixture.Factory.Services.CreateScope())
+            Assert.True(await Windows(scope).OpenWindowsAsync(CancellationToken.None) >= 1);
+
+        using var claimed = await client.PostAsJsonAsync($"/api/offtake-commitments/{offtakeId}/claim", new { addressId });
+        var body = (await claimed.Content.ReadFromJsonAsync<OfftakeCommitmentResponse>())!;
+        var paid = await SimulateAsync(client, body.Payment!.ReferenceCode);
+        Assert.Equal(WebhookResult.Matched, paid.Outcome);
+
+        using var cancel = await client.PostAsJsonAsync($"/api/orders/{body.OrderNo}/cancel", new { reason = "Không lấy hàng nữa" });
+        Assert.Equal(HttpStatusCode.OK, cancel.StatusCode);
+
+        await using var check = fixture.OpenDb();
+        var offtake = await check.OfftakeCommitments.AsNoTracking().SingleAsync(o => o.OfftakeId == offtakeId);
+        Assert.Equal("Cancelled", offtake.Status);
+        Assert.Equal("Forfeited", offtake.DepositStatus);
+        var order = await check.SalesOrders.AsNoTracking().SingleAsync(o => o.OrderNo == body.OrderNo);
+        Assert.Equal("Cancelled", order.Status);
+        var refund = await check.PaymentInstructions.AsNoTracking().SingleAsync(i => i.OrderId == order.OrderId);
+        Assert.Equal("Refund", refund.InstructionType);
+        Assert.Equal(2_210_000m, refund.Amount);
     }
 
     [Fact]
