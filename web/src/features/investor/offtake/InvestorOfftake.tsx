@@ -1,17 +1,53 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { errorMessage } from '../../../shared/api/http'
 import { formatDateTime, formatVnd } from '../../../shared/lib/format'
 import { VietQrBox } from '../../../shared/payments/VietQrBox'
 import { SimulatePaymentButton } from '../../../shared/payments/SimulatePaymentButton'
 import { usePaymentRequest, type PaymentStatus } from '../../../shared/payments/paymentsApi'
+import { useAddresses } from '../../accounts/paymentProfilesApi'
 import { useMyContributions } from '../funding/fundingApi'
 import {
   useMyOfftakes,
   useOfftakeCap,
   useCreateOfftake,
+  useClaimOfftake,
   type OfftakeCommitment,
   type OfftakePayment,
 } from './offtakeApi'
+
+const STATUS_LABEL: Record<string, string> = {
+  PendingHarvest: 'Chờ thu hoạch',
+  WindowOpen: 'Cửa sổ ưu tiên',
+  Fulfilled: 'Đã nhận hàng',
+  Expired: 'Hết cửa sổ',
+  Cancelled: 'Đã huỷ',
+}
+
+const DEPOSIT_LABEL: Record<string, string> = {
+  Pending: 'Chờ cọc',
+  Held: 'Đã giữ',
+  Applied: 'Đã trừ vào tiền hàng',
+  Forfeited: 'Mất cọc',
+  Refunded: 'Đã hoàn',
+}
+
+function useCountdown(expiresAt?: string | null) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!expiresAt) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [expiresAt])
+  if (!expiresAt) return null
+  const ms = new Date(expiresAt).getTime() - now
+  if (ms <= 0) return 'Đã hết giờ'
+  const total = Math.floor(ms / 1000)
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  return `${h} giờ ${String(m).padStart(2, '0')} phút ${String(s).padStart(2, '0')} giây`
+}
 
 
 function OfftakePaymentSection({ payment }: { payment: OfftakePayment }) {
@@ -34,7 +70,20 @@ function OfftakePaymentSection({ payment }: { payment: OfftakePayment }) {
 
 function OfftakeItem({ item }: { item: OfftakeCommitment }) {
   const [showQr, setShowQr] = useState(false)
+  const [addressId, setAddressId] = useState<number | ''>('')
+  const addresses = useAddresses()
+  const claim = useClaimOfftake()
+  const countdown = useCountdown(item.status === 'WindowOpen' ? item.windowExpiresAt : null)
   const isPendingDeposit = item.depositStatus === 'Pending'
+  const canClaim = item.status === 'WindowOpen' && item.depositStatus === 'Held' && !item.orderId
+  const balanceDue = item.status === 'WindowOpen' && item.depositStatus === 'Held' && !!item.orderId && !!item.payment
+
+  useEffect(() => {
+    const list = addresses.data ?? []
+    if (!list.length) return
+    if (list.some((a) => a.addressId === addressId)) return
+    setAddressId((list.find((a) => a.isDefault) ?? list[0]).addressId)
+  }, [addresses.data, addressId])
 
   return (
     <div
@@ -64,7 +113,7 @@ function OfftakeItem({ item }: { item: OfftakeCommitment }) {
               color: item.depositStatus === 'Held' ? '#166534' : '#854d0e',
             }}
           >
-            Cọc: {item.depositStatus === 'Held' ? 'Đã giữ (Held)' : item.depositStatus}
+            Cọc: {DEPOSIT_LABEL[item.depositStatus] ?? item.depositStatus}
           </span>
           <span
             style={{
@@ -76,7 +125,7 @@ function OfftakeItem({ item }: { item: OfftakeCommitment }) {
               color: item.status === 'Cancelled' ? '#991b1b' : '#3730a3',
             }}
           >
-            {item.status === 'PendingHarvest' ? 'Chờ thu hoạch' : item.status}
+            {STATUS_LABEL[item.status] ?? item.status}
           </span>
         </div>
       </div>
@@ -106,6 +155,63 @@ function OfftakeItem({ item }: { item: OfftakeCommitment }) {
 
       {isPendingDeposit && item.payment && showQr && (
         <OfftakePaymentSection payment={item.payment} />
+      )}
+
+      {item.status === 'WindowOpen' && countdown && (
+        <div style={{ fontSize: '14px' }}>
+          Cửa sổ ưu tiên còn: <b>{countdown}</b>
+          {item.windowExpiresAt && <span className="rd-muted"> · hết hạn {formatDateTime(item.windowExpiresAt)}</span>}
+        </div>
+      )}
+
+      {canClaim && (
+        <div style={{ display: 'grid', gap: '8px' }}>
+          {(addresses.data ?? []).length === 0 ? (
+            <p className="rd-muted" style={{ margin: 0 }}>
+              Cần địa chỉ nhận hàng trước khi nhận cua.{' '}
+              <Link to="/tai-khoan/dia-chi">Thêm địa chỉ</Link>
+            </p>
+          ) : (
+            <label style={{ display: 'grid', gap: '4px', fontSize: '13px' }}>
+              Địa chỉ nhận hàng
+              <select value={addressId} onChange={(e) => setAddressId(Number(e.target.value))}>
+                {(addresses.data ?? []).map((a) => (
+                  <option key={a.addressId} value={a.addressId}>
+                    {a.recipientName} — {a.addressLine}, {a.province}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <button
+            type="button"
+            className="rd-btn rd-btn--primary"
+            disabled={claim.isPending || typeof addressId !== 'number'}
+            onClick={() => {
+              if (typeof addressId !== 'number') return
+              claim.mutate({ offtakeId: item.offtakeId, addressId })
+            }}
+          >
+            {claim.isPending ? 'Đang nhận hàng…' : 'Nhận hàng ưu tiên'}
+          </button>
+          {claim.isError && <p className="rd-note" role="alert">{errorMessage(claim.error)}</p>}
+        </div>
+      )}
+
+      {balanceDue && item.payment && (
+        <div>
+          <div style={{ fontSize: '13px' }}>
+            Đơn <b>{item.orderNo}</b> · còn phải trả <b>{formatVnd(item.payment.amount)}</b> (đã trừ cọc {formatVnd(item.depositAmount)})
+          </div>
+          <OfftakePaymentSection payment={item.payment} />
+        </div>
+      )}
+
+      {item.depositStatus === 'Forfeited' && (
+        <p className="rd-muted" style={{ margin: 0 }}>Hết cửa sổ chưa thanh toán. Cọc được cộng vào doanh thu của lô, phần hàng chưa nhận mở bán trên gian hàng.</p>
+      )}
+      {item.depositStatus === 'Refunded' && (
+        <p className="rd-muted" style={{ margin: 0 }}>Cọc được hoàn 100% vì lô huỷ hoặc không đủ hàng để giao.</p>
       )}
     </div>
   )

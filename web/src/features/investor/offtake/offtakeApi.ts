@@ -27,6 +27,10 @@ export interface OfftakeCommitment {
   status: string
   createdAt: string
   payment: OfftakePayment | null
+  windowOpensAt?: string | null
+  windowExpiresAt?: string | null
+  orderId?: number | null
+  orderNo?: string | null
 }
 
 export interface OfftakeGradePrice {
@@ -92,6 +96,22 @@ export function useCreateOfftake(batchCode: string) {
       void qc.invalidateQueries({ queryKey: offtakeKeys.cap(batchCode) })
       if (created.payment)
         void qc.invalidateQueries({ queryKey: paymentKeys.request(created.payment.paymentRequestId) })
+    },
+  })
+}
+
+export function useClaimOfftake() {
+  const qc = useQueryClient()
+  return useMutation({
+    retry: false,
+    mutationFn: async (body: { offtakeId: number; addressId: number }) =>
+      (await http.post<OfftakeCommitment>(`/api/offtake-commitments/${body.offtakeId}/claim`, {
+        addressId: body.addressId,
+      })).data,
+    onSuccess: (claimed) => {
+      void qc.invalidateQueries({ queryKey: offtakeKeys.mine })
+      if (claimed.payment)
+        void qc.invalidateQueries({ queryKey: paymentKeys.request(claimed.payment.paymentRequestId) })
     },
   })
 }

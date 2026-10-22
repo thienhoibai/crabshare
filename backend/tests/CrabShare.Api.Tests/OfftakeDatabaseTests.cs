@@ -6,6 +6,8 @@ using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Features.Auth;
 using CrabShare.Api.Features.Funding;
 using CrabShare.Api.Features.Offtake;
+using CrabShare.Api.Common.Paging;
+using CrabShare.Api.Features.Catalog;
 using CrabShare.Api.Features.Orders;
 using CrabShare.Api.Features.Payments;
 using CrabShare.Api.Infrastructure.Persistence;
@@ -404,5 +406,197 @@ public class OfftakeDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtur
             Assert.Equal(0m, cap.OfftakeKg);
             Assert.Equal(24m, cap.RemainingKg); // Trần 24kg được giải phóng lại
         }
+    }
+
+    private async Task<(HttpClient Client, long UserId, long OfftakeId, string Code, long BatchId)> HeldCommitmentAsync(decimal qtyKg = 10m)
+    {
+        var (client, userId) = await InvestorAsync();
+        var (code, batchId) = await CreateFundingBatchAsync();
+        var contributionId = await CreateConfirmedContributionAsync(batchId, userId);
+        using var created = await client.PostAsJsonAsync($"/api/batches/{code}/offtake-commitments", new
+        {
+            contributionId,
+            gradeCode = "L1",
+            qtyKg,
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var body = (await created.Content.ReadFromJsonAsync<OfftakeCommitmentResponse>())!;
+        var paid = await SimulateAsync(client, body.Payment!.ReferenceCode);
+        Assert.Equal(WebhookResult.Matched, paid.Outcome);
+        return (client, userId, body.OfftakeId, code, batchId);
+    }
+
+    private async Task<long> AddressAsync(long userId)
+    {
+        await using var db = fixture.OpenDb();
+        var address = new CustomerAddress
+        {
+            CustomerId = userId,
+            RecipientName = "Người nhận",
+            RecipientPhone = "0900000000",
+            AddressLine = "1 Đường Test",
+            Province = "Cà Mau",
+            IsDefault = true,
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+        db.CustomerAddresses.Add(address);
+        await db.SaveChangesAsync();
+        return address.AddressId;
+    }
+
+    private async Task<long> FreshListingAsync(long batchId, long changedBy, decimal stockKg)
+    {
+        await using var db = fixture.OpenDb();
+        var now = DateTimeOffset.UtcNow;
+        var gradeId = await db.ProductGrades.Where(g => g.GradeCode == "L1").Select(g => g.GradeId).SingleAsync();
+        var listing = new ProductListing
+        {
+            BatchId = batchId,
+            GradeId = gradeId,
+            Title = "Cua L1 tươi",
+            StorageType = "Fresh",
+            CurrentPricePerKg = 300_000,
+            StockQtyKg = stockKg,
+            ReservedQtyKg = 0,
+            Status = "Published",
+            PublishedAt = now,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        listing.PriceHistories.Add(new PriceHistory
+        {
+            PricePerKg = 300_000,
+            EffectiveFrom = now,
+            ChangedBy = changedBy,
+            ReasonCode = "Initial",
+            CreatedAt = now,
+        });
+        db.ProductListings.Add(listing);
+        await db.SaveChangesAsync();
+        return listing.ListingId;
+    }
+
+    private static OfftakeWindowService Windows(IServiceScope scope) => scope.ServiceProvider.GetRequiredService<OfftakeWindowService>();
+
+    [Fact]
+    public async Task Claim_before_window_returns_422()
+    {
+        var (client, userId, offtakeId, _, _) = await HeldCommitmentAsync();
+        var addressId = await AddressAsync(userId);
+
+        using var res = await client.PostAsJsonAsync($"/api/offtake-commitments/{offtakeId}/claim", new { addressId });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
+        Assert.Equal("offtake.window_closed", await ErrorCode(res));
+    }
+
+    [Fact]
+    public async Task Claim_inside_window_creates_offtake_order_at_fixed_price()
+    {
+        var (client, userId, offtakeId, _, batchId) = await HeldCommitmentAsync();
+        var addressId = await AddressAsync(userId);
+        await FreshListingAsync(batchId, userId, 20m);
+        await using (var db = fixture.OpenDb())
+            await db.Batches.Where(b => b.BatchId == batchId).ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, "Harvesting"));
+
+        using (var scope = fixture.Factory.Services.CreateScope())
+            Assert.True(await Windows(scope).OpenWindowsAsync(CancellationToken.None) >= 1);
+
+        using var res = await client.PostAsJsonAsync($"/api/offtake-commitments/{offtakeId}/claim", new { addressId });
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var body = (await res.Content.ReadFromJsonAsync<OfftakeCommitmentResponse>())!;
+        Assert.Equal("WindowOpen", body.Status);
+        Assert.Equal(260_000L, body.FixedUnitPrice);
+        Assert.Equal(2_600_000L, body.CommitmentValue);
+        Assert.NotNull(body.OrderNo);
+        Assert.NotNull(body.Payment);
+        Assert.StartsWith("BH", body.Payment.ReferenceCode);
+        Assert.Equal(2_210_000L, body.Payment.Amount);
+
+        await using var check = fixture.OpenDb();
+        var order = await check.SalesOrders.Include(o => o.OrderLines).SingleAsync(o => o.OrderNo == body.OrderNo);
+        Assert.Equal("Offtake", order.OrderType);
+        Assert.Equal(offtakeId, order.OfftakeId);
+        Assert.Equal(2_600_000m, order.TotalAmount);
+        Assert.Equal(390_000m, order.DepositAmount);
+        Assert.Equal(260_000m, order.OrderLines.Single().UnitPrice);
+        var retail = await check.ProductListings.AsNoTracking().SingleAsync(l => l.BatchId == batchId);
+        Assert.Equal(300_000m, retail.CurrentPricePerKg);
+        Assert.Equal(10m, retail.ReservedQtyKg);
+    }
+
+    [Fact]
+    public async Task Expire_with_unsold_stock_forfeits_and_returns_kg_to_store()
+    {
+        var (_, userId, offtakeId, code, batchId) = await HeldCommitmentAsync();
+        await FreshListingAsync(batchId, userId, 20m);
+        await using (var db = fixture.OpenDb())
+            await db.Batches.Where(b => b.BatchId == batchId).ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, "Harvesting"));
+        using (var scope = fixture.Factory.Services.CreateScope())
+            Assert.True(await Windows(scope).OpenWindowsAsync(CancellationToken.None) >= 1);
+
+        using var anon = fixture.Factory.CreateClient();
+        var before = (await anon.GetFromJsonAsync<PagedResult<StoreListingResponse>>($"/api/listings?batch={code}"))!;
+        Assert.Equal(10m, before.Items.Single().AvailableQtyKg);
+
+        await using (var db = fixture.OpenDb())
+        {
+            var past = DateTimeOffset.UtcNow.AddMinutes(-1);
+            await db.OfftakeCommitments.Where(o => o.OfftakeId == offtakeId).ExecuteUpdateAsync(s => s
+                .SetProperty(o => o.WindowOpensAt, past.AddHours(-1))
+                .SetProperty(o => o.WindowExpiresAt, past));
+        }
+        using (var scope = fixture.Factory.Services.CreateScope())
+            Assert.True(await Windows(scope).CloseExpiredAsync(CancellationToken.None) >= 1);
+
+        await using var check = fixture.OpenDb();
+        var offtake = await check.OfftakeCommitments.AsNoTracking().SingleAsync(o => o.OfftakeId == offtakeId);
+        Assert.Equal("Expired", offtake.Status);
+        Assert.Equal("Forfeited", offtake.DepositStatus);
+        var after = (await anon.GetFromJsonAsync<PagedResult<StoreListingResponse>>($"/api/listings?batch={code}"))!;
+        Assert.Equal(20m, after.Items.Single().AvailableQtyKg);
+    }
+
+    [Fact]
+    public async Task Expire_without_goods_refunds_full_deposit()
+    {
+        var (_, _, offtakeId, _, batchId) = await HeldCommitmentAsync();
+        await using (var db = fixture.OpenDb())
+            await db.Batches.Where(b => b.BatchId == batchId).ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, "Harvesting"));
+        using (var scope = fixture.Factory.Services.CreateScope())
+            Assert.True(await Windows(scope).OpenWindowsAsync(CancellationToken.None) >= 1);
+        await using (var db = fixture.OpenDb())
+        {
+            var past = DateTimeOffset.UtcNow.AddMinutes(-1);
+            await db.OfftakeCommitments.Where(o => o.OfftakeId == offtakeId).ExecuteUpdateAsync(s => s
+                .SetProperty(o => o.WindowOpensAt, past.AddHours(-1))
+                .SetProperty(o => o.WindowExpiresAt, past));
+        }
+
+        using (var scope = fixture.Factory.Services.CreateScope())
+            Assert.True(await Windows(scope).CloseExpiredAsync(CancellationToken.None) >= 1);
+
+        await using var check = fixture.OpenDb();
+        var offtake = await check.OfftakeCommitments.AsNoTracking().SingleAsync(o => o.OfftakeId == offtakeId);
+        Assert.Equal("Cancelled", offtake.Status);
+        Assert.Equal("Refunded", offtake.DepositStatus);
+        var refund = await check.PaymentInstructions.AsNoTracking().SingleAsync(i => i.ContributionId == offtake.ContributionId);
+        Assert.Equal("Refund", refund.InstructionType);
+        Assert.Equal(390_000m, refund.Amount);
+    }
+
+    [Fact]
+    public async Task Cancelled_batch_refunds_held_deposit()
+    {
+        var (_, _, offtakeId, _, batchId) = await HeldCommitmentAsync();
+        await using (var db = fixture.OpenDb())
+            await db.Batches.Where(b => b.BatchId == batchId).ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, "Cancelled"));
+
+        using (var scope = fixture.Factory.Services.CreateScope())
+            Assert.True(await Windows(scope).RefundCancelledAsync(CancellationToken.None) >= 1);
+
+        await using var check = fixture.OpenDb();
+        var offtake = await check.OfftakeCommitments.AsNoTracking().SingleAsync(o => o.OfftakeId == offtakeId);
+        Assert.Equal("Cancelled", offtake.Status);
+        Assert.Equal("Refunded", offtake.DepositStatus);
     }
 }

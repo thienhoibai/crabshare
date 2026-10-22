@@ -18,6 +18,12 @@ public sealed class CreateOfftakeCommitmentRequest
     public long? FixedUnitPrice { get; set; }
 }
 
+public sealed class ClaimOfftakeRequest
+{
+    [Range(1, long.MaxValue)]
+    public long AddressId { get; set; }
+}
+
 /// <summary>Khoản thu cọc — cùng shape field với OrderPaymentResponse / Preorder để web tái dùng VietQrBox.</summary>
 public sealed record OfftakePaymentResponse(
     string ReferenceCode,
@@ -41,7 +47,11 @@ public sealed record OfftakeCommitmentResponse(
     string DepositStatus,
     string Status,
     DateTimeOffset CreatedAt,
-    OfftakePaymentResponse? Payment);
+    OfftakePaymentResponse? Payment,
+    DateTimeOffset? WindowOpensAt = null,
+    DateTimeOffset? WindowExpiresAt = null,
+    long? OrderId = null,
+    string? OrderNo = null);
 
 public sealed record OfftakeGradePriceResponse(string GradeCode, string GradeName, long UnitPrice);
 

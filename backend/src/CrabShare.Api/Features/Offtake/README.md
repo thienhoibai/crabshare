@@ -4,7 +4,7 @@
 
 ## Trạng thái implement
 - **CS-72 / NH-14 / UC13:** POST commitments + GET mine + GET offtake-cap + webhook Held + hết hạn cọc. ✅
-- **CS-75 / NH-15 / UC23:** claim / WindowOpen / Expired+Forfeited — chưa làm.
+- **CS-75 / NH-15 / UC23:** cửa sổ 48 giờ, claim tạo đơn Offtake đúng giá chốt, hết hạn mất cọc hoặc hoàn cọc, kg chưa nhận trả về gian hàng. ✅
 
 Nhà đầu tư bao tiêu cam kết mua một lượng cua (kg, hạng) với giá cố định, trả cọc; khi thu hoạch được quyền lấy hàng trước trong một **cửa sổ ưu tiên**.
 
@@ -21,7 +21,7 @@ Nhà đầu tư bao tiêu cam kết mua một lượng cua (kg, hạng) với gi
 | GET | `/api/me/offtake-commitments` | Investor | |
 | POST | `/api/offtake-commitments/{id}/claim` | Investor | UC23: trong cửa sổ ưu tiên → tạo `sales_order` loại `Offtake` (trừ cọc) |
 
-Job nền: mở cửa sổ khi lô thu hoạch; hết cửa sổ chưa lấy → `Expired`, xử lý cọc theo TL-30.
+Job `OfftakeWindowJob`: lô `Harvesting` và cọc `Held` → `WindowOpen` 48 giờ. Hết hạn mà đã có hàng tươi nhưng chưa thanh toán → `Expired` + cọc `Forfeited` (view doanh thu đã cộng). Hết hạn mà không đủ hàng, hoặc lô `Cancelled` → hoàn 100% (`Refunded`). Kg cửa sổ chưa nhận bị trừ khỏi tồn bán lẻ; hết hạn hoặc sau khi giữ chỗ của đơn được trả thì kg về gian hàng.
 
 ## Quy tắc phải giữ
 - **Cấm** hộ nuôi (hoặc bên liên quan) bao tiêu lô của chính mình → 422 `offtake.related_party`.
