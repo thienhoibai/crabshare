@@ -12,21 +12,36 @@ public sealed partial class HarvestService
     {
         var open = approved && h.LifecycleStatus == "Open" && RecordingState(batch.Status);
         return new(h.HarvestId, batch.BatchCode, h.Name, h.Note, h.LifecycleStatus ?? "Legacy", h.HarvestedAt, h.CompletedAt,
-            h.DeclaredBy, h.CompletedBy, h.HarvestedCount, h.TotalWeightKg, h.RevisionNo, open, open && member.MemberRole == "Owner");
+            h.DeclaredBy, h.CompletedBy, h.HarvestedCount, h.TotalWeightKg, h.RevisionNo, open, open && member.MemberRole == "Owner", []);
+    }
+
+    private async Task<Dictionary<long, IReadOnlyList<HarvestGradeSummary>>> GradeSummariesAsync(IReadOnlyCollection<long> harvestIds, CancellationToken ct)
+    {
+        var rows = await db.HarvestRecords.AsNoTracking().Where(r => harvestIds.Contains(r.HarvestId))
+            .GroupBy(r => new { r.HarvestId, r.GradeCode, r.GradeName })
+            .Select(g => new { g.Key.HarvestId, g.Key.GradeCode, g.Key.GradeName, CrabCount = g.Count(), WeightG = g.Sum(r => (long?)r.WeightG) ?? 0L })
+            .ToListAsync(ct);
+        return harvestIds.Distinct().ToDictionary(id => id, id => (IReadOnlyList<HarvestGradeSummary>)rows
+            .Where(r => r.HarvestId == id)
+            .OrderBy(r => r.GradeCode)
+            .Select(r => new HarvestGradeSummary(r.GradeCode, r.GradeName, r.CrabCount, r.WeightG / 1000m))
+            .ToArray());
     }
     private Task<bool> ApprovedAsync(long operatorId, CancellationToken ct) => db.Operators.AnyAsync(o => o.OperatorId == operatorId && o.Status == "Approved", ct);
 
     public async Task<HarvestResponse> GetAsync(long id, CancellationToken ct)
     {
         var member = await MemberAsync(false, ct); var (session, batch) = await SessionAsync(id, member.OperatorId, false, ct);
-        return Response(session, batch, member, await ApprovedAsync(member.OperatorId, ct));
+        var response = Response(session, batch, member, await ApprovedAsync(member.OperatorId, ct));
+        return response with { GradeSummaries = (await GradeSummariesAsync([id], ct))[id] };
     }
     public async Task<PagedResult<HarvestResponse>> ListAsync(string code, PageQuery paging, CancellationToken ct)
     {
         var member = await MemberAsync(false, ct); var batch = await BatchAsync(code, member.OperatorId, false, ct);
         var approved = await ApprovedAsync(member.OperatorId, ct);
         var page = await db.Harvests.AsNoTracking().Where(h => h.BatchId == batch.BatchId).OrderByDescending(h => h.HarvestId).ToPagedAsync(paging, ct);
-        return new(page.Items.Select(h => Response(h, batch, member, approved)).ToArray(), page.Page, page.PageSize, page.Total);
+        var summaries = await GradeSummariesAsync(page.Items.Select(h => h.HarvestId).ToArray(), ct);
+        return new(page.Items.Select(h => Response(h, batch, member, approved) with { GradeSummaries = summaries[h.HarvestId] }).ToArray(), page.Page, page.PageSize, page.Total);
     }
     public async Task<HarvestContextResponse> ContextAsync(string code, string? slotCode, CancellationToken ct)
     {

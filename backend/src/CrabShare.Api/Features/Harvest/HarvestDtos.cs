@@ -39,7 +39,9 @@ public sealed class UpdateHarvestRequest : CompleteHarvestRequest
 
 public sealed record HarvestResponse(long Id, string BatchCode, string? Name, string? Note, string Status,
     DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, long DeclaredBy, long? CompletedBy,
-    int HarvestedCount, decimal TotalWeightKg, int Revision, bool CanRecord, bool CanComplete);
+    int HarvestedCount, decimal TotalWeightKg, int Revision, bool CanRecord, bool CanComplete,
+    IReadOnlyList<HarvestGradeSummary> GradeSummaries);
+public sealed record HarvestGradeSummary(string GradeCode, string GradeName, int CrabCount, decimal TotalWeightKg);
 public sealed record HarvestCrabContext(long Id, Guid ItemUuid, long AllocationId);
 public sealed record HarvestContextResponse(string BatchCode, string BatchStatus, HarvestResponse? ActiveHarvest,
     bool CanStart, bool CanRecord, bool CanComplete, int RemainingGrowingCount, int HarvestedCount,

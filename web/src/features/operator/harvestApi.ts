@@ -5,7 +5,8 @@ export type PageResult<T> = { items: T[]; total: number; page: number; pageSize:
 export type HarvestSession = {
   id: number; batchCode: string; name: string | null; note: string | null; status: 'Open' | 'Completed' | 'Legacy';
   startedAt: string; completedAt: string | null; declaredBy: number; completedBy: number | null;
-  harvestedCount: number; totalWeightKg: number; revision: number; canRecord: boolean; canComplete: boolean
+  harvestedCount: number; totalWeightKg: number; revision: number; canRecord: boolean; canComplete: boolean;
+  gradeSummaries: { gradeCode: string; gradeName: string; crabCount: number; totalWeightKg: number }[]
 }
 export type HarvestContext = {
   batchCode: string; batchStatus: string; activeHarvest: HarvestSession | null; canStart: boolean; canRecord: boolean; canComplete: boolean;

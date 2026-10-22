@@ -158,7 +158,7 @@ function HarvestDetail({ code }: { code: string }) {
     {batchContext.data && <OpFacts items={[{ label: 'Còn đang nuôi', value: `${batchContext.data.remainingGrowingCount} con` }, { label: 'Đã thu hoạch', value: `${batchContext.data.harvestedCount} con` }, { label: 'Tổng khối lượng', value: `${batchContext.data.totalWeightKg} kg` }]} />}
     <div className="op-grid">
       <OpPanel className="op-span-4" title="Đợt thu hoạch" subtitle={session ? `${statusLabel[session.status]} · Bắt đầu ${time(session.startedAt)}` : 'Mở đợt khi lô sẵn sàng thu hoạch.'}>
-        {session && <><p>{session.name || `Đợt #${session.id}`}</p><p>{session.harvestedCount} con · {session.totalWeightKg} kg</p>{session.status === 'Completed' && <p>Chốt lúc {time(session.completedAt)}</p>}{session.status === 'Legacy' && <p>Dữ liệu lịch sử chỉ đọc; thời điểm chốt chưa được ghi nhận.</p>}</>}
+        {session && <><p>{session.name || `Đợt #${session.id}`}</p><p>{session.harvestedCount} con · {session.totalWeightKg} kg</p>{session.status === 'Completed' && <><p>Chốt lúc {time(session.completedAt)}</p><h3>Tổng hợp theo hạng cua</h3>{session.gradeSummaries.length === 0 ? <p>Đợt này không có cua được ghi nhận.</p> : <table><thead><tr><th>Hạng cua</th><th>Số con</th><th>Tổng khối lượng (kg)</th></tr></thead><tbody>{session.gradeSummaries.map(grade => <tr key={grade.gradeCode}><td>{grade.gradeName} ({grade.gradeCode})</td><td>{grade.crabCount}</td><td>{grade.totalWeightKg.toFixed(3)}</td></tr>)}</tbody></table>}</>}{session.status === 'Legacy' && <p>Dữ liệu lịch sử chỉ đọc; thời điểm chốt chưa được ghi nhận.</p>}</>}
         {owner && ((!active && batchContext.data?.canStart) || (session?.status === 'Open' && session.canComplete)) && <div className="op-form">
           <div className="op-field"><label htmlFor="hv-name">Tên đợt thu hoạch</label><input id="hv-name" className="op-input" maxLength={100} value={name} onChange={e => setName(e.target.value)} disabled={locked} /></div>
           <div className="op-field"><label htmlFor="hv-note">Ghi chú đợt</label><textarea id="hv-note" className="op-input" maxLength={300} value={note} onChange={e => setNote(e.target.value)} disabled={locked} /></div>
@@ -166,7 +166,7 @@ function HarvestDetail({ code }: { code: string }) {
           {session?.status === 'Open' && session.canComplete && <><OpBtn variant="ghost" disabled={locked} onClick={() => void update()}>Lưu thông tin đợt</OpBtn><OpBtn variant="ink" disabled={locked} onClick={() => setClosing(true)}>Chốt đợt thu hoạch</OpBtn></>}
         </div>}
         {pendingStart && <OpBtn disabled={busy} onClick={() => void start()}>Gửi lại yêu cầu mở đợt</OpBtn>}
-        {closing && <div className="op-note"><div><p>Chốt đợt này? Lô vẫn có thể tiếp tục thu hoạch trong đợt mới.</p><OpBtn disabled={locked} onClick={() => void complete()}>Xác nhận chốt đợt</OpBtn><OpBtn variant="ghost" disabled={busy} onClick={() => setClosing(false)}>Quay lại</OpBtn></div></div>}
+        {closing && <div className="op-note"><div><p>Chốt đợt này? Lô vẫn có thể tiếp tục thu hoạch trong đợt mới.</p><OpBtn disabled={locked} onClick={() => void complete()}>{busy ? 'Đang chốt…' : 'Xác nhận chốt đợt'}</OpBtn><OpBtn variant="ghost" disabled={busy} onClick={() => setClosing(false)}>Quay lại</OpBtn></div></div>}
         {!owner && !active && <p>Chủ hộ nuôi cần mở đợt trước khi nhân viên ghi nhận.</p>}
       </OpPanel>
       <OpPanel className="op-span-4" title="Cân từng con" subtitle="Không tự gửi lần cân tiếp theo.">

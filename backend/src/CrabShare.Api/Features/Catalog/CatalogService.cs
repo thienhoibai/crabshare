@@ -56,7 +56,7 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
         var stock = await db.CrabItems
             .Where(c => c.Batch.OperatorId == operatorId && c.Batch.Status == "Harvesting" && c.Status == "InStock" && c.GradeId != null)
             .GroupBy(c => new { c.BatchId, c.Batch.BatchCode, c.Batch.Title, c.Batch.CrabType, GradeId = c.GradeId!.Value, c.Grade!.GradeCode, c.Grade.GradeName })
-            .Select(g => new { g.Key, Count = g.Count(), Grams = g.Sum(c => (int?)c.WeightG) ?? 0 })
+            .Select(g => new { g.Key, Count = g.Count(), Grams = g.Sum(c => (long?)c.WeightG) ?? 0L })
             .ToListAsync(ct);
 
         var existing = await db.ProductListings.Where(l => l.Batch.OperatorId == operatorId)
@@ -524,11 +524,36 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
     {
         var grams = await db.CrabItems
             .Where(c => c.BatchId == batchId && c.GradeId == gradeId && c.Status == "InStock")
-            .SumAsync(c => (int?)c.WeightG, ct) ?? 0;
+            .SumAsync(c => (long?)c.WeightG, ct) ?? 0L;
         return ToKg(grams);
     }
 
-    private static decimal ToKg(int grams) => Math.Round(grams / 1000m, 3);
+    /// <summary>Đồng bộ các niêm yết của lô với cua InStock theo hạng. Gọi bên trong transaction của nghiệp vụ thu hoạch.</summary>
+    internal async Task SyncHarvestStockAsync(long batchId, CancellationToken ct)
+    {
+        var listings = await db.ProductListings
+            .FromSqlInterpolated($"SELECT * FROM dbo.product_listing WITH (UPDLOCK,HOLDLOCK) WHERE batch_id = {batchId}")
+            .ToListAsync(ct);
+        var now = clock.GetUtcNow();
+        foreach (var listing in listings)
+        {
+            if (listing.Status == "Closed") continue;
+            var stockKg = await InStockKgAsync(listing.BatchId, listing.GradeId, ct);
+            if (stockKg < listing.ReservedQtyKg)
+                throw new BusinessRuleException("listing.stock_below_reserved", "Tồn trong kho thấp hơn phần đang giữ cho đơn hàng. Kiểm tra lại cua đã đóng gói.");
+
+            listing.StockQtyKg = stockKg;
+            listing.Status = listing.Status switch
+            {
+                "Published" when stockKg - listing.ReservedQtyKg <= 0 => "SoldOut",
+                "SoldOut" when stockKg - listing.ReservedQtyKg > 0 => "Published",
+                var status => status,
+            };
+            listing.UpdatedAt = now;
+        }
+    }
+
+    private static decimal ToKg(long grams) => grams / 1000m;
 
     private static DateTimeOffset? ResolveFrozenAt(CreateListingRequest req, Batch batch, DateTimeOffset now)
     {

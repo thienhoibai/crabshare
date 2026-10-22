@@ -18,6 +18,14 @@ Map<String, dynamic> harvestSessionJson({
   'completedBy': null,
   'harvestedCount': 1,
   'totalWeightKg': 0.25,
+  'gradeSummaries': [
+    {
+      'gradeCode': 'SOFT',
+      'gradeName': 'Cua mềm',
+      'crabCount': 1,
+      'totalWeightKg': 0.25,
+    },
+  ],
   'revision': 2,
   'canRecord': status == 'Open',
   'canComplete': owner && status == 'Open',
@@ -143,6 +151,14 @@ class HarvestServer {
         'revision': 3,
         'canRecord': false,
         'canComplete': false,
+        'gradeSummaries': [
+          {
+            'gradeCode': 'SOFT',
+            'gradeName': 'Cua mềm',
+            'crabCount': 1,
+            'totalWeightKg': 0.25,
+          },
+        ],
       };
       return jsonResponse(session);
     }

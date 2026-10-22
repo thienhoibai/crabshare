@@ -70,6 +70,8 @@ void main() {
       final done = await repo.complete(41, expectedRevision: 3);
       expect(server.requests.last.data, {'expectedRevision': 3});
       expect(done.status, 'Completed');
+      expect(done.gradeSummaries.single.gradeCode, 'SOFT');
+      expect(done.gradeSummaries.single.crabCount, 1);
       expect((await repo.get(41)).revision, 3);
     },
   );

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 const code = 'HARVEST-TEST'
-const session = { id: 12, batchCode: code, name: 'Buổi sáng', note: null, status: 'Open', startedAt: '2026-10-21T01:00:00Z', completedAt: null, declaredBy: 1, completedBy: null, harvestedCount: 0, totalWeightKg: 0, revision: 1, canRecord: true, canComplete: true }
+const session = { id: 12, batchCode: code, name: 'Buổi sáng', note: null, status: 'Open', startedAt: '2026-10-21T01:00:00Z', completedAt: null, declaredBy: 1, completedBy: null, harvestedCount: 0, totalWeightKg: 0, revision: 1, canRecord: true, canComplete: true, gradeSummaries: [] }
 const result = { crabItemId: 42, itemUuid: 'CRAB-42', harvestId: 12, batchCode: code, slotCode: '0006', weightG: 250, shellCondition: 'HardShell', gradeCode: 'L3', gradeName: 'Hạng do máy chủ', tagCode: '23456789ABCD', tagStatus: 'Printed', tracePath: '/truy-xuat/23456789ABCD', recordedAt: '2026-10-21T02:00:00Z', harvestedCount: 1, totalWeightKg: 0.25, remainingGrowingCount: 1 }
 
 async function setup(page: Page, options: { staff?: boolean; open?: boolean } = {}) {
@@ -110,7 +110,7 @@ test('Owner saves metadata with the current revision, closes once and can open t
     return route.fulfill({ json: state.active })
   })
   await page.route('**/api/harvests/12/complete', route => {
-    completions.push(route.request().postDataJSON()); state.sessions = [{ ...state.sessions[0], status: 'Completed', completedAt: '2026-10-21T03:00:00Z', completedBy: 1, revision: 3, canRecord: false, canComplete: false }]; state.active = null
+    completions.push(route.request().postDataJSON()); state.sessions = [{ ...state.sessions[0], status: 'Completed', completedAt: '2026-10-21T03:00:00Z', completedBy: 1, harvestedCount: 1, totalWeightKg: 0.25, revision: 3, canRecord: false, canComplete: false, gradeSummaries: [{ gradeCode: 'L3', gradeName: 'Hạng 3', crabCount: 1, totalWeightKg: 0.25 }] }]; state.active = null
     return route.fulfill({ json: state.sessions[0] })
   })
   await page.goto(`/operator/harvest?batchId=${code}`)
@@ -122,6 +122,8 @@ test('Owner saves metadata with the current revision, closes once and can open t
   await page.getByRole('button', { name: 'Chốt đợt thu hoạch', exact: true }).click()
   await page.getByRole('button', { name: 'Xác nhận chốt đợt', exact: true }).click()
   await expect(page.getByRole('status')).toContainText('Đã chốt đợt thu hoạch')
+  await expect(page.getByText('Tổng hợp theo hạng cua')).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Hạng 3 (L3)' })).toBeVisible()
   expect(completions).toEqual([{ expectedRevision: 2 }])
   await expect(page.getByRole('button', { name: 'Chốt đợt thu hoạch', exact: true })).toHaveCount(0)
   await page.getByLabel('Tên đợt thu hoạch').fill('Đợt tiếp theo')
