@@ -25,7 +25,8 @@ String? parseTraceTag(String raw) {
 
 String? _normalizeCode(String value) {
   final code = value.toUpperCase();
-  if (code.length != 12 || code.any((character) => !_tagAlphabet.contains(character))) {
+  if (code.length != 12 ||
+      code.split('').any((character) => !_tagAlphabet.contains(character))) {
     return null;
   }
   return code;

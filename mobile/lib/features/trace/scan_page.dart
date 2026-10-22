@@ -62,14 +62,15 @@ class _ScanPageState extends State<ScanPage> {
       if (!mounted) return;
       await context.push(Routes.trace(code));
     } finally {
-      if (!mounted) return;
-      _scanGate.reset();
-      _openingResult = false;
-      if (!_scanner.value.isRunning) {
-        try {
-          await _scanner.start();
-        } on MobileScannerException {
-          // The error builder explains permission and initialization failures.
+      if (mounted) {
+        _scanGate.reset();
+        _openingResult = false;
+        if (!_scanner.value.isRunning) {
+          try {
+            await _scanner.start();
+          } on MobileScannerException {
+            // The error builder explains permission and initialization failures.
+          }
         }
       }
     }
