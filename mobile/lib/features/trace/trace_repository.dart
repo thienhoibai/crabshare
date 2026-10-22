@@ -8,15 +8,12 @@ class TraceResult {
     required this.tagCode,
     required this.batchCode,
     required this.crabType,
-    required this.itemUuid,
     required this.itemStatus,
     required this.weightG,
     required this.gradeCode,
     required this.gradeName,
     required this.stockedAt,
     required this.harvestedAt,
-    required this.operatorName,
-    required this.farmAddress,
     required this.slotCode,
     required this.events,
   });
@@ -24,15 +21,12 @@ class TraceResult {
   final String tagCode;
   final String batchCode;
   final String crabType;
-  final String itemUuid;
   final String itemStatus;
   final int? weightG;
   final String? gradeCode;
   final String? gradeName;
   final DateTime stockedAt;
   final DateTime? harvestedAt;
-  final String operatorName;
-  final String farmAddress;
   final String slotCode;
   final List<TraceEvent> events;
 
@@ -40,7 +34,6 @@ class TraceResult {
     tagCode: json['tagCode'] as String,
     batchCode: json['batchCode'] as String,
     crabType: json['crabType'] as String,
-    itemUuid: json['itemUuid'] as String,
     itemStatus: json['itemStatus'] as String,
     weightG: (json['weightG'] as num?)?.toInt(),
     gradeCode: json['gradeCode'] as String?,
@@ -49,8 +42,6 @@ class TraceResult {
     harvestedAt: json['harvestedAt'] == null
         ? null
         : DateTime.parse(json['harvestedAt'] as String).toLocal(),
-    operatorName: json['operatorName'] as String,
-    farmAddress: json['farmAddress'] as String,
     slotCode: json['slotCode'] as String,
     events: (json['events'] as List<dynamic>? ?? const [])
         .map((event) => TraceEvent.fromJson(Map<String, dynamic>.from(event as Map)))
@@ -59,16 +50,14 @@ class TraceResult {
 }
 
 class TraceEvent {
-  const TraceEvent({required this.eventType, required this.occurredAt, this.note});
+  const TraceEvent({required this.eventType, required this.occurredAt});
 
   final String eventType;
   final DateTime occurredAt;
-  final String? note;
 
   factory TraceEvent.fromJson(Map<String, dynamic> json) => TraceEvent(
     eventType: json['eventType'] as String,
     occurredAt: DateTime.parse(json['occurredAt'] as String).toLocal(),
-    note: json['note'] as String?,
   );
 }
 
