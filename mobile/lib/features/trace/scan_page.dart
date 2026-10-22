@@ -248,35 +248,40 @@ class _ViewfinderState extends State<_Viewfinder> with SingleTickerProviderState
 
   @override
   Widget build(BuildContext context) {
-    const size = 240.0;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        SizedBox(
-          width: size,
-          height: size,
-          child: Stack(
-            children: [
-              Positioned.fill(child: CustomPaint(painter: _CornersPainter())),
-              AnimatedBuilder(
-                animation: _anim,
-                builder: (context, _) => Positioned(
-                  left: 18,
-                  right: 18,
-                  top: 18 + (size - 36) * _anim.value,
-                  child: Container(height: 2, color: AppColors.accent),
-                ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = (constraints.maxHeight * .76).clamp(160.0, 240.0).toDouble();
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: size,
+              height: size,
+              child: Stack(
+                children: [
+                  Positioned.fill(child: CustomPaint(painter: _CornersPainter())),
+                  AnimatedBuilder(
+                    animation: _anim,
+                    builder: (context, _) => Positioned(
+                      left: 18,
+                      right: 18,
+                      top: 18 + (size - 36) * _anim.value,
+                      child: Container(height: 2, color: AppColors.accent),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        const Text(
-          'Đưa tem QR vào khung hình',
-          style: TextStyle(color: Color(0xFFBDB7B1)),
-        ),
-      ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Đưa tem QR vào khung hình',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xFFBDB7B1)),
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -45,7 +45,7 @@ void main() {
       ),
     ));
 
-    expect(find.textContaining('khởi tạo camera'), findsOneWidget);
+    expect(find.textContaining('Không khởi tạo được camera'), findsOneWidget);
   });
 }
 
