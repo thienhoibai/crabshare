@@ -22,7 +22,9 @@ public static class SecuritySetup
         services.Configure<ForwardedHeadersOptions>(o =>
         {
             o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-            o.ForwardLimit = 1;
+            // App Service routes through two hops (front-end LB → ARR → Kestrel), so ForwardLimit
+            // must be 2 for IsHttps to be set correctly. Default stays 1 elsewhere.
+            o.ForwardLimit = onAppService ? 2 : 1;
             foreach (var proxy in config.GetSection("Security:KnownProxies").Get<string[]>() ?? [])
                 o.KnownProxies.Add(IPAddress.Parse(proxy));
             // App Service's private ingress ranges, as documented by Microsoft. Kestrel is not public there.
@@ -56,10 +58,18 @@ public static class SecuritySetup
         if (!app.Environment.IsDevelopment())
         {
             app.UseHsts();
-            // HTTPS is enforced at the Azure App Service infrastructure level (--https-only true).
-            // A custom IsHttps middleware is not used here because App Service proxies through two
-            // hops (front-end LB → ARR → Kestrel), so ForwardedHeaders with ForwardLimit=1 does
-            // not reliably set IsHttps=true, causing it to return 400 before [Authorize] can run.
+            // Reject HTTP credentials instead of processing or replaying them via a redirect.
+            // ForwardedHeaders (with ForwardLimit=2 on App Service) sets IsHttps=true for legitimate
+            // HTTPS requests; untrusted X-Forwarded-Proto headers are ignored by the middleware.
+            app.Use(async (context, next) =>
+            {
+                if (!context.Request.IsHttps && !context.Request.Path.StartsWithSegments("/api/health"))
+                {
+                    await Results.Problem(statusCode: 400, title: "security.https_required", detail: "HTTPS is required.").ExecuteAsync(context);
+                    return;
+                }
+                await next(context);
+            });
         }
         return app;
     }
