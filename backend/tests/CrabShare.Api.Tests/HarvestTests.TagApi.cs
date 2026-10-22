@@ -9,14 +9,116 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Data.SqlClient;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Storage;
 using CrabShare.Api.Common.Auditing;
+using Microsoft.Extensions.Logging;
 
 namespace CrabShare.Api.Tests;
 
 public partial class HarvestTests
 {
+    private sealed class TraceLogProvider : ILoggerProvider
+    {
+        private readonly List<string> _messages = [];
+        public IReadOnlyList<string> Messages { get { lock (_messages) return _messages.ToArray(); } }
+        public ILogger CreateLogger(string categoryName) => new TraceLogger(_messages);
+        public void Dispose() { }
+
+        private sealed class TraceLogger(List<string> messages) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                if (!IsEnabled(logLevel)) return;
+                lock (messages) messages.Add(formatter(state, exception));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Trace_is_anonymous_and_returns_allowlist_with_one_scan()
+    {
+        var (farm, code) = await HarvestOne();
+        using var operatorClient = Client(farm.UserId);
+        var evidenceId = await AcceptedEvidence(farm);
+        using (var activation = await operatorClient.PostAsJsonAsync($"/api/tags/{code}/activate", new { evidenceId }))
+            Assert.Equal(HttpStatusCode.OK, activation.StatusCode);
+
+        using var anonymousClient = fixture.Factory.CreateClient();
+        using var response = await anonymousClient.GetAsync($"/api/trace/{code}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymousClient.GetAsync($"/api/tags/{code}/label")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymousClient.GetAsync($"/api/batches/{farm.Code}/harvests")).StatusCode);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(code, json.GetProperty("tagCode").GetString());
+        Assert.Equal("0001", json.GetProperty("slotCode").GetString());
+        Assert.Equal((short)250, json.GetProperty("weightG").GetInt16());
+        Assert.Equal("L3", json.GetProperty("gradeCode").GetString());
+        Assert.False(json.TryGetProperty("operatorName", out _));
+        Assert.False(json.TryGetProperty("farmAddress", out _));
+        Assert.False(json.TryGetProperty("itemUuid", out _));
+        Assert.False(json.TryGetProperty("harvestPhotoUri", out _));
+        Assert.False(json.TryGetProperty("orderNo", out _));
+        Assert.All(json.GetProperty("events").EnumerateArray(), e =>
+        {
+            Assert.False(e.TryGetProperty("note", out _));
+        });
+
+        var scan = await Db(db => db.TagScans.Where(s => s.Tag.TagCode == code)
+            .Select(s => new { s.ScannedBy, s.IsOrderOwner }).SingleAsync());
+        Assert.Null(scan.ScannedBy);
+        Assert.False(scan.IsOrderOwner);
+    }
+
+    [Fact]
+    public async Task Trace_rejects_malformed_and_inactive_tags_without_recording_scans()
+    {
+        var printedCode = (await HarvestOne()).Code;
+        var (voidFarm, voidCode) = await HarvestOne();
+        using var voidingClient = Client(voidFarm.UserId);
+        using (var voided = await voidingClient.PostAsJsonAsync($"/api/tags/{voidCode}/void", new { reason = "Tem test bị hỏng" }))
+            Assert.Equal(HttpStatusCode.OK, voided.StatusCode);
+
+        using var anonymousClient = fixture.Factory.CreateClient();
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymousClient.GetAsync("/api/trace/invalid")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await anonymousClient.GetAsync("/api/trace/23456789ABCD")).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await anonymousClient.GetAsync($"/api/trace/{printedCode}")).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await anonymousClient.GetAsync($"/api/trace/{voidCode}")).StatusCode);
+        Assert.Equal(0, await Db(db => db.TagScans.CountAsync(s => s.Tag.TagCode == printedCode || s.Tag.TagCode == voidCode)));
+    }
+
+    [Fact]
+    public async Task Trace_scan_write_failure_does_not_fail_lookup()
+    {
+        var (farm, code) = await HarvestOne();
+        using var operatorClient = Client(farm.UserId);
+        var evidenceId = await AcceptedEvidence(farm);
+        using (var activation = await operatorClient.PostAsJsonAsync($"/api/tags/{code}/activate", new { evidenceId }))
+            Assert.Equal(HttpStatusCode.OK, activation.StatusCode);
+
+        await Db(db => db.Database.ExecuteSqlRawAsync("CREATE TRIGGER dbo.cs82_trace_scan_failure ON dbo.tag_scan AFTER INSERT AS BEGIN THROW 51082, 'CS82 test scan failure', 1; END"));
+        try
+        {
+            var logs = new TraceLogProvider();
+            using var testFactory = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureLogging(logging => logging.AddProvider(logs)));
+            using var anonymousClient = testFactory.CreateClient();
+            using var response = await anonymousClient.GetAsync($"/api/trace/{code}");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.DoesNotContain("CS82 test scan failure", body, StringComparison.Ordinal);
+            Assert.Contains(logs.Messages, message => message.Contains("Trace scan logging failed", StringComparison.Ordinal));
+            Assert.Equal(0, await Db(db => db.TagScans.CountAsync(s => s.Tag.TagCode == code)));
+        }
+        finally
+        {
+            await Db(db => db.Database.ExecuteSqlRawAsync("DROP TRIGGER dbo.cs82_trace_scan_failure"));
+        }
+    }
+
     private async Task<(Farm Farm, string Code)> HarvestOne()
     {
         var farm = await Setup(); using var client = Client(farm.UserId);

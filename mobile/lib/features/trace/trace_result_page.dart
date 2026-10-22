@@ -42,8 +42,6 @@ class TraceResultPage extends ConsumerWidget {
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
                     const SizedBox(height: 12),
-                    _Row(icon: Icons.storefront_outlined, label: 'Hộ nuôi', value: t.operatorName),
-                    _Row(icon: Icons.location_on_outlined, label: 'Địa chỉ', value: t.farmAddress),
                     _Row(icon: Icons.inventory_2_outlined, label: 'Lô', value: t.batchCode),
                     _Row(icon: Icons.grid_view_rounded, label: 'Hộp nuôi', value: 'Số ${t.slotCode}'),
                     _Row(icon: Icons.info_outline, label: 'Trạng thái', value: _statusLabel(t.itemStatus)),
@@ -87,8 +85,6 @@ class TraceResultPage extends ConsumerWidget {
                                         '${_eventLabel(event.eventType)} · ${formatDate(event.occurredAt)}',
                                         style: const TextStyle(fontWeight: FontWeight.w700),
                                       ),
-                                      if (event.note != null && event.note!.trim().isNotEmpty)
-                                        Text(event.note!, style: Theme.of(context).textTheme.bodySmall),
                                       const SizedBox(height: 12),
                                     ],
                                   ),

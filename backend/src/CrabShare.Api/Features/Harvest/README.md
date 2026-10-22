@@ -42,7 +42,7 @@ Tem **in lúc thu hoạch** bằng máy in nhãn của trại, dán lên con cua
 | POST | `/api/tags/{tagCode}/activate` | Operator Owner/Staff | `{evidenceId}`; chỉ Evidence `Accepted`, `Photo`, `InAppCapture`, đúng crab/batch mới kích hoạt. Replay cùng evidence là idempotent |
 | POST | `/api/tags/{tagCode}/void` | Operator Owner | `{reason}`; thay tag Printed/Active của crab `InStock`, tạo tag Printed mới |
 | POST | `/api/harvests/{id}/complete` | Operator Owner | CS-71: `{ expectedRevision }` → chốt đợt Completed, giữ tổng cân hiện có; không đóng lô hoặc cộng tồn lần hai. Phần mở rộng VI-16 làm sau. |
-| GET | `/api/trace/{tagCode}` | **Công khai** | Chỉ trả thông tin truy xuất khi tag `Active`; `Printed` chưa kích hoạt và `Void` không trả dữ liệu cua. Cache tắt. |
+| GET | `/api/trace/{tagCode}` | **Công khai** | Anonymous, mã đúng 12 ký tự theo alphabet tem VI-15; chỉ tag `Active` có view truy xuất mới trả DTO allowlist (lô, loại cua, trạng thái, cân nặng/hạng, ngày thả/thu hoạch, hộp và loại/thời điểm sự kiện). Không trả tên pháp lý/địa chỉ riêng tư, UUID nội bộ, ghi chú sự kiện, ảnh hoặc mã đơn hàng. Mỗi lượt hợp lệ thử ghi một `tag_scan` anonymous (`scanned_by=NULL`, `is_order_owner=0`); lỗi ghi scan không chặn kết quả. `Printed`/`Void` không ghi scan. Cache tắt. |
 
 ### Bruno examples
 

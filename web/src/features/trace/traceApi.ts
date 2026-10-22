@@ -4,7 +4,6 @@ import { http } from '../../shared/api/http'
 export type TraceEvent = {
   eventType: string
   occurredAt: string
-  note: string | null
 }
 
 /** Public fields returned for an Active tag. This deliberately excludes evidence and media data. */
@@ -12,15 +11,12 @@ export type TraceResponse = {
   tagCode: string
   batchCode: string
   crabType: string
-  itemUuid: string
   itemStatus: string
   weightG: number | null
   gradeCode: string | null
   gradeName: string | null
   stockedAt: string
   harvestedAt: string | null
-  operatorName: string
-  farmAddress: string
   slotCode: string
   events: TraceEvent[]
 }

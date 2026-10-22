@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace CrabShare.Api.Features.Harvest;
 
@@ -6,6 +7,7 @@ namespace CrabShare.Api.Features.Harvest;
 public sealed class TraceController(TraceService trace) : ControllerBase
 {
     [HttpGet("{tag}")]
+    [AllowAnonymous]
     public async Task<ActionResult<TraceResponse>> Get(string tag, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";

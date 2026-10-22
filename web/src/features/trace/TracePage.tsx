@@ -38,6 +38,7 @@ export default function TracePage() {
           <span className="trace-spinner" aria-hidden="true" /><p>Đang tải thông tin truy xuất…</p>
         </section> : query.isError ? <section className="trace-state" role="alert">
           {code === 'tag.not_found' ? <><h2>Không tìm thấy tem</h2><p>Mã tem này không tồn tại hoặc không có thông tin truy xuất.</p></> :
+            code === 'tag.invalid_code' ? <><h2>Mã tem không hợp lệ</h2><p>Mã trên tem hoặc đường dẫn QR không đúng định dạng.</p></> :
             code === 'tag.void' ? <><h2>Tem đã bị hủy</h2><p>Tem này không còn hợp lệ để truy xuất sản phẩm.</p></> :
               code === 'tag.not_active' ? <><h2>Tem chưa được kích hoạt</h2><p>Thông tin truy xuất sẽ xuất hiện sau khi tem được xác nhận kích hoạt.</p></> :
                 <><h2>Chưa tải được thông tin</h2><p>Đã xảy ra lỗi khi kết nối đến dịch vụ truy xuất. Vui lòng thử lại.</p></>}
@@ -54,9 +55,7 @@ export default function TracePage() {
             <dl className="trace-facts">
               <div><dt>Hạng</dt><dd>{trace.gradeName || trace.gradeCode || 'Chưa phân hạng'}</dd></div>
               <div><dt>Khối lượng</dt><dd>{trace.weightG != null ? `${trace.weightG.toLocaleString('vi-VN')} g` : 'Chưa cân'}</dd></div>
-              <div><dt>Trang trại</dt><dd>{trace.farmAddress}</dd></div>
-              <div><dt>Người phụ trách</dt><dd>{trace.operatorName}</dd></div>
-              <div><dt>Vị trí nuôi</dt><dd>{trace.slotCode}</dd></div>
+              <div><dt>Hộp nuôi</dt><dd>{trace.slotCode}</dd></div>
               <div><dt>Tình trạng</dt><dd>{itemStatusName[trace.itemStatus] ?? trace.itemStatus}</dd></div>
               <div><dt>Ngày thả nuôi</dt><dd>{dateTime(trace.stockedAt)}</dd></div>
               <div><dt>Ngày thu hoạch</dt><dd>{dateTime(trace.harvestedAt)}</dd></div>
@@ -70,7 +69,7 @@ export default function TracePage() {
               {trace.events.map((event, index) => <li key={`${event.occurredAt}-${event.eventType}-${index}`}>
                 <span className="trace-timeline__dot" aria-hidden="true" />
                 <div><h3>{event.eventType}</h3><time dateTime={event.occurredAt}>{dateTime(event.occurredAt)}</time>
-                  {event.note && <p>{event.note}</p>}</div>
+                </div>
               </li>)}
             </ol> : <p className="rd-muted">Chưa có sự kiện nào được ghi nhận.</p>}
           </section>
