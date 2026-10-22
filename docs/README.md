@@ -8,9 +8,10 @@
 | [conventions.md](conventions.md) | Trước khi viết dòng code đầu tiên |
 | [git-workflow.md](git-workflow.md) | Trước khi push lần đầu |
 | [deploy.md](deploy.md) | Web chạy ở đâu (Vercel), API + CSDL ở đâu (Azure), cái gì tự deploy, việc tuyệt đối không làm |
+| [diagrams/README.md](diagrams/README.md) | Sơ đồ thiết kế bản 2.0 cho Review 2 (use case, ERD 3 mức, component, state machine, activity, sequence, class): mở trên draw.io thẳng từ GitHub, sinh lại bằng `generator/` khi code đổi |
 | [plan/CrabShare_Ke_hoach_code_21_ngay.xlsx](plan/CrabShare_Ke_hoach_code_21_ngay.xlsx) | Kế hoạch 21 ngày (13/10 → 02/11): 74 task kèm mã Jira và tên nhánh, lịch theo ngày, Gantt, phụ thuộc |
 | [Jira — dự án CS](https://nguyendaothien2003.atlassian.net/jira/software/projects/CS/boards/2/backlog) | Nơi cập nhật trạng thái thật: epic CS-1 → CS-19, task CS-20 → CS-93, Sprint 1–3 |
 | [plan/CrabShare_Jira_import.csv](plan/CrabShare_Jira_import.csv) | Bản dự phòng để import lại vào Jira nếu cần (đã tạo trực tiếp trên Jira) |
 
-Tài liệu nghiệp vụ (Phiếu, Report, TL, CSDL, sơ đồ) nằm ở thư mục `Chuan_hoa/` ngoài repo — đó là nguồn sự thật về nghiệp vụ.
+Tài liệu nghiệp vụ (Phiếu, Report, TL, CSDL) nằm ở thư mục `Chuan_hoa/` ngoài repo — đó là nguồn sự thật về nghiệp vụ. Sơ đồ thiết kế (bản nguồn `.drawio`) nằm trong repo ở `docs/diagrams/`.
 Thứ tự ưu tiên khi các tài liệu nói khác nhau: **Phiếu > TL > PRD > CSDL**.
