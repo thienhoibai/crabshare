@@ -56,16 +56,10 @@ public static class SecuritySetup
         if (!app.Environment.IsDevelopment())
         {
             app.UseHsts();
-            // Reject HTTP credentials instead of processing or replaying them via a redirect.
-            app.Use(async (context, next) =>
-            {
-                if (!context.Request.IsHttps && !context.Request.Path.StartsWithSegments("/api/health"))
-                {
-                    await Results.Problem(statusCode: 400, title: "security.https_required", detail: "HTTPS is required.").ExecuteAsync(context);
-                    return;
-                }
-                await next(context);
-            });
+            // HTTPS is enforced at the Azure App Service infrastructure level (--https-only true).
+            // A custom IsHttps middleware is not used here because App Service proxies through two
+            // hops (front-end LB → ARR → Kestrel), so ForwardedHeaders with ForwardLimit=1 does
+            // not reliably set IsHttps=true, causing it to return 400 before [Authorize] can run.
         }
         return app;
     }

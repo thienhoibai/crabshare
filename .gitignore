@@ -39,3 +39,4 @@ ml/runs/
 *.swp
 .DS_Store
 Thumbs.db
+.superpowers/
