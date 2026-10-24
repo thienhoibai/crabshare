@@ -5,7 +5,7 @@ Lưu ảnh hiện hỗ trợ Local/Cloudinary qua IFileStorage. Cấu hình loca
 ```
 backend/
 ├── CrabShare.sln
-├── dotnet-tools.json                 ← dotnet-ef (chạy dotnet tool restore)
+├── dotnet-tools.json                 ← dotnet-ef + dotnet-stryker (chạy dotnet tool restore trong backend/)
 ├── scripts/scaffold-db.ps1           ← sinh lại Entities từ CSDL
 ├── src/
 │   ├── CrabShare.Api/                ← API (Controller, lát cắt dọc theo Features/)
@@ -44,6 +44,23 @@ dotnet test backend/CrabShare.sln
 ```
 
 Test cần CSDL thì gắn `[Trait("Category", "Database")]`; CI chỉ chạy test không cần CSDL (`--filter "Category!=Database"`).
+
+### Mutation testing — VI-13 / CS-67
+
+Cần SDK .NET 10. Từ thư mục gốc repository:
+
+```bash
+cd backend/tests/CrabShare.SettlementEngine.Tests
+dotnet tool restore
+dotnet test -c Release
+dotnet tool run dotnet-stryker
+```
+
+Local tool được pin trong `backend/dotnet-tools.json`. Lệnh restore ở trên tìm manifest từ thư mục cha; không cần cài Stryker global. Stryker 5.0.0 khai báo command `dotnet-stryker`, vì vậy dùng đúng lệnh `dotnet tool run dotnet-stryker`.
+
+`stryker-config.json` chỉ chọn `CrabShare.SettlementEngine.csproj`, dùng bộ xUnit/FsCheck hiện có và chạy tối đa 4 test session song song. Không cần API, CSDL hay dịch vụ ngoài. Reporter HTML và JSON ghi vào `StrykerOutput/<timestamp>/reports/mutation-report.html` và `mutation-report.json` ngay dưới thư mục test; mở HTML bằng trình duyệt để xem từng mutant. Thư mục output tạm được gitignore.
+
+Kết quả đo, bản HTML/JSON lưu lại và giải thích mutant sống sót: [CS-67 mutation testing](../docs/validation/CS-67-mutation-testing.md). Mutation score tính cả timeout là detected, bỏ compile error/ignored theo Stryker; không có ngưỡng score bắt buộc trong ticket. VI-13 bổ sung regression test theo kết quả mutation, còn yêu cầu bộ property đầy đủ thuộc VI-12.
 
 ## Thêm tính năng
 

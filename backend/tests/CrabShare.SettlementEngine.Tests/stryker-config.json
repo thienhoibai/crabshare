@@ -1,0 +1,7 @@
+{
+  "stryker-config": {
+    "project": "CrabShare.SettlementEngine.csproj",
+    "reporters": ["progress", "html", "json"],
+    "concurrency": 4
+  }
+}
