@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="440" viewBox="0 0 1280 440" fill="none" role="img" aria-labelledby="title description">
+  <title id="title">CrabShare</title>
+  <desc id="description">Nền tảng đầu tư chia sẻ doanh thu và thương mại điện tử cho nuôi cua RAS. Vốn góp, lô nuôi, truy xuất và quyết toán được kết nối trong một hệ thống.</desc>
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" stroke="#FFFFFF" stroke-opacity=".045"/>
+    </pattern>
+    <clipPath id="frame"><rect width="1280" height="440" rx="24"/></clipPath>
+  </defs>
+  <g clip-path="url(#frame)">
+    <rect width="1280" height="440" fill="#111F25"/>
+    <rect width="1280" height="440" fill="url(#grid)"/>
+    <path d="M-35 379C171 278 338 461 554 387C733 325 881 332 1071 402C1175 441 1260 392 1320 357" stroke="#3F6B68" stroke-opacity=".35" stroke-width="2"/>
+    <path d="M-35 400C171 299 338 482 554 408C733 346 881 353 1071 423C1175 462 1260 413 1320 378" stroke="#3F6B68" stroke-opacity=".2" stroke-width="2"/>
+    <path d="M-35 421C171 320 338 503 554 429C733 367 881 374 1071 444C1175 483 1260 434 1320 399" stroke="#3F6B68" stroke-opacity=".13" stroke-width="2"/>
+
+    <g font-family="Segoe UI, Arial, sans-serif">
+      <rect x="64" y="48" width="8" height="8" rx="2" fill="#F58D54"/>
+      <text x="84" y="58" fill="#C0D2D0" font-size="12" font-weight="600" letter-spacing="2.4">FPT UNIVERSITY / CAPSTONE FA26SE229</text>
+      <text x="60" y="175" fill="#F5F2EA" font-size="88" font-weight="750" letter-spacing="-5">Crab<tspan fill="#F58D54">Share</tspan></text>
+      <text x="66" y="221" fill="#E6ECE9" font-size="23" font-weight="500">Từ vốn góp đến nguồn gốc từng con cua.</text>
+      <text x="66" y="257" fill="#9CB4B4" font-size="15">Đầu tư chia sẻ doanh thu · Thương mại điện tử · Nuôi cua RAS</text>
+
+      <g font-size="11" font-weight="600" letter-spacing="1.4">
+        <rect x="66" y="307" width="92" height="30" rx="15" fill="#1B3339" stroke="#365356"/>
+        <text x="112" y="327" text-anchor="middle" fill="#C4DBD7">GỌI VỐN</text>
+        <path d="M166 322H185M181 318L185 322L181 326" stroke="#668C88" stroke-width="1.5"/>
+        <rect x="194" y="307" width="92" height="30" rx="15" fill="#1B3339" stroke="#365356"/>
+        <text x="240" y="327" text-anchor="middle" fill="#C4DBD7">NUÔI CUA</text>
+        <path d="M294 322H313M309 318L313 322L309 326" stroke="#668C88" stroke-width="1.5"/>
+        <rect x="322" y="307" width="104" height="30" rx="15" fill="#1B3339" stroke="#365356"/>
+        <text x="374" y="327" text-anchor="middle" fill="#C4DBD7">TRUY XUẤT</text>
+        <path d="M434 322H453M449 318L453 322L449 326" stroke="#668C88" stroke-width="1.5"/>
+        <rect x="462" y="307" width="116" height="30" rx="15" fill="#F58D54"/>
+        <text x="520" y="327" text-anchor="middle" fill="#172226">QUYẾT TOÁN</text>
+      </g>
+
+      <text x="66" y="395" fill="#799A98" font-size="11" font-weight="600" letter-spacing="2">REVENUE SHARING / E-COMMERCE / TRACEABILITY</text>
+    </g>
+
+    <g transform="translate(990 211)">
+      <circle r="167" stroke="#38534F" stroke-dasharray="3 9"/>
+      <circle r="143" stroke="#38534F"/>
+      <circle r="122" fill="#F58D54"/>
+      <path d="M-143 0H-167M143 0H167M0-143V-167M0 143V167" stroke="#8AA9A1" stroke-width="2"/>
+      <circle cx="-143" r="4" fill="#A9C2B5"/>
+      <circle cy="143" r="4" fill="#F58D54"/>
+      <circle cx="143" r="4" fill="#A9C2B5"/>
+
+      <g stroke="#172226" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M-42-8L-67-34M42-8L67-34M-49 9L-74 4L-91 8M49 9L74 4L91 8M-47 28L-73 33L-91 47M47 28L73 33L91 47M-38 43L-65 62L-91 82M38 43L65 62L91 82"/>
+        <path d="M-57-66A23 23 0 1 0-35-43" stroke-width="14"/>
+        <path d="M57-66A23 23 0 1 1 35-43" stroke-width="14"/>
+        <path d="M-20-16L-24-31M20-16L24-31"/>
+      </g>
+      <ellipse cy="23" rx="60" ry="39" fill="#172226"/>
+      <circle cx="-25" cy="-34" r="8" fill="#172226"/>
+      <circle cx="25" cy="-34" r="8" fill="#172226"/>
+      <path d="M-16 29Q0 43 16 29" stroke="#F58D54" stroke-width="6" stroke-linecap="round"/>
+    </g>
+
+    <g font-family="Segoe UI, Arial, sans-serif" font-size="10" font-weight="600" letter-spacing="1.8" fill="#B5CEBF">
+      <text x="990" y="30" text-anchor="middle">RAS / BOX FARMING</text>
+      <text x="990" y="405" text-anchor="middle">ONE BATCH. A CONNECTED RECORD.</text>
+    </g>
+    <path d="M1248 0H1280V32" fill="#F58D54"/>
+  </g>
+</svg>

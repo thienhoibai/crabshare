@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="mobile/assets/icon/crabshare.png" alt="Biểu tượng cua CrabShare" width="112" height="112">
+<img src="docs/assets/crabshare-banner.svg" alt="CrabShare — Từ vốn góp đến nguồn gốc từng con cua. Nền tảng đầu tư chia sẻ doanh thu, thương mại điện tử và truy xuất nuôi cua RAS." width="100%">
 
 <h1>CrabShare</h1>
 
@@ -9,7 +9,7 @@
 <p>Nền tảng đầu tư chia sẻ doanh thu kết hợp thương mại điện tử<br>cho mô hình nuôi cua trong hệ thống tuần hoàn nước RAS.</p>
 
 <p>
-  <a href="https://github.com/thienhoibai/crabshare/actions/workflows/ci.yml"><img src="https://github.com/thienhoibai/crabshare/actions/workflows/ci.yml/badge.svg?branch=develop" alt="Trạng thái CI nhánh develop"></a>
+  <a href="https://github.com/thienhoibai/crabshare/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-GitHub_Actions-334155?style=flat-square&amp;logo=githubactions&amp;logoColor=white" alt="CI bằng GitHub Actions — xem kết quả workflow"></a>
   <img src="https://img.shields.io/badge/Capstone-FA26SE229-F58D54?style=flat-square" alt="Đồ án FA26SE229">
   <img src="https://img.shields.io/badge/Scope-v1.2-334155?style=flat-square" alt="Phạm vi theo phiếu v1.2">
   <img src="https://img.shields.io/badge/Integrations-Simulated-D97706?style=flat-square" alt="Dịch vụ thanh toán, ký số và eKYC đang giả lập">
@@ -43,7 +43,7 @@
 
 <a name="tong-quan"></a>
 
-## Tổng quan
+## ✨ Tổng quan
 
 **CrabShare kết nối nhà đầu tư, hộ nuôi và người mua trong cùng một vòng đời lô nuôi:** từ phê duyệt chi phí, huy động vốn, ký hợp đồng đến ghi nhận sản xuất, thu hoạch, bán hàng và quyết toán. Mỗi con cua được theo dõi qua hộp nuôi có số định danh và tem truy xuất khi thu hoạch.
 
@@ -74,7 +74,7 @@ Trong mô hình RAS (*Recirculating Aquaculture System*), nước được xử 
 
 <a name="tinh-nang"></a>
 
-## Tính năng và phạm vi triển khai
+## 🚀 Tính năng và phạm vi triển khai
 
 ### Ai sử dụng CrabShare?
 
@@ -116,7 +116,7 @@ Bảng dưới mô tả mã nguồn hiện có. Các mục tiêu nghiên cứu v
 
 **Giới hạn của đề tài:** tích hợp tài khoản production và chuyển tiền thật, vai trò trung gian tài chính được cấp phép, cảm biến/camera/phần cứng máy in, tích hợp riêng từng phần mềm trại, đơn vị vận chuyển, marketplace nhiều nhà bán, bán lại khoản góp vốn và nhận diện cua chết/lột xác/kích thước nằm ngoài phạm vi. Theo thiết kế nghiệp vụ, tiền do trung gian thanh toán giữ; CrabShare ghi nhận, đối soát và phát lệnh.
 
-## Vòng đời lô và nguyên tắc quyết toán
+## 🔄 Vòng đời lô và nguyên tắc quyết toán
 
 ```mermaid
 stateDiagram-v2
@@ -153,7 +153,7 @@ Mã nguồn tính toán nằm trong [`CrabShare.SettlementEngine`](backend/src/C
 
 <a name="kien-truc"></a>
 
-## Kiến trúc và công nghệ
+## 🏗️ Kiến trúc và công nghệ
 
 CrabShare là một **monorepo** với API dùng chung cho web và mobile. Backend tổ chức theo **modular monolith**, chia các tính năng thành lát cắt dọc trong `Features/`; database được quản lý bằng script SQL và DbUp.
 
@@ -218,7 +218,7 @@ crabshare/
 
 <a name="bat-dau"></a>
 
-## Bắt đầu trên máy phát triển
+## ⚡ Bắt đầu trên máy phát triển
 
 ### 1. Chuẩn bị
 
@@ -296,7 +296,7 @@ Mở terminal mới tại thư mục gốc:
 ```powershell
 Set-Location web
 npm ci
-Copy-Item .env.example .env.local
+if (!(Test-Path .env.local)) { Copy-Item .env.example .env.local }
 npm run dev
 ```
 
@@ -315,7 +315,8 @@ flutter run -d chrome --web-port 8080
 Mở [localhost:8080](http://localhost:8080) để xem nhanh. Trên **Android Emulator**, chọn thiết bị trong `flutter devices` và chạy:
 
 ```powershell
-flutter run -d <device-id> --dart-define=API_URL=http://10.0.2.2:5233 --dart-define=WEB_URL=http://10.0.2.2:5173
+$deviceId = 'emulator-5554' # Thay bằng ID trong flutter devices
+flutter run -d $deviceId --dart-define=API_URL=http://10.0.2.2:5233 --dart-define=WEB_URL=http://10.0.2.2:5173
 ```
 
 `10.0.2.2` là địa chỉ máy host đối với Android Emulator. Với điện thoại thật, dùng API HTTPS đã triển khai hoặc cấu hình LAN phù hợp; kiểm thử camera, vị trí, quét tem và bản APK theo [`hướng dẫn demo mobile`](docs/demo-app.md).
@@ -337,9 +338,11 @@ flutter run -d <device-id> --dart-define=API_URL=http://10.0.2.2:5233 --dart-def
 
 Cấu hình Cloudinary và cách truy cập ảnh có phân quyền: [`docs/cloudinary.md`](docs/cloudinary.md). Giá trị bí mật đặt ngoài Git; `.env.example` là mẫu cấu hình.
 
-## Tài khoản và kịch bản demo
+## 🔐 Tài khoản và kịch bản demo
 
 Các tài khoản sau do seed Development tạo. Mật khẩu dùng chung được định nghĩa tại hằng `DemoPassword` trong [`DevDataSeeder.cs`](backend/src/CrabShare.Api/Infrastructure/Persistence/DevDataSeeder.cs). Web Development và mobile debug có lựa chọn đăng nhập nhanh.
+
+App dành cho nhà đầu tư và hộ nuôi; khách hàng, quản trị và thẩm định dùng web. Quét tem/truy xuất công khai không cần đăng nhập.
 
 | Tài khoản | Vai trò demo |
 |---|---|
@@ -356,7 +359,7 @@ Seed bao gồm dữ liệu ở nhiều giai đoạn để thử từng phân h�
 
 <a name="kiem-thu"></a>
 
-## Kiểm thử và nghiên cứu
+## ✅ Kiểm thử và nghiên cứu
 
 ### Các lệnh kiểm tra
 
@@ -372,7 +375,7 @@ Seed bao gồm dữ liệu ở nhiều giai đoạn để thử từng phân h�
 
 Chạy build trước lệnh backend có `--no-build`. Database tests hiện dùng **Windows LocalDB**, tạo CSDL kiểm thử riêng và được loại khỏi CI. Script `test:kyc` chạy toàn bộ bộ Playwright dù tên vẫn là `kyc`; local dùng Chrome đã cài, CI cài Chromium. Các bài UI có mock API, nên kết quả của chúng cần được bổ sung bằng nghiệm thu tích hợp thực tế.
 
-[Workflow CI](.github/workflows/ci.yml) kiểm tra container API/migrator, build và test backend không cần CSDL, build web/Playwright, cùng `flutter analyze` và `flutter test`. Badge đầu trang phản ánh workflow trên nhánh `develop`.
+[Workflow CI](.github/workflows/ci.yml) kiểm tra container API/migrator, build và test backend không cần CSDL, build web/Playwright, cùng `flutter analyze` và `flutter test`. Badge CI đầu trang dẫn đến workflow; xem kết quả từng lần chạy và nhánh tương ứng trong tab Actions.
 
 ### TSK-12 — Kiểm định đúng đắn quyết toán
 
@@ -411,7 +414,7 @@ Kế hoạch, kết quả đo và nghiệm thu thực tế nằm trong [`docs/va
 
 <a name="tai-lieu"></a>
 
-## Tài liệu và sản phẩm bàn giao
+## 📚 Tài liệu và sản phẩm bàn giao
 
 | Muốn tìm hiểu | Tài liệu |
 |---|---|
@@ -452,16 +455,43 @@ Phiếu xác định các sản phẩm bàn giao gồm **Reports 1–7/SRS/SDD v
 
 <a name="doi-ngu"></a>
 
-## Đội ngũ và cách cộng tác
+## 👨‍💻 Đội ngũ phát triển
 
 **Giảng viên hướng dẫn:** Lâm Hữu Khánh Phương — FPT University.
 
-| Thành viên | MSSV | Phụ trách chính |
-|---|---|---|
-| **Nguyễn Đạo Thiện** · Trưởng nhóm | `SE180297` | Góp vốn, hợp đồng, thanh toán, giải ngân, quyết toán và audit |
-| **Nguyễn Ngọc Viên** | `SE182672` | Hộ nuôi, hộp/lô, chi phí chuẩn, sản xuất, thu hoạch/truy xuất và nghiên cứu TSK-12 |
-| **Tạ Hiểu Nhân** | `SE180368` | Cửa hàng, đơn/đặt trước, bao tiêu, TSK-13 và kiểm thử hệ thống |
-| **Võ Tuấn Khôi** | `SE184567` | Tài khoản/KYC, bằng chứng/thẩm định, cảnh báo, danh mục/dashboard, khung mobile và triển khai |
+<table align="center">
+  <tr>
+    <td align="center" width="25%">
+      <a href="https://github.com/thienhoibai"><img src="https://github.com/thienhoibai.png?size=160" width="80" height="80" alt="Avatar GitHub của Nguyễn Đạo Thiện"><br><strong>Nguyễn Đạo Thiện</strong></a><br>
+      <a href="https://github.com/thienhoibai">@thienhoibai</a><br>
+      <sub>SE180297 · Trưởng nhóm</sub>
+    </td>
+    <td align="center" width="25%">
+      <a href="https://github.com/zienk"><img src="https://github.com/zienk.png?size=160" width="80" height="80" alt="Avatar GitHub của Nguyễn Ngọc Viên"><br><strong>Nguyễn Ngọc Viên</strong></a><br>
+      <a href="https://github.com/zienk">@zienk</a><br>
+      <sub>SE182672 · Thành viên</sub>
+    </td>
+    <td align="center" width="25%">
+      <a href="https://github.com/hieunhann"><img src="https://github.com/hieunhann.png?size=160" width="80" height="80" alt="Avatar GitHub của Tạ Hiểu Nhân"><br><strong>Tạ Hiểu Nhân</strong></a><br>
+      <a href="https://github.com/hieunhann">@hieunhann</a><br>
+      <sub>SE180368 · Thành viên</sub>
+    </td>
+    <td align="center" width="25%">
+      <a href="https://github.com/rakkiu"><img src="https://github.com/rakkiu.png?size=160" width="80" height="80" alt="Avatar GitHub của Võ Tuấn Khôi"><br><strong>Võ Tuấn Khôi</strong></a><br>
+      <a href="https://github.com/rakkiu">@rakkiu</a><br>
+      <sub>SE184567 · Thành viên</sub>
+    </td>
+  </tr>
+</table>
+
+| Thành viên | Phụ trách chính |
+|---|---|
+| [**Nguyễn Đạo Thiện**](https://github.com/thienhoibai) | Góp vốn, hợp đồng, thanh toán, giải ngân, quyết toán và audit |
+| [**Nguyễn Ngọc Viên**](https://github.com/zienk) | Hộ nuôi, hộp/lô, chi phí chuẩn, sản xuất, thu hoạch/truy xuất và nghiên cứu TSK-12 |
+| [**Tạ Hiểu Nhân**](https://github.com/hieunhann) | Cửa hàng, đơn/đặt trước, bao tiêu, TSK-13 và kiểm thử hệ thống |
+| [**Võ Tuấn Khôi**](https://github.com/rakkiu) | Tài khoản/KYC, bằng chứng/thẩm định, cảnh báo, danh mục/dashboard, khung mobile và triển khai |
+
+### Cách cộng tác
 
 1. Đọc [quy ước](docs/conventions.md), [quy trình Git](docs/git-workflow.md) và [bản đồ tính năng](docs/feature-map.md).
 2. Nhận task trên Jira; theo quy trình nhóm, tạo nhánh `feature/CS-<so>-<mo-ta>`, `fix/*` hoặc `docs/*` từ `develop`.
