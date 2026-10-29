@@ -27,12 +27,15 @@ public sealed partial class HarvestService(AppDbContext db, ICurrentUser me, Tim
 
     private async Task<OperatorMember> MemberAsync(bool owner, CancellationToken ct)
     {
-        if (!me.IsInRole(Roles.OperatorMember)) throw Denied();
+        if (!me.IsInRole(Roles.OperatorMember))
+            throw Denied();
         var member = await db.OperatorMembers.AsNoTracking().Include(m => m.User).SingleOrDefaultAsync(m => m.UserId == me.UserId, ct);
         if (member is null || member.User.Status != "Active" || member.MemberRole is not ("Owner" or "Staff")
             || (me.OperatorId is { } claimed && claimed != member.OperatorId)
-            || !await db.AppUserRoles.AnyAsync(r => r.UserId == me.UserId && r.RoleCode == Roles.OperatorMember, ct)) throw Denied();
-        if (owner && member.MemberRole != "Owner") throw new ForbiddenException("harvest.owner_required", "Chỉ chủ hộ nuôi được mở, sửa hoặc chốt đợt thu hoạch.");
+            || !await db.AppUserRoles.AnyAsync(r => r.UserId == me.UserId && r.RoleCode == Roles.OperatorMember, ct))
+            throw Denied();
+        if (owner && member.MemberRole != "Owner")
+            throw new ForbiddenException("harvest.owner_required", "Chỉ chủ hộ nuôi được mở, sửa hoặc chốt đợt thu hoạch.");
         return member;
     }
 
@@ -42,13 +45,16 @@ public sealed partial class HarvestService(AppDbContext db, ICurrentUser me, Tim
         {
             var farm = await db.Operators.FromSqlInterpolated($"SELECT * FROM dbo.operator WITH (UPDLOCK,HOLDLOCK) WHERE operator_id = {operatorId}")
                 .AsNoTracking().SingleAsync(ct);
-            if (farm.Status != "Approved") throw Rule("operator_not_approved", "Hộ nuôi cần được duyệt để thu hoạch.");
+            if (farm.Status != "Approved")
+                throw Rule("operator_not_approved", "Hộ nuôi cần được duyệt để thu hoạch.");
         }
         var batch = write
             ? await db.Batches.FromSqlInterpolated($"SELECT * FROM dbo.batch WITH (UPDLOCK,HOLDLOCK) WHERE batch_code = {code}").SingleOrDefaultAsync(ct)
             : await db.Batches.AsNoTracking().SingleOrDefaultAsync(b => b.BatchCode == code, ct);
-        if (batch is null) throw new NotFoundException("batch.not_found", "Không tìm thấy lô.");
-        if (batch.OperatorId != operatorId) throw Denied();
+        if (batch is null)
+            throw new NotFoundException("batch.not_found", "Không tìm thấy lô.");
+        if (batch.OperatorId != operatorId)
+            throw Denied();
         return batch;
     }
 
@@ -65,14 +71,35 @@ public sealed partial class HarvestService(AppDbContext db, ICurrentUser me, Tim
 
     private async Task<T> WriteAsync<T>(Func<Task<T>> action, CancellationToken ct)
     {
-        try { return await db.InTransactionAsync(async () => { await audit.LockAsync(ct); return await action(); }, ct, IsolationLevel.Serializable); }
+        try
+        {
+            // Thay đổi dữ liệu và audit phải cùng thành công, hoặc cùng được hoàn tác.
+            return await db.InTransactionAsync(async () =>
+            {
+                await audit.LockAsync(ct);
+                return await action();
+            }, ct, IsolationLevel.Serializable);
+        }
         catch (Exception ex) when (SqlNumber(ex) is 2601 or 2627 or 1205 or 1222 || ex is DbUpdateConcurrencyException)
-        { db.ChangeTracker.Clear(); throw Conflict(); }
-        catch { db.ChangeTracker.Clear(); throw; }
+        {
+            db.ChangeTracker.Clear();
+            throw Conflict();
+        }
+        catch
+        {
+            db.ChangeTracker.Clear();
+            throw;
+        }
     }
     private static int? SqlNumber(Exception ex)
     {
-        for (Exception? inner = ex; inner is not null; inner = inner.InnerException) if (inner is SqlException sql) return sql.Number;
+        for (Exception? inner = ex; inner is not null; inner = inner.InnerException)
+        {
+            if (inner is SqlException sql)
+            {
+                return sql.Number;
+            }
+        }
         return null;
     }
     private static bool TagCollision(Exception ex) => SqlNumber(ex) is 2601 or 2627 && ex.ToString().Contains("uq_crab_tag_tag_code", StringComparison.Ordinal);
@@ -85,8 +112,13 @@ public sealed partial class HarvestService(AppDbContext db, ICurrentUser me, Tim
     public Task<HarvestWriteResult<HarvestResponse>> StartAsync(string code, StartHarvestRequest request, CancellationToken ct)
     {
         BatchService.Validate(request);
-        var name = Clean(request.Name); var note = Clean(request.Note);
-        var hash = Hash(new { name, note });
+        var name = Clean(request.Name);
+        var note = Clean(request.Note);
+        var hash = Hash(new
+        {
+            name,
+            note
+        });
         return WriteAsync(async () =>
         {
             var member = await MemberAsync(true, ct);
@@ -94,33 +126,61 @@ public sealed partial class HarvestService(AppDbContext db, ICurrentUser me, Tim
             var previous = await db.HarvestStartRequests.AsNoTracking().SingleOrDefaultAsync(r => r.RequestId == request.RequestId, ct);
             if (previous is not null)
             {
-                if (previous.BatchId != batch.BatchId || previous.ActorId != me.UserId || previous.RequestHash != hash) throw Conflict("request_reused", "Mã yêu cầu đã được dùng với nội dung khác.");
+                // Gửi lại cùng requestId trả kết quả cũ, không mở thêm một đợt thu hoạch.
+                if (previous.BatchId != batch.BatchId || previous.ActorId != me.UserId || previous.RequestHash != hash)
+                    throw Conflict("request_reused", "Mã yêu cầu đã được dùng với nội dung khác.");
                 var replay = await db.Harvests.SingleAsync(h => h.HarvestId == previous.HarvestId, ct);
                 return new HarvestWriteResult<HarvestResponse>(Response(replay, batch, member, true), false);
             }
-            if (batch.Status is not ("InProduction" or "Harvesting")) throw Rule("invalid_state", "Chỉ bắt đầu thu hoạch lô đang nuôi hoặc đang thu hoạch.");
+            if (batch.Status is not ("InProduction" or "Harvesting"))
+                throw Rule("invalid_state", "Chỉ bắt đầu thu hoạch lô đang nuôi hoặc đang thu hoạch.");
             var session = await db.Harvests.SingleOrDefaultAsync(h => h.BatchId == batch.BatchId && h.LifecycleStatus == "Open", ct);
             var created = session is null;
             var now = AuditChain.Timestamp(clock.GetUtcNow());
             if (session is null)
             {
-                session = new HarvestSession { BatchId = batch.BatchId, Name = name, Note = note, LifecycleStatus = "Open", RevisionNo = 1,
-                    HarvestedAt = now, CreatedAt = now, DeclaredBy = me.UserId };
+                session = new HarvestSession
+                {
+                    BatchId = batch.BatchId,
+                    Name = name,
+                    Note = note,
+                    LifecycleStatus = "Open",
+                    RevisionNo = 1,
+                    HarvestedAt = now,
+                    CreatedAt = now,
+                    DeclaredBy = me.UserId
+                };
                 db.Harvests.Add(session);
                 if (batch.Status == "InProduction")
                 {
-                    batch.Status = "Harvesting"; batch.HarvestStartedAt ??= now; batch.UpdatedAt = now;
-                    await audit.WriteAsync("batch", batch.BatchId, "start_harvest", new { status = "InProduction" }, new { status = "Harvesting", batch.HarvestStartedAt }, now, ct);
+                    batch.Status = "Harvesting";
+                    batch.HarvestStartedAt ??= now;
+                    batch.UpdatedAt = now;
+                    await audit.WriteAsync("batch", batch.BatchId, "start_harvest", new
+                    {
+                        status = "InProduction"
+                    }, new
+                    {
+                        status = "Harvesting",
+                        batch.HarvestStartedAt
+                    }, now, ct);
                 }
                 else if (batch.HarvestStartedAt is null)
                 {
-                    // Legacy Harvesting rows have no reliable first-start timestamp. Preserve unknown rather than invent history.
+                    // Dữ liệu cũ không có mốc bắt đầu đáng tin cậy; không tự tạo lịch sử thay thế.
                     batch.UpdatedAt = now;
                 }
                 await db.SaveChangesAsync(ct);
             }
-            db.HarvestStartRequests.Add(new HarvestStartRequestLog { RequestId = request.RequestId, HarvestId = session.HarvestId,
-                BatchId = batch.BatchId, ActorId = me.UserId, RequestHash = hash, CreatedAt = now });
+            db.HarvestStartRequests.Add(new HarvestStartRequestLog
+            {
+                RequestId = request.RequestId,
+                HarvestId = session.HarvestId,
+                BatchId = batch.BatchId,
+                ActorId = me.UserId,
+                RequestHash = hash,
+                CreatedAt = now
+            });
             var response = Response(session, batch, member, true);
             await audit.WriteAsync("harvest", session.HarvestId, created ? "start" : "continue", null, response, now, ct);
             return new HarvestWriteResult<HarvestResponse>(response, created);
@@ -132,13 +192,18 @@ public sealed partial class HarvestService(AppDbContext db, ICurrentUser me, Tim
         BatchService.Validate(request);
         return WriteAsync(async () =>
         {
-            var member = await MemberAsync(true, ct); var (session, batch) = await SessionAsync(id, member.OperatorId, true, ct);
+            var member = await MemberAsync(true, ct);
+            var (session, batch) = await SessionAsync(id, member.OperatorId, true, ct);
             EnsureOpen(session, batch);
-            if (session.RevisionNo != request.ExpectedRevision) throw Conflict("harvest_changed");
+            if (session.RevisionNo != request.ExpectedRevision)
+                throw Conflict("harvest_changed");
             var before = Response(session, batch, member, true);
-            session.Name = Clean(request.Name); session.Note = Clean(request.Note); session.RevisionNo = checked(session.RevisionNo + 1);
+            session.Name = Clean(request.Name);
+            session.Note = Clean(request.Note);
+            session.RevisionNo = checked(session.RevisionNo + 1);
             var response = Response(session, batch, member, true);
-            await audit.WriteAsync("harvest", id, "update", before, response, ct); return response;
+            await audit.WriteAsync("harvest", id, "update", before, response, ct);
+            return response;
         }, ct);
     }
 
@@ -147,24 +212,38 @@ public sealed partial class HarvestService(AppDbContext db, ICurrentUser me, Tim
         BatchService.Validate(request);
         return WriteAsync(async () =>
         {
-            var member = await MemberAsync(true, ct); var (session, batch) = await SessionAsync(id, member.OperatorId, true, ct);
+            var member = await MemberAsync(true, ct);
+            var (session, batch) = await SessionAsync(id, member.OperatorId, true, ct);
             if (session.LifecycleStatus == "Completed")
             {
                 var completedSummaries = await GradeSummariesAsync([id], ct);
-                return Response(session, batch, member, true) with { GradeSummaries = completedSummaries[id] };
+                return Response(session, batch, member, true) with
+                {
+                    GradeSummaries = completedSummaries[id]
+                };
             }
             EnsureOpen(session, batch);
-            if (session.RevisionNo != request.ExpectedRevision) throw Conflict("harvest_changed");
+            if (session.RevisionNo != request.ExpectedRevision)
+                throw Conflict("harvest_changed");
             var summaries = await GradeSummariesAsync([id], ct);
             var gradeSummaries = summaries[id];
-            var before = Response(session, batch, member, true) with { GradeSummaries = gradeSummaries };
+            var before = Response(session, batch, member, true) with
+            {
+                GradeSummaries = gradeSummaries
+            };
             session.HarvestedCount = gradeSummaries.Sum(g => g.CrabCount);
             session.TotalWeightKg = gradeSummaries.Sum(g => g.TotalWeightKg);
             await catalog.SyncHarvestStockAsync(batch.BatchId, ct);
-            session.LifecycleStatus = "Completed"; session.CompletedAt = AuditChain.Timestamp(clock.GetUtcNow()); session.CompletedBy = me.UserId;
+            session.LifecycleStatus = "Completed";
+            session.CompletedAt = AuditChain.Timestamp(clock.GetUtcNow());
+            session.CompletedBy = me.UserId;
             session.RevisionNo = checked(session.RevisionNo + 1);
-            var response = Response(session, batch, member, true) with { GradeSummaries = gradeSummaries };
-            await audit.WriteAsync("harvest", id, "complete", before, response, ct); return response;
+            var response = Response(session, batch, member, true) with
+            {
+                GradeSummaries = gradeSummaries
+            };
+            await audit.WriteAsync("harvest", id, "complete", before, response, ct);
+            return response;
         }, ct);
     }
 }

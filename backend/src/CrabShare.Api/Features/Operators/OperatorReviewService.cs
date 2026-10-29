@@ -15,7 +15,8 @@ public sealed class OperatorReviewService(AppDbContext db, ICurrentUser me, Time
     {
         await RequireAdminAsync(ct);
         var query = db.Operators.AsNoTracking();
-        if (filter.Status is not null) query = query.Where(o => o.Status == filter.Status);
+        if (filter.Status is not null)
+            query = query.Where(o => o.Status == filter.Status);
         return await query.OrderBy(o => o.SubmittedAt).ThenBy(o => o.OperatorId)
             .Select(o => new AdminOperatorResponse(o.OperatorId, o.LegalName, o.TaxCode, o.BusinessRegNo,
                 o.FarmAddress, o.Status, o.ApprovedSlotCapacity, o.SubmittedAt, o.ApprovedAt, o.ApprovedBy))
@@ -64,7 +65,13 @@ public sealed class OperatorReviewService(AppDbContext db, ICurrentUser me, Time
     }
 
     private static string Snapshot(Operator op, string? reason) => JsonSerializer.Serialize(new
-    { status = op.Status, approvedSlotCapacity = op.ApprovedSlotCapacity, approvedBy = op.ApprovedBy, approvedAt = op.ApprovedAt, reason });
+    {
+        status = op.Status,
+        approvedSlotCapacity = op.ApprovedSlotCapacity,
+        approvedBy = op.ApprovedBy,
+        approvedAt = op.ApprovedAt,
+        reason
+    });
 
     private async Task RequireAdminAsync(CancellationToken ct)
     {

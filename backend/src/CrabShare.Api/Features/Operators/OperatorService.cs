@@ -19,19 +19,29 @@ public sealed class OperatorService(AppDbContext db, ICurrentUser me, TimeProvid
         var now = clock.GetUtcNow();
         var op = new Operator
         {
-            LegalName = req.LegalName.Trim(), TaxCode = req.TaxCode.Trim(),
-            BusinessRegNo = req.BusinessRegNo.Trim(), FarmAddress = req.FarmAddress.Trim(),
-            Status = "Draft", CreatedAt = now, UpdatedAt = now,
+            LegalName = req.LegalName.Trim(),
+            TaxCode = req.TaxCode.Trim(),
+            BusinessRegNo = req.BusinessRegNo.Trim(),
+            FarmAddress = req.FarmAddress.Trim(),
+            Status = "Draft",
+            CreatedAt = now,
+            UpdatedAt = now,
         };
         op.OperatorMembers.Add(new OperatorMember
         {
-            UserId = userId, MemberRole = "Owner", JoinedAt = now, CreatedAt = now,
+            UserId = userId,
+            MemberRole = "Owner",
+            JoinedAt = now,
+            CreatedAt = now,
         });
         db.Operators.Add(op);
         if (!await HasOperatorRoleAsync(userId, ct))
             db.AppUserRoles.Add(new AppUserRole
             {
-                UserId = userId, RoleCode = Roles.OperatorMember, GrantedAt = now, CreatedAt = now,
+                UserId = userId,
+                RoleCode = Roles.OperatorMember,
+                GrantedAt = now,
+                CreatedAt = now,
             });
 
         // Một SaveChanges: EF Core bọc toàn bộ INSERT operator/member/role trong cùng transaction.
@@ -91,7 +101,8 @@ public sealed class OperatorService(AppDbContext db, ICurrentUser me, TimeProvid
             .SingleOrDefaultAsync(m => m.UserId == userId, ct);
         if (member is null)
         {
-            if (forWrite) throw new ForbiddenException("operator.membership_required", "Bạn chưa thuộc hộ nuôi nào.");
+            if (forWrite)
+                throw new ForbiddenException("operator.membership_required", "Bạn chưa thuộc hộ nuôi nào.");
             throw new NotFoundException("operator.not_found", "Bạn chưa đăng ký hồ sơ hộ nuôi.");
         }
         if (!await HasOperatorRoleAsync(userId, ct) || member.MemberRole is not ("Owner" or "Staff"))
@@ -130,11 +141,22 @@ public sealed class OperatorService(AppDbContext db, ICurrentUser me, TimeProvid
         if (await db.OperatorMembers.AnyAsync(m => m.UserId == user.UserId, ct))
             throw new ConflictException("operator.already_member", "Tài khoản đã thuộc một hộ nuôi.");
         var now = clock.GetUtcNow();
-        db.OperatorMembers.Add(new OperatorMember { UserId = user.UserId, OperatorId = owner.OperatorId,
-            MemberRole = "Staff", JoinedAt = now, CreatedAt = now });
+        db.OperatorMembers.Add(new OperatorMember
+        {
+            UserId = user.UserId,
+            OperatorId = owner.OperatorId,
+            MemberRole = "Staff",
+            JoinedAt = now,
+            CreatedAt = now
+        });
         if (!await HasOperatorRoleAsync(user.UserId, ct))
-            db.AppUserRoles.Add(new AppUserRole { UserId = user.UserId, RoleCode = Roles.OperatorMember,
-                GrantedAt = now, CreatedAt = now });
+            db.AppUserRoles.Add(new AppUserRole
+            {
+                UserId = user.UserId,
+                RoleCode = Roles.OperatorMember,
+                GrantedAt = now,
+                CreatedAt = now
+            });
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return new(user.UserId, user.FullName, user.Email, "Staff", now);
@@ -157,7 +179,8 @@ public sealed class OperatorService(AppDbContext db, ICurrentUser me, TimeProvid
             throw new ForbiddenException("operator.cannot_remove_owner", "Không được xóa chủ hộ nuôi qua chức năng quản lý nhân viên.");
         db.OperatorMembers.Remove(member);
         var role = await db.AppUserRoles.SingleOrDefaultAsync(r => r.UserId == userId && r.RoleCode == Roles.OperatorMember, ct);
-        if (role is not null) db.AppUserRoles.Remove(role);
+        if (role is not null)
+            db.AppUserRoles.Remove(role);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
     }

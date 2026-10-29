@@ -17,19 +17,22 @@ public sealed partial class TimelineService(AppDbContext db, ICurrentUser me, Ev
 
     private async Task<long> RequireBatchAsync(string code, CancellationToken ct)
     {
-        if (!await db.AppUsers.AnyAsync(u => u.UserId == me.UserId && u.Status == "Active", ct)) throw Denied();
+        if (!await db.AppUsers.AnyAsync(u => u.UserId == me.UserId && u.Status == "Active", ct))
+            throw Denied();
         var batch = await db.Batches.AsNoTracking().Where(b => b.BatchCode == code)
             .Select(b => new { b.BatchId, b.OperatorId }).SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException("batch.not_found", "Không tìm thấy lô.");
         var roles = await db.AppUserRoles.Where(r => r.UserId == me.UserId).Select(r => r.RoleCode).ToListAsync(ct);
         bool Has(string role) => me.IsInRole(role) && roles.Contains(role);
-        if (Has(Roles.PlatformAdmin)) return batch.BatchId;
+        if (Has(Roles.PlatformAdmin))
+            return batch.BatchId;
         if (Has(Roles.OperatorMember))
         {
             var member = await db.OperatorMembers.AsNoTracking().Where(m => m.UserId == me.UserId)
                 .Select(m => new { m.OperatorId, m.MemberRole }).SingleOrDefaultAsync(ct);
             if (member is not null && member.MemberRole is "Owner" or "Staff" && member.OperatorId == batch.OperatorId
-                && (me.OperatorId is null || me.OperatorId == member.OperatorId)) return batch.BatchId;
+                && (me.OperatorId is null || me.OperatorId == member.OperatorId))
+                return batch.BatchId;
         }
         if (Has(Roles.Investor) &&
             (await db.CapitalShares.AnyAsync(s => s.BatchId == batch.BatchId && s.InvestorId == me.UserId, ct)
@@ -42,10 +45,11 @@ public sealed partial class TimelineService(AppDbContext db, ICurrentUser me, Ev
     {
         BatchService.Validate(query);
         var batchId = await RequireBatchAsync(code, ct);
-        // A day is selected once across all sources. SQL returns only days+1 values.
+        // Lấy thêm một ngày để biết còn trang sau; các nguồn cùng ngày được gộp một lần.
         var beforeDate = query.Before ?? DateOnly.MaxValue;
-        // SQL datetimeoffset cannot represent UTC before year 1.
-        if (beforeDate == DateOnly.MinValue) return new(code, "Asia/Ho_Chi_Minh", [], null, false);
+        // Ngày nhỏ nhất không thể lùi thêm sang UTC; trả trang rỗng trước khi truy vấn SQL.
+        if (beforeDate == DateOnly.MinValue)
+            return new(code, "Asia/Ho_Chi_Minh", [], null, false);
         var beforeAt = query.Before is null ? DateTimeOffset.MaxValue : Midnight(beforeDate);
         var dates = await db.Database.SqlQuery<DateOnly>($"""
             SELECT TOP ({query.Days + 1}) d.[Value]
@@ -66,7 +70,8 @@ public sealed partial class TimelineService(AppDbContext db, ICurrentUser me, Ev
             """).ToListAsync(ct);
         var hasMore = dates.Count > query.Days;
         var selected = dates.Take(query.Days).ToArray();
-        if (selected.Length == 0) return new(code, "Asia/Ho_Chi_Minh", [], null, false);
+        if (selected.Length == 0)
+            return new(code, "Asia/Ho_Chi_Minh", [], null, false);
         var items = await ReadItemsAsync(batchId, code, selected[^1], selected[0], ct);
         var groups = selected.Select(date => new TimelineDay(date, items.Where(i => i.BusinessDate == date)
             .OrderByDescending(i => i.OccurredAt).ThenBy(i => i.Type, StringComparer.Ordinal)
@@ -93,6 +98,8 @@ public sealed partial class TimelineService(AppDbContext db, ICurrentUser me, Ev
             return new(await storage.OpenReadAsync(evidence.FileUri, ct), "application/octet-stream", $"evidence-{id}{safeExtension}");
         }
         catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException)
-        { throw new NotFoundException("evidence.file_not_found", "Không tìm thấy file bằng chứng."); }
+        {
+            throw new NotFoundException("evidence.file_not_found", "Không tìm thấy file bằng chứng.");
+        }
     }
 }
