@@ -119,31 +119,8 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
             var now = clock.GetUtcNow();
             cost.UpdatedAt = now;
             batch.UpdatedAt = now;
-            foreach (var item in req.Items)
-                cost.StandardCostItems.Add(new StandardCostItem
-                {
-                    Category = item.Category,
-                    Description = item.Description.Trim(),
-                    Quantity = item.Quantity,
-                    Unit = item.Unit.Trim(),
-                    UnitPrice = item.UnitPrice,
-                    TrancheNo = item.TrancheNo,
-                    CreatedAt = now
-                });
-            foreach (var removed in cost.TranchePlans.Where(p => !req.Tranches.Any(t => t.TrancheNo == p.TrancheNo)).ToList())
-            {
-                db.StandardCostTranchePlans.Remove(removed);
-                cost.TranchePlans.Remove(removed);
-            }
-            foreach (var tranche in req.Tranches)
-            {
-                var plan = cost.TranchePlans.SingleOrDefault(p => p.TrancheNo == tranche.TrancheNo);
-                if (plan is null) { plan = new StandardCostTranchePlan { TrancheNo = tranche.TrancheNo }; cost.TranchePlans.Add(plan); }
-                plan.PlannedDate = tranche.PlannedDate;
-                plan.AnchorCode = tranche.AnchorCode;
-                plan.OffsetDays = tranche.OffsetDays;
-                plan.UnlockCondition = tranche.UnlockCondition.Trim();
-            }
+            AddCostItems(cost, req.Items, now);
+            UpdateTranchePlans(cost, req.Tranches);
             var response = ToResponse(batch, cost, true, prices);
             await audit.WriteAsync("batch", batch.BatchId, "standard_cost", before, response, ct);
             return response;
@@ -156,20 +133,7 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
             await RequireUnlockedAsync(batch.BatchId, ct);
             if (batch.Status != "Draft")
                 throw new BusinessRuleException("batch.invalid_transition", "Chỉ lô Draft được gửi duyệt.");
-            Validate(new BatchRequest
-            {
-                Title = batch.Title,
-                CrabType = batch.CrabType,
-                SeedQuantity = batch.SeedQuantity,
-                ExpectedOutputKg = batch.ExpectedOutputKg,
-                CycleDays = batch.CycleDays,
-                RestockCutoffDays = batch.RestockCutoffDays,
-                MinViableCapital = (long)batch.MinViableCapital,
-                TargetCapital = (long)batch.TargetCapital,
-                MaxCapital = (long)batch.MaxCapital,
-                MinContribution = (long)batch.MinContribution,
-                OperatorSharePct = batch.OperatorSharePct
-            });
+            ValidateBatchTerms(batch);
             var cost = await CostAsync(batch.BatchId, ct);
             var prices = await OfftakePricesAsync(batch.BatchId, ct);
             if (prices.Count == 0)
@@ -208,21 +172,37 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
         var hasRegistry = await db.CrabItems.AnyAsync(c => c.BatchId == batch.BatchId, ct) ||
             await db.SlotAllocations.AnyAsync(a => a.BatchId == batch.BatchId, ct) ||
             await db.SlotEvents.AnyAsync(e => e.BatchId == batch.BatchId && e.EventType == "Stocked", ct);
-        var reason = member.MemberRole != "Owner" ? "Chỉ chủ hộ nuôi được ghi nhận thả giống." :
-            !await db.Operators.AnyAsync(o => o.OperatorId == member.OperatorId && o.Status == "Approved", ct) ? "Hộ nuôi cần được duyệt để thả giống." :
-            FundingReadiness.StockingBlockedReason(batch, clock.GetUtcNow(), hasRegistry);
+        string? reason;
+        if (member.MemberRole != "Owner")
+        {
+            reason = "Chỉ chủ hộ nuôi được ghi nhận thả giống.";
+        }
+        else if (!await db.Operators.AnyAsync(o => o.OperatorId == member.OperatorId && o.Status == "Approved", ct))
+        {
+            reason = "Hộ nuôi cần được duyệt để thả giống.";
+        }
+        else
+        {
+            reason = FundingReadiness.StockingBlockedReason(batch, clock.GetUtcNow(), hasRegistry);
+        }
         return ToResponse(batch, await CostAsync(batch.BatchId, ct), member.MemberRole == "Owner",
-            await OfftakePricesAsync(batch.BatchId, ct)) with { CanStock = reason is null, StockingBlockedReason = reason, StockedAt = batch.StockedAt };
+            await OfftakePricesAsync(batch.BatchId, ct)) with
+        {
+            CanStock = reason is null,
+            StockingBlockedReason = reason,
+            StockedAt = batch.StockedAt
+        };
     }
 
     public async Task<PagedResult<BatchResponse>> ListMineAsync(BatchListQuery filter, PageQuery paging, CancellationToken ct)
     {
         var member = await MemberAsync(false, ct);
         var query = db.Batches.AsNoTracking().Where(b => b.OperatorId == member.OperatorId);
-        if (filter.Status is not null) query = query.Where(b => b.Status == filter.Status);
+        if (filter.Status is not null)
+            query = query.Where(b => b.Status == filter.Status);
         var page = await query.OrderByDescending(b => b.BatchId).ToPagedAsync(paging, ct);
         var priceMap = await OfftakePricesByBatchAsync(page.Items.Select(b => b.BatchId).ToList(), ct);
-        // List does not load line items; the editor retrieves the full standard cost by code.
+        // Danh sách chỉ tải thông tin gọn; màn chỉnh sửa lấy chi tiết chi phí theo mã lô.
         return new(page.Items.Select(b => ToResponse(b, null, member.MemberRole == "Owner",
             priceMap.GetValueOrDefault(b.BatchId, []))).ToList(), page.Page, page.PageSize, page.Total);
     }
@@ -257,7 +237,14 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
             TrancheNo = i.TrancheNo
         }).ToList();
     internal static List<CostTrancheRequest> Plans(StandardCostVersion cost) => cost.TranchePlans.Select(p =>
-        new CostTrancheRequest { TrancheNo = p.TrancheNo, PlannedDate = p.PlannedDate, UnlockCondition = p.UnlockCondition, AnchorCode = p.AnchorCode, OffsetDays = p.OffsetDays }).ToList();
+        new CostTrancheRequest
+        {
+            TrancheNo = p.TrancheNo,
+            PlannedDate = p.PlannedDate,
+            UnlockCondition = p.UnlockCondition,
+            AnchorCode = p.AnchorCode,
+            OffsetDays = p.OffsetDays
+        }).ToList();
     internal static bool Scheduled(string category) => category is not ("Depreciation" or "MortalityReserve");
     internal static long Amount(decimal quantity, decimal unitPrice) => checked((long)decimal.Round(quantity * unitPrice, 0, MidpointRounding.AwayFromZero));
 
@@ -287,10 +274,67 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
 
     private void Apply(Batch batch, BatchRequest req)
     {
-        batch.Title = req.Title.Trim(); batch.CrabType = req.CrabType; batch.SeedQuantity = req.SeedQuantity;
-        batch.ExpectedOutputKg = req.ExpectedOutputKg; batch.CycleDays = req.CycleDays; batch.RestockCutoffDays = req.RestockCutoffDays;
-        batch.MinViableCapital = req.MinViableCapital; batch.TargetCapital = req.TargetCapital; batch.MaxCapital = req.MaxCapital;
-        batch.MinContribution = req.MinContribution; batch.OperatorSharePct = req.OperatorSharePct; batch.UpdatedAt = clock.GetUtcNow();
+        batch.Title = req.Title.Trim();
+        batch.CrabType = req.CrabType;
+        batch.SeedQuantity = req.SeedQuantity;
+        batch.ExpectedOutputKg = req.ExpectedOutputKg;
+        batch.CycleDays = req.CycleDays;
+        batch.RestockCutoffDays = req.RestockCutoffDays;
+        batch.MinViableCapital = req.MinViableCapital;
+        batch.TargetCapital = req.TargetCapital;
+        batch.MaxCapital = req.MaxCapital;
+        batch.MinContribution = req.MinContribution;
+        batch.OperatorSharePct = req.OperatorSharePct;
+        batch.UpdatedAt = clock.GetUtcNow();
+    }
+
+    private static void AddCostItems(StandardCostVersion cost, IEnumerable<StandardCostItemRequest> items, DateTimeOffset now)
+    {
+        foreach (var item in items)
+        {
+            cost.StandardCostItems.Add(new StandardCostItem
+            {
+                Category = item.Category,
+                Description = item.Description.Trim(),
+                Quantity = item.Quantity,
+                Unit = item.Unit.Trim(),
+                UnitPrice = item.UnitPrice,
+                TrancheNo = item.TrancheNo,
+                CreatedAt = now
+            });
+        }
+    }
+
+    private void UpdateTranchePlans(StandardCostVersion cost, IReadOnlyCollection<CostTrancheRequest> tranches)
+    {
+        // Xóa các đợt không còn trong bản nhập, giữ lại đợt có cùng số để cập nhật.
+        var removedPlans = cost.TranchePlans
+            .Where(plan => !tranches.Any(tranche => tranche.TrancheNo == plan.TrancheNo))
+            .ToList();
+
+        foreach (var removed in removedPlans)
+        {
+            db.StandardCostTranchePlans.Remove(removed);
+            cost.TranchePlans.Remove(removed);
+        }
+
+        foreach (var tranche in tranches)
+        {
+            var plan = cost.TranchePlans.SingleOrDefault(plan => plan.TrancheNo == tranche.TrancheNo);
+            if (plan is null)
+            {
+                plan = new StandardCostTranchePlan
+                {
+                    TrancheNo = tranche.TrancheNo
+                };
+                cost.TranchePlans.Add(plan);
+            }
+
+            plan.PlannedDate = tranche.PlannedDate;
+            plan.AnchorCode = tranche.AnchorCode;
+            plan.OffsetDays = tranche.OffsetDays;
+            plan.UnlockCondition = tranche.UnlockCondition.Trim();
+        }
     }
 
     internal static void Validate(object request)
@@ -300,36 +344,74 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
             throw new BusinessRuleException("batch.invalid_data", string.Join(" ", errors.Select(e => e.ErrorMessage)));
     }
 
+    internal static void ValidateBatchTerms(Batch batch)
+    {
+        // Khi gửi và duyệt, kiểm tra lại dữ liệu đã lưu bằng cùng quy tắc của form tạo lô.
+        Validate(new BatchRequest
+        {
+            Title = batch.Title,
+            CrabType = batch.CrabType,
+            SeedQuantity = batch.SeedQuantity,
+            ExpectedOutputKg = batch.ExpectedOutputKg,
+            CycleDays = batch.CycleDays,
+            RestockCutoffDays = batch.RestockCutoffDays,
+            MinViableCapital = (long)batch.MinViableCapital,
+            TargetCapital = (long)batch.TargetCapital,
+            MaxCapital = (long)batch.MaxCapital,
+            MinContribution = (long)batch.MinContribution,
+            OperatorSharePct = batch.OperatorSharePct
+        });
+    }
+
     internal static void ValidateCosts(List<StandardCostItemRequest> items)
     {
         if (items is null || items.Any(i => i is null))
             throw new BusinessRuleException("batch.invalid_cost", "Danh sách khoản chi không hợp lệ.");
-        foreach (var item in items) Validate(item);
+        foreach (var item in items)
+            Validate(item);
         if (!items.Any(i => i.Category == "MortalityReserve"))
             throw new BusinessRuleException("batch.mortality_reserve_required", "Chi phí chuẩn bắt buộc có khoản dự phòng hao hụt (MortalityReserve).");
         decimal total = 0;
         foreach (var item in items)
         {
             total += decimal.Round(item.Quantity * item.UnitPrice, 0, MidpointRounding.AwayFromZero);
-            // Stop before accumulating more rows: even many individually valid DECIMAL values must not overflow.
+            // Mỗi dòng hợp lệ vẫn có thể cộng thành tổng quá lớn; dừng trước khi vượt giới hạn DB.
             if (total > 999999999999999999m)
                 throw new BusinessRuleException("batch.cost_overflow", "Tổng chi phí vượt giới hạn DECIMAL(18,0) của quyết toán.");
         }
     }
 
-    internal static BatchResponse ToResponse(Batch b, StandardCostVersion? cost, bool owner,
+    internal static BatchResponse ToResponse(Batch batch, StandardCostVersion? cost, bool owner,
         IReadOnlyList<OfftakePriceResponse>? offtakePrices = null)
     {
-        var items = cost?.StandardCostItems.OrderBy(i => i.CostItemId).Select(i => new StandardCostItemResponse(i.Category,
-            i.Description, i.Quantity, i.Unit, (long)i.UnitPrice, i.TrancheNo,
-            checked((long)decimal.Round(i.Quantity * i.UnitPrice, 0, MidpointRounding.AwayFromZero)))).ToList();
-        return new(b.BatchCode, b.OperatorId, b.Title, b.CrabType, b.SeedQuantity, b.ExpectedOutputKg, b.CycleDays,
-            b.RestockCutoffDays, (long)b.MinViableCapital, (long)b.TargetCapital, (long)b.MaxCapital, (long)b.MinContribution,
-            b.OperatorSharePct, b.Status, cost is null ? null : new(cost.VersionNo, cost.Status, items!.Sum(i => i.Amount), items!,
-                cost.TranchePlans.OrderBy(p => p.TrancheNo).Select(p => new CostTrancheResponse(p.TrancheNo, p.PlannedDate, p.UnlockCondition,
-                    items!.Where(i => Scheduled(i.Category) && i.TrancheNo == p.TrancheNo).Sum(i => i.Amount), p.AnchorCode, p.OffsetDays)).ToList(), cost.LockedAt),
-            owner && b.Status == "Draft", owner && b.Status == "Draft", b.RejectionReason,
-            b.OfftakePreorderCapPct, b.OfftakeDepositPct, offtakePrices ?? []);
+        StandardCostResponse? standardCost = null;
+        if (cost is not null)
+        {
+            var items = cost.StandardCostItems.OrderBy(i => i.CostItemId)
+                .Select(i => new StandardCostItemResponse(i.Category,
+                    i.Description, i.Quantity, i.Unit, (long)i.UnitPrice, i.TrancheNo,
+                    checked((long)decimal.Round(i.Quantity * i.UnitPrice, 0, MidpointRounding.AwayFromZero))))
+                .ToList();
+            var total = items.Sum(item => item.Amount);
+            var tranches = cost.TranchePlans
+                .OrderBy(plan => plan.TrancheNo)
+                .Select(plan => new CostTrancheResponse(
+                    plan.TrancheNo,
+                    plan.PlannedDate,
+                    plan.UnlockCondition,
+                    items.Where(item => Scheduled(item.Category) && item.TrancheNo == plan.TrancheNo).Sum(item => item.Amount),
+                    plan.AnchorCode,
+                    plan.OffsetDays))
+                .ToList();
+
+            standardCost = new StandardCostResponse(cost.VersionNo, cost.Status, total, items, tranches, cost.LockedAt);
+        }
+
+        return new(batch.BatchCode, batch.OperatorId, batch.Title, batch.CrabType, batch.SeedQuantity, batch.ExpectedOutputKg, batch.CycleDays,
+            batch.RestockCutoffDays, (long)batch.MinViableCapital, (long)batch.TargetCapital, (long)batch.MaxCapital, (long)batch.MinContribution,
+            batch.OperatorSharePct, batch.Status, standardCost,
+            owner && batch.Status == "Draft", owner && batch.Status == "Draft", batch.RejectionReason,
+            batch.OfftakePreorderCapPct, batch.OfftakeDepositPct, offtakePrices ?? []);
     }
 
     internal async Task<IReadOnlyList<OfftakePriceResponse>> OfftakePricesAsync(long batchId, CancellationToken ct)
@@ -341,7 +423,8 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
     private async Task<Dictionary<long, IReadOnlyList<OfftakePriceResponse>>> OfftakePricesByBatchAsync(
         IReadOnlyList<long> batchIds, CancellationToken ct)
     {
-        if (batchIds.Count == 0) return new();
+        if (batchIds.Count == 0)
+            return new();
         var rows = await db.BatchOfftakePrices.AsNoTracking()
             .Where(p => batchIds.Contains(p.BatchId))
             .Select(p => new { p.BatchId, p.Grade.GradeCode, p.Grade.GradeName, p.UnitPrice })
@@ -352,7 +435,7 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
                 .Select(r => new OfftakePriceResponse(r.GradeCode, r.GradeName, (long)r.UnitPrice)).ToList());
     }
 
-    /// <summary>Thay toàn bộ giá bao tiêu của lô Draft. Chỉ gọi khi RequireEditable đã qua.</summary>
+    // Chỉ thay giá khi lô còn Draft; các bước sau phải dùng giá đã công bố.
     private async Task SyncOfftakePricesAsync(Batch batch, List<OfftakePriceRequest>? prices, CancellationToken ct)
     {
         if (batch.Status is not ("Draft"))

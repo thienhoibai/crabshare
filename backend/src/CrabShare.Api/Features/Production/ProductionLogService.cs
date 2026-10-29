@@ -39,11 +39,16 @@ public sealed partial class ProductionLogService(AppDbContext db, ICurrentUser m
                 return ThresholdResponse(current);
             var version = new ProductionThresholdVersion
             {
-                BatchId = batch.BatchId, VersionNo = checked((current?.VersionNo ?? 0) + 1),
-                PhMin = request.PhMin!.Value, PhMax = request.PhMax!.Value,
-                WaterTempMinC = request.WaterTempMinC!.Value, WaterTempMaxC = request.WaterTempMaxC!.Value,
-                SalinityMinPpt = request.SalinityMinPpt!.Value, SalinityMaxPpt = request.SalinityMaxPpt!.Value,
-                CreatedBy = me.UserId, CreatedAt = clock.GetUtcNow(),
+                BatchId = batch.BatchId,
+                VersionNo = checked((current?.VersionNo ?? 0) + 1),
+                PhMin = request.PhMin!.Value,
+                PhMax = request.PhMax!.Value,
+                WaterTempMinC = request.WaterTempMinC!.Value,
+                WaterTempMaxC = request.WaterTempMaxC!.Value,
+                SalinityMinPpt = request.SalinityMinPpt!.Value,
+                SalinityMaxPpt = request.SalinityMaxPpt!.Value,
+                CreatedBy = me.UserId,
+                CreatedAt = clock.GetUtcNow(),
             };
             db.ProductionThresholdVersions.Add(version);
             await db.SaveChangesAsync(ct);
@@ -74,15 +79,24 @@ public sealed partial class ProductionLogService(AppDbContext db, ICurrentUser m
                 var violations = Violations(request, threshold);
                 var log = new ProductionLog
                 {
-                    Batch = batch, BatchId = batch.BatchId, LogDate = day, Source = "Manual",
-                    Ph = request.Ph, WaterTempC = request.WaterTempC, SalinityPpt = request.SalinityPpt, FeedKg = request.FeedKg,
+                    Batch = batch,
+                    BatchId = batch.BatchId,
+                    LogDate = day,
+                    Source = "Manual",
+                    Ph = request.Ph,
+                    WaterTempC = request.WaterTempC,
+                    SalinityPpt = request.SalinityPpt,
+                    FeedKg = request.FeedKg,
                     Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(),
                     PlausibilityFlag = violations.Count == 0 ? "Ok" : "OutOfRange",
-                    ThresholdVersion = threshold, ThresholdVersionId = threshold.ThresholdVersionId,
-                    RecordedBy = me.UserId, ReceivedAt = now, CreatedAt = now,
+                    ThresholdVersion = threshold,
+                    ThresholdVersionId = threshold.ThresholdVersionId,
+                    RecordedBy = me.UserId,
+                    ReceivedAt = now,
+                    CreatedAt = now,
                 };
                 db.ProductionLogs.Add(log);
-                // DB unique constraint is the final guard; do not raise an alert before insert succeeds.
+                // DB chặn nhật ký trùng ngày; chỉ tạo cảnh báo sau khi lưu nhật ký thành công.
                 await db.SaveChangesAsync(ct);
                 var result = LogResponse(log);
                 await audit.WriteAsync("production_log", log.ProductionLogId, "record", null, result, now, ct);
@@ -109,14 +123,19 @@ public sealed partial class ProductionLogService(AppDbContext db, ICurrentUser m
                 return await work();
             }, ct, IsolationLevel.Serializable);
         }
-        catch { db.ChangeTracker.Clear(); throw; }
+        catch
+        {
+            db.ChangeTracker.Clear();
+            throw;
+        }
     }
 
     private async Task<OperatorMember> MemberAsync(bool owner, CancellationToken ct)
     {
         await RequireRoleAsync(Roles.OperatorMember, ct);
         var member = await db.OperatorMembers.AsNoTracking().Include(m => m.User).SingleOrDefaultAsync(m => m.UserId == me.UserId, ct);
-        if (member is null || member.MemberRole is not ("Owner" or "Staff") || (me.OperatorId is { } claim && claim != member.OperatorId)) throw Denied();
+        if (member is null || member.MemberRole is not ("Owner" or "Staff") || (me.OperatorId is { } claim && claim != member.OperatorId))
+            throw Denied();
         if (owner && member.MemberRole != "Owner")
             throw new ForbiddenException("production.owner_required", "Chỉ Owner của Operator được cấu hình ngưỡng.");
         return member;
@@ -130,26 +149,29 @@ public sealed partial class ProductionLogService(AppDbContext db, ICurrentUser m
             throw new BusinessRuleException("production.operator_not_approved", "Operator cần ở trạng thái Approved để ghi dữ liệu nuôi.");
         var batch = await db.Batches.FromSqlInterpolated($"SELECT * FROM dbo.batch WITH (UPDLOCK, HOLDLOCK) WHERE batch_code = {code}").SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException("batch.not_found", "Không tìm thấy lô.");
-        if (batch.OperatorId != operatorId) throw Denied();
+        if (batch.OperatorId != operatorId)
+            throw Denied();
         return batch;
     }
 
     private Task<ProductionThresholdVersion?> CurrentThresholdAsync(long batchId, CancellationToken ct)
         => db.ProductionThresholdVersions.Where(v => v.BatchId == batchId).OrderByDescending(v => v.VersionNo).FirstOrDefaultAsync(ct);
 
-    private static List<string> Violations(ProductionLogRequest r, ProductionThresholdVersion v)
+    private static List<string> Violations(ProductionLogRequest request, ProductionThresholdVersion thresholds)
     {
         var messages = new List<string>();
-        Check("pH", r.Ph!.Value, v.PhMin, v.PhMax, "");
-        Check("Nhiệt độ", r.WaterTempC!.Value, v.WaterTempMinC, v.WaterTempMaxC, " °C");
-        Check("Độ mặn", r.SalinityPpt!.Value, v.SalinityMinPpt, v.SalinityMaxPpt, " ppt");
+        Check("pH", request.Ph!.Value, thresholds.PhMin, thresholds.PhMax, "");
+        Check("Nhiệt độ", request.WaterTempC!.Value, thresholds.WaterTempMinC, thresholds.WaterTempMaxC, " °C");
+        Check("Độ mặn", request.SalinityPpt!.Value, thresholds.SalinityMinPpt, thresholds.SalinityMaxPpt, " ppt");
         return messages;
+
         void Check(string label, decimal value, decimal min, decimal max, string unit)
         {
             if (value < min || value > max)
-                messages.Add($"{label} {F(value)}{unit} (ngưỡng {F(min)}–{F(max)}{unit})");
+                messages.Add($"{label} {FormatReading(value)}{unit} (ngưỡng {FormatReading(min)}–{FormatReading(max)}{unit})");
         }
-        static string F(decimal value) => value.ToString("0.#", CultureInfo.InvariantCulture);
+
+        static string FormatReading(decimal value) => value.ToString("0.#", CultureInfo.InvariantCulture);
     }
 
     private static ProductionThresholdResponse ThresholdResponse(ProductionThresholdVersion v)

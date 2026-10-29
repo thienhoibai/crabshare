@@ -31,13 +31,18 @@ public sealed partial class HarvestService
 
     public async Task<HarvestResponse> GetAsync(long id, CancellationToken ct)
     {
-        var member = await MemberAsync(false, ct); var (session, batch) = await SessionAsync(id, member.OperatorId, false, ct);
+        var member = await MemberAsync(false, ct);
+        var (session, batch) = await SessionAsync(id, member.OperatorId, false, ct);
         var response = Response(session, batch, member, await ApprovedAsync(member.OperatorId, ct));
-        return response with { GradeSummaries = (await GradeSummariesAsync([id], ct))[id] };
+        return response with
+        {
+            GradeSummaries = (await GradeSummariesAsync([id], ct))[id]
+        };
     }
     public async Task<PagedResult<HarvestResponse>> ListAsync(string code, PageQuery paging, CancellationToken ct)
     {
-        var member = await MemberAsync(false, ct); var batch = await BatchAsync(code, member.OperatorId, false, ct);
+        var member = await MemberAsync(false, ct);
+        var batch = await BatchAsync(code, member.OperatorId, false, ct);
         var approved = await ApprovedAsync(member.OperatorId, ct);
         var page = await db.Harvests.AsNoTracking().Where(h => h.BatchId == batch.BatchId).OrderByDescending(h => h.HarvestId).ToPagedAsync(paging, ct);
         var summaries = await GradeSummariesAsync(page.Items.Select(h => h.HarvestId).ToArray(), ct);
@@ -45,10 +50,13 @@ public sealed partial class HarvestService
     }
     public async Task<HarvestContextResponse> ContextAsync(string code, string? slotCode, CancellationToken ct)
     {
-        var member = await MemberAsync(false, ct); var batch = await BatchAsync(code, member.OperatorId, false, ct);
+        var member = await MemberAsync(false, ct);
+        var batch = await BatchAsync(code, member.OperatorId, false, ct);
         var approved = await ApprovedAsync(member.OperatorId, ct);
         var active = await db.Harvests.AsNoTracking().SingleOrDefaultAsync(h => h.BatchId == batch.BatchId && h.LifecycleStatus == "Open", ct);
-        HarvestCrabContext? current = null; string? status = null; DateTimeOffset? molted = null;
+        HarvestCrabContext? current = null;
+        string? status = null;
+        DateTimeOffset? molted = null;
         if (!string.IsNullOrWhiteSpace(slotCode))
         {
             var normalized = slotCode.Trim();
@@ -87,13 +95,18 @@ public sealed partial class HarvestService
 
     public async Task<PagedResult<HarvestCrabResponse>> CrabsAsync(long id, PageQuery paging, CancellationToken ct)
     {
-        var member = await MemberAsync(false, ct); var (session, batch) = await SessionAsync(id, member.OperatorId, false, ct);
+        var member = await MemberAsync(false, ct);
+        var (session, batch) = await SessionAsync(id, member.OperatorId, false, ct);
         var page = await db.CrabItems.AsNoTracking().Where(c => c.HarvestId == id).OrderByDescending(c => c.CrabItemId).ToPagedAsync(paging, ct);
         var result = new List<HarvestCrabResponse>();
         foreach (var crab in page.Items)
         {
             var record = await db.HarvestRecords.AsNoTracking().SingleOrDefaultAsync(r => r.CrabItemId == crab.CrabItemId, ct);
-            if (record is not null) { result.Add(await RecordResponseAsync(record, ct)); continue; }
+            if (record is not null)
+            {
+                result.Add(await RecordResponseAsync(record, ct));
+                continue;
+            }
             var grade = await db.ProductGrades.AsNoTracking().SingleAsync(g => g.GradeId == crab.GradeId, ct);
             var slot = await db.SlotAllocations.Where(a => a.SlotAllocationId == crab.SlotAllocationId).Select(a => a.Slot.SlotCode).SingleAsync(ct);
             var tag = await db.CrabTags.AsNoTracking().Where(t => t.CrabItemId == crab.CrabItemId).OrderBy(t => t.Status == "Void" ? 1 : 0).ThenByDescending(t => t.TagId).FirstOrDefaultAsync(ct);

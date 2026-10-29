@@ -31,7 +31,8 @@ public sealed class BoxService(AppDbContext db, ICurrentUser me, TimeProvider cl
     {
         var member = await MemberAsync(false, ct);
         var boxes = db.PhysicalSlots.AsNoTracking().Where(b => b.OperatorId == member.OperatorId);
-        if (!string.IsNullOrEmpty(query.Status)) boxes = boxes.Where(b => b.Status == query.Status);
+        if (!string.IsNullOrEmpty(query.Status))
+            boxes = boxes.Where(b => b.Status == query.Status);
         if (!string.IsNullOrWhiteSpace(query.BatchCode))
         {
             var batchCode = query.BatchCode.Trim();
@@ -61,7 +62,7 @@ public sealed class BoxService(AppDbContext db, ICurrentUser me, TimeProvider cl
                 .Select(e => new BoxEvidenceResponse(e.EvidenceId, e.ReceivedAt, e.ReviewStatus)).FirstOrDefault())).ToPagedAsync(paging, ct);
     }
 
-    // All creators take the same parent-row lock before counting: concurrent ranges/singles serialize per farm.
+    // Khóa hộ nuôi trước khi đếm sức chứa để hai yêu cầu tạo hộp không cùng vượt hạn mức.
     private Task<T> WriteAsync<T>(Func<Operator, Task<T>> action, CancellationToken ct)
         => db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
@@ -76,7 +77,7 @@ public sealed class BoxService(AppDbContext db, ICurrentUser me, TimeProvider cl
             return result;
         });
 
-    private async Task CapacityAsync(Operator farm, long added, CancellationToken ct)
+    private async Task EnsureCapacityAsync(Operator farm, long added, CancellationToken ct)
     {
         var count = await db.PhysicalSlots.CountAsync(b => b.OperatorId == farm.OperatorId, ct);
         if (count + added > farm.ApprovedSlotCapacity)
@@ -87,7 +88,7 @@ public sealed class BoxService(AppDbContext db, ICurrentUser me, TimeProvider cl
         => WriteAsync(async farm =>
         {
             var count = (long)request.To - request.From + 1;
-            await CapacityAsync(farm, count, ct);
+            await EnsureCapacityAsync(farm, count, ct);
             var existing = await db.PhysicalSlots.Where(b => b.OperatorId == farm.OperatorId).Select(b => b.SlotCode).ToListAsync(ct);
             var codes = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
             var now = clock.GetUtcNow();
@@ -101,13 +102,18 @@ public sealed class BoxService(AppDbContext db, ICurrentUser me, TimeProvider cl
             for (long value = request.From; value <= request.To; value++)
             {
                 var code = Code(value);
-                if (!codes.Add(code)) throw new ConflictException("box.duplicate", $"Hộp {code} đã tồn tại.");
+                if (!codes.Add(code))
+                    throw new ConflictException("box.duplicate", $"Hộp {code} đã tồn tại.");
                 table.Rows.Add(farm.OperatorId, code, "Available", now, now);
             }
-            // One bulk command; check constraints remains enabled for the existing schema.
+            // Gửi cả bảng một lần để tạo nhiều hộp nhanh; DB vẫn kiểm tra các ràng buộc dữ liệu.
             using var bulk = new SqlBulkCopy((SqlConnection)db.Database.GetDbConnection(), SqlBulkCopyOptions.CheckConstraints,
-                (SqlTransaction)db.Database.CurrentTransaction!.GetDbTransaction()) { DestinationTableName = "dbo.physical_slot" };
-            foreach (DataColumn column in table.Columns) bulk.ColumnMappings.Add(column.ColumnName, column.ColumnName);
+                (SqlTransaction)db.Database.CurrentTransaction!.GetDbTransaction())
+            {
+                DestinationTableName = "dbo.physical_slot"
+            };
+            foreach (DataColumn column in table.Columns)
+                bulk.ColumnMappings.Add(column.ColumnName, column.ColumnName);
             await bulk.WriteToServerAsync(table, ct);
             return new BoxRangeResponse((int)count, Code(request.From), Code(request.To));
         }, ct);
@@ -118,9 +124,9 @@ public sealed class BoxService(AppDbContext db, ICurrentUser me, TimeProvider cl
             var code = request.SlotCode.Trim();
             if (await db.PhysicalSlots.AnyAsync(b => b.OperatorId == farm.OperatorId && b.SlotCode == code, ct))
                 throw new ConflictException("box.duplicate", "Số hộp đã tồn tại.");
-            await CapacityAsync(farm, 1, ct);
+            await EnsureCapacityAsync(farm, 1, ct);
             var now = clock.GetUtcNow();
-            // Parameterized SQL also keeps execution-strategy retries free of tracked pending inserts.
+            // Nội suy SQL này được EF chuyển thành tham số; không ghép trực tiếp dữ liệu người dùng vào lệnh.
             await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO dbo.physical_slot (operator_id, slot_code, row_code, rack_no, tier_no, column_no, status, created_at, updated_at) VALUES ({farm.OperatorId}, {code}, {request.RowCode}, {request.RackNo}, {request.TierNo}, {request.ColumnNo}, 'Available', {now}, {now})", ct);
             return new BoxResponse(code, "Available", request.RowCode, request.RackNo, request.TierNo, request.ColumnNo);
         }, ct);
@@ -134,7 +140,8 @@ public sealed class BoxService(AppDbContext db, ICurrentUser me, TimeProvider cl
                     (b.Status == "Available" || b.Status == "Maintenance") &&
                     !db.SlotAllocations.Any(a => a.SlotId == b.SlotId && a.ReleasedAt == null))
                 .ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, request.Status).SetProperty(b => b.UpdatedAt, clock.GetUtcNow()), ct);
-            if (changed == 0) throw new BusinessRuleException("box.in_use", "Hộp đang nuôi không thể đổi trạng thái bảo trì.");
+            if (changed == 0)
+                throw new BusinessRuleException("box.in_use", "Hộp đang nuôi không thể đổi trạng thái bảo trì.");
             return new BoxResponse(box.SlotCode, request.Status, box.RowCode, box.RackNo, box.TierNo, box.ColumnNo);
         }, ct);
 }

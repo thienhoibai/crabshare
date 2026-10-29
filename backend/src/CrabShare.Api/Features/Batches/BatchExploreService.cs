@@ -9,13 +9,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CrabShare.Api.Features.Batches;
 
-/// <summary>UC09: authenticated investor reads of the terms published by UC08.</summary>
+// CS-42: nhà đầu tư xem các điều khoản đã được công bố, không đọc bản nháp của hộ nuôi.
 public sealed class BatchExploreService(AppDbContext db, ICurrentUser me, TimeProvider clock)
 {
     private static readonly string[] PublishedStatuses = ["Funding", "Cancelled", "Stocked", "InProduction", "Harvesting", "Settlement", "Closed"];
     private sealed record Row(Batch Batch, string OperatorName, VBatchFundingProgress? Progress);
 
-    // Keep publication, role checks and the returned detail in one consistent read, like PortfolioService.
+    // Đọc quyền, trạng thái công bố và nội dung trong cùng transaction để kết quả nhất quán.
     private Task<T> ReadAsync<T>(Func<Task<T>> read, CancellationToken ct) => db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
     {
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
@@ -44,8 +44,10 @@ public sealed class BatchExploreService(AppDbContext db, ICurrentUser me, TimePr
     public Task<PagedResult<ExploreBatchResponse>> ListAsync(ExploreBatchQuery query, PageQuery paging, CancellationToken ct) => ReadAsync(async () =>
     {
         var batches = Published();
-        if (query.Status != null) batches = batches.Where(b => b.Status == query.Status);
-        if (query.CrabType != null) batches = batches.Where(b => b.CrabType == query.CrabType);
+        if (query.Status != null)
+            batches = batches.Where(b => b.Status == query.Status);
+        if (query.CrabType != null)
+            batches = batches.Where(b => b.CrabType == query.CrabType);
         var page = await Rows(batches.OrderByDescending(b => b.CreatedAt).ThenByDescending(b => b.BatchId)).ToPagedAsync(paging, ct);
         var priceMap = await LoadOfftakePricesAsync(page.Items.Select(r => r.Batch.BatchId).ToList(), ct);
         return new PagedResult<ExploreBatchResponse>(
@@ -59,7 +61,7 @@ public sealed class BatchExploreService(AppDbContext db, ICurrentUser me, TimePr
             ?? throw new NotFoundException("batch.not_found", "Không tìm thấy lô đã công bố.");
         var cost = await db.StandardCostVersions.AsNoTracking().Include(v => v.StandardCostItems)
             .SingleAsync(v => v.BatchId == row.Batch.BatchId && v.Status == "Locked", ct);
-        // Same per-line whole-VND rounding as the authoring/approval flow, before aggregating categories.
+        // Làm tròn từng dòng về đồng trước khi cộng, giống bước tạo và duyệt chi phí.
         var items = cost.StandardCostItems.GroupBy(i => i.Category).OrderBy(g => g.Key)
             .Select(g => new ExploreCostCategory(g.Key, checked((long)g.Sum(i => (decimal)BatchService.Amount(i.Quantity, i.UnitPrice))))).ToList();
         var summary = new ExploreStandardCost(cost.VersionNo, cost.Status, checked((long)items.Sum(i => (decimal)i.Amount)), items, cost.LockedAt);
@@ -69,8 +71,7 @@ public sealed class BatchExploreService(AppDbContext db, ICurrentUser me, TimePr
 
     internal static ExploreFundingProgress Funding(VBatchFundingProgress? view, decimal target)
     {
-        // SQL's positive-capital constraint prevents a zero divisor in the view. Keep the mapping safe
-        // for absent/null rows too; never substitute reservations, recalculate, round or cap the view percentage.
+        // Giữ nguyên tỷ lệ từ view; vốn đang giữ chỗ không được tính thành vốn đã xác nhận.
         var percent = target > 0 ? view?.PctOfTarget ?? 0 : 0;
         return new(checked((long)(view?.ConfirmedCapital ?? 0)), checked((long)(view?.ReservedCapital ?? 0)), view?.InvestorCount ?? 0,
             percent, percent.ToString("F2", CultureInfo.InvariantCulture).Replace('.', ',') + "%");
@@ -88,7 +89,8 @@ public sealed class BatchExploreService(AppDbContext db, ICurrentUser me, TimePr
     private async Task<Dictionary<long, IReadOnlyList<ExploreOfftakePrice>>> LoadOfftakePricesAsync(
         IReadOnlyList<long> batchIds, CancellationToken ct)
     {
-        if (batchIds.Count == 0) return new();
+        if (batchIds.Count == 0)
+            return new();
         var rows = await db.BatchOfftakePrices.AsNoTracking()
             .Where(p => batchIds.Contains(p.BatchId))
             .Select(p => new { p.BatchId, p.Grade.GradeCode, p.Grade.GradeName, p.UnitPrice })

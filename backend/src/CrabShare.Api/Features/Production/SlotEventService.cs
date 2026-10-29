@@ -23,12 +23,15 @@ public sealed partial class SlotEventService(AppDbContext db, ICurrentUser me, T
 
     private async Task<OperatorMember> MemberAsync(bool owner, CancellationToken ct)
     {
-        if (!me.IsInRole(Roles.OperatorMember)) throw Denied();
+        if (!me.IsInRole(Roles.OperatorMember))
+            throw Denied();
         var member = await db.OperatorMembers.AsNoTracking().Include(m => m.User).SingleOrDefaultAsync(m => m.UserId == me.UserId, ct);
         if (member is null || member.User.Status != "Active" || member.MemberRole is not ("Owner" or "Staff")
             || (me.OperatorId is { } claimed && claimed != member.OperatorId)
-            || !await db.AppUserRoles.AnyAsync(r => r.UserId == me.UserId && r.RoleCode == Roles.OperatorMember, ct)) throw Denied();
-        if (owner && member.MemberRole != "Owner") throw new ForbiddenException("slot_events.owner_required", "Chỉ chủ hộ nuôi được cấu hình quy tắc cho lô.");
+            || !await db.AppUserRoles.AnyAsync(r => r.UserId == me.UserId && r.RoleCode == Roles.OperatorMember, ct))
+            throw Denied();
+        if (owner && member.MemberRole != "Owner")
+            throw new ForbiddenException("slot_events.owner_required", "Chỉ chủ hộ nuôi được cấu hình quy tắc cho lô.");
         return member;
     }
 
@@ -38,13 +41,16 @@ public sealed partial class SlotEventService(AppDbContext db, ICurrentUser me, T
         {
             var farm = await db.Operators.FromSqlInterpolated($"SELECT * FROM dbo.operator WITH (UPDLOCK,HOLDLOCK) WHERE operator_id = {operatorId}")
                 .AsNoTracking().SingleAsync(ct);
-            if (farm.Status != "Approved") throw Rule("operator_not_approved", "Hộ nuôi cần được duyệt để ghi dữ liệu.");
+            if (farm.Status != "Approved")
+                throw Rule("operator_not_approved", "Hộ nuôi cần được duyệt để ghi dữ liệu.");
         }
         var batch = write
             ? await db.Batches.FromSqlInterpolated($"SELECT * FROM dbo.batch WITH (UPDLOCK,HOLDLOCK) WHERE batch_code = {code}").SingleOrDefaultAsync(ct)
             : await db.Batches.AsNoTracking().SingleOrDefaultAsync(b => b.BatchCode == code, ct);
-        if (batch is null) throw new NotFoundException("batch.not_found", "Không tìm thấy lô.");
-        if (batch.OperatorId != operatorId) throw Denied();
+        if (batch is null)
+            throw new NotFoundException("batch.not_found", "Không tìm thấy lô.");
+        if (batch.OperatorId != operatorId)
+            throw Denied();
         return batch;
     }
 
@@ -52,16 +58,28 @@ public sealed partial class SlotEventService(AppDbContext db, ICurrentUser me, T
     {
         try
         {
-            return await db.InTransactionAsync(async () => { await audit.LockAsync(ct); return await work(); }, ct, IsolationLevel.Serializable);
+            return await db.InTransactionAsync(async () =>
+            {
+                await audit.LockAsync(ct);
+                return await work();
+            }, ct, IsolationLevel.Serializable);
         }
         catch (Exception ex) when (SqlConflict(ex))
-        { db.ChangeTracker.Clear(); throw Changed(); }
-        catch { db.ChangeTracker.Clear(); throw; }
+        {
+            db.ChangeTracker.Clear();
+            throw Changed();
+        }
+        catch
+        {
+            db.ChangeTracker.Clear();
+            throw;
+        }
     }
     private static bool SqlConflict(Exception ex)
     {
         for (Exception? current = ex; current is not null; current = current.InnerException)
-            if (current is SqlException { Number: 2601 or 2627 or 1205 or 1222 }) return true;
+            if (current is SqlException { Number: 2601 or 2627 or 1205 or 1222 })
+                return true;
         return ex is DbUpdateConcurrencyException;
     }
 
@@ -70,9 +88,10 @@ public sealed partial class SlotEventService(AppDbContext db, ICurrentUser me, T
 
     private DateOnly? Deadline(Batch batch, SlotEventPolicyVersion? policy)
     {
-        if (batch.StockedAt is null || policy is null) return null;
+        if (batch.StockedAt is null || policy is null)
+            return null;
         var stocked = BusinessDate(batch.StockedAt.Value);
-        // Use the declared cycle, rather than an editable/unset estimated date, for a reproducible cutoff.
+        // Tính hạn từ chu kỳ đã khai để ngày dự kiến chưa có hoặc bị sửa không làm lệch hạn thả bù.
         return policy.RestockCutoffBasis == "AfterStocking"
             ? stocked.AddDays(policy.RestockCutoffDays)
             : stocked.AddDays(batch.CycleDays - policy.RestockCutoffDays);
@@ -98,20 +117,27 @@ public sealed partial class SlotEventService(AppDbContext db, ICurrentUser me, T
         {
             var member = await MemberAsync(true, ct);
             var batch = await BatchAsync(code, member.OperatorId, true, ct);
-            if (!ConfigurationState(batch.Status)) throw Rule("invalid_state", "Trạng thái lô không cho phép cấu hình quy tắc.");
+            if (!ConfigurationState(batch.Status))
+                throw Rule("invalid_state", "Trạng thái lô không cho phép cấu hình quy tắc.");
             if (request.RestockCutoffBasis == "BeforeHarvest" && request.RestockCutoffDays > batch.CycleDays)
                 throw Rule("invalid_cutoff", "Số ngày tối thiểu trước thu hoạch không được lớn hơn chu kỳ lô.");
             var current = await CurrentPolicyAsync(batch.BatchId, ct);
             if (request.ExpectedVersionNo != (current?.VersionNo ?? 0))
                 throw new ConflictException("slot_events.policy_changed", "Quy tắc vừa được thay đổi. Vui lòng tải lại trước khi lưu.");
-            if (current?.VersionNo == int.MaxValue) throw Rule("version_limit", "Đã đạt giới hạn phiên bản quy tắc.");
+            if (current?.VersionNo == int.MaxValue)
+                throw Rule("version_limit", "Đã đạt giới hạn phiên bản quy tắc.");
             var policy = new SlotEventPolicyVersion
             {
-                BatchId = batch.BatchId, VersionNo = (current?.VersionNo ?? 0) + 1,
-                RestockCutoffBasis = request.RestockCutoffBasis, RestockCutoffDays = request.RestockCutoffDays,
-                MortalityWindowHours = request.MortalityWindowHours, MortalityThresholdPercent = request.MortalityThresholdPercent,
-                MortalitySeverity = request.MortalitySeverity, MortalityAckWithinHours = request.MortalityAckWithinHours,
-                CreatedBy = me.UserId, CreatedAt = clock.GetUtcNow(),
+                BatchId = batch.BatchId,
+                VersionNo = (current?.VersionNo ?? 0) + 1,
+                RestockCutoffBasis = request.RestockCutoffBasis,
+                RestockCutoffDays = request.RestockCutoffDays,
+                MortalityWindowHours = request.MortalityWindowHours,
+                MortalityThresholdPercent = request.MortalityThresholdPercent,
+                MortalitySeverity = request.MortalitySeverity,
+                MortalityAckWithinHours = request.MortalityAckWithinHours,
+                CreatedBy = me.UserId,
+                CreatedAt = clock.GetUtcNow(),
             };
             db.SlotEventPolicies.Add(policy);
             await db.SaveChangesAsync(ct);

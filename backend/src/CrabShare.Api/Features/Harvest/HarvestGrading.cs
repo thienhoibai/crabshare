@@ -9,25 +9,57 @@ public static class HarvestGrading
     {
         if (weightG is < 1 or > short.MaxValue || shellCondition is not ("HardShell" or "SoftShell"))
             throw new BusinessRuleException("harvest.invalid_weight", "Cân nặng hoặc xác nhận vỏ không hợp lệ.");
+
         if (shellCondition == "SoftShell")
         {
-            var soft = grades.SingleOrDefault(g => g.GradeCode == "SOFT") ?? throw Invalid();
-            if (soft.MinWeightG is { } min && soft.MaxWeightG is { } max && min > max) throw Invalid();
-            return Matches(soft, weightG) ? soft : throw Missing();
+            return SelectSoftShellGrade(grades, weightG);
         }
-        var hard = grades.Where(g => g.GradeCode is "L1" or "L2" or "L3" or "L4")
-            .OrderBy(g => g.MinWeightG ?? 1).ToArray();
-        if (hard.Length != 4 || hard.Select(g => g.GradeCode).Distinct().Count() != 4) throw Invalid();
-        var next = 1;
-        foreach (var grade in hard)
+
+        var hardShellGrades = grades
+            .Where(grade => grade.GradeCode is "L1" or "L2" or "L3" or "L4")
+            .OrderBy(grade => grade.MinWeightG ?? 1)
+            .ToArray();
+
+        EnsureHardShellGradesCoverAllWeights(hardShellGrades);
+        return hardShellGrades.SingleOrDefault(grade => Matches(grade, weightG)) ?? throw Missing();
+    }
+
+    private static ProductGrade SelectSoftShellGrade(IEnumerable<ProductGrade> grades, int weightG)
+    {
+        var softShellGrade = grades.SingleOrDefault(grade => grade.GradeCode == "SOFT") ?? throw Invalid();
+        if (softShellGrade.MinWeightG is { } min && softShellGrade.MaxWeightG is { } max && min > max)
+        {
+            throw Invalid();
+        }
+
+        return Matches(softShellGrade, weightG) ? softShellGrade : throw Missing();
+    }
+
+    private static void EnsureHardShellGradesCoverAllWeights(IReadOnlyCollection<ProductGrade> grades)
+    {
+        if (grades.Count != 4 || grades.Select(grade => grade.GradeCode).Distinct().Count() != 4)
+        {
+            throw Invalid();
+        }
+
+        // Mỗi khoảng bắt đầu ngay sau khoảng trước: không bỏ sót gram nào và không chồng hạng.
+        var nextWeightG = 1;
+        foreach (var grade in grades)
         {
             var min = Math.Max(1, (int?)grade.MinWeightG ?? 1);
             var max = (int?)grade.MaxWeightG ?? short.MaxValue;
-            if (min != next || max < min || max > short.MaxValue) throw Invalid();
-            next = max + 1;
+            if (min != nextWeightG || max < min || max > short.MaxValue)
+            {
+                throw Invalid();
+            }
+
+            nextWeightG = max + 1;
         }
-        if (next != short.MaxValue + 1) throw Invalid();
-        return hard.SingleOrDefault(g => Matches(g, weightG)) ?? throw Missing();
+
+        if (nextWeightG != short.MaxValue + 1)
+        {
+            throw Invalid();
+        }
     }
     private static bool Matches(ProductGrade g, int weight) => (g.MinWeightG is null || weight >= g.MinWeightG)
         && (g.MaxWeightG is null || weight <= g.MaxWeightG);

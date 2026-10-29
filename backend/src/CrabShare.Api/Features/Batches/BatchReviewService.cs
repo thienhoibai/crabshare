@@ -22,7 +22,8 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
     {
         await RequireAdminAsync(ct);
         var query = db.Batches.AsNoTracking().Include(b => b.Operator).Include(b => b.FeeTier).AsQueryable();
-        if (filter.Status is not null) query = query.Where(b => b.Status == filter.Status);
+        if (filter.Status is not null)
+            query = query.Where(b => b.Status == filter.Status);
         var page = await query.OrderByDescending(b => b.BatchId).ToPagedAsync(paging, ct);
         var priceMap = new Dictionary<long, IReadOnlyList<OfftakePriceResponse>>();
         foreach (var id in page.Items.Select(b => b.BatchId).Distinct())
@@ -43,7 +44,7 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
         await RequireAdminAsync(ct);
         var operatorId = await db.Batches.Where(b => b.BatchCode == code).Select(b => (long?)b.OperatorId).SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException("batch.not_found", "Không tìm thấy lô.");
-        // Same order as VI-04: audit -> operator -> batch -> costs.
+        // Khóa theo cùng thứ tự với tạo lô để các thao tác đồng thời không khóa chéo nhau.
         var farm = await db.Operators.FromSqlInterpolated($"SELECT * FROM dbo.operator WITH(UPDLOCK,HOLDLOCK) WHERE operator_id={operatorId}").SingleAsync(ct);
         var batch = await db.Batches.FromSqlInterpolated($"SELECT * FROM dbo.batch WITH(UPDLOCK,HOLDLOCK) WHERE batch_code={code}").SingleAsync(ct);
         batch.Operator = farm;
@@ -60,20 +61,7 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
             throw new BusinessRuleException("batch.invalid_funding_time", "Thời gian mở phải trước hạn gọi vốn và hạn gọi vốn phải ở tương lai.");
         if (b.Operator.Status != "Approved")
             throw new BusinessRuleException("batch.operator_not_approved", "Hộ nuôi phải đang ở trạng thái Approved.");
-        BatchService.Validate(new BatchRequest
-        {
-            Title = b.Title,
-            CrabType = b.CrabType,
-            SeedQuantity = b.SeedQuantity,
-            ExpectedOutputKg = b.ExpectedOutputKg,
-            CycleDays = b.CycleDays,
-            RestockCutoffDays = b.RestockCutoffDays,
-            MinViableCapital = (long)b.MinViableCapital,
-            TargetCapital = (long)b.TargetCapital,
-            MaxCapital = (long)b.MaxCapital,
-            MinContribution = (long)b.MinContribution,
-            OperatorSharePct = b.OperatorSharePct
-        });
+        BatchService.ValidateBatchTerms(b);
         var cost = await batches.CostAsync(b.BatchId, ct);
         if (cost is null || cost.Status != "Submitted" ||
             await db.StandardCostVersions.CountAsync(v => v.BatchId == b.BatchId && v.Status == "Submitted", ct) != 1 ||
@@ -118,10 +106,18 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
         }
         else if (account.Status != "Open")
             throw new BusinessRuleException("batch.account_not_open", "Tài khoản chuyên dùng của lô chưa mở; không thể mở gọi vốn.");
-        b.Status = "Funding"; b.FundingOpenAt = req.FundingOpenAt!.Value.ToUniversalTime(); b.FundingDeadline = req.FundingDeadline.Value.ToUniversalTime();
-        b.FeeTier = tiers[0]; b.FeeTierId = tiers[0].FeeTierId; b.PlatformFeeAmount = tiers[0].FeeAmount;
-        b.ApprovedAt = b.UpdatedAt = now; b.ApprovedBy = me.UserId; b.RejectionReason = null;
-        cost.Status = "Locked"; cost.LockedAt = cost.ApprovedAt = cost.UpdatedAt = now; cost.ApprovedBy = me.UserId;
+        b.Status = "Funding";
+        b.FundingOpenAt = req.FundingOpenAt!.Value.ToUniversalTime();
+        b.FundingDeadline = req.FundingDeadline.Value.ToUniversalTime();
+        b.FeeTier = tiers[0];
+        b.FeeTierId = tiers[0].FeeTierId;
+        b.PlatformFeeAmount = tiers[0].FeeAmount;
+        b.ApprovedAt = b.UpdatedAt = now;
+        b.ApprovedBy = me.UserId;
+        b.RejectionReason = null;
+        cost.Status = "Locked";
+        cost.LockedAt = cost.ApprovedAt = cost.UpdatedAt = now;
+        cost.ApprovedBy = me.UserId;
         var tranches = cost.TranchePlans.OrderBy(p => p.TrancheNo).Select(p => new DisbursementTranche
         {
             BatchId = b.BatchId,
@@ -140,7 +136,15 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
         await audit.WriteAsync("batch", b.BatchId, "approve", before, after, now, ct);
         if (accountCreated)
             await audit.WriteAsync("batch_account", account!.BatchAccountId, "create", null,
-                new { account.BatchAccountId, account.BatchId, account.ProviderName, account.ProviderAccountNo, account.Status, account.OpenedAt }, now, ct);
+                new
+                {
+                    account.BatchAccountId,
+                    account.BatchId,
+                    account.ProviderName,
+                    account.ProviderAccountNo,
+                    account.Status,
+                    account.OpenedAt
+                }, now, ct);
         return after;
     }, ct);
 
@@ -148,22 +152,26 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
     {
         BatchService.Validate(req);
         var before = await DetailAsync(b, ct);
-        b.Status = "Rejected"; b.RejectionReason = req.Reason.Trim(); b.UpdatedAt = clock.GetUtcNow();
+        b.Status = "Rejected";
+        b.RejectionReason = req.Reason.Trim();
+        b.UpdatedAt = clock.GetUtcNow();
         var after = await DetailAsync(b, ct);
         await audit.WriteAsync("batch", b.BatchId, "reject", before, after, ct);
         return after;
     }, ct);
 
-    public Task<AdminBatchResponse> RequestRevisionAsync(string code,RejectBatchRequest req,CancellationToken ct) => WriteAsync(code,async b=>
+    public Task<AdminBatchResponse> RequestRevisionAsync(string code, RejectBatchRequest req, CancellationToken ct) => WriteAsync(code, async b =>
     {
         BatchService.Validate(req);
-        var before=await DetailAsync(b,ct);
-        // Submitted version is preserved. Saving the returned draft creates the next cost version.
-        b.Status="Draft"; b.RejectionReason=req.Reason.Trim(); b.UpdatedAt=clock.GetUtcNow();
-        var after=await DetailAsync(b,ct);
-        await audit.WriteAsync("batch",b.BatchId,"request_revision",before,after,ct);
+        var before = await DetailAsync(b, ct);
+        // Giữ bản chi phí đã gửi; lần lưu nháp tiếp theo sẽ tạo phiên bản mới.
+        b.Status = "Draft";
+        b.RejectionReason = req.Reason.Trim();
+        b.UpdatedAt = clock.GetUtcNow();
+        var after = await DetailAsync(b, ct);
+        await audit.WriteAsync("batch", b.BatchId, "request_revision", before, after, ct);
         return after;
-    },ct);
+    }, ct);
 
     private async Task<AdminBatchResponse> DetailAsync(Batch b, CancellationToken ct)
     {
@@ -177,5 +185,5 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
         IReadOnlyList<OfftakePriceResponse> offtakePrices)
         => new(BatchService.ToResponse(b, cost, false, offtakePrices), new(b.OperatorId, b.Operator.LegalName, b.Operator.FarmAddress, b.Operator.Status),
             b.FundingOpenAt, b.FundingDeadline, b.FeeTierId, b.FeeTier?.TierCode, b.PlatformFeeAmount is null ? null : (long)b.PlatformFeeAmount,
-            b.RejectionReason, b.ApprovedAt, b.ApprovedBy, tranches.Select(t => new DisbursementResponse(t.TrancheNo, (long)t.PlannedAmount, t.PlannedDate, t.UnlockCondition, t.Status,t.AnchorCode,t.OffsetDays)).ToList());
+            b.RejectionReason, b.ApprovedAt, b.ApprovedBy, tranches.Select(t => new DisbursementResponse(t.TrancheNo, (long)t.PlannedAmount, t.PlannedDate, t.UnlockCondition, t.Status, t.AnchorCode, t.OffsetDays)).ToList());
 }
