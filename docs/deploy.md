@@ -2,7 +2,7 @@
 
 | Phần | Ở đâu | Tự cập nhật khi |
 |---|---|---|
-| Web | Vercel project `crabshare` (tài khoản của Thiện), thư mục gốc `web/` → https://crabshare.vercel.app | Push lên nhánh production của Vercel; mọi nhánh/PR khác có link Preview riêng |
+| Web | Vercel project `crabshare` (tài khoản của Thiện), thư mục gốc `web/` → https://crabshare.vercel.app | Workflow `deploy-web.yml`: push `main` → production; push `develop` → preview cố định https://crabshare-develop-nguyn1hien.vercel.app; PR có thay đổi `web/` → link preview trong comment |
 | API | Azure App Service `crabshare-api` (Linux B1, .NET 10) → https://crabshare-api.azurewebsites.net | Push lên `develop` có thay đổi `backend/` hoặc `database/` (workflow `deploy-backend.yml`) |
 | CSDL | Azure SQL `crabshare-sql` / `crabshare` (Basic) | Migration chạy trong cùng workflow, trước khi deploy API |
 
@@ -15,6 +15,14 @@ Tất cả nằm trong nhóm tài nguyên `crabshare-rg`, vùng **East Asia** (g
 4. Deploy lên App Service, rồi chờ `/api/health/ready` báo `database: connected`.
 
 Chạy lại tay: tab **Actions** → *Deploy backend* → **Run workflow** (nhánh `develop`).
+
+## Tự động deploy web (`.github/workflows/deploy-web.yml`)
+Vercel gói Hobby chỉ deploy commit do chủ tài khoản Vercel tạo; commit hay merge của thành viên khác bị **"Deployment was blocked"** và không thêm được thành viên. Vì vậy web không dùng Git integration của Vercel nữa (`web/vercel.json`: `git.deploymentEnabled=false`) mà deploy bằng Vercel CLI trong GitHub Actions với token của chủ project, nên **ai commit hay merge cũng deploy được**.
+1. `vercel pull` lấy cấu hình project (Root Directory `web`) và biến môi trường đúng môi trường (`VITE_API_URL` vẫn khai báo trên Vercel như cũ).
+2. `vercel build` rồi `vercel deploy --prebuilt` (`--prod` khi push `main`).
+3. Push `develop`: gắn alias `crabshare-develop-nguyn1hien.vercel.app` (khớp mẫu CORS `crabshare-*-nguyn1hien.vercel.app`). PR: ghi link preview vào comment.
+
+Thiết lập một lần, chỉ chủ project Vercel làm được (Settings → Secrets and variables → Actions → *Secrets*): `VERCEL_TOKEN` (tạo ở vercel.com/account/tokens, không dán vào đâu khác), `VERCEL_ORG_ID` ("Your ID" trong Account Settings với tài khoản cá nhân), `VERCEL_PROJECT_ID` (Project Settings → General). Thiếu secret thì workflow dừng ngay ở bước *Check secrets* với thông báo rõ. Chạy lại tay: tab **Actions** → *Deploy web* → **Run workflow**.
 
 ## Quy tắc
 - **Không bao giờ chạy DbMigrator `--reset` vào Azure.** `--reset` xoá CSDL rồi DbUp tạo lại theo gói mặc định của Azure (General Purpose, vài trăm USD/tháng).
@@ -40,7 +48,7 @@ The workflow runs only from `develop`. Another team member must review the PR an
 2. Build, test and publish before maintenance. The workflow checks configuration without printing secrets, enforces HTTPS-only/Production, disables seed and sets persistent storage/keys. Existing JWT and managed identity credentials remain in Azure. No new paid infrastructure is needed.
 3. Stop the old API, apply new migrations, deploy the matching binary and start the app. CS-88 upgrades legacy payout records before serving. Coordinate this short maintenance window with the team.
 4. Readiness must pass, followed by `python deploy/smoke.py --expected-revision <SHA>`: HTTPS, database, anonymous 401, web/JS asset and the deployed API commit. The report contains no tokens, photos or account numbers.
-5. Run CS-92 acceptance afterwards. Vercel must build with `VITE_API_URL=https://crabshare-api.azurewebsites.net`. Changing that value requires a redeploy. A blocked Preview needs the Vercel project owner's deployment permissions; code CI does not prove a Preview deployment succeeded.
+5. Run CS-92 acceptance afterwards. Vercel must build with `VITE_API_URL=https://crabshare-api.azurewebsites.net`. Changing that value requires a redeploy. Previews and production are deployed by the `Deploy web` workflow with the project owner's token, so a commit by any member deploys; the Git-integration check that blocked other authors' commits is gone. Code CI alone does not prove a Preview deployment succeeded; look at the `Deploy web` run or the preview comment on the PR.
 
 Failure after maintenance begins does not automatically reopen an old binary. Inspect the last successful Actions step, preserve SQL and keys, deploy a compatible fixed binary and then start the app. Never reset/recreate Azure SQL or roll back to a plaintext-reading binary after V012. Only the infrastructure owner performs coordinated SQL/key backup recovery; prefer a forward fix. DbMigrator now rejects `--reset` outside LocalDB and never creates a missing remote database with an unintended service tier.
 

@@ -40,3 +40,6 @@ ml/runs/
 .DS_Store
 Thumbs.db
 .superpowers/
+
+# Vercel CLI (deploy-web.yml tạo lúc chạy, không commit)
+.vercel
