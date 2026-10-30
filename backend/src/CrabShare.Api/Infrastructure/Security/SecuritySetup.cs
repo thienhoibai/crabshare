@@ -28,8 +28,13 @@ public static class SecuritySetup
             foreach (var proxy in config.GetSection("Security:KnownProxies").Get<string[]>() ?? [])
                 o.KnownProxies.Add(IPAddress.Parse(proxy));
             // App Service's private ingress ranges, as documented by Microsoft. Kestrel is not public there.
+            // On App Service for Linux the platform hands the request to the container from the sandbox's
+            // link-local network (169.254.0.0/16, the same range as WEBSITE_PRIVATE_IP), not from an RFC 1918
+            // address. Without that range every forwarded header is ignored, IsHttps stays false and the whole
+            // API answers 400 security.https_required (CS-88; deploy smoke check anonymous-private-route-401).
             var networks = config.GetSection("Security:KnownNetworks").Get<string[]>() ?? (onAppService
-                ? ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "::ffff:10.0.0.0/104", "::ffff:172.16.0.0/108", "::ffff:192.168.0.0/112"] : []);
+                ? ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16",
+                   "::ffff:10.0.0.0/104", "::ffff:172.16.0.0/108", "::ffff:192.168.0.0/112", "::ffff:169.254.0.0/112"] : []);
             foreach (var network in networks) o.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
             // Keep framework loopback defaults; never clear trust lists or trust arbitrary client headers.
         });
@@ -65,6 +70,11 @@ public static class SecuritySetup
             {
                 if (!context.Request.IsHttps && !context.Request.Path.StartsWithSegments("/api/health"))
                 {
+                    // Remote address and the (still unprocessed) forwarded headers only — no cookies or tokens.
+                    // Enough to see from `az webapp log tail` which proxy hop was not in the trust list.
+                    app.Logger.LogWarning("Rejected non-HTTPS request {Method} {Path} from {RemoteIp}; X-Forwarded-Proto='{Proto}'; X-Forwarded-For='{For}'",
+                        context.Request.Method, context.Request.Path, context.Connection.RemoteIpAddress,
+                        context.Request.Headers["X-Forwarded-Proto"].ToString(), context.Request.Headers["X-Forwarded-For"].ToString());
                     await Results.Problem(statusCode: 400, title: "security.https_required", detail: "HTTPS is required.").ExecuteAsync(context);
                     return;
                 }
