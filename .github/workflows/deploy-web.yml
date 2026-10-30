@@ -93,8 +93,20 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        # --scope bắt buộc: token tạo theo team ("Hobby team") không gọi được API người dùng, thiếu nó CLI báo "User not found".
-        run: vercel alias set "${{ steps.deploy.outputs.url }}" "$DEVELOP_ALIAS" --scope "$VERCEL_ORG_ID" --token="$VERCEL_TOKEN" || echo "::warning::Không gắn được alias $DEVELOP_ALIAS (tên đã có người dùng?). Bản preview vẫn ở ${{ steps.deploy.outputs.url }}"
+          URL: ${{ steps.deploy.outputs.url }}
+        # Gọi REST API thay cho `vercel alias set`: lệnh CLI đó phải đọc thông tin user trước, token tạo theo
+        # team ("Hobby team") không có quyền đó nên luôn báo "User not found" dù có --scope.
+        run: |
+          team=""; case "$VERCEL_ORG_ID" in team_*) team="?teamId=$VERCEL_ORG_ID";; esac
+          auth="Authorization: Bearer $VERCEL_TOKEN"
+          dep=$(curl -sS -H "$auth" "https://api.vercel.com/v13/deployments/${URL#https://}$team" | jq -r '.id // empty')
+          if [ -z "$dep" ]; then echo "::warning::Không tra được deployment của $URL, bỏ qua alias"; exit 0; fi
+          resp=$(curl -sS -X POST -H "$auth" -H "Content-Type: application/json" "https://api.vercel.com/v2/deployments/$dep/aliases$team" -d "{\"alias\":\"$DEVELOP_ALIAS\"}")
+          if echo "$resp" | jq -e '.alias' > /dev/null 2>&1; then
+            echo "Alias https://$DEVELOP_ALIAS -> $URL" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::Không gắn được alias $DEVELOP_ALIAS: $(echo "$resp" | jq -r '.error.message // .error.code // empty' 2>/dev/null | head -c 300). Bản preview vẫn ở $URL"
+          fi
 
       - name: Comment preview link on the pull request
         if: github.event_name == 'pull_request'
