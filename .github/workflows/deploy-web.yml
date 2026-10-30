@@ -93,7 +93,8 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel alias set "${{ steps.deploy.outputs.url }}" "$DEVELOP_ALIAS" --token="$VERCEL_TOKEN" || echo "::warning::Không gắn được alias $DEVELOP_ALIAS (tên đã có người dùng?). Bản preview vẫn ở ${{ steps.deploy.outputs.url }}"
+        # --scope bắt buộc: token tạo theo team ("Hobby team") không gọi được API người dùng, thiếu nó CLI báo "User not found".
+        run: vercel alias set "${{ steps.deploy.outputs.url }}" "$DEVELOP_ALIAS" --scope "$VERCEL_ORG_ID" --token="$VERCEL_TOKEN" || echo "::warning::Không gắn được alias $DEVELOP_ALIAS (tên đã có người dùng?). Bản preview vẫn ở ${{ steps.deploy.outputs.url }}"
 
       - name: Comment preview link on the pull request
         if: github.event_name == 'pull_request'
