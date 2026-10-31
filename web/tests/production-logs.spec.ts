@@ -28,6 +28,16 @@ async function fillLog(page: Page, ph = '7.4') {
   await page.getByLabel('Ghi chú', { exact: true }).fill(measurement.note)
 }
 
+test('shows applied water ranges beside measurements without rejecting out-of-range readings', async ({ page }) => {
+  await setup(page)
+  await page.goto('/operator/log')
+  await expect(page.getByLabel('Độ pH', { exact: true })).toHaveAccessibleDescription('Ngưỡng đang áp dụng: 6.2 - 8.4')
+  await expect(page.getByLabel('Nhiệt độ nước (°C)', { exact: true })).toHaveAccessibleDescription('Ngưỡng đang áp dụng: -1 - 32 °C')
+  await expect(page.getByLabel('Độ mặn (ppt)', { exact: true })).toHaveAccessibleDescription('Ngưỡng đang áp dụng: 8 - 30 ppt')
+  await fillLog(page, '9.1')
+  await expect(page.getByRole('button', { name: 'Lưu nhật ký', exact: true })).toBeEnabled()
+})
+
 test('Owner configures blank water ranges before recording and uses the server date', async ({ page }) => {
   const state = await setup(page, { configured: false })
   await page.route('**/api/batches/VI08-TEST/production-thresholds', route => {
