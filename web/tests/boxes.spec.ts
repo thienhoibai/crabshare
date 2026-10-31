@@ -130,7 +130,7 @@ test('capacity error retains input and staff cannot create', async ({ page }) =>
   await page.getByRole('dialog').getByRole('button', { name: 'Tạo hộp' }).click()
   await expect(page.getByRole('dialog').getByRole('alert')).toContainText('vượt sức chứa')
   await expect(page.getByLabel('Đến số')).toHaveValue('1200')
-  await page.getByRole('dialog').getByRole('button', { name: 'Đóng', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Đóng hộp thoại', exact: true }).click()
   await setup(page, 'Staff')
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Hộp nuôi', exact: true })).toBeVisible()
