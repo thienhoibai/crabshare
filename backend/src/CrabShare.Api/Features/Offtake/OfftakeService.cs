@@ -56,7 +56,6 @@ public sealed class OfftakeService(
     public async Task<IReadOnlyList<OfftakeCommitmentResponse>> ListMineAsync(CancellationToken ct)
     {
         var investorId = await RequireInvestorAsync(ct);
-        var now = clock.GetUtcNow();
         var rows = await db.OfftakeCommitments.AsNoTracking()
             .Where(o => o.Contribution.InvestorId == investorId)
             .OrderByDescending(o => o.OfftakeId)
@@ -74,11 +73,27 @@ public sealed class OfftakeService(
                 o.DepositStatus,
                 o.Status,
                 o.CreatedAt,
+                o.WindowOpensAt,
+                o.WindowExpiresAt,
                 AccountNo = o.Batch.BatchAccount != null ? o.Batch.BatchAccount.ProviderAccountNo : null,
-                Payment = o.PaymentRequests
+                DepositPayment = o.PaymentRequests
                     .Where(p => p.Purpose == PaymentPurposes.OfftakeDeposit)
                     .OrderByDescending(p => p.PaymentRequestId)
                     .Select(p => new { p.PaymentRequestId, p.ReferenceCode, p.Amount, p.ExpiresAt, p.Status })
+                    .FirstOrDefault(),
+                Order = o.SalesOrders
+                    .Where(s => s.Status != "Cancelled")
+                    .OrderByDescending(s => s.OrderId)
+                    .Select(s => new
+                    {
+                        s.OrderId,
+                        s.OrderNo,
+                        Payment = s.PaymentRequests
+                            .Where(p => p.Purpose == PaymentPurposes.OfftakePayment)
+                            .OrderByDescending(p => p.PaymentRequestId)
+                            .Select(p => new { p.PaymentRequestId, p.ReferenceCode, p.Amount, p.ExpiresAt, p.Status })
+                            .FirstOrDefault(),
+                    })
                     .FirstOrDefault(),
             })
             .ToListAsync(ct);
@@ -87,8 +102,9 @@ public sealed class OfftakeService(
         return rows.Select(r =>
         {
             var value = OrderService.LineAmount(r.CommittedQtyKg, (long)r.FixedUnitPrice);
+            var source = r.Order?.Payment ?? (r.DepositStatus == "Pending" ? r.DepositPayment : null);
             OfftakePaymentResponse? pay = null;
-            if (r.Payment is { } p && r.AccountNo is { } acc)
+            if (source is { } p && r.AccountNo is { } acc)
             {
                 pay = new OfftakePaymentResponse(
                     p.ReferenceCode, acc, (long)p.Amount,
@@ -98,7 +114,8 @@ public sealed class OfftakeService(
             return new OfftakeCommitmentResponse(
                 r.OfftakeId, r.BatchCode, r.ContributionId, r.GradeCode, r.GradeName,
                 r.CommittedQtyKg, (long)r.FixedUnitPrice, value, (long)r.DepositAmount, r.DepositPct,
-                r.DepositStatus, r.Status, r.CreatedAt, pay);
+                r.DepositStatus, r.Status, r.CreatedAt, pay,
+                r.WindowOpensAt, r.WindowExpiresAt, r.Order?.OrderId, r.Order?.OrderNo);
         }).ToList();
     }
 

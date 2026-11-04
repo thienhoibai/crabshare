@@ -23,8 +23,12 @@ public sealed class ReservationExpiryService(AppDbContext db, IAuditLog audit, T
     public async Task<int> ReleaseExpiredAsync(CancellationToken ct)
     {
         var now = AuditChain.Timestamp(clock.GetUtcNow());
+        // Đơn Offtake hết hạn cùng cửa sổ 48 giờ: OfftakeWindowService mới được huỷ đơn và tịch thu/hoàn cọc
+        // trong cùng một transaction. Job này huỷ trước thì cọc Applied/Held bị kẹt, webhook tiền về chỉ ghi audit.
         var reservedIds = await db.StockReservations.AsNoTracking()
-            .Where(r => r.Status == "Active" && r.ExpiresAt < now && r.OrderLine.SalesOrder.Status == "PendingPayment")
+            .Where(r => r.Status == "Active" && r.ExpiresAt < now
+                        && r.OrderLine.SalesOrder.Status == "PendingPayment"
+                        && r.OrderLine.SalesOrder.OrderType != "Offtake")
             .Select(r => r.OrderLine.OrderId)
             .Distinct()
             .ToListAsync(ct);

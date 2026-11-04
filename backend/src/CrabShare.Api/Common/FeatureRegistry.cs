@@ -98,7 +98,11 @@ public static class FeatureRegistry
         services.AddScoped<IPaymentPurposeHandler, OrderPaymentHandler>(); // tiền đơn hàng về → đơn Paid, trừ tồn (NH-06)
         services.AddScoped<OrderPackingService>();    // UC29 đóng gói quét tem (NH-09)
         services.AddScoped<OfftakeService>();          // NH-14 cam kết bao tiêu (UC13)
+        services.AddScoped<OfftakeClaimService>();     // NH-15 nhận hàng trong cửa sổ (UC23)
+        services.AddScoped<OfftakeWindowService>();
+        services.AddHostedService<OfftakeWindowJob>(); // tắt Offtake:WindowJob:Enabled = false
         services.AddScoped<IPaymentPurposeHandler, OfftakeDepositHandler>();
+        services.AddScoped<IPaymentPurposeHandler, OfftakePaymentHandler>();
         services.AddScoped<OrderQueryService>();        // NH-07 lịch sử + theo dõi đơn
         services.AddScoped<OrderCancellationService>(); // NH-07 huỷ đơn
         services.AddScoped<ReservationExpiryService>(); // NH-07 trả tồn khi quá hạn thanh toán

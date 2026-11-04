@@ -3,6 +3,7 @@ using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Errors;
 using CrabShare.Api.Common.Paging;
 using CrabShare.Api.Infrastructure.Persistence;
+using CrabShare.Api.Features.Offtake;
 using CrabShare.Api.Infrastructure.Persistence.Entities;
 using CrabShare.Api.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
@@ -289,7 +290,8 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
             .ToListAsync(ct);
         var stats = await LoadRatingStatsAsync(rows.Select(r => r.ListingId).ToArray(), ct);
         var caps = await LoadCommitmentRemainingAsync(rows.Select(r => r.BatchId).Distinct().ToArray(), ct);
-        return new PagedResult<StoreListingResponse>(rows.Select(r => ToStoreResponse(r, stats, caps)).ToList(), q.Page, q.PageSize, total);
+        var holds = await LoadOpenHoldsAsync(rows.Select(r => r.BatchId).Distinct().ToArray(), ct);
+        return new PagedResult<StoreListingResponse>(rows.Select(r => ToStoreResponse(r, stats, caps, holds)).ToList(), q.Page, q.PageSize, total);
     }
 
     /// <summary>Chi tiết ở cửa hàng: lịch sử giá công khai (TL-27) và một mã tem để mở trang truy xuất lô.</summary>
@@ -318,9 +320,10 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
 
         var stats = await LoadRatingStatsAsync([listing.ListingId], ct);
         var caps = await LoadCommitmentRemainingAsync([listing.BatchId], ct);
+        var holds = await LoadOpenHoldsAsync([listing.BatchId], ct);
         var reviews = await LoadListingReviewsAsync(listing.ListingId, ct);
         return new StoreListingDetailResponse(
-            ToStoreResponse(ToStoreRowCompiled(listing), stats, caps),
+            ToStoreResponse(ToStoreRowCompiled(listing), stats, caps, holds),
             listing.Batch.Title, listing.FrozenAt, SellUntil(listing), tagCode, history, reviews);
     }
 
@@ -383,25 +386,27 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
         long ListingId, string Title, string Status, string CrabType, string GradeCode, string GradeName,
         short? MinWeightG, short? MaxWeightG, string StorageType, string BatchCode, string FarmName, DateTimeOffset? HarvestedAt,
         decimal PricePerKg, decimal StockQtyKg, decimal ReservedQtyKg, string? ImageUri, string? ImageSha256, DateTimeOffset? PublishedAt,
-        long BatchId, string BatchStatus, decimal OfftakeDepositPct, DateOnly? ExpectedHarvestDate);
+        long BatchId, long GradeId, string BatchStatus, decimal OfftakeDepositPct, DateOnly? ExpectedHarvestDate);
 
     private static readonly Expression<Func<ProductListing, StoreRow>> ToStoreRow = l => new StoreRow(
         l.ListingId, l.Title, l.Status, l.Batch.CrabType, l.Grade.GradeCode, l.Grade.GradeName,
         l.Grade.MinWeightG, l.Grade.MaxWeightG, l.StorageType, l.Batch.BatchCode, l.Batch.Operator.LegalName,
         l.Batch.Harvests.Max(h => (DateTimeOffset?)h.HarvestedAt),
         l.CurrentPricePerKg, l.StockQtyKg, l.ReservedQtyKg, l.ImageUri, l.ImageSha256, l.PublishedAt,
-        l.BatchId, l.Batch.Status, l.Batch.OfftakeDepositPct, l.Batch.ExpectedHarvestDate);
+        l.BatchId, l.GradeId, l.Batch.Status, l.Batch.OfftakeDepositPct, l.Batch.ExpectedHarvestDate);
 
     private static readonly Func<ProductListing, StoreRow> ToStoreRowCompiled = ToStoreRow.Compile();
 
     private static StoreListingResponse ToStoreResponse(
         StoreRow r,
         IReadOnlyDictionary<long, (decimal Average, int Count)> stats,
-        IReadOnlyDictionary<long, decimal> remainingByBatch)
+        IReadOnlyDictionary<long, decimal> remainingByBatch,
+        IReadOnlyDictionary<(long BatchId, long GradeId), decimal> openHolds)
     {
         var isPreorder = r.Status == "Published" && r.BatchStatus == "InProduction";
         remainingByBatch.TryGetValue(r.BatchId, out var remaining);
-        var available = isPreorder ? remaining : Math.Max(0, r.StockQtyKg - r.ReservedQtyKg);
+        var held = !isPreorder && r.StorageType == "Fresh" && openHolds.TryGetValue((r.BatchId, r.GradeId), out var kg) ? kg : 0m;
+        var available = isPreorder ? remaining : Math.Max(0, r.StockQtyKg - r.ReservedQtyKg - held);
         var inStock = isPreorder ? remaining >= 0.001m : r.Status == "Published" && available > 0;
         var imageUrl = r.ImageUri is null ? null : $"/api/listings/{r.ListingId}/image?v={r.ImageSha256?[..8]}";
         stats.TryGetValue(r.ListingId, out var stat);
@@ -414,6 +419,18 @@ public sealed class CatalogService(AppDbContext db, ICurrentUser me, IFileStorag
             isPreorder ? remaining : null,
             isPreorder ? r.OfftakeDepositPct : null,
             isPreorder ? r.ExpectedHarvestDate : null);
+    }
+
+    private async Task<Dictionary<(long BatchId, long GradeId), decimal>> LoadOpenHoldsAsync(
+        IReadOnlyCollection<long> batchIds, CancellationToken ct)
+    {
+        if (batchIds.Count == 0) return [];
+        var rows = await OfftakeStock.Unclaimed(db.OfftakeCommitments.AsNoTracking())
+            .Where(o => batchIds.Contains(o.BatchId))
+            .GroupBy(o => new { o.BatchId, o.GradeId })
+            .Select(g => new { g.Key.BatchId, g.Key.GradeId, Kg = g.Sum(x => x.CommittedQtyKg) })
+            .ToListAsync(ct);
+        return rows.ToDictionary(r => (r.BatchId, r.GradeId), r => r.Kg);
     }
 
     private async Task<Dictionary<long, decimal>> LoadCommitmentRemainingAsync(
