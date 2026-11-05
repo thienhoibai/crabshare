@@ -1,0 +1,79 @@
+%% Figure 4.31 – Activity Diagram: WF-01 Create a Batch by box rows, price it and open funding
+%% v3.2 · 05/11/2026 · Register v1.4
+%% Business level; generated from gen-activity.js with the same nodes and flows as CrabShare_Activity_Diagrams.drawio.
+%% Lanes = subgraphs (one per actor). «planned» = in Register v1.4, not yet on develop @ 420a379 (dashed).
+%% draw.io splits this figure into 2 parts; the connectors (B, A) join them here into one flow.
+flowchart TB
+  subgraph LANE_op["Operator"]
+    direction TB
+    s((" "))
+    a1("Register boxes with their row code and box number")
+    a2("Create the Batch on chosen box rows: crab type, seed quantity, cycle, capital range (box rows «planned»)")
+    m1{" "}
+    a3("Author the Standard Cost: line items, mortality reserve, milestone tranches")
+    a4("«planned» Ask for a sale price range")
+    a5("«planned» Set price per kg, floor price, survival threshold with remuneration tiers, delivery radius")
+    a6("Submit the Batch for approval")
+    mA{" "}
+    a7("Correct the dossier (errors or revision reasons shown)")
+  end
+  subgraph LANE_sys["CrabShare System"]
+    direction TB
+    s1("«planned» Suggest a price range per kg (season, holidays, last 2–3 years) with a warning")
+    s2("Validate the dossier: cost lines, reserve, tranche plan, row capital, price ≥ floor price (row and price checks «planned»)")
+    d1{"dossier valid?"}
+    o1["Batch [PendingApproval]"]
+    s4("Lock the Standard Cost and prices; open the Batch account and the funding window (price per kg, floor price «planned»)")
+    o2["Batch [Funding], visible to investors and bulk buyers"]
+    e((("end")))
+  end
+  subgraph LANE_adm["Platform Administrator"]
+    direction TB
+    b1("Review the dossier: Standard Cost, floor price, remuneration tiers (floor price, tiers «planned»)")
+    d2{"decision on the Batch?"}
+    b3("Reject with the reason; notify the Operator")
+    ff(("✕"))
+  end
+  cB(("B"))
+  cA(("A"))
+  s --> a1
+  a1 --> a2
+  a2 --> m1
+  m1 --> a3
+  a3 -.-> a4
+  a4 -.-> s1
+  s1 -.-> a5
+  a5 -.-> a6
+  a6 --> s2
+  s2 --> d1
+  d1 -->|"[valid]"| o1
+  d1 -->|"[invalid]"| mA
+  cB --> mA
+  mA --> a7
+  a7 --> m1
+  o1 --> cA
+  cA --> b1
+  b1 --> d2
+  d2 -->|"[request revision]"| cB
+  d2 -->|"[approve]"| s4
+  d2 -->|"[reject]"| b3
+  b3 --> ff
+  s4 --> o2
+  o2 --> e
+  classDef planned stroke-dasharray:5 5,color:#64748b,stroke:#64748b,fill:#f8fafc
+  classDef bar fill:#1e293b,stroke:#1e293b,color:#1e293b
+  classDef startNode fill:#111111,stroke:#111111,color:#111111
+  classDef object fill:#fff7ed,stroke:#c2410c
+  classDef conn fill:#ffffff,stroke:#1e293b,stroke-width:2px
+  class a4,s1,a5 planned
+  class s startNode
+  class o1,o2 object
+  class cB,cA conn
+
+%% The Operator prepares the dossier; connector A leads to the review on part 2, and a requested revision comes back through connector B. Traceability:
+%% UC44, UC07, UC49, UC08 (TP2 Viên). Precondition: the Operator is approved (UC04, UC05). Exception branches: invalid dossier and revision requested
+%% (both corrected through one merge), rejection. «planned» in v1.4 (not on develop): box rows of the Batch, grouped by the row codes of the boxes, one
+%% investor per row, each row's capital at least the platform minimum contribution; the price module (a range per kg by season and Tet with a warning,
+%% never an expected return), price per kg, a floor price committed by the buyer, survival threshold with remuneration tiers, delivery radius, and
+%% locking price per kg and floor price with the Standard Cost. States: Batch Draft → PendingApproval → Draft (revision) / Rejected / Funding (Figure
+%% 4.8); Standard Cost Draft → Submitted → Locked (Figure 4.22). Design decisions of 05/11/2026 applied here were confirmed by the lead.

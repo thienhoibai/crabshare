@@ -1,0 +1,118 @@
+%% Figure 4.32 – Activity Diagram: WF-02 Pick box rows, pay, sign and close funding
+%% v3.2 · 05/11/2026 · Register v1.4
+%% Business level; generated from gen-activity.js with the same nodes and flows as CrabShare_Activity_Diagrams.drawio.
+%% Lanes = subgraphs (one per actor). «planned» = in Register v1.4, not yet on develop @ 420a379 (dashed).
+%% draw.io splits this figure into 3 parts; the connectors (A, B, C, D) join them here into one flow.
+flowchart TB
+  subgraph LANE_inv["Investor"]
+    direction TB
+    s((" "))
+    i1("Complete eKYC: ID card, selfie, consent")
+    i2("Explore the offering: Standard Cost, price per kg, floor price, free box rows (prices, box rows «planned»)")
+    i3("Accept the risk disclosure; pick free box rows (the amount is their total capital) (box rows «planned»)")
+    i6("Sign second through the Viettel signing service")
+    i5("Pay the full amount once by VietQR")
+  end
+  subgraph LANE_sys["CrabShare System"]
+    direction TB
+    s1("Verify identity through the eKYC provider; keep only the result")
+    d1{"verified?"}
+    ff1(("✕"))
+    s2("Check limits; hold the rows 30 minutes (≤ funding deadline); issue the VietQR (row hold «planned»)")
+    f1[" "]
+    s5("Prepare the investment contract")
+    ob1["InvestmentContract [FullySigned]"]
+    d2{"paid before the hold expired?"}
+    s3("Expire the reservation; release the rows; void the contract; refund the late transfer")
+    s4("Confirm the payment; the contribution counts toward the capital")
+    t1>"⌛ funding deadline or maximum capital reached"]
+    d3{"minimum viable capital reached AND pre-order ratio ≥ minimum?"}
+    s6("Close the capital; snapshot capital shares")
+    s6b("«planned» Keep only the boxes of funded rows; refund capital that cannot become boxes")
+    j1[" "]
+    ob2["Batch [Funding], capital closed: ready for stocking (WF-03)"]
+    e1((("end")))
+    s7("Cancel the Batch; void contracts; create refunds for investors and every Customer deposit (Customer deposits «planned»)")
+  end
+  subgraph LANE_op["Operator"]
+    direction TB
+    o1("Sign first through the Viettel signing service")
+  end
+  subgraph LANE_psp["Payment Service Provider"]
+    direction TB
+    p1("Credit the Batch account; notify the transaction")
+    p2("Execute the refunds")
+    e2((("end")))
+  end
+  subgraph LANE_adm["Platform Administrator"]
+    direction TB
+    mR{" "}
+    a1("Send the refund instructions")
+  end
+  cA(("A"))
+  cB(("B"))
+  cC(("C"))
+  cD(("D"))
+  s --> i1
+  i1 --> s1
+  s1 --> d1
+  d1 -->|"[verified]"| i2
+  d1 -->|"[rejected: retry or admin exception]"| ff1
+  i2 --> i3
+  i3 --> s2
+  s2 --> cA
+  cA --> f1
+  f1 --> s5
+  f1 --> i5
+  s5 --> o1
+  o1 --> i6
+  i6 --> ob1
+  ob1 --> cB
+  i5 --> p1
+  p1 --> d2
+  d2 -->|"[yes]"| cC
+  d2 -->|"[no: hold expired]"| s3
+  s3 --> cD
+  cC --> s4
+  s4 --> t1
+  t1 --> d3
+  d3 -->|"[yes]"| s6
+  d3 -->|"[no]"| s7
+  s6 -.-> s6b
+  s6b -.-> j1
+  cB --> j1
+  j1 --> ob2
+  ob2 --> e1
+  s7 --> mR
+  cD --> mR
+  mR --> a1
+  a1 --> p2
+  p2 --> e2
+  classDef planned stroke-dasharray:5 5,color:#64748b,stroke:#64748b,fill:#f8fafc
+  classDef bar fill:#1e293b,stroke:#1e293b,color:#1e293b
+  classDef startNode fill:#111111,stroke:#111111,color:#111111
+  classDef object fill:#fff7ed,stroke:#c2410c
+  classDef conn fill:#ffffff,stroke:#1e293b,stroke-width:2px
+  class s6b planned
+  class f1,j1 bar
+  class s startNode
+  class ob1,ob2 object
+  class cA,cB,cC,cD conn
+
+%% Each box row goes to one investor; the amount is the total capital of the chosen rows (boxes × Standard Cost per box), so the minimum contribution is
+%% one row. Connector A continues on part 2. The fork runs payment and contract in parallel, as in code: the wizard goes disclosure → amount → contract →
+%% VietQR → done, the contract can be drafted while the reservation holds, and signing does not block payment; the join is on part 3. Connectors B
+%% (contract fully signed), C (payment received in time) and D (late transfer to refund) continue on part 3. An unpaid reservation simply expires after
+%% 30 minutes (expiry job): rows released, contract voided. The Batch opens when the minimum viable capital is reached AND the pre-order ratio is at
+%% least the minimum set by the Administrator; otherwise it is cancelled and investors and every depositing Customer are refunded, cancelled pre-orders
+%% included. Between the minimum and the target only the boxes of funded rows are stocked, and settlement deducts the locked Standard Cost of those boxes
+%% only. The join waits for both branches of part 2: stocking needs the capital closed and every contract FullySigned (Figure 4.8). Both refund paths end
+%% the activity, so a contract still waiting at the join is voided. Traceability: UC02, UC09, UC11, UC10, UC14, UC12, UC40, funding close job (TP1
+%% Thiện). Exception branches: eKYC rejected; transfer after the 30-minute hold (refunded); minimum viable capital not reached or pre-orders below the
+%% minimum ratio → Batch cancelled, refunds. «planned» in v1.4: box-row choice and row hold (one investor per row), keeping only the boxes of funded
+%% rows, price per kg and floor price on the offering, the minimum pre-order ratio in the funding-close condition (the code closes on minimum viable
+%% capital only) and refunds of Customer deposits. One payment per contribution, no instalments; UC15 Upload Offline-Signed Contract (Administrator)
+%% replaces the two e-signatures for paper signing (not drawn). Removed in v1.4 (still in code): UC13 Register Offtake Commitment. States: contribution
+%% Reserved → Confirmed / Expired / Refunded (Figure 4.9); row allocation Held → Allocated / Released «planned»; contract Draft → OperatorSigned →
+%% FullySigned / Void (4.10); payment request Pending → Paid / Expired (4.11); refund instruction Created → Succeeded / Failed (4.12); Batch Funding →
+%% capital closed / Cancelled (4.8). Design decisions of 05/11/2026 applied here were confirmed by the lead.
