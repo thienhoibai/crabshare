@@ -48,7 +48,8 @@ function CaptureRequests() {
   const expired = useGet<PagedResultOfCaptureRequestResponse>('/api/operators/me/capture-requests', { status: 'Expired', pageSize: 20 })
   const waiting = open.data?.items ?? []
   const late = expired.data?.items ?? []
-  if (waiting.length === 0 && late.length === 0) return null
+  // Đang mở hộp thoại chụp thì giữ khối này: gửi xong yêu cầu cuối cùng, danh sách trống nhưng người nuôi vẫn phải thấy kết quả gửi ảnh.
+  if (waiting.length === 0 && late.length === 0 && !capturing) return null
   return (
     <OpPanel title="Hộp cần chụp" subtitle="Mỗi ngày hệ thống chọn ngẫu nhiên vài hộp. Chụp đúng hộp trước hạn.">
       {waiting.length > 0 && (

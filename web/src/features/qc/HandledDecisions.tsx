@@ -16,7 +16,8 @@ function FinalBadges({ d }: { d: GradeDecisionResponse }) {
     <>
       <StatusBadge kind="sizeCode" value={d.finalSize} />
       <StatusBadge kind="gradeCode" value={d.finalGrade} />
-      {d.isSubstandard && <OpBadge tone="warn">Dưới chuẩn</OpBadge>}
+      {/* Hạng BELOW đã mang nhãn "Dưới chuẩn"; chỉ thêm nhãn khi dưới chuẩn vì ngoài cỡ. */}
+      {d.isSubstandard && d.finalGrade !== 'BELOW' && <OpBadge tone="warn">Dưới chuẩn</OpBadge>}
     </>
   )
 }

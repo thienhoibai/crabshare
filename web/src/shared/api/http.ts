@@ -14,7 +14,14 @@ http.interceptors.request.use((config) => {
 })
 
 http.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // API chỉ trả JSON hoặc tệp. Nhận về một trang HTML nghĩa là địa chỉ API trỏ nhầm sang máy chủ web:
+    // coi là lỗi để trang hiện báo lỗi và nút thử lại, thay vì đọc trang HTML như dữ liệu rồi vỡ.
+    const type = String(res.headers['content-type'] ?? '')
+    if (type.includes('text/html') && res.config.responseType !== 'blob')
+      return Promise.reject(new AxiosError('Phản hồi không phải dữ liệu của API', AxiosError.ERR_BAD_RESPONSE, res.config, res.request, res))
+    return res
+  },
   (error: AxiosError) => {
     const token = useAuthStore.getState().token
     if (error.response?.status === 401 && token && error.config?.headers.Authorization === `Bearer ${token}`)

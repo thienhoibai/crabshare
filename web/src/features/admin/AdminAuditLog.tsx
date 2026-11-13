@@ -2,6 +2,7 @@
    GET /api/admin/audit-log (EntityType, From, To, ThroughAuditId, Page, PageSize) trả kèm kết quả kiểm tra chuỗi băm.
    GET /api/admin/audit-log/export xuất CSV cùng bộ lọc (tối đa 5.000 dòng mỗi lần). */
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Download, RefreshCw } from 'lucide-react'
 import type { AuditLogPage, AuditLogRow } from '../../shared/api/api.gen'
 import {
@@ -31,6 +32,7 @@ const pretty = (json: string | null) => {
 
 export default function AdminAuditLog() {
   const filters = useUrlFilters()
+  const queryClient = useQueryClient()
   const entityType = filters.get('entityType')
   const from = filters.get('from')
   const to = filters.get('to')
@@ -56,7 +58,7 @@ export default function AdminAuditLog() {
         description="Chỉ thêm, không sửa, không xoá."
         action={
           <>
-            <OpBtn variant="ghost" onClick={() => { filters.set({ through: null }); void log.refetch() }}><RefreshCw size={16} /> Làm mới</OpBtn>
+            <OpBtn variant="ghost" onClick={() => { filters.set({ through: null }); void queryClient.invalidateQueries({ queryKey: ['/api/admin/audit-log'] }) }}><RefreshCw size={16} /> Làm mới</OpBtn>
             <OpBtn onClick={exportCsv} disabled={!rangeOk}><Download size={17} /> Xuất CSV</OpBtn>
           </>
         }

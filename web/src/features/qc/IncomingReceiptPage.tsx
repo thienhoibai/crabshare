@@ -105,8 +105,11 @@ export default function IncomingReceiptPage() {
         const submit = (event: FormEvent<HTMLFormElement>) => {
           event.preventDefault()
           if (!ready) return
-          if (fails.length > 0) setRejecting(true)
-          else send()
+          if (fails.length > 0) {
+            // Hộp xác nhận mở ra chưa gửi gì: bỏ lỗi của lần ghi trước để không hiện nhầm trong hộp.
+            inspect.reset()
+            setRejecting(true)
+          } else send()
         }
 
         return (

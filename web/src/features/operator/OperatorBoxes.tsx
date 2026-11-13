@@ -1,7 +1,7 @@
 /* /operator/boxes — Hộp nuôi của trại (UC44): GET /api/boxes?status=&search=&batchCode=, POST /api/boxes, POST /api/boxes/range,
    PATCH /api/boxes/{slotCode}. Mỗi hộp nuôi một con; vị trí dàn, tầng, cột là tuỳ chọn (camera chạy dàn cần ba số này).
    Tổng số hộp không vượt sức chứa Admin đã duyệt. Bấm một hộp để xem và đổi trạng thái bảo trì. */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ListPlus, Plus } from 'lucide-react'
 import type { BoxRangeRequest, CreateBoxRequest, PagedResultOfBatchResponse, UpdateBoxRequest } from '../../shared/api/api.gen'
 import {
@@ -116,6 +116,11 @@ export default function OperatorBoxes() {
   const [dialog, setDialog] = useState<'add' | 'range' | null>(null)
   const [selected, setSelected] = useState<FarmBox | null>(null)
   const boxes = useGet<FarmBoxPage>('/api/boxes', { status, batchCode, search: search.trim(), page, pageSize: PAGE_SIZE })
+  // Trang đang xem hết hộp (hộp cuối vừa đổi trạng thái nên rời bộ lọc): lùi về trang cuối còn hộp thay vì báo danh sách trống.
+  const shown = boxes.data
+  useEffect(() => {
+    if (shown && page > 1 && shown.items.length === 0) setPage(Math.max(1, Math.ceil(shown.total / PAGE_SIZE)))
+  }, [shown, page])
   const total = useGet<FarmBoxPage>('/api/boxes', { pageSize: 1 })
   const available = useGet<FarmBoxPage>('/api/boxes', { status: 'Available', pageSize: 1 })
   const occupied = useGet<FarmBoxPage>('/api/boxes', { status: 'Occupied', pageSize: 1 })

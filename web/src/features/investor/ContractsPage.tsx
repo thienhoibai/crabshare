@@ -65,8 +65,9 @@ export default function ContractsPage() {
           : contract.isError ? <OpError error={contract.error} onRetry={() => void contract.refetch()} />
             : c && (
               <OpPanel title={`Hợp đồng ${c.contractNo}`} accent={c.canSign}>
-                <ContractViewer contract={c} onSign={() => sign.mutate(c.contractId)} signing={sign.isPending}
-                  signError={sign.isError ? errorMessage(sign.error) : null} />
+                {/* Ghim hợp đồng đang ký lên ?id=: ký xong nó không còn là "hợp đồng chờ tôi ký" nhưng vẫn phải hiện kết quả. */}
+                <ContractViewer contract={c} onSign={() => { setParams({ id: String(c.contractId) }, { replace: true }); sign.mutate(c.contractId) }}
+                  signing={sign.isPending} signError={sign.isError ? errorMessage(sign.error) : null} />
               </OpPanel>
             )
       )}

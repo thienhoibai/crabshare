@@ -41,7 +41,7 @@ function WaitingCard({ decision: d, role, ruleSet, checking, onRemeasured }: {
           <OpNote tone="info">Con này không phân cho bạn.</OpNote>
         ) : (
           <>
-            {role === 'second' && d.reason && <OpNote>Lý do giữ lại: {d.reason}</OpNote>}
+            {/* Lý do giữ lại đã hiện trên thẻ (DecisionCard) cho mọi con bị giữ, không lặp lại ở đây. */}
             <div className="qc-acts">
               {needConfirm ? (
                 <OpBtn onClick={() => setDialog('confirm')}><ShieldCheck size={18} /> Xác nhận giữ</OpBtn>
