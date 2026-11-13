@@ -18,6 +18,7 @@ npm run dev                    # http://localhost:5173
 | `npm run dev` | chạy dev, tự tải lại khi sửa |
 | `npm run build` | kiểm tra TypeScript + build ra `dist/` (CI chạy lệnh này) |
 | `npm run lint` | chỉ kiểm tra TypeScript |
+| `npx playwright test` | chạy bộ kiểm thử giao diện trong `tests/` (CI chạy lệnh này qua `npm run test:kyc`); không cần backend |
 | `node scripts/gen-api-types.mjs <url hoặc file openapi>` | sinh lại `src/shared/api/api.gen.ts` và `endpoints.gen.md` sau khi backend đổi API |
 
 Khi chạy dev, trang Đăng nhập có nút đăng nhập nhanh bằng tài khoản mẫu (`features/auth/demoAccounts.ts`).
@@ -86,5 +87,27 @@ Thêm trang mới: tạo component trong feature, thêm một dòng vào tệp r
 ## Kiểm thử
 
 - `npm run lint` và `npm run build` phải sạch.
-- Thư mục `tests/` còn 27 tệp Playwright của giao diện cũ (cửa hàng, giỏ hàng, niêm yết, khung quản trị cũ). Chúng chưa được viết lại
-  cho giao diện BR v1.5 nên hiện không chạy được; cần viết lại hoặc bỏ.
+- `npx playwright test` phải qua hết. Bộ spec trong `tests/` kiểm thử giao diện BR v1.5 mà không cần backend: mọi lời gọi `/api/**`
+  được giả lập, máy chủ dev tự bật ở cổng 5175 (đổi bằng biến `PW_PORT`). Trên máy của nhóm bộ spec chạy bằng Chrome đã cài; trên CI
+  chạy bằng Chromium của Playwright.
+
+| Tệp | Kiểm thử gì |
+|---|---|
+| `tests/support/app.ts` | `test` có fixture `api` (giả lập và ghi lại lời gọi API), `signIn(page, vai trò)`, các hàm tiện ích |
+| `tests/support/<cổng>.ts` | dữ liệu giả lập có kiểu từ `api.gen.ts`, hàm `mock<Cổng>(api)` và danh sách trang `<CỔNG>_PAGES` |
+| `auth`, `session-security` | đăng nhập, chuyển hướng theo vai trò, chặn trang theo vai trò, phiên hết hạn |
+| `public-batches`, `order-trace` | `/lo`, `/lo/:code`, `/chuan-phan-hang`, `/truy-xuat/:traceCode` |
+| `customer-*` | đặt trước tới bước QR đặt cọc, chi tiết đơn và nghiệm thu, giao hàng, địa điểm nhận hàng |
+| `investor-*`, `kyc`, `notifications`, `timeline`, `payment-profiles` | tổng quan, góp vốn, danh mục, hợp đồng, quyết toán, xác minh, thông báo, nhật trình |
+| `operator-*`, `batches`, `boxes`, `production-logs`, `evidence-explanation`, `dashboard` | trang làm việc một Lô, nhật ký chăm sóc, lượt đo, chuyến giao, hộp nuôi, bằng chứng |
+| `qc-*` | việc được giao, kiểm đầu vào, duyệt phân hạng, thăm trại, chuẩn phân hạng |
+| `admin-*`, `batch-review`, `evidence-review`, `alerts`, `audit-log` | duyệt Lô, giải ngân theo mốc, gọi vốn, quyết toán, người dùng, cảnh báo, nhật ký kiểm toán |
+| `no-return-promises` | mở lại mọi trang trong các danh sách `*_PAGES` và soát chữ: không có "ROI", "lợi suất", "lợi nhuận kỳ vọng", không có số quy tắc |
+
+Viết spec mới: nhập `test`, `expect`, `signIn` từ `./support/app`, gọi `mock<Cổng>(api)` rồi ghi đè endpoint cần đổi bằng
+`api.get/post/put/delete(...)` (đăng ký sau thắng đăng ký trước). Lời gọi API chưa giả lập làm test hỏng, nên dữ liệu giả lập luôn khớp
+với những gì trang thật sự gọi. Kiểm tra bằng nhãn tiếng Việt trên màn hình và bằng `api.sent(method, path)` (method, đường dẫn, body).
+Thêm trang mới vào `<CỔNG>_PAGES` để trang đó cũng được soát chữ. Kiểm tra kiểu của spec: `npx tsc -p tests/tsconfig.json --noEmit`.
+
+Ngày trong dữ liệu giả lập tính bằng `dateFromNow` / `daysFromNow` (giờ Việt Nam), không viết cứng. Trình duyệt của bộ spec luôn ở giờ
+Việt Nam; `PW_SHIFT_HOURS=12 npx playwright test` chạy cả bộ với đồng hồ lệch 12 giờ để kiểm tra spec không phụ thuộc giờ trong ngày.
