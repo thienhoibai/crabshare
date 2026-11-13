@@ -66,6 +66,19 @@ Dùng khi CSDL trên Azure đã có tài khoản nhưng chưa có Lô nào, và 
 
 Seeder dùng lại các tài khoản mẫu `...@crabshare.local` và hộ nuôi mẫu đang có (giữ nguyên mật khẩu và hồ sơ), tạo thêm phần còn thiếu, đổi mã hộp kiểu cũ 3 chữ số sang 4 chữ số và thêm hộp cho đủ 0001–1740. Tài khoản của người dùng khác không bị đụng tới. Toàn bộ nằm trong một giao dịch: lỗi ở đâu thì CSDL giữ nguyên như trước. Khi đã có Lô, seeder tự bỏ qua nên chạy lại không sinh trùng. Các tài khoản do seeder tạo mới dùng mật khẩu demo của nhóm.
 
+### Công cụ demo trên môi trường kiểm thử (giả lập chuyển khoản, kết thúc hạn góp ý)
+
+Mã QR của hệ thống là mã thử nghiệm, không có ngân hàng thật báo có. Vì vậy ngoài Development, người kiểm thử không xác nhận được khoản cọc hay khoản góp vốn nếu không có công cụ demo. Hai công tắc phải bật cùng nhau:
+
+| Nơi | Cấu hình | Tác dụng |
+|---|---|---|
+| API (App Service) | `Demo__Tools=true` | Mở `POST /api/dev/payments/simulate` và `POST /api/dev/settlements/{id}/end-feedback-window`. Tắt thì hai địa chỉ này trả 404 |
+| Web (lúc build) | `VITE_DEMO_TOOLS=true` | Hiện nút "Giả lập đã chuyển khoản" ở bước thanh toán và công cụ kết thúc hạn góp ý ở trang quyết toán |
+
+Chỉ bật trên môi trường demo hoặc kiểm thử không có tiền thật: khi bật, người đã đăng nhập tự đánh dấu "đã thanh toán" được cho mã chuyển khoản của mình. Muốn tắt thì gỡ `Demo__Tools` trên App Service và build lại web không có `VITE_DEMO_TOOLS`. Nút đăng nhập nhanh bằng tài khoản mẫu vẫn chỉ có khi chạy dev.
+
+Khi deploy web bằng tay: `vercel deploy --build-env VITE_DEMO_TOOLS=true`. Workflow `deploy-web.yml` lấy biến môi trường từ project Vercel, nên muốn các lần deploy tự động cũng có công cụ demo thì thêm `VITE_DEMO_TOOLS=true` vào Environment Variables của project.
+
 ## Optional container on an existing server
 
 Azure remains the actual demo environment. `backend/Dockerfile` supplies a non-root API image and an explicit `migrator` target. Replicas do not each apply schema migrations. Build from the repository root:

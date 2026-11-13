@@ -9,6 +9,7 @@ import {
   Field, NumberInput, OpAside, OpBtn, OpConfirm, OpDl, OpFlow, OpMore, OpNote,
   formatDateTime, formatVnd, useSend, type FlowStep, type KvItem,
 } from '../../../shared/ui/console'
+import { demoTools } from '../../../shared/demoTools'
 import { isPast } from '../quality/shared'
 import { isLocked, operatorPayout, requiredPayout } from './financeModel'
 
@@ -81,7 +82,7 @@ export default function SettlementActions({ s, onShowFeedback }: { s: Settlement
     ...(mode !== 'T' ? [{ title: 'Gửi lệnh chi', state: paid ? 'done' : next === 'send' ? 'now' : 'todo' } satisfies FlowStep] : []),
     { title: 'Lô đóng', state: s.status === 'Closed' ? 'done' : 'todo' },
   ]
-  const devTool = import.meta.env.DEV && published && !windowOver
+  const devTool = demoTools && published && !windowOver
 
   // Các hộp xác nhận nằm ngoài cột dính để phủ kín cả màn hình.
   return (

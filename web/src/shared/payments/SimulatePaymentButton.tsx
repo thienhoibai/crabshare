@@ -1,17 +1,18 @@
-/* Nút "Giả lập đã chuyển khoản" (TH-06): chỉ có khi chạy dev (import.meta.env.DEV), gọi POST /api/dev/payments/simulate
-   để backend đi đúng luồng webhook như ngân hàng báo có. Bản build production không render gì. */
+/* Nút "Giả lập đã chuyển khoản" (TH-06): công cụ demo (shared/demoTools.ts), gọi POST /api/dev/payments/simulate
+   để backend đi đúng luồng webhook như ngân hàng báo có. Bản build không bật công cụ demo thì không render gì. */
 import { FlaskConical } from 'lucide-react'
 import { errorMessage } from '../api/http'
+import { demoTools } from '../demoTools'
 import { useSimulatePayment, type PaymentRequest } from './paymentsApi'
 import './vietqr.css'
 
 export function SimulatePaymentButton({ payment }: { payment: Pick<PaymentRequest, 'paymentRequestId' | 'referenceCode'> }) {
   const simulate = useSimulatePayment()
-  if (!import.meta.env.DEV) return null
+  if (!demoTools) return null
   return (
     <>
       <button type="button" className="rd-btn rd-btn--ghost rd-btn--sm vq-sim" disabled={simulate.isPending}
-        title="Chỉ có khi chạy dev: giả lập ngân hàng báo có đúng số tiền cho mã này"
+        title="Công cụ demo: giả lập ngân hàng báo có đúng số tiền cho mã này"
         onClick={() => simulate.mutate({ paymentRequestId: payment.paymentRequestId, referenceCode: payment.referenceCode })}>
         <FlaskConical size={14} /> {simulate.isPending ? 'Đang giả lập…' : 'Giả lập đã chuyển khoản'}
       </button>
