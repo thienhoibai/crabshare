@@ -62,7 +62,7 @@ export function VietQrBox({ payment, status = 'Pending', onExpire }: { payment: 
       <div className="vq vq--state vq--off" role="status">
         <span className="vq-state__icon"><Clock size={24} /></span>
         <b>Mã QR đã hết hạn lúc {formatDateTime(payment.expiresAt)}</b>
-        <p>Đừng chuyển khoản theo mã này nữa. Nếu lỡ chuyển sau khi hết hạn, khoản tiền sẽ được hoàn về tài khoản đã chuyển.</p>
+        <p>Đừng chuyển theo mã này nữa. Lỡ chuyển thì tiền sẽ được hoàn.</p>
       </div>
     )
   }
@@ -82,8 +82,7 @@ export function VietQrBox({ payment, status = 'Pending', onExpire }: { payment: 
         <p className="vq-info__label">Nội dung chuyển khoản</p>
         <p className="vq-info__ref">{payment.referenceCode}</p>
         <p className="vq-timer" role="timer" aria-live="off"><Clock size={14} /> Mã hết hạn sau <b>{cd.text}</b></p>
-        <p className="rd-note"><ScanLine size={14} /> Mở app ngân hàng và quét mã: số tiền, nội dung đã điền sẵn, bạn chỉ cần xác nhận.</p>
-        {sandbox && <p className="rd-note"><TriangleAlert size={14} /> Môi trường thử nghiệm: mã này không dùng để chuyển tiền thật.</p>}
+        <p className="rd-note"><ScanLine size={14} /> {sandbox ? 'Mã thử nghiệm, không chuyển tiền thật.' : 'Quét bằng app ngân hàng, số tiền và nội dung đã điền sẵn.'}</p>
       </div>
       <ManualTransfer payment={payment} />
     </div>
@@ -100,7 +99,7 @@ function ManualTransfer({ payment }: { payment: VietQrInfo }) {
       </button>
       <div id={panel} className="vq-manual__body" hidden={!open}>
         <p className="vq-warn"><TriangleAlert size={16} />
-          <span>Chuyển tay phải ghi <b>đúng</b> nội dung <b>{payment.referenceCode}</b> và đúng số tiền. Sai nội dung thì khoản tiền không tự khớp được, phải chờ đối soát thủ công.</span>
+          <span>Ghi <b>đúng</b> nội dung <b>{payment.referenceCode}</b> và đúng số tiền, nếu không tiền sẽ không tự khớp.</span>
         </p>
         <dl className="vq-manual__list">
           {payment.providerName && <><dt>Đơn vị giữ tài khoản</dt><dd>{payment.providerName}</dd></>}

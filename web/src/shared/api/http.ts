@@ -32,12 +32,15 @@ export interface ApiProblem {
   errors?: Record<string, string[]>
 }
 
+/** Bỏ phần dẫn số quy tắc như "(BR-164)" mà backend ghi trong câu báo lỗi: người dùng không cần thấy. */
+const plain = (text: string) => text.replace(/\s*\((?:BR|UC|TL|TH|NH)-[^)]*\)/g, '').trim()
+
 /** Lấy câu thông báo lỗi dễ đọc từ bất kỳ lỗi nào (dùng trong toast, dòng báo lỗi dưới form). */
 export function errorMessage(error: unknown): string {
   if (axios.isAxiosError<ApiProblem>(error)) {
     const p = error.response?.data
-    if (p?.errors) return Object.values(p.errors).flat().join(' ')
-    if (p?.detail) return p.detail
+    if (p?.errors) return plain(Object.values(p.errors).flat().join(' '))
+    if (p?.detail) return plain(p.detail)
     if (!error.response) return 'Không kết nối được máy chủ. Kiểm tra API đã chạy chưa.'
   }
   return 'Có lỗi xảy ra, thử lại sau.'

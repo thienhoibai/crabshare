@@ -1,111 +1,123 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
-import { Camera, ShieldCheck } from 'lucide-react'
-import { errorMessage } from '../../shared/api/http'
+/* UC02 — Xác minh danh tính eKYC của nhà đầu tư: GET /api/me/kyc, POST /api/kyc/ekyc (multipart IdCardFront, IdCardBack, Selfie, Consent).
+   Ảnh chỉ chuyển cho nhà cung cấp eKYC, hệ thống chỉ lưu kết quả. Hai thành phần ở đây không có khung bao: đặt trong OpPanel của trang gọi. */
+import { useState, type FormEvent } from 'react'
+import { ShieldCheck } from 'lucide-react'
+import type { KycStatusResponse } from '../../shared/api/api.gen'
 import { useAuthStore } from '../../shared/auth/authStore'
-import { useKycStatus, useVerifyKyc } from './kycApi'
-import './kyc.css'
+import {
+  Checkbox, Field, OpBtn, OpKv, OpMore, OpNote, OpPhoto, QueryView, StatusBadge, formatDateTime, label, useGet, useSend,
+} from '../../shared/ui/console'
 
-const labels = ['CCCD mặt trước', 'CCCD mặt sau', 'Ảnh khuôn mặt']
-const statusLabel = { Unverified: 'Chưa xác minh danh tính', Verified: 'Đã xác minh danh tính', Rejected: 'Xác minh không đạt — hãy thử lại' }
+type EkycForm = { IdCardFront: File; IdCardBack: File; Selfie: File; Consent: boolean }
 
-function ImagePreview({ file }: { file: File }) {
-  const [url, setUrl] = useState('')
-  useEffect(() => {
-    const preview = URL.createObjectURL(file)
-    setUrl(preview)
-    return () => URL.revokeObjectURL(preview)
-  }, [file])
-  return <img className="kyc-preview" src={url || undefined} alt="Ảnh vừa chọn để xác minh" />
+const PHOTOS = [
+  { key: 'front', label: 'CCCD mặt trước', hint: 'Chụp rõ bốn góc, không loá' },
+  { key: 'back', label: 'CCCD mặt sau', hint: 'Chụp rõ bốn góc, không loá' },
+  { key: 'selfie', label: 'Ảnh khuôn mặt', hint: 'Nhìn thẳng, không che mặt' },
+] as const
+type PhotoKey = (typeof PHOTOS)[number]['key']
+
+const ALLOWED = ['image/jpeg', 'image/png', 'image/webp']
+const MAX_BYTES = 5 * 1024 * 1024
+
+const useKyc = () => {
+  const isInvestor = useAuthStore((s) => !!s.user?.roles.includes('Investor'))
+  return useGet<KycStatusResponse>(isInvestor ? '/api/me/kyc' : null)
 }
 
+/** Dòng nhắc xác minh danh tính. Chỉ hiện khi nhà đầu tư chưa xác minh; đã xác minh thì không hiện gì. */
 export function KycStatusCard() {
-  const status = useKycStatus()
+  const kyc = useKyc()
+  if (!kyc.data || kyc.data.verificationStatus === 'Verified') return null
   return (
-    <section className="iv-card i2-wide kyc-banner" aria-live="polite">
-      <ShieldCheck size={24} aria-hidden="true" />
-      <div>
-        <strong>{status.isPending ? 'Đang kiểm tra danh tính…' : status.isError ? 'Chưa đọc được trạng thái xác minh' : statusLabel[status.data.verificationStatus]}</strong>
-        <p>{status.isError ? errorMessage(status.error) : 'CrabShare chỉ lưu kết quả xác minh danh tính.'}</p>
-      </div>
-      <Link className="rd-btn rd-btn--ghost" to="/nha-dau-tu/ho-so">{status.data?.verificationStatus === 'Verified' ? 'Xem hồ sơ' : 'Xác minh ngay'}</Link>
-    </section>
+    <OpNote tone="danger">
+      <b>{kyc.data.verificationStatus === 'Rejected' ? 'Xác minh danh tính chưa đạt' : 'Chưa xác minh danh tính'}</b>.{' '}
+      <a className="op-link" href="/nha-dau-tu/ho-so?tab=xac-minh">Xác minh ngay</a>
+    </OpNote>
   )
 }
 
-function InvestorKycForm() {
-  const status = useKycStatus()
-  const verify = useVerifyKyc()
-  const [images, setImages] = useState<(File | null)[]>([null, null, null])
+function InvestorKyc() {
+  const kyc = useKyc()
+  const [files, setFiles] = useState<Record<PhotoKey, File | null>>({ front: null, back: null, selfie: null })
   const [consent, setConsent] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [inputVersion, setInputVersion] = useState(0)
+  const [problem, setProblem] = useState('')
+  const verify = useSend<KycStatusResponse, EkycForm>('post', '/api/kyc/ekyc', {
+    form: true,
+    success: (res) => (res.verificationStatus === 'Verified' ? 'Đã xác minh danh tính.' : 'Xác minh chưa đạt. Gửi lại ảnh rõ hơn.'),
+    onSuccess: () => setFiles({ front: null, back: null, selfie: null }),
+  })
 
-  function chooseImage(index: number, file: File | undefined) {
-    if (!file) return
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size === 0 || file.size > 5 * 1024 * 1024) {
-      setError('Mỗi ảnh cần có định dạng JPEG, PNG hoặc WebP và dung lượng không quá 5 MB.')
+  const pick = (key: PhotoKey, file: File | null) => {
+    if (file && (!ALLOWED.includes(file.type) || file.size === 0 || file.size > MAX_BYTES)) {
+      setProblem('Mỗi ảnh phải là JPEG, PNG hoặc WebP và không quá 5 MB.')
       return
     }
-    setError(null)
-    setImages((current) => current.map((image, i) => i === index ? file : image))
+    setProblem('')
+    setFiles((current) => ({ ...current, [key]: file }))
   }
 
-  async function submit(event: FormEvent) {
+  const ready = !!files.front && !!files.back && !!files.selfie && consent
+  const submit = (event: FormEvent) => {
     event.preventDefault()
-    if (!consent || images.some((image) => !image) || verify.isPending) return
-    setError(null)
-    try {
-      await verify.mutateAsync({ images: images as [File, File, File], consent })
-      setImages([null, null, null])
-      setInputVersion((version) => version + 1)
-    } catch (failure) {
-      setError(errorMessage(failure))
-      await status.refetch()
-    } finally {
-      verify.reset()
-    }
+    if (!files.front || !files.back || !files.selfie || !consent || verify.isPending) return
+    verify.mutate({ IdCardFront: files.front, IdCardBack: files.back, Selfie: files.selfie, Consent: consent })
   }
 
-  if (status.isPending) return <p role="status">Đang đọc trạng thái xác minh…</p>
-  if (status.isError) return <div role="alert" className="kyc-error"><p>{errorMessage(status.error)}</p><button className="rd-btn rd-btn--ghost" type="button" onClick={() => void status.refetch()}>Thử lại</button></div>
-  const data = status.data
   return (
-    <div className="kyc-verification">
-      <div className={`kyc-result ${data.verificationStatus === 'Verified' ? 'is-verified' : ''}`} role="status">
-        <ShieldCheck size={22} aria-hidden="true" />
-        <div><strong>{statusLabel[data.verificationStatus]}</strong>
-          {data.lastCheck?.failureReason && <p>{data.lastCheck.failureReason}</p>}
-          {data.verifiedAt && <p>Xác minh lúc {new Date(data.verifiedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</p>}
-        </div>
-      </div>
-      <p className="rd-note">Ảnh được gửi cho nhà cung cấp eKYC. CrabShare chỉ lưu kết quả xác minh, không lưu ảnh CCCD hoặc selfie.</p>
-      {data.verificationStatus !== 'Verified' && (
-        <form onSubmit={submit} className="kyc-form">
-          <div className="kyc-images">
-            {labels.map((label, index) => <label className="kyc-image" key={`${index}-${inputVersion}`}>
-              <strong>{index + 1}. {label}</strong>
-              {images[index] ? <ImagePreview file={images[index]!} /> : <div className="kyc-placeholder"><Camera size={28} aria-hidden="true" /><span>Chụp hoặc chọn ảnh rõ nét</span></div>}
-              <input type="file" aria-label={label} accept="image/jpeg,image/png,image/webp" capture={index === 2 ? 'user' : 'environment'}
-                disabled={verify.isPending} onChange={(event) => chooseImage(index, event.target.files?.[0])} />
-            </label>)}
+    <QueryView query={kyc}>
+      {(data) => {
+        const verified = data.verificationStatus === 'Verified'
+        const last = data.lastCheck
+        return (
+          <div className="op-stack">
+            <div className="op-inline">
+              <ShieldCheck size={20} />
+              <StatusBadge kind="verification" value={data.verificationStatus} />
+              {data.verifiedAt && <span className="rd-muted">Xác minh lúc {formatDateTime(data.verifiedAt)}</span>}
+            </div>
+
+            {!verified && last?.failureReason && <OpNote tone="danger">{last.failureReason}</OpNote>}
+
+            {!verified && (
+              <form className="op-form" onSubmit={submit}>
+                <div className="op-form__row">
+                  {PHOTOS.map((p) => (
+                    <Field key={p.key} label={p.label} required>
+                      <OpPhoto value={files[p.key]} onChange={(file) => pick(p.key, file)} label={p.label} hint={p.hint} capture={p.key === 'selfie' ? 'user' : 'environment'} />
+                    </Field>
+                  ))}
+                </div>
+                <Checkbox checked={consent} onChange={setConsent} disabled={verify.isPending}>
+                  Tôi đồng ý gửi ảnh cho nhà cung cấp eKYC để xác minh. Hệ thống chỉ lưu kết quả, không lưu ảnh.
+                </Checkbox>
+                {problem && <OpNote tone="danger">{problem}</OpNote>}
+                <div className="op-formfoot">
+                  <OpBtn type="submit" disabled={!ready || verify.isPending}>{verify.isPending ? 'Đang xác minh…' : 'Gửi xác minh'}</OpBtn>
+                </div>
+              </form>
+            )}
+
+            {last && (
+              <OpMore label="Lần kiểm tra gần nhất">
+                <OpKv items={[
+                  { label: 'Thời điểm', value: formatDateTime(last.checkedAt) },
+                  { label: 'Kết quả', value: label('kyc', last.result) },
+                  { label: 'Mã tham chiếu', value: last.providerReference ? <span className="op-mono">{last.providerReference}</span> : null },
+                ]} />
+              </OpMore>
+            )}
           </div>
-          <p className="rd-note">Chụp rõ bốn góc CCCD; selfie nhìn thẳng, không che khuôn mặt. Mỗi ảnh tối đa 5 MB.</p>
-          <label className="kyc-consent"><input type="checkbox" checked={consent} disabled={verify.isPending} onChange={(event) => setConsent(event.target.checked)} />
-            <span>Tôi đồng ý cho nhà cung cấp eKYC xử lý ảnh CCCD và khuôn mặt để xác minh danh tính.</span>
-          </label>
-          <button className="rd-btn rd-btn--primary" type="submit" disabled={!consent || images.some((image) => !image) || verify.isPending}>
-            {verify.isPending ? 'Đang xác minh…' : 'Gửi xác minh'}
-          </button>
-        </form>
-      )}
-      {error && <p role="alert" className="kyc-error">{error}</p>}
-    </div>
+        )
+      }}
+    </QueryView>
   )
 }
 
+/** Khối xác minh danh tính. Tài khoản không có vai trò nhà đầu tư chỉ thấy một dòng giải thích. */
 export default function KycVerification() {
   const user = useAuthStore((s) => s.user)
-  return user?.roles.includes('Investor') ? <InvestorKycForm key={user.userId} />
-    : <p className="rd-note">Xác minh danh tính eKYC dành cho tài khoản nhà đầu tư. Hồ sơ pháp lý của hộ nuôi được duyệt riêng.</p>
+  return user?.roles.includes('Investor')
+    ? <InvestorKyc key={user.userId} />
+    : <OpNote tone="info">Xác minh eKYC chỉ dành cho tài khoản nhà đầu tư.</OpNote>
 }

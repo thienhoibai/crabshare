@@ -1,50 +1,80 @@
-import { useRef, useState, type FormEvent } from 'react'
-import { Landmark, ShieldCheck } from 'lucide-react'
-import { errorMessage } from '../../shared/api/http'
+/* UC03 — Tài khoản nhận tiền của nhà đầu tư hoặc của hộ nuôi: GET / PUT /api/me/payout-account?ownerType=.
+   Tên chủ tài khoản được đối chiếu với tên trên hồ sơ. Không có khung bao: đặt trong OpPanel của trang gọi. */
+import { useState, type FormEvent } from 'react'
+import { Landmark } from 'lucide-react'
+import type { PayoutProfileResponse } from '../../shared/api/api.gen'
 import { useAuthStore } from '../../shared/auth/authStore'
-import { usePayoutProfile, useSavePayout, type PayoutOwner, type PayoutProfile } from './paymentProfilesApi'
-import './paymentProfiles.css'
+import { Field, Input, OpBadge, OpBtn, OpNote, QueryView, type Tone } from '../../shared/ui/console'
+import { usePayoutProfile, useSavePayout, type PayoutOwner } from './paymentProfilesApi'
 
-function PayoutEditor({ profile, owner }: { profile: PayoutProfile; owner: PayoutOwner }) {
-  const save = useSavePayout(owner)
-  const busy = useRef(false)
-  const [error, setError] = useState('')
+const MATCH: Record<string, [string, Tone]> = {
+  Pending: ['Chờ đối chiếu tên', 'warn'],
+  Matched: ['Tên khớp hồ sơ', 'ok'],
+  Mismatched: ['Tên chưa khớp hồ sơ', 'danger'],
+}
+const ACCOUNT: Record<string, [string, Tone]> = {
+  Active: ['Đang nhận tiền', 'ok'],
+  Locked: ['Đang khoá', 'danger'],
+  Closed: ['Đã đóng', 'mute'],
+}
+
+function Editor({ profile, owner }: { profile: PayoutProfileResponse; owner: PayoutOwner }) {
   const account = profile.account
-  const locked = account?.status === 'Locked' && account.nameMatchStatus === 'Matched'
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  const save = useSavePayout(owner)
+  const [bankCode, setBankCode] = useState(account?.bankCode ?? '')
+  const [accountNo, setAccountNo] = useState(account?.accountNo ?? '')
+  const [holder, setHolder] = useState(account?.accountHolderName ?? profile.expectedHolderName)
+  // Tài khoản khớp tên mà bị khoá là do Admin khoá: không tự mở lại bằng cách lưu.
+  const adminLocked = account?.status === 'Locked' && account.nameMatchStatus === 'Matched'
+  const valid = /^[A-Za-z0-9_-]{1,20}$/.test(bankCode.trim()) && /^[0-9]{4,30}$/.test(accountNo.trim()) && holder.trim().length > 0
+
+  const submit = (event: FormEvent) => {
     event.preventDefault()
-    if (busy.current || locked) return
-    const form = new FormData(event.currentTarget)
-    const input = { bankCode: String(form.get('bankCode')).trim().toUpperCase(), accountNo: String(form.get('accountNo')).trim(), accountHolderName: String(form.get('accountHolderName')).trim() }
-    if (Object.values(input).some(v => !v)) { setError('Vui lòng điền đầy đủ thông tin.'); return }
-    busy.current = true
-    setError('')
-    try { await save.mutateAsync(input) } catch (failure) { setError(errorMessage(failure)) }
-    finally { busy.current = false; save.reset() }
+    if (!valid || adminLocked || save.isPending) return
+    save.mutate({ bankCode: bankCode.trim().toUpperCase(), accountNo: accountNo.trim(), accountHolderName: holder.trim() })
   }
-  return <div className="account-stack">
-    <div className={`account-notice ${account?.status === 'Active' ? 'is-good' : ''}`} role="status">
-      <ShieldCheck size={22} aria-hidden="true" /><div><strong>{!account ? 'Chưa có tài khoản nhận tiền' : account.nameMatchStatus === 'Mismatched' ? 'Tên chủ tài khoản chưa khớp' : account.status === 'Active' ? 'Tài khoản sẵn sàng nhận tiền' : 'Tài khoản nhận tiền đã bị khoá'}</strong>
-        <p>{account?.nameMatchStatus === 'Mismatched' ? 'Tài khoản đang bị khoá. Kiểm tra lại tên chủ tài khoản để xác minh lại.' : locked ? 'Vui lòng liên hệ quản trị để được hỗ trợ.' : 'Mỗi chủ sở hữu dùng một tài khoản nhận tiền đang hoạt động.'}</p></div>
+
+  return (
+    <div className="op-stack">
+      {account && (
+        <div className="op-inline">
+          <OpBadge tone={ACCOUNT[account.status]?.[1] ?? 'mute'}>{ACCOUNT[account.status]?.[0] ?? account.status}</OpBadge>
+          <OpBadge tone={MATCH[account.nameMatchStatus]?.[1] ?? 'mute'}>{MATCH[account.nameMatchStatus]?.[0] ?? account.nameMatchStatus}</OpBadge>
+        </div>
+      )}
+      {/* Chỉ một ghi chú, khi tài khoản đang không nhận được tiền. */}
+      {adminLocked
+        ? <OpNote tone="danger">Tài khoản đang bị Admin khoá. Liên hệ Admin để mở lại.</OpNote>
+        : account?.nameMatchStatus === 'Mismatched' && <OpNote tone="danger">Tên chưa khớp nên tài khoản đang khoá. Sửa tên rồi lưu lại.</OpNote>}
+
+      <form className="op-form" onSubmit={submit}>
+        <div className="op-form__row">
+          <Field label="Mã ngân hàng" required hint="Ví dụ: VCB, BIDV, TCB">
+            <Input value={bankCode} onChange={(e) => setBankCode(e.target.value)} maxLength={20} autoCapitalize="characters" disabled={adminLocked} />
+          </Field>
+          <Field label="Số tài khoản" required>
+            <Input value={accountNo} onChange={(e) => setAccountNo(e.target.value.replace(/\D/g, ''))} maxLength={30} inputMode="numeric" autoComplete="off" disabled={adminLocked} />
+          </Field>
+        </div>
+        <Field label="Tên chủ tài khoản" required hint={`Phải khớp: ${profile.expectedHolderName}`}>
+          <Input value={holder} onChange={(e) => setHolder(e.target.value)} maxLength={150} autoComplete="off" disabled={adminLocked} />
+        </Field>
+        <div className="op-formfoot">
+          <OpBtn type="submit" disabled={!valid || adminLocked || save.isPending}>
+            <Landmark size={17} /> {save.isPending ? 'Đang đối chiếu…' : 'Lưu tài khoản'}
+          </OpBtn>
+        </div>
+      </form>
     </div>
-    <p className="rd-note">Tên cần khớp với {owner === 'Investor' ? 'hồ sơ nhà đầu tư' : 'tên pháp lý của hộ nuôi'}: <strong>{profile.expectedHolderName}</strong>.</p>
-    <form className="rd-form account-form" onSubmit={submit} aria-busy={save.isPending}>
-      <fieldset disabled={save.isPending || locked}>
-        <label>Mã ngân hàng<input name="bankCode" autoCapitalize="characters" placeholder="Ví dụ: VCB" required maxLength={20} pattern="(?:[A-Za-z0-9_]|-)+" defaultValue={account?.bankCode ?? ''} /></label>
-        <label>Số tài khoản<input name="accountNo" inputMode="numeric" autoComplete="off" required maxLength={30} pattern="[0-9]{4,30}" defaultValue={account?.accountNo ?? ''} /></label>
-        <label className="account-wide">Tên chủ tài khoản<input name="accountHolderName" autoComplete="off" required maxLength={150} defaultValue={account?.accountHolderName ?? profile.expectedHolderName} /></label>
-      </fieldset>
-      <p className="rd-note">Nhập tên như trên tài khoản ngân hàng. Khi thay đổi ngân hàng hoặc số tài khoản, tài khoản cũ sẽ ngừng nhận tiền.</p>
-      {error && <p className="account-error" role="alert">{error}</p>}
-      <button className="rd-btn rd-btn--primary" type="submit" disabled={save.isPending || locked}><Landmark size={17} />{save.isPending ? 'Đang đối chiếu…' : account ? 'Lưu và đối chiếu lại' : 'Lưu tài khoản nhận tiền'}</button>
-    </form>
-  </div>
+  )
 }
 
 export default function PayoutAccountForm({ owner }: { owner: PayoutOwner }) {
-  const userId = useAuthStore(s => s.user?.userId)
-  const query = usePayoutProfile(owner)
-  if (query.isPending) return <p role="status">Đang tải tài khoản nhận tiền…</p>
-  if (query.isError) return <div className="account-stack"><p className="account-error" role="alert">{errorMessage(query.error)}</p><button className="rd-btn rd-btn--ghost" type="button" onClick={() => void query.refetch()}>Thử lại</button></div>
-  return <PayoutEditor key={`${userId}-${owner}-${query.data.account?.updatedAt ?? 'new'}`} profile={query.data} owner={owner} />
+  const userId = useAuthStore((s) => s.user?.userId)
+  const profile = usePayoutProfile(owner)
+  return (
+    <QueryView query={profile}>
+      {(data) => <Editor key={`${userId}-${owner}-${data.account?.updatedAt ?? 'new'}`} profile={data} owner={owner} />}
+    </QueryView>
+  )
 }

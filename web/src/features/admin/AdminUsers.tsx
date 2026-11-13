@@ -1,24 +1,23 @@
-import { useSearchParams } from 'react-router'
-import { Building2, Users, ShieldCheck } from 'lucide-react'
-import { useAuthStore } from '../../shared/auth/authStore'
-import AdminLayout from './AdminLayout'
-import AdminUserList from './AdminUserList'
+/* /admin/users — Người dùng và eKYC: hai tab trên cùng một trang.
+   Tab "Người dùng": GET /api/admin/users. Tab "Kiểm tra eKYC": GET /api/admin/kyc-checks và duyệt ngoại lệ (UC06). */
+import { OpHeading, OpTabs } from '../../shared/ui/console'
+import { useUrlFilters } from './adminPartA'
 import AdminKycQueue from './AdminKycQueue'
-import AdminOperators from './AdminOperators'
+import AdminUserList from './AdminUserList'
+
+const TABS = [
+  { key: 'users', label: 'Người dùng' },
+  { key: 'kyc', label: 'Kiểm tra eKYC' },
+] as const
 
 export default function AdminUsers() {
-  const [params, setParams] = useSearchParams()
-  const isAdmin = useAuthStore(s => s.user?.roles.includes('PlatformAdmin') ?? false)
-  const tab = params.get('tab') === 'kyc' ? 'kyc' : isAdmin && params.get('tab') !== 'users' ? 'operators' : 'users'
-  return <AdminLayout activeTab="users">
-    <header className="mb-6"><h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Quản lý người dùng & hộ nuôi</h1><p className="mt-1 text-sm text-slate-500">Quản lý hồ sơ định danh và xét duyệt hoạt động hộ nuôi trên nền tảng.</p></header>
-    <div className="mb-6 flex gap-2 overflow-x-auto border-b border-slate-200" aria-label="Chọn danh sách">
-      {(isAdmin ? [{ id: 'operators', label: 'Hộ nuôi', icon: Building2 }, { id: 'users', label: 'Người dùng', icon: Users }, { id: 'kyc', label: 'Ngoại lệ KYC', icon: ShieldCheck }] : []).map(item => {
-        const Icon = item.icon
-        return <button key={item.id} type="button" aria-pressed={tab === item.id} onClick={() => setParams({ tab: item.id })}
-          className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-bold ${tab === item.id ? 'border-red-600 text-red-700' : 'border-transparent text-slate-500 hover:text-slate-900'}`}><Icon size={17} />{item.label}</button>
-      })}
-    </div>
-    {tab === 'operators' ? <AdminOperators /> : tab === 'kyc' ? <AdminKycQueue /> : <AdminUserList />}
-  </AdminLayout>
+  const filters = useUrlFilters()
+  const tab = filters.get('tab') === 'kyc' ? 'kyc' : 'users'
+  return (
+    <>
+      <OpHeading eyebrow="Đối tác và tài khoản" title="Người dùng và eKYC" />
+      <OpTabs items={TABS} value={tab} onChange={(key) => filters.set({ tab: key === 'users' ? null : key, role: null, status: null, q: null, result: null, checkType: null })} />
+      {tab === 'kyc' ? <AdminKycQueue /> : <AdminUserList />}
+    </>
+  )
 }

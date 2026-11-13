@@ -1,175 +1,165 @@
-import { useRef, useState, type FormEvent } from 'react'
-import axios from 'axios'
-import { errorMessage, type ApiProblem } from '../../shared/api/http'
-import OperatorLayout from './OperatorLayout'
-import { OpBadge, OpBtn, OpHeading, OpNote, OpPanel } from './operatorUi'
+/* /operator/register — Hồ sơ hộ nuôi (UC04): hồ sơ xét duyệt, địa điểm, hồ sơ đối tác, bên liên quan.
+   GET/PUT /api/operators/me, POST /api/operators, POST /api/operators/me/submit, GET/PUT /api/me/party.
+   Trang chỉ trả nội dung vì còn được dùng cho tài khoản đã đăng nhập nhưng chưa thuộc hộ nuôi nào. */
+import { useState, type FormEvent } from 'react'
+import { Send } from 'lucide-react'
+import type { OperatorProfileRequest, OperatorResponse, PartyResponse, UpdatePartyRequest } from '../../shared/api/api.gen'
+import { useAuthStore } from '../../shared/auth/authStore'
 import {
-  useOperatorApplication,
-  useSaveOperatorApplication,
-  useSubmitOperatorApplication,
-  type OperatorProfile
-} from './operatorsApi'
+  Field, Input, OpBadge, OpBtn, OpConfirm, OpError, OpHeading, OpLoading, OpMore, OpNote, OpPanel, Select, StatusBadge, errorMessage, label, options, useGet,
+  useSend,
+} from '../../shared/ui/console'
+import FarmSites from './FarmSites'
+import { httpStatus } from './opA'
+import RelatedParties from './RelatedParties'
 
-const fields: { name: keyof OperatorProfile; label: string; maxLength: number }[] = [
-  { name: 'legalName', label: 'Tên pháp nhân', maxLength: 200 },
-  { name: 'taxCode', label: 'Mã số thuế', maxLength: 14 },
-  { name: 'businessRegNo', label: 'Số đăng ký kinh doanh', maxLength: 30 },
-  { name: 'farmAddress', label: 'Địa chỉ trại', maxLength: 300 }
-]
-const statusLabels = {
-  Draft: 'Nháp',
-  Submitted: 'Đã gửi',
-  Rejected: 'Bị từ chối',
-  Approved: 'Đã duyệt',
-  Suspended: 'Đình chỉ'
+function ApplicationForm({ app }: { app: OperatorResponse | null }) {
+  const [f, setF] = useState<OperatorProfileRequest>({
+    legalName: app?.legalName ?? '', taxCode: app?.taxCode ?? '', businessRegNo: app?.businessRegNo ?? '', farmAddress: app?.farmAddress ?? '',
+  })
+  const [confirming, setConfirming] = useState(false)
+  const save = useSend<OperatorResponse, OperatorProfileRequest>(app ? 'put' : 'post', app ? '/api/operators/me' : '/api/operators', {
+    success: app ? 'Đã lưu hồ sơ.' : 'Đã tạo hồ sơ nháp.', quietError: true,
+  })
+  const submit = useSend<OperatorResponse, void>('post', '/api/operators/me/submit', { success: 'Đã gửi hồ sơ xét duyệt.', onSuccess: () => setConfirming(false), quietError: true })
+  const canEdit = !app || app.canEdit
+  const complete = Object.values(f).every((v) => v.trim())
+  const dirty = !app || f.legalName !== app.legalName || f.taxCode !== app.taxCode || f.businessRegNo !== app.businessRegNo || f.farmAddress !== app.farmAddress
+  const onSave = (e: FormEvent) => {
+    e.preventDefault()
+    if (canEdit && complete) save.mutate({ legalName: f.legalName.trim(), taxCode: f.taxCode.trim(), businessRegNo: f.businessRegNo.trim(), farmAddress: f.farmAddress.trim() })
+  }
+  const set = (key: keyof OperatorProfileRequest) => (e: { target: { value: string } }) => setF((old) => ({ ...old, [key]: e.target.value }))
+  // Hồ sơ nháp đã lưu đủ thì nút chính là gửi duyệt; còn lại nút chính là lưu.
+  const readyToSubmit = !!app?.canSubmit && !dirty && complete
+
+  return (
+    <form className="op-form" onSubmit={onSave}>
+      <div className="op-form__row">
+        <Field label="Tên pháp lý" required>
+          <Input value={f.legalName} maxLength={200} disabled={!canEdit} onChange={set('legalName')} placeholder="HTX Nuôi cua Năm Căn" />
+        </Field>
+        <Field label="Mã số thuế" required>
+          <Input value={f.taxCode} maxLength={14} inputMode="numeric" disabled={!canEdit} onChange={set('taxCode')} />
+        </Field>
+      </div>
+      <div className="op-form__row">
+        <Field label="Số đăng ký kinh doanh" required>
+          <Input value={f.businessRegNo} maxLength={30} disabled={!canEdit} onChange={set('businessRegNo')} />
+        </Field>
+        <Field label="Địa chỉ trại" required>
+          <Input value={f.farmAddress} maxLength={300} disabled={!canEdit} onChange={set('farmAddress')} />
+        </Field>
+      </div>
+      {save.isError && <OpNote tone="danger">{errorMessage(save.error)}</OpNote>}
+      {canEdit && (
+        <div className="op-formfoot">
+          <OpBtn type="submit" variant={readyToSubmit ? 'ghost' : 'primary'} disabled={!complete || !dirty || save.isPending}>
+            {save.isPending ? 'Đang lưu…' : app ? 'Lưu' : 'Tạo hồ sơ'}
+          </OpBtn>
+          {app?.canSubmit && <OpBtn type="button" variant={readyToSubmit ? 'primary' : 'ghost'} disabled={!readyToSubmit} onClick={() => setConfirming(true)}><Send size={16} /> Gửi xét duyệt</OpBtn>}
+        </div>
+      )}
+      {confirming && app && (
+        <OpConfirm title="Gửi hồ sơ xét duyệt" sub={app.legalName} confirmLabel="Gửi" pending={submit.isPending} error={submit.error}
+          onConfirm={() => submit.mutate()} onClose={() => setConfirming(false)}>
+          <p className="rd-muted">Hồ sơ khoá lại cho tới khi Admin có kết quả.</p>
+        </OpConfirm>
+      )}
+    </form>
+  )
 }
-const statusGuidance = {
-  Draft: 'Kiểm tra thông tin pháp lý và địa chỉ trại trước khi gửi hồ sơ xét duyệt.',
-  Submitted: 'Hồ sơ đang chờ xét duyệt. Trạng thái sẽ tự cập nhật khi có kết quả.',
-  Approved: 'Hồ sơ đã được duyệt. Bạn có thể quản lý hộp nuôi và lập đề xuất lô nuôi.',
-  Rejected: 'Bạn có thể sửa và lưu hồ sơ bị từ chối. Chức năng gửi lại chưa được hỗ trợ.',
-  Suspended: 'Hộ nuôi đang bị đình chỉ. Liên hệ quản trị viên để được hướng dẫn.'
+
+function PartyForm({ party }: { party: PartyResponse }) {
+  const [f, setF] = useState({
+    legalName: party.legalName, partyType: party.partyType, registrationNo: party.registrationNo ?? '', representative: party.representative ?? '', phone: party.phone ?? '',
+  })
+  const save = useSend<PartyResponse, UpdatePartyRequest>('put', '/api/me/party', { success: 'Đã lưu hồ sơ đối tác.', quietError: true })
+  const organisation = f.partyType !== 'Individual'
+  const onSave = (e: FormEvent) => {
+    e.preventDefault()
+    save.mutate({
+      legalName: f.legalName.trim(), partyType: f.partyType, registrationNo: f.registrationNo.trim() || null,
+      representative: f.representative.trim() || null, phone: f.phone.trim() || null,
+    })
+  }
+  return (
+    <form className="op-form" onSubmit={onSave}>
+      <div className="op-inline">
+        <OpBadge>{party.partyCode}</OpBadge>
+        <StatusBadge kind="verification" value={party.verificationStatus} />
+        {party.roles.map((r) => <OpBadge key={r.roleType} tone={r.status === 'Active' ? 'ok' : r.status === 'Pending' ? 'warn' : 'mute'}>{label('roleType', r.roleType)} · {label('partyRole', r.status)}</OpBadge>)}
+      </div>
+      {party.rejectReason && <OpNote tone="danger">Bị từ chối xác minh: {party.rejectReason}</OpNote>}
+      <div className="op-form__row">
+        <Field label="Tên pháp lý" required hint="Phải khớp tên chủ tài khoản nhận tiền">
+          <Input value={f.legalName} maxLength={200} onChange={(e) => setF({ ...f, legalName: e.target.value })} />
+        </Field>
+        <Field label="Loại đối tác">
+          <Select value={f.partyType} onChange={(e) => setF({ ...f, partyType: e.target.value })}>
+            {options('partyType').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </Select>
+        </Field>
+      </div>
+      <div className="op-form__row">
+        <Field label="Số đăng ký">
+          <Input value={f.registrationNo} maxLength={30} onChange={(e) => setF({ ...f, registrationNo: e.target.value })} />
+        </Field>
+        <Field label="Người đại diện" required={organisation}>
+          <Input value={f.representative} maxLength={150} onChange={(e) => setF({ ...f, representative: e.target.value })} />
+        </Field>
+        <Field label="Điện thoại">
+          <Input type="tel" inputMode="tel" value={f.phone} maxLength={15} onChange={(e) => setF({ ...f, phone: e.target.value })} />
+        </Field>
+      </div>
+      {save.isError && <OpNote tone="danger">{errorMessage(save.error)}</OpNote>}
+      <div className="op-formfoot">
+        <OpBtn type="submit" variant="ghost" disabled={!f.legalName.trim() || (organisation && !f.representative.trim()) || save.isPending}>
+          {save.isPending ? 'Đang lưu…' : 'Lưu hồ sơ đối tác'}
+        </OpBtn>
+      </div>
+    </form>
+  )
 }
 
 export default function OperatorRegistration() {
-  const query = useOperatorApplication()
-  const save = useSaveOperatorApplication()
-  const submit = useSubmitOperatorApplication()
-  const busy = useRef(false)
-  const [processing, setProcessing] = useState(false)
-  const [message, setMessage] = useState('')
-  const [failure, setFailure] = useState<unknown>(null)
-  const application = query.data
-  const canEdit = !application || application.canEdit
-  const canSubmit = !application || application.canSubmit
-  const errors = axios.isAxiosError<ApiProblem>(failure) ? failure.response?.data.errors : undefined
-
-  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const send = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('data-intent') === 'submit'
-    if (busy.current || !canEdit || (send && !canSubmit)) return
-    const form = new FormData(event.currentTarget)
-    const profile = Object.fromEntries(
-      fields.map(({ name }) => [name, String(form.get(name) ?? '').trim()])
-    ) as OperatorProfile
-    setMessage('')
-    setFailure(null)
-    if (fields.some(({ name }) => !profile[name])) {
-      setMessage('Vui lòng điền đầy đủ thông tin, không chỉ nhập khoảng trắng.')
-      return
-    }
-    busy.current = true
-    setProcessing(true)
-    try {
-      await save.mutateAsync({ profile, exists: !!application })
-      if (send) await submit.mutateAsync()
-      setMessage(send ? 'Đã gửi hồ sơ xét duyệt.' : 'Đã lưu hồ sơ hộ nuôi.')
-    } catch (error) {
-      setFailure(error)
-      // Tải lại quyền/trạng thái nếu hồ sơ đã thay đổi ở phiên khác.
-      if (axios.isAxiosError(error) && [403, 409, 422].includes(error.response?.status ?? 0))
-        void query.refetch()
-    } finally {
-      busy.current = false
-      setProcessing(false)
-    }
-  }
+  const application = useGet<OperatorResponse>('/api/operators/me', undefined, { retry: false })
+  const party = useGet<PartyResponse>('/api/me/party', undefined, { retry: false })
+  const isMember = useAuthStore((s) => !!s.user?.roles.includes('OperatorMember'))
+  const none = application.isError && httpStatus(application.error) === 404
+  const app = application.data ?? null
 
   return (
-    <OperatorLayout activeTab="register">
-      <OpHeading
-        eyebrow="Hồ sơ hộ nuôi"
-        title="Đăng ký hộ nuôi"
-        description="Lưu hồ sơ nháp và gửi xét duyệt để đăng ký hộ nuôi trên CrabShare."
-      />
-      {query.isPending ? (
-        <p role="status">Đang tải hồ sơ…</p>
-      ) : query.isError ? (
-        <OpPanel title="Không tải được hồ sơ">
-          <p role="alert">{errorMessage(query.error)}</p>
-          <OpBtn variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>
-            Thử lại
-          </OpBtn>
-        </OpPanel>
-      ) : (
-        <OpPanel
-          title="Thông tin hộ nuôi"
-          action={
-            <OpBadge
-              tone={
-                application?.status === 'Approved'
-                  ? 'ok'
-                  : application?.status === 'Submitted'
-                    ? 'info'
-                    : 'mute'
-              }
-            >
-              {application ? statusLabels[application.status] : 'Chưa có hồ sơ'}
-            </OpBadge>
-          }
-        >
-          <div className="space-y-5">
-            {application && (
-              <OpNote tone={application.status === 'Approved' ? 'ok' : 'info'}>
-                {statusGuidance[application.status]}
-              </OpNote>
-            )}
-            {application?.memberRole === 'Staff' && (
-                <OpNote>Chỉ chủ hộ nuôi được gửi hồ sơ xét duyệt.</OpNote>
-            )}
-            {message && <p role="status">{message}</p>}
-            {!!failure && (
-              <div role="alert">
-                <OpNote tone="danger">{errorMessage(failure)}</OpNote>
-              </div>
-            )}
-            <form
-              key={JSON.stringify(application)}
-              onSubmit={handleSave}
-              className="space-y-5"
-              aria-busy={processing}
-            >
-              <fieldset disabled={!canEdit || processing} className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                {fields.map(({ name, label, maxLength }) => {
-                  const fieldErrors = errors?.[name] ?? errors?.[name[0].toUpperCase() + name.slice(1)]
-                  return (
-                    <div className="op-field" key={name}>
-                      <label htmlFor={name}>{label}</label>
-                      <input
-                        className="op-input"
-                        id={name}
-                        name={name}
-                        defaultValue={application?.[name] ?? ''}
-                        required
-                        maxLength={maxLength}
-                        aria-invalid={!!fieldErrors}
-                        aria-describedby={fieldErrors ? `${name}-error` : undefined}
-                      />
-                      {fieldErrors && (
-                        <p id={`${name}-error`} className="text-sm text-red-700">
-                          {fieldErrors.join(' ')}
-                        </p>
-                      )}
-                    </div>
-                  )
-                })}
-              </fieldset>
-              <div className="op-actions">
-                {canEdit && (
-                  <OpBtn type="submit" variant="outline" disabled={processing}>
-                    {processing ? 'Đang xử lý…' : application ? 'Lưu thay đổi' : 'Tạo hồ sơ nháp'}
-                  </OpBtn>
-                )}
-                {canEdit && canSubmit && (
-                  <OpBtn type="submit" data-intent="submit" disabled={processing}>
-                    Lưu và gửi hồ sơ
-                  </OpBtn>
-                )}
-              </div>
-            </form>
-          </div>
+    <>
+      <OpHeading eyebrow="Hồ sơ" title="Hồ sơ hộ nuôi" />
+
+      <OpPanel
+        title="Hồ sơ xét duyệt"
+        action={app ? <StatusBadge kind="operator" value={app.status} /> : none ? <OpBadge>Chưa có hồ sơ</OpBadge> : undefined}
+      >
+        {application.isPending ? <OpLoading /> : application.isError && !none ? <OpError error={application.error} onRetry={() => void application.refetch()} /> : (
+          <>
+            {app && !isMember
+              ? <OpNote>Đăng xuất rồi đăng nhập lại để mở cổng người nuôi.</OpNote>
+              : app?.status === 'Rejected' ? <OpNote tone="danger">Hồ sơ bị từ chối. Liên hệ Admin để xét lại.</OpNote>
+                : app?.status === 'Suspended' ? <OpNote tone="danger">Hộ nuôi đang tạm dừng. Liên hệ Admin.</OpNote> : null}
+            <ApplicationForm key={app ? `${app.operatorId}-${app.status}` : 'new'} app={app} />
+          </>
+        )}
+      </OpPanel>
+
+      <FarmSites />
+
+      {(party.data || app) && (
+        <OpPanel title="Thông tin khác">
+          {party.data && (
+            <OpMore label="Hồ sơ đối tác">
+              <PartyForm key={`${party.data.partyId}-${party.data.verificationStatus}`} party={party.data} />
+            </OpMore>
+          )}
+          {app && <RelatedParties />}
         </OpPanel>
       )}
-    </OperatorLayout>
+    </>
   )
 }

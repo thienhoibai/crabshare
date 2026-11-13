@@ -1,0 +1,21 @@
+/* Kiểu riêng của cổng nhà đầu tư (tiền tố inv-). Dùng biến màu của bộ kit, không thêm màu mới. */
+
+/* khung cuộn của bản công bố rủi ro */
+.inv-risk { display: grid; gap: 14px; max-height: 420px; overflow-y: auto; padding: 18px 20px; border-radius: 18px; border: 1px solid var(--line); background: var(--input); font-size: 15px; line-height: 1.6; }
+.inv-risk:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.inv-risk ol { display: grid; gap: 10px; padding-left: 24px; list-style: decimal; }
+.inv-risk li { padding-left: 4px; }
+.inv-risk li.is-key { padding: 10px 12px; border-radius: 12px; font-weight: 600; border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent); background: color-mix(in srgb, var(--danger) 7%, var(--surface)); }
+
+/* biểu đồ chỉ số nước */
+.inv-chart { width: 100%; height: 220px; }
+.inv-chart .recharts-cartesian-axis-tick-value { fill: var(--muted); font-size: 11px; }
+
+/* thông báo: dòng có mốc thời gian bên phải */
+.inv-notice { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 14px 0; border-top: 1px solid var(--line); }
+.inv-notice:first-child { padding-top: 0; border-top: 0; }
+.inv-notice:last-child { padding-bottom: 0; }
+.inv-notice > div { display: grid; gap: 4px; min-width: 0; }
+.inv-notice p { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.inv-notice time { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) { .inv-notice { grid-template-columns: 44px minmax(0, 1fr); } .inv-notice time { grid-column: 2; } }

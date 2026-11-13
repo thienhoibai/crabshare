@@ -74,7 +74,7 @@
 .cse-cursor[data-mode='scan'] .cse-cursor__dot { background: var(--accent); mix-blend-mode: normal; }
 .cse-cursor[data-mode='scan'] .cse-cursor__label {
   top: calc(100% + 12px); left: 50%; transform: translateX(-50%); opacity: 1; color: var(--fg);
-  font: 500 12px/1 ui-monospace, 'SFMono-Regular', Consolas, monospace; letter-spacing: 0.04em; padding: 6px 9px; border-radius: 6px; background: rgba(7, 9, 8, 0.72);
+  font-size: 12px; line-height: 1; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; padding: 6px 9px; border-radius: 6px; background: rgba(7, 9, 8, 0.72);
 }
 .cse-cursor__c { position: absolute; width: 20px; height: 20px; border: 0 solid var(--fg); opacity: 0; transition: opacity 0.3s; }
 .cse-cursor[data-mode='scan'] .cse-cursor__c { opacity: 1; }
@@ -335,7 +335,7 @@
   grid-area: 1 / 1; display: flex; align-items: center; gap: 14px; padding: 14px 20px 14px 14px; border-radius: 20px;
   background: rgba(16, 20, 18, 0.9); border: 1px solid var(--line); -webkit-backface-visibility: hidden; backface-visibility: hidden;
 }
-.cse-chip__face b { display: block; font: 600 14px/1.3 ui-monospace, 'SFMono-Regular', Consolas, monospace; letter-spacing: 0.02em; }
+.cse-chip__face b { display: block; font-size: 14px; line-height: 1.3; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
 .cse-chip__face small { display: block; font-size: 13px; color: var(--muted); }
 .cse-chip__qr { width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; background: var(--fg); color: var(--bg); flex: none; }
 .cse-chip__back { transform: rotateX(180deg); flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding-left: 20px; border-color: rgba(255, 91, 36, 0.5); }

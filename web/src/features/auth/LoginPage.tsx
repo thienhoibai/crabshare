@@ -1,14 +1,28 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
+import { Check, Eye, EyeOff } from 'lucide-react'
 import { errorMessage } from '../../shared/api/http'
 import { homePathFor } from '../../shared/auth/authStore'
-import { SiteFooter, SiteHeader } from '../../shared/layout/SiteChrome'
+import SiteShell from '../../shared/layout/SiteShell'
+import { Field, Input, OpBtn, OpNote } from '../../shared/ui/console'
 import { useLogin } from './authApi'
 import { DEMO_ACCOUNTS } from './demoAccounts'
 
-const asset = (name: string) => `/assets/${name}`
+/** Phần giới thiệu bên trái trang đăng nhập và đăng ký. */
+export function AuthPitch({ title, points }: { title: React.ReactNode; points: string[] }) {
+  return (
+    <aside className="op-auth__pitch">
+      <img src="/minhbach/farmer.png" alt="" />
+      <p className="rd-eyebrow" style={{ color: 'rgba(243,239,231,0.7)' }}>CrabShare</p>
+      <h2 className="rd-h2">{title}</h2>
+      <ul>
+        {points.map((p) => <li key={p}><Check size={16} />{p}</li>)}
+      </ul>
+    </aside>
+  )
+}
 
-/** Đăng nhập thật qua POST /api/auth/login. Giao diện giữ nguyên từ bản demo. */
+/** Đăng nhập qua POST /api/auth/login. Đăng nhập xong về trang của vai trò, hoặc trang đang mở dở (?next=). */
 export default function LoginPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
@@ -36,54 +50,57 @@ export default function LoginPage() {
   }
 
   return (
-    <>
-      <SiteHeader />
-      <main className='login-page'>
-        <section className='login-card' aria-labelledby='login-title'>
-          <header className='login-brand'>
-            <a href='/' className='login-logo' aria-label='CrabShare'>
-              <span className='login-wordmark'><strong>CRAB</strong><span>SHARE</span></span>
-              <span className='login-logo-icon'><img src={asset('loginCrabIcon.svg')} alt='' /></span>
-            </a>
-            <span className='login-tagline'>BATCH . GROW . SHARE</span>
-            <h1 id='login-title' className='sr-only'>Đăng nhập</h1>
-          </header>
+    <SiteShell bare>
+      <main className="op-auth">
+        <AuthPitch
+          title={<>Mỗi con cua một hộp, <em>mỗi Lô một sổ.</em></>}
+          points={['Đặt trước cua theo quy cách', 'Góp vốn và theo dõi từng Lô', 'Đo và phân hạng từng con tại trạm']}
+        />
+        <section className="op-auth__card" aria-labelledby="login-title">
+          <div>
+            <p className="rd-eyebrow">Tài khoản</p>
+            <h1 id="login-title" className="rd-h2">Đăng nhập</h1>
+          </div>
+
+          <form className="op-form" onSubmit={onSubmit} noValidate>
+            <Field label="Email">
+              <Input type="email" autoComplete="email" value={email} placeholder="ban@vidu.vn" required
+                onChange={(e) => { setEmail(e.target.value); setMessage('') }} />
+            </Field>
+            <Field label="Mật khẩu">
+              <span className="op-affix">
+                <Input type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} required
+                  onChange={(e) => { setPassword(e.target.value); setMessage('') }} />
+                <span style={{ pointerEvents: 'auto', right: 8 }}>
+                  <button type="button" className="rd-iconbtn" style={{ width: 34, height: 34 }} onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </span>
+              </span>
+            </Field>
+            {message && <OpNote tone="danger">{message}</OpNote>}
+            <OpBtn type="submit" full disabled={login.isPending}>{login.isPending ? 'Đang đăng nhập…' : 'Đăng nhập'}</OpBtn>
+          </form>
+
+          <p className="op-auth__alt">Chưa có tài khoản? <a href="/dang-ky">Đăng ký</a></p>
 
           {import.meta.env.DEV && (
-            <div className='login-demo-banner'>
-              <div className='login-demo-header'>
-                <span className='login-demo-badge'>DEV</span>
-                <p className='login-demo-desc'>Đăng nhập nhanh bằng tài khoản demo (chỉ hiện khi chạy dev)</p>
-              </div>
-              <div className='login-demo-actions'>
+            <div className="op-form">
+              <p className="rd-eyebrow">Tài khoản mẫu, chỉ có khi chạy thử</p>
+              <div className="op-demo">
                 {DEMO_ACCOUNTS.map((a) => (
-                  <button key={a.email} type='button' className='login-demo-btn login-demo-btn--outline' disabled={login.isPending}
+                  <button key={a.email} type="button" disabled={login.isPending}
                     onClick={() => { setEmail(a.email); setPassword(a.password); submit(a) }}>
-                    <span className='login-demo-btn-text'><strong>{a.label}</strong><small>{a.hint}</small></span>
+                    <b>{a.label}</b>
+                    <small>{a.hint}</small>
                   </button>
                 ))}
               </div>
             </div>
           )}
-
-          <form className='login-form' onSubmit={onSubmit} noValidate>
-            <label className='login-field'>
-              <span className='sr-only'>Email</span>
-              <input type='email' autoComplete='email' value={email} onChange={(e) => { setEmail(e.target.value); setMessage('') }} placeholder='Email' required />
-              <img src={asset('loginMail.svg')} alt='' />
-            </label>
-            <label className='login-field'>
-              <span className='sr-only'>Mật khẩu</span>
-              <input type={showPassword ? 'text' : 'password'} autoComplete='current-password' value={password} onChange={(e) => { setPassword(e.target.value); setMessage('') }} placeholder='Mật khẩu' required />
-              <button type='button' onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}><img src={asset('loginEye.svg')} alt='' /></button>
-            </label>
-            <button type='submit' className='login-submit' disabled={login.isPending}>{login.isPending ? 'Đang đăng nhập…' : 'Đăng nhập'}</button>
-            {message && <p className='login-error' role='alert'>{message}</p>}
-            <p className='login-signup'>Chưa có tài khoản? <a href='/dang-ky'>Đăng ký</a></p>
-          </form>
         </section>
       </main>
-      <SiteFooter />
-    </>
+    </SiteShell>
   )
 }
