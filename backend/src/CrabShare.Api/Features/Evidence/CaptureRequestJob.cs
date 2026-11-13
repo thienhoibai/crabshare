@@ -12,6 +12,9 @@ public sealed class CaptureRequestOptions
 {
     public const string Section = "Evidence:CaptureRequests";
     public bool Enabled { get; init; } = true;
+    /// <summary>BR-135: không có yêu cầu chụp chọn hộp ngẫu nhiên; yêu cầu chụp chỉ phát khi có cảnh báo về hộp hoặc Người thẩm định cần ảnh.
+    /// Giữ cờ để bật lại cho dữ liệu cũ khi cần; mặc định tắt.</summary>
+    public bool RandomDailyRequests { get; init; } = false;
     public int IntervalMinutes { get; init; } = 5;
     public int UtcOffsetHours { get; init; } = 7;
     public int DailyRequestHour { get; init; } = 9;
@@ -48,7 +51,7 @@ public sealed class CaptureRequestJob(AppDbContext db, AlertService alerts, IOpt
         }
 
         var created = 0;
-        if (local.Hour >= settings.DailyRequestHour)
+        if (settings.RandomDailyRequests && local.Hour >= settings.DailyRequestHour)
         {
             var batchIds = await db.Batches.AsNoTracking().Where(b => b.Status == "InProduction" && b.Operator.Status == "Approved"
                 && (b.StockedAt == null || b.StockedAt <= now)

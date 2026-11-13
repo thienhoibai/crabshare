@@ -153,9 +153,15 @@ public sealed class DisbursementService(AppDbContext db, ICurrentUser me, IAudit
                 "Blocked" => "Đợt này đã bị dừng chi.",
                 _ => $"Đợt đang ở trạng thái {tranche.Status}.",
             };
+        var previous = batch.DisbursementTranches.SingleOrDefault(t => t.TrancheNo == tranche.TrancheNo - 1);
+        if (tranche.MilestoneKind is { } kind)
+        {
+            if (previous is not null && previous.Status != "Released")
+                return $"Mốc {previous.TrancheNo} chưa được giải ngân.";
+            return await MilestoneGateAsync(batch, tranche, kind, previous, now, ct);
+        }
         if (!DisbursableBatchStatuses.Contains(batch.Status))
             return "Lô không còn ở giai đoạn giải ngân.";
-        var previous = batch.DisbursementTranches.SingleOrDefault(t => t.TrancheNo == tranche.TrancheNo - 1);
         if (previous is not null && previous.Status != "Released")
             return $"Đợt {previous.TrancheNo} chưa được giải ngân.";
         if (tranche.PlannedDate is not { } planned)
@@ -185,6 +191,66 @@ public sealed class DisbursementService(AppDbContext db, ICurrentUser me, IAudit
         if (tranche.TrancheNo >= 3 && batch.ExpectedHarvestDate is null)
             return "Chưa khai báo kế hoạch thu hoạch (ngày dự kiến).";
         return null;
+    }
+
+    private static readonly string[] MilestoneBatchStatuses = ["Sourcing", "InProduction", "Harvesting", "Selling"];
+
+    /// <summary>
+    /// Cổng bằng chứng của mốc giải ngân theo BR v1.5 (BR-144, BR-145, BR-233). Mốc nhận cua: đủ phiếu nhận hàng cho số con được cấp vốn,
+    /// lô có lưu nuôi thì mọi con đủ ảnh thả cua. Mốc giữa vụ: nhật ký chăm sóc đủ từng ngày, mỗi hộp đang nuôi có ảnh thiết bị hoặc ảnh bằng chứng
+    /// trong 7 ngày, và có biên bản thăm trại của Nhân viên kiểm phẩm. Mốc quyết toán chỉ chi khi quyết toán.
+    /// </summary>
+    private async Task<string?> MilestoneGateAsync(Batch batch, DisbursementTranche tranche, string kind, DisbursementTranche? previous,
+        DateTimeOffset now, CancellationToken ct)
+    {
+        if (batch.BatchMode != "P") return "Chỉ lô P giải ngân Chi phí chuẩn theo mốc (BR-144).";
+        if (batch.LiquidationStartedAt is not null) return "Lô đang thanh lý sớm: các mốc chưa giải ngân đã dừng (BR-210).";
+        if (!MilestoneBatchStatuses.Contains(batch.Status)) return "Lô không còn ở giai đoạn giải ngân theo mốc.";
+        switch (kind)
+        {
+            case "Receipt":
+            {
+                if (await db.GoodsReceipts.AnyAsync(r => r.BatchId == batch.BatchId && r.Status == "Inspecting", ct))
+                    return "Còn phiếu nhận hàng đang kiểm đầu vào.";
+                var funded = batch.FundedQuantity ?? batch.SeedQuantity;
+                var received = await db.CrabUnits.CountAsync(c => c.BatchId == batch.BatchId && c.ReplacesCrabUnitId == null, ct);
+                if (received < funded) return $"Mới nhận {received}/{funded} con được cấp vốn (BR-145).";
+                if (batch.HasHolding)
+                {
+                    var missing = await db.CrabUnits.CountAsync(c => c.BatchId == batch.BatchId && c.ReplacesCrabUnitId == null &&
+                        !db.BoxAssignments.Any(a => a.CrabUnitId == c.CrabUnitId && a.Reason == "Stock" && a.EvidenceId != null), ct);
+                    if (missing > 0) return $"Còn {missing} con chưa có ảnh thả cua chụp trong ứng dụng (BR-145).";
+                }
+                return null;
+            }
+            case "MidCycle":
+            {
+                if (batch.StockedAt is not { } stocked) return "Lô chưa thả cua vào hộp.";
+                var from = DateOnly.FromDateTime(stocked.ToOffset(Vietnam).DateTime);
+                var until = DateOnly.FromDateTime(now.ToOffset(Vietnam).DateTime).AddDays(-1);
+                if (until >= from)
+                {
+                    var logged = await db.ProductionLogs.Where(l => l.BatchId == batch.BatchId && l.Source == "Manual" && l.LogDate >= from && l.LogDate <= until)
+                        .Select(l => l.LogDate).Distinct().CountAsync(ct);
+                    var expected = until.DayNumber - from.DayNumber + 1;
+                    if (logged < expected) return $"Thiếu {expected - logged} ngày nhật ký chăm sóc tới mốc (BR-145).";
+                }
+                var since = now.AddDays(-7);
+                var bare = await db.BoxAssignments.CountAsync(a => a.BatchId == batch.BatchId && a.LeftAt == null &&
+                    !db.DeviceImages.Any(i => i.SlotId == a.SlotId && i.CapturedAt >= since) &&
+                    !db.Evidences.Any(e => e.SlotId == a.SlotId && e.BatchId == batch.BatchId && e.ReviewStatus != "Flagged" && e.CapturedAt >= since), ct);
+                if (bare > 0) return $"Còn {bare} hộp chưa có ảnh thiết bị hoặc ảnh bằng chứng trong 7 ngày qua (BR-145).";
+                var visitedAfter = previous?.ReleasedAt ?? stocked;
+                if (!await db.SiteVisitReports.AnyAsync(r => r.BatchId == batch.BatchId && r.CreatedAt >= visitedAfter, ct))
+                    return "Chưa có biên bản thăm trại của Nhân viên kiểm phẩm được phân ngẫu nhiên (BR-233).";
+                return null;
+            }
+            case "Settlement":
+                return "Mốc này giải ngân khi quyết toán (BR-145, BR-207).";
+            default:
+                return tranche.PlannedDate is { } planned && planned > DateOnly.FromDateTime(now.ToOffset(Vietnam).DateTime)
+                    ? $"Chưa tới ngày dự kiến {planned:dd/MM/yyyy}." : null;
+        }
     }
 
     // ---------- Dùng chung ----------

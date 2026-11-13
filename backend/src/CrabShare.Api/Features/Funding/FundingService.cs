@@ -18,8 +18,16 @@ namespace CrabShare.Api.Features.Funding;
 /// </summary>
 public sealed class FundingService(
     AppDbContext db, ICurrentUser me, IAuditLog audit, TimeProvider clock,
-    IOptions<FundingOptions> options, RiskDisclosureDocuments documents, PaymentRequestService payments)
+    IOptions<FundingOptions> options, RiskDisclosureDocuments documents, PaymentRequestService payments,
+    CrabShare.Api.Common.Parameters.PlatformParameters parameters)
 {
+    /// <summary>BR-060: thời gian giữ chỗ theo tham số nền tảng có hiệu lực lúc Lô mở gọi vốn (BR-218).</summary>
+    private async Task<int> HoldMinutesAsync(Batch batch, CancellationToken ct)
+    {
+        try { return await parameters.GetIntAsync(CrabShare.Api.Common.Parameters.ParamKeys.ContributionHoldMinutes, batch.FundingOpenAt, ct); }
+        catch (BusinessRuleException) { return options.Value.ReservationMinutes; }
+    }
+
     private static readonly CultureInfo Vi = CultureInfo.GetCultureInfo("vi-VN");
 
     // ---------- Xác nhận rủi ro ----------
@@ -103,7 +111,7 @@ public sealed class FundingService(
             (long)batch.MinContribution, (long)batch.MinViableCapital, (long)batch.TargetCapital, (long)batch.MaxCapital,
             (long)confirmed, (long)reserved, (long)Math.Max(0, batch.MaxCapital - confirmed - reserved),
             contributions.Where(c => c.Status == "Confirmed").Select(c => c.InvestorId).Distinct().Count(),
-            batch.FundingOpenAt, batch.FundingDeadline, IsOpen(batch, now), options.Value.ReservationMinutes,
+            batch.FundingOpenAt, batch.FundingDeadline, IsOpen(batch, now), await HoldMinutesAsync(batch, ct),
             new FundingEligibility(investor.VerificationStatus == "Verified", await HasAcknowledgedActiveAsync(investor.UserId, ct)),
             mine is null ? null : ToResponse(mine, batch, now));
     }
@@ -127,6 +135,9 @@ public sealed class FundingService(
             var now = Now();
             if (!IsOpen(batch, now))
                 throw new BusinessRuleException("funding.not_open", "Lô này hiện không nhận góp vốn.");
+            // BR-057: quy đổi tỷ lệ % ra số tiền, làm tròn tới đồng. Người nuôi góp được như nhà đầu tư thường (BR-076).
+            var amount = req.Pct is { } pct ? (long)decimal.Round(pct / 100m * batch.TargetCapital, 0, MidpointRounding.AwayFromZero) : req.Amount;
+            req.Amount = amount;
             if (req.Amount < batch.MinContribution)
                 throw new BusinessRuleException("funding.below_min_contribution", $"Số tiền góp tối thiểu là {Vnd(batch.MinContribution)}.");
             if (await db.Contributions.AnyAsync(c => c.BatchId == batch.BatchId && c.InvestorId == investor.UserId
@@ -143,7 +154,7 @@ public sealed class FundingService(
                     : $"Lô chỉ còn nhận tối đa {Vnd(remaining)}.");
 
             // expiresAt = min(lúc giữ + thời hạn giữ chỗ, hạn gọi vốn) (TL-17 §6.1 bước 4)
-            var expiresAt = now.AddMinutes(options.Value.ReservationMinutes);
+            var expiresAt = now.AddMinutes(await HoldMinutesAsync(batch, ct));
             if (batch.FundingDeadline < expiresAt) expiresAt = batch.FundingDeadline.Value;
             var contribution = new Contribution
             {

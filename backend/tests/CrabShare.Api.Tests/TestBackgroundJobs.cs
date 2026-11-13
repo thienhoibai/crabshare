@@ -23,4 +23,15 @@ internal static class TestBackgroundJobs
     // TH-07: job chốt vốn chạy mỗi phút; test gọi FundingCloseService trực tiếp nên tắt lịch nền.
     [ModuleInitializer]
     internal static void DisableFundingCloseJob() => Environment.SetEnvironmentVariable("Funding__CloseJob__Enabled", "false");
+
+    // BR v1.5: các job mới; test gọi service trực tiếp.
+    [ModuleInitializer]
+    internal static void DisableBr15Jobs()
+    {
+        Environment.SetEnvironmentVariable("Sales__HoldExpiryJob__Enabled", "false");
+        Environment.SetEnvironmentVariable("Devices__OfflineJob__Enabled", "false");
+        Environment.SetEnvironmentVariable("Grading__AssignmentJob__Enabled", "false");
+        Environment.SetEnvironmentVariable("Delivery__Jobs__Enabled", "false");
+        Environment.SetEnvironmentVariable("Settlement__Jobs__Enabled", "false");
+    }
 }

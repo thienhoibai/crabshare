@@ -124,8 +124,10 @@ public static class DevDataSeeder
         var people = new DemoLifecycleSeeder.People(admin, owner, staff, investors,
             [new(buyer, buyerAddress), new(investors[0], investorAddress)], farm, farmPayout);
         await DemoLifecycleSeeder.SeedAsync(db, people, now);
+        // Business Rule v1.5: đối tác, Nhân viên kiểm phẩm, lô P đang nuôi có thiết bị IoT, lô T nhận đặt trước.
+        await Br15DemoSeeder.SeedAsync(db, scope.ServiceProvider.GetRequiredService<Features.Parties.PartyDirectory>(), people, buyer, now, logger);
 
-        logger.LogInformation("Đã seed dữ liệu demo sau {Seconds:N1} giây: 9 tài khoản, 1 người nuôi, 1.700 hộp, 6 lô (database/README.md).",
+        logger.LogInformation("Đã seed dữ liệu demo sau {Seconds:N1} giây: 11 tài khoản, 1 người nuôi, 1.740 hộp, 8 lô (database/README.md).",
             Stopwatch.GetElapsedTime(started).TotalSeconds);
     }
 }

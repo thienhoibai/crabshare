@@ -10,13 +10,9 @@ using CrabShare.Api.Features.Operators;
 using CrabShare.Api.Features.Boxes;
 using CrabShare.Api.Features.Batches;
 using CrabShare.Api.Features.Production;
-using CrabShare.Api.Features.Harvest;
 
 // Nhân
 using CrabShare.Api.Common.Alerts;
-using CrabShare.Api.Features.Catalog;
-using CrabShare.Api.Features.Orders;
-using CrabShare.Api.Features.Offtake;
 
 // Khôi
 using CrabShare.Api.Features.Accounts;
@@ -24,6 +20,11 @@ using CrabShare.Api.Features.Evidence;
 using CrabShare.Api.Features.Alerts;
 using CrabShare.Api.Features.Portfolio;
 using CrabShare.Api.Features.Admin;
+
+// BR v1.5
+using CrabShare.Api.Common.Parameters;
+using CrabShare.Api.Features.Parties;
+using CrabShare.Api.Features.Sales;
 
 namespace CrabShare.Api.Common;
 
@@ -75,46 +76,14 @@ public static class FeatureRegistry
         services.AddOptions<TrancheScheduleOptions>().BindConfiguration("Batches:Schedules")
             .Validate(o=>o.IntervalSeconds>0,"Schedule refresh interval must be positive.").ValidateOnStart();
         services.AddHostedService<TrancheScheduleJob>();
-        services.AddScoped<FeeTierService>();         // Configurable fixed fees used by UC08
-        services.AddScoped<StockingService>();       // Features/Production — VI-07
-        services.AddScoped<ProductionLogService>();  // VI-08
-        services.AddScoped<SlotEventService>();      // VI-09
+        services.AddScoped<ProductionLogService>();  // VI-08 (BR-111 nhật ký chăm sóc)
         services.AddScoped<TimelineService>();       // VI-11
-        services.AddScoped<HarvestService>();        // CS-71
-        services.AddSingleton<IHarvestTagCodeGenerator, HarvestTagCodeGenerator>();
-        services.AddScoped<TagsService>();            // CS-74 / VI-15
-        services.AddScoped<TraceService>();
-        services.AddOptions<TraceOptions>().BindConfiguration("Trace").Validate(o => Uri.TryCreate(o.PublicBaseUrl, UriKind.Absolute, out var uri)
-            && uri.Scheme is "https" or "http", "Trace:PublicBaseUrl must be an absolute HTTP(S) URL.").ValidateOnStart();
+        // BR v1.5 (G6): thu hoạch theo bản ghi, tem từng con, truy xuất từng con đã thay bằng phân hạng (G5) và QR đơn (Features/Delivery).
 
         // Nhân
-        services.AddScoped<CatalogService>();
-        services.AddScoped<ListingModerationService>(); // UC24 kiểm duyệt
-        services.AddScoped<LowStockMonitor>();
-        services.AddOptions<LowStockOptions>().BindConfiguration(LowStockOptions.Section);
+        // BR v1.5 (G6): danh mục bán lẻ, giỏ hàng, đóng gói quét tem và khiếu nại cũ đã thay bằng đặt trước theo quy cách (G2)
+        // và giao hàng, nghiệm thu, khiếu nại theo đợt giao (Features/Delivery).
         services.AddScoped<IAlertRaiser, AlertServiceRaiser>(); // chuyển tiếp sang AlertService (KH-05)
-        services.AddScoped<OrderService>();           // Features/Orders
-        services.AddOptions<OrderOptions>().BindConfiguration(OrderOptions.Section);
-        services.AddScoped<IPaymentPurposeHandler, OrderPaymentHandler>(); // tiền đơn hàng về → đơn Paid, trừ tồn (NH-06)
-        services.AddScoped<OrderPackingService>();    // UC29 đóng gói quét tem (NH-09)
-        services.AddScoped<OfftakeService>();          // NH-14 cam kết bao tiêu (UC13)
-        services.AddScoped<IPaymentPurposeHandler, OfftakeDepositHandler>();
-        services.AddScoped<OrderQueryService>();        // NH-07 lịch sử + theo dõi đơn
-        services.AddScoped<OrderCancellationService>(); // NH-07 huỷ đơn
-        services.AddScoped<ReservationExpiryService>(); // NH-07 trả tồn khi quá hạn thanh toán
-        services.AddHostedService<ReservationExpiryJob>(); // chạy mỗi phút; tắt bằng Orders:ExpiryJob:Enabled = false
-        services.AddScoped<OrderFulfilmentService>();   // NH-10 giao hàng + xác nhận đã nhận (UC30)
-        services.AddScoped<OrderCompletionService>();   // NH-10 hết cửa sổ đổi trả → Completed
-        services.AddHostedService<OrderCompletionJob>(); // chạy mỗi phút; tắt bằng Orders:CompletionJob:Enabled = false
-        services.AddScoped<ComplaintService>();        // NH-11 khiếu nại + giải quyết tranh chấp (UC31, UC32)
-        services.AddHostedService<ComplaintEscalationJob>(); // chạy mỗi phút; tắt bằng Orders:ComplaintEscalationJob:Enabled = false
-        services.AddScoped<OrderRatingService>();     // NH-12 đánh giá đơn Completed (UC34)
-        services.AddScoped<OrderReturnService>();     // NH-12 trả hàng trong hạn → Returned
-        services.AddScoped<PreorderService>();          // NH-13 đặt trước có cọc (UC27)
-        services.AddScoped<IPaymentPurposeHandler, PreOrderDepositHandler>();
-        services.AddScoped<IPaymentPurposeHandler, PreOrderBalanceHandler>();
-        services.AddScoped<PreorderBalanceService>();
-        services.AddHostedService<PreorderBalanceJob>(); // tắt Orders:BalanceJob:Enabled = false
 
         // Khôi
         services.AddScoped<AccountService>();        // Features/Accounts
@@ -134,6 +103,62 @@ public static class FeatureRegistry
         services.AddScoped<NotificationService>();  // CS-65
         services.AddScoped<AuditLogQueryService>(); // CS-76
         services.AddScoped<DashboardService>();     // CS-73
+
+        // BR v1.5: các nhóm làm lại theo Business Rule v1.5 (G0–G8)
+        services.AddScoped<PlatformParameters>();      // G0 tham số nền tảng có ngày hiệu lực (BR-217)
+        services.AddScoped<ParameterAdminService>();
+        services.AddScoped<PartyDirectory>();          // G0 đối tác, vai trò, người tham gia Lô
+        services.AddScoped<PartyService>();
+        services.AddScoped<IBatchLifecycleHooks, PreorderLedger>();     // G2 sổ đặt trước: tỷ lệ đặt trước, Lô mở, Lô huỷ
+        services.AddScoped<CrabShare.Api.Features.Sales.PreorderService>(); // G2 đặt trước theo quy cách (BR-084…097, BR-234)
+        services.AddScoped<IPaymentPurposeHandler, PreorderDepositHandler>();
+        services.AddScoped<PreorderHoldExpiryService>();
+        services.AddHostedService<PreorderHoldExpiryJob>(); // tắt bằng Sales:HoldExpiryJob:Enabled = false
+        services.AddScoped<BatchAccess>();
+        services.AddScoped<CrabShare.Api.Features.Quality.QcAssignmentService>(); // G3 phân ngẫu nhiên QC (BR-017)
+        services.AddScoped<CrabShare.Api.Features.Sourcing.SourcingService>();     // G3 đơn mua nguồn, phiếu nhận, kiểm đầu vào
+        services.AddScoped<CrabShare.Api.Features.Holding.HoldingService>();       // G3 đợt lưu nuôi, xếp hộp, sự kiện tồn
+        services.AddScoped<CrabShare.Api.Features.Devices.DeviceIngestService>();  // G4 API nhận dữ liệu thiết bị (mục 11 Hướng dẫn)
+        services.AddScoped<CrabShare.Api.Features.Devices.IStationMeasurementProcessor, CrabShare.Api.Features.Grading.GradingStationProcessor>();
+        services.AddScoped<CrabShare.Api.Features.Devices.DeviceAdminService>();
+        services.AddScoped<CrabShare.Api.Features.Devices.DeviceDataService>();
+        services.AddScoped<CrabShare.Api.Features.Devices.DeviceOfflineService>();
+        services.AddHostedService<CrabShare.Api.Features.Devices.DeviceOfflineJob>(); // tắt bằng Devices:OfflineJob:Enabled = false
+        services.AddScoped<CrabShare.Api.Features.Grading.MeasurementSessionService>(); // G4 lượt đo mở bằng mã cua (BR-224)
+        // G5 phân hạng: chuẩn và bộ quy tắc (BR-038), số đo, AI đo mai (BR-226), quyết định phân hạng (BR-155 – BR-158)
+        services.AddScoped<CrabShare.Api.Features.Grading.GradingStandardService>();
+        services.AddScoped<CrabShare.Api.Features.Grading.GradingService>();
+        // G6 phân bổ, giao hàng theo đợt, nghiệm thu, hoá đơn, khiếu nại, đơn có hoá đơn, đơn hàng cuối, QR đơn (BR-160 – BR-185, BR-234)
+        services.AddScoped<CrabShare.Api.Features.Delivery.AllocationService>();
+        services.AddScoped<CrabShare.Api.Features.Grading.IGradingHooks>(sp => sp.GetRequiredService<CrabShare.Api.Features.Delivery.AllocationService>());
+        services.AddScoped<CrabShare.Api.Features.Delivery.SalesLedger>();
+        services.AddScoped<CrabShare.Api.Features.Delivery.DeliveryService>();
+        services.AddScoped<CrabShare.Api.Features.Delivery.ClaimService>();
+        services.AddScoped<CrabShare.Api.Features.Delivery.DirectSaleService>();
+        services.AddScoped<CrabShare.Api.Features.Delivery.OrderTraceService>();
+        services.AddScoped<IPaymentPurposeHandler, CrabShare.Api.Features.Delivery.DirectSalePaymentHandler>();
+        services.AddScoped<IPaymentPurposeHandler, CrabShare.Api.Features.Delivery.PreorderBalanceHandler>();
+        // G7 mốc giải ngân có cổng bằng chứng, thăm trại, sáu điều kiện chờ quyết toán, quyết toán P/T/A, thanh lý sớm, biểu quyết, ba số tiền
+        services.AddScoped<CrabShare.Api.Features.Quality.SiteVisitService>();
+        services.AddScoped<CrabShare.Api.Features.Settlement.SettlementReadinessService>();
+        services.AddHostedService<CrabShare.Api.Features.Settlement.SettlementReadinessJob>(); // tắt bằng Settlement:Jobs:Enabled = false
+        services.AddScoped<CrabShare.Api.Features.Settlement.CollectiveDecisionService>();
+        services.AddScoped<CrabShare.Api.Features.Settlement.MoneySummaryService>();
+        services.AddScoped<CrabShare.Api.Features.Delivery.DeliveryJobService>();
+        // G8 quyền xem theo vai trò (BR-142, BR-143)
+        services.AddScoped<CrabShare.Api.Features.Holding.BatchProgressService>();
+        services.AddHostedService<CrabShare.Api.Features.Delivery.DeliveryJob>(); // tắt bằng Delivery:Jobs:Enabled = false
+        services.AddOptions<CrabShare.Api.Features.Grading.CarapaceAiOptions>().BindConfiguration(CrabShare.Api.Features.Grading.CarapaceAiOptions.Section)
+            .Validate(o => o.Mode is "None" or "Simulated" || (o.Mode == "Http" && Uri.TryCreate(o.Endpoint, UriKind.Absolute, out _)),
+                "Grading:Ai:Mode phải là None, Simulated hoặc Http (Http cần Endpoint tuyệt đối).").ValidateOnStart();
+        services.AddHttpClient<CrabShare.Api.Features.Grading.HttpCarapaceAi>();
+        services.AddScoped<CrabShare.Api.Features.Grading.ICarapaceAi>(sp =>
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<CrabShare.Api.Features.Grading.CarapaceAiOptions>>().Value.Mode switch
+            {
+                "Http" => sp.GetRequiredService<CrabShare.Api.Features.Grading.HttpCarapaceAi>(),
+                "Simulated" => new CrabShare.Api.Features.Grading.SimulatedCarapaceAi(),
+                _ => new CrabShare.Api.Features.Grading.UnconfiguredCarapaceAi(),
+            });
 
         return services;
     }

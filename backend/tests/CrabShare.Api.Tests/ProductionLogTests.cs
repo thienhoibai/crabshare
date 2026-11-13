@@ -130,11 +130,11 @@ public partial class ProductionLogTests(KycDatabaseFixture fixture) : IClassFixt
         var replies = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => client.PostAsJsonAsync(Path(farm), input)));
         Assert.Single(replies, r => r.StatusCode == HttpStatusCode.Created); Assert.Equal(3, replies.Count(r => r.StatusCode == HttpStatusCode.Conflict));
         foreach (var reply in replies.Where(r => r.StatusCode == HttpStatusCode.Conflict)) await Error(reply, HttpStatusCode.Conflict, "production.log_exists");
-        var audits = await AuditCount(farm.UserId); var before = await Db(db => db.Alerts.AsNoTracking().SingleAsync(a => a.BatchId == farm.BatchId));
+        var audits = await AuditCount(farm.UserId);
         input["ph"] = 0m; await Error(await client.PostAsJsonAsync(Path(farm), input), HttpStatusCode.Conflict, "production.log_exists");
-        Assert.Equal(audits, await AuditCount(farm.UserId)); var after = await Db(db => db.Alerts.AsNoTracking().SingleAsync(a => a.BatchId == farm.BatchId));
-        Assert.Equal(before.Message, after.Message); Assert.Equal(before.AckDeadline, after.AckDeadline); Assert.Equal(before.UpdatedAt, after.UpdatedAt);
-        Assert.Equal(1, await Db(db => db.ProductionLogs.CountAsync(l => l.BatchId == farm.BatchId))); Assert.Equal(1, await Db(db => db.Alerts.CountAsync(a => a.BatchId == farm.BatchId)));
+        Assert.Equal(audits, await AuditCount(farm.UserId));
+        // BR-115 (v1.5): chỉ số nước không cảnh báo theo ngưỡng.
+        Assert.Equal(1, await Db(db => db.ProductionLogs.CountAsync(l => l.BatchId == farm.BatchId))); Assert.Equal(0, await Db(db => db.Alerts.CountAsync(a => a.BatchId == farm.BatchId)));
         await AssertChain(); foreach (var reply in replies) reply.Dispose();
     }
 
@@ -150,15 +150,13 @@ public partial class ProductionLogTests(KycDatabaseFixture fixture) : IClassFixt
     }
 
     [Fact]
-    public async Task Custom_out_of_range_water_is_preserved_and_raises_one_medium_alert_with_configured_ranges()
+    public async Task Custom_out_of_range_water_is_preserved_with_flag_and_raises_no_alert()
     {
         var farm = await Setup(); using var client = Client(farm.UserId); var input = Input(); input["ph"] = 6.5m; input["waterTempC"] = 32.0m; input["salinityPpt"] = 14.0m;
         using var response = await client.PostAsJsonAsync(Path(farm), input); Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var result = await response.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("OutOfRange", result.GetProperty("plausibilityFlag").GetString());
         Assert.Equal(6.5m, result.GetProperty("ph").GetDecimal()); Assert.Equal(32.0m, result.GetProperty("waterTempC").GetDecimal()); Assert.Equal(14.0m, result.GetProperty("salinityPpt").GetDecimal());
-        var alert = await Db(db => db.Alerts.AsNoTracking().SingleAsync(a => a.BatchId == farm.BatchId));
-        Assert.Equal("WaterQuality", alert.AlertType); Assert.Equal("Medium", alert.Severity); Assert.Equal("Open", alert.Status); Assert.Equal(TimeSpan.FromHours(24), alert.AckDeadline - alert.RaisedAt);
-        Assert.Contains("6.5", alert.Message); Assert.Contains("32", alert.Message); Assert.Contains("14", alert.Message); Assert.Contains("25", alert.Message); Assert.Contains("31", alert.Message); Assert.Contains("ppt", alert.Message);
+        Assert.False(await Db(db => db.Alerts.AnyAsync(a => a.BatchId == farm.BatchId)));
         Assert.Equal(6.5m, await Db(db => db.ProductionLogs.Where(l => l.BatchId == farm.BatchId).Select(l => l.Ph).SingleAsync())); await AssertChain();
     }
 
@@ -174,12 +172,15 @@ public partial class ProductionLogTests(KycDatabaseFixture fixture) : IClassFixt
     }
 
     [Fact]
-    public async Task Missing_threshold_configuration_blocks_recording_without_inventing_defaults()
+    public async Task Missing_threshold_configuration_still_records_without_inventing_defaults()
     {
+        // BR-115 (v1.5): chưa đặt ngưỡng nước, nên nhật ký không còn phụ thuộc cấu hình ngưỡng.
         var farm = await Setup(configure: false); using var client = Client(farm.UserId); var config = await client.GetFromJsonAsync<JsonElement>(ThresholdPath(farm));
-        Assert.Equal(JsonValueKind.Null, config.GetProperty("current").ValueKind); Assert.True(config.GetProperty("canConfigure").GetBoolean()); Assert.False(config.GetProperty("canRecord").GetBoolean());
-        await Error(await client.PostAsJsonAsync(Path(farm), Input()), HttpStatusCode.UnprocessableEntity, "production.thresholds_required");
-        Assert.False(await Db(db => db.ProductionLogs.AnyAsync(l => l.BatchId == farm.BatchId))); Assert.Equal(0, await AuditCount(farm.UserId));
+        Assert.Equal(JsonValueKind.Null, config.GetProperty("current").ValueKind); Assert.True(config.GetProperty("canConfigure").GetBoolean()); Assert.True(config.GetProperty("canRecord").GetBoolean());
+        var input = Input(); input["ph"] = 6.5m;
+        using var response = await client.PostAsJsonAsync(Path(farm), input); Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("Ok", result.GetProperty("plausibilityFlag").GetString());
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("thresholdVersion").ValueKind); Assert.False(await Db(db => db.Alerts.AnyAsync(a => a.BatchId == farm.BatchId)));
     }
 
     [Fact]
@@ -209,11 +210,11 @@ public partial class ProductionLogTests(KycDatabaseFixture fixture) : IClassFixt
     {
         var farm = await Setup(); using var client = Client(farm.UserId); var input = Input(); input["ph"] = 6.5m;
         using var created = await client.PostAsJsonAsync(Path(farm), input); Assert.Equal(HttpStatusCode.Created, created.StatusCode); var original = await created.Content.ReadFromJsonAsync<JsonElement>();
-        var alert = await Db(db => db.Alerts.AsNoTracking().SingleAsync(a => a.BatchId == farm.BatchId)); var changed = ThresholdInput(1); changed["phMin"] = 6.0m;
+        var changed = ThresholdInput(1); changed["phMin"] = 6.0m;
         Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(ThresholdPath(farm), changed)).StatusCode);
         var history = (await client.GetFromJsonAsync<JsonElement>(Path(farm))).GetProperty("items")[0]; Assert.Equal(1, history.GetProperty("thresholdVersion").GetInt32());
         Assert.Equal(original.GetProperty("thresholdsApplied").GetProperty("id").GetInt64(), history.GetProperty("thresholdsApplied").GetProperty("id").GetInt64()); Assert.Equal(7.0m, history.GetProperty("thresholdsApplied").GetProperty("phMin").GetDecimal()); Assert.Equal("OutOfRange", history.GetProperty("plausibilityFlag").GetString());
-        var unchanged = await Db(db => db.Alerts.AsNoTracking().SingleAsync(a => a.BatchId == farm.BatchId)); Assert.Equal(alert.Message, unchanged.Message); Assert.Equal("Open", unchanged.Status); Assert.Equal(alert.UpdatedAt, unchanged.UpdatedAt);
+        Assert.False(await Db(db => db.Alerts.AnyAsync(a => a.BatchId == farm.BatchId)));
     }
 
     [Fact]
@@ -231,7 +232,7 @@ public partial class ProductionLogTests(KycDatabaseFixture fixture) : IClassFixt
     }
 
     [Theory]
-    [InlineData("alert")] [InlineData("audit")]
+    [InlineData("audit")]
     public async Task Alert_or_audit_failure_rolls_back_new_log_alert_and_audit_together(string failure)
     {
         var farm = await Setup(); using var client = Client(farm.UserId); var audits = await AuditCount(farm.UserId);

@@ -39,7 +39,7 @@ public class CaptureRequestDatabaseTests(KycDatabaseFixture fixture) : IClassFix
     private async Task<CaptureRequestJobResult> Run(DateTimeOffset now, int hour = 0)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<AppDbContext>(); var clock = new Clock(now);
-        return await new CaptureRequestJob(db, new AlertService(db, scope.ServiceProvider.GetRequiredService<ICurrentUser>(), clock), Options.Create(new CaptureRequestOptions { DailyRequestHour = hour }), clock).RunAsync();
+        return await new CaptureRequestJob(db, new AlertService(db, scope.ServiceProvider.GetRequiredService<ICurrentUser>(), clock), Options.Create(new CaptureRequestOptions { DailyRequestHour = hour, RandomDailyRequests = true }), clock).RunAsync();
     }
     private Task<List<CaptureRequest>> Requests(Farm farm) => Db(db => db.CaptureRequests.AsNoTracking().Where(r => r.BatchId == farm.BatchId).OrderBy(r => r.CaptureRequestId).ToListAsync());
     private Task<bool> Chain() => Db(async db => { string? previous = null; foreach (var row in await db.AuditLogs.AsNoTracking().OrderBy(a => a.AuditId).ToListAsync()) { Assert.Equal(previous, row.PrevHash); Assert.Matches("^[0-9a-f]{64}$", row.RowHash); Assert.True(AuditChain.VerifyHash(row)); previous = row.RowHash; } return true; });
@@ -102,7 +102,7 @@ public class CaptureRequestDatabaseTests(KycDatabaseFixture fixture) : IClassFix
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var original = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlServer(original.Database.GetConnectionString()).AddInterceptors(new FailAlert()).Options);
         var clock = new Clock(request.DueAt.AddSeconds(1)); var alerts = new AlertService(db, scope.ServiceProvider.GetRequiredService<ICurrentUser>(), clock);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => new CaptureRequestJob(db, alerts, Options.Create(new CaptureRequestOptions()), clock).RunAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new CaptureRequestJob(db, alerts, Options.Create(new CaptureRequestOptions { RandomDailyRequests = true }), clock).RunAsync());
         Assert.Equal("Open", (await Requests(farm)).First().Status);
         Assert.False(await Db(db => db.AuditLogs.AnyAsync(a => a.EntityType == "CaptureRequest" && a.EntityId == request.CaptureRequestId && a.ActionType == "ExpireCaptureRequest"))); await Chain();
     }

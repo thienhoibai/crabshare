@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace CrabShare.Api.Features.Operators;
 
-public sealed class OperatorService(AppDbContext db, ICurrentUser me, TimeProvider clock)
+public sealed class OperatorService(AppDbContext db, ICurrentUser me, TimeProvider clock, CrabShare.Api.Features.Parties.PartyDirectory parties)
 {
     public async Task<OperatorResponse> CreateAsync(OperatorProfileRequest req, CancellationToken ct)
     {
@@ -46,6 +46,9 @@ public sealed class OperatorService(AppDbContext db, ICurrentUser me, TimeProvid
 
         // Một SaveChanges: EF Core bọc toàn bộ INSERT operator/member/role trong cùng transaction.
         // PK operator_member(user_id) chặn hai request tạo đồng thời; lỗi unique rollback cả ba bảng.
+        await db.SaveChangesAsync(ct);
+        // Hộ nuôi là vai trò người nuôi của chính đối tác chủ hộ (BR-001, BR-005).
+        op.PartyId = (await parties.EnsureForUserAsync(userId, ct)).PartyId;
         await db.SaveChangesAsync(ct);
         return ToResponse(op, "Owner");
     }
@@ -90,6 +93,11 @@ public sealed class OperatorService(AppDbContext db, ICurrentUser me, TimeProvid
                 .SetProperty(o => o.SubmittedAt, now).SetProperty(o => o.UpdatedAt, now), ct);
         if (changed == 0)
             throw new BusinessRuleException("operator.cannot_submit", "Hồ sơ phải ở trạng thái Draft và có đủ tên pháp nhân, mã số thuế, số đăng ký kinh doanh, địa chỉ trại.");
+        // Vai trò người nuôi chờ Admin duyệt hồ sơ (BR-005, BR-006).
+        var partyId = await parties.PartyIdOfOperatorAsync(member.OperatorId, ct);
+        await parties.SetRoleAsync(partyId, CrabShare.Api.Features.Parties.PartnerRoleTypes.Farmer, "Pending", ct);
+        await db.Parties.Where(p => p.PartyId == partyId && p.VerificationStatus != "Verified")
+            .ExecuteUpdateAsync(x => x.SetProperty(p => p.VerificationStatus, "Pending").SetProperty(p => p.UpdatedAt, now), ct);
         return await GetMeAsync(ct);
     }
 
@@ -119,78 +127,6 @@ public sealed class OperatorService(AppDbContext db, ICurrentUser me, TimeProvid
             .OrderBy(m => m.MemberRole == "Owner" ? 0 : 1).ThenBy(m => m.UserId)
             .Select(m => new OperatorMemberResponse(m.UserId, m.User.FullName, m.User.Email, m.MemberRole, m.JoinedAt))
             .ToListAsync(ct);
-    }
-
-    public Task<OperatorMemberResponse> AddMemberAsync(AddOperatorMemberRequest req, CancellationToken ct)
-        => db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
-        {
-            db.ChangeTracker.Clear();
-            return await AddMemberInTransactionAsync(req, ct);
-        });
-
-    private async Task<OperatorMemberResponse> AddMemberInTransactionAsync(AddOperatorMemberRequest req, CancellationToken ct)
-    {
-        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
-        var owner = await RequireOwnerAsync(ct);
-        var email = req.Email.Trim().ToLowerInvariant();
-        var user = await db.AppUsers.SingleOrDefaultAsync(u => u.Email == email, ct)
-            ?? throw new NotFoundException("operator.user_not_found", "Không tìm thấy tài khoản với email này.");
-        if (user.Status != "Active")
-            throw new BusinessRuleException("operator.user_inactive", "Chỉ được thêm tài khoản đang hoạt động.");
-        // PK user_id: mỗi tài khoản chỉ thuộc một hộ nuôi, kể cả khi request thêm đồng thời.
-        if (await db.OperatorMembers.AnyAsync(m => m.UserId == user.UserId, ct))
-            throw new ConflictException("operator.already_member", "Tài khoản đã thuộc một hộ nuôi.");
-        var now = clock.GetUtcNow();
-        db.OperatorMembers.Add(new OperatorMember
-        {
-            UserId = user.UserId,
-            OperatorId = owner.OperatorId,
-            MemberRole = "Staff",
-            JoinedAt = now,
-            CreatedAt = now
-        });
-        if (!await HasOperatorRoleAsync(user.UserId, ct))
-            db.AppUserRoles.Add(new AppUserRole
-            {
-                UserId = user.UserId,
-                RoleCode = Roles.OperatorMember,
-                GrantedAt = now,
-                CreatedAt = now
-            });
-        await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        return new(user.UserId, user.FullName, user.Email, "Staff", now);
-    }
-
-    public Task RemoveMemberAsync(long userId, CancellationToken ct)
-        => db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
-        {
-            db.ChangeTracker.Clear();
-            await RemoveMemberInTransactionAsync(userId, ct);
-        });
-
-    private async Task RemoveMemberInTransactionAsync(long userId, CancellationToken ct)
-    {
-        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
-        var owner = await RequireOwnerAsync(ct);
-        var member = await db.OperatorMembers.SingleOrDefaultAsync(m => m.UserId == userId && m.OperatorId == owner.OperatorId, ct)
-            ?? throw new NotFoundException("operator.member_not_found", "Không tìm thấy nhân viên thuộc hộ nuôi này.");
-        if (member.MemberRole != "Staff")
-            throw new ForbiddenException("operator.cannot_remove_owner", "Không được xóa chủ hộ nuôi qua chức năng quản lý nhân viên.");
-        db.OperatorMembers.Remove(member);
-        var role = await db.AppUserRoles.SingleOrDefaultAsync(r => r.UserId == userId && r.RoleCode == Roles.OperatorMember, ct);
-        if (role is not null)
-            db.AppUserRoles.Remove(role);
-        await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-    }
-
-    private async Task<OperatorMember> RequireOwnerAsync(CancellationToken ct)
-    {
-        var member = await RequireMembershipAsync(true, ct);
-        if (member.MemberRole != "Owner")
-            throw new ForbiddenException("operator.owner_required", "Chỉ chủ hộ nuôi được quản lý nhân viên.");
-        return member;
     }
 
     private async Task RequireActiveUserAsync(long userId, CancellationToken ct)

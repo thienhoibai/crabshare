@@ -108,6 +108,14 @@ public sealed partial class PaymentWebhookService(
             request.Status = "Paid";
             request.UpdatedAt = now;
             await db.SaveChangesAsync(ct);
+            // BR-068: giao dịch được phân bổ vào đúng nghĩa vụ nó trả; một giao dịch không phân bổ quá số tiền của nó (trigger CSDL).
+            db.PaymentApplications.Add(new PaymentApplication
+            {
+                TransactionId = transaction.TransactionId, TargetType = ApplicationTarget(request.Purpose),
+                TargetId = request.ContributionId ?? request.OrderId ?? request.OfftakeId ?? request.PaymentRequestId,
+                Amount = txn.Amount, Status = "Applied", AppliedAt = now,
+            });
+            await db.SaveChangesAsync(ct);
             await audit.WriteAsync("payment_request", request.PaymentRequestId, "paid", new { status = "Pending" },
                 new { status = "Paid", txn.ProviderTxnId, amount = txn.Amount, txn.OccurredAt }, now, ct);
 
@@ -149,6 +157,16 @@ public sealed partial class PaymentWebhookService(
     private static WebhookResult Duplicate(ProviderTransaction existing)
         => new(WebhookResult.Duplicate, existing.TransactionId, existing.PaymentRequest?.ReferenceCode,
             existing.PaymentRequestId, existing.PaymentRequest?.Purpose, null);
+
+    /// <summary>Loại nghĩa vụ mà khoản thu trả (BR-068).</summary>
+    internal static string ApplicationTarget(string purpose) => purpose switch
+    {
+        PaymentPurposes.Contribution => "Contribution",
+        PaymentPurposes.PreOrderDeposit => "OrderDeposit",
+        PaymentPurposes.PreOrderBalance => "TrancheBalance",
+        PaymentPurposes.OrderPayment => "OrderPayment",
+        _ => "Other",
+    };
 
     private static bool IsDuplicateProviderTxn(DbUpdateException ex)
         => ex.InnerException is SqlException { Number: 2627 or 2601 } sql && sql.Message.Contains("uq_provider_transaction_provider_txn_id");

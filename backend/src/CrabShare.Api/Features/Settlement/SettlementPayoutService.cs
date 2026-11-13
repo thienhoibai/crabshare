@@ -29,18 +29,33 @@ public sealed class SettlementPayoutService(
             .SingleOrDefaultAsync(x => x.SettlementId == settlementId, ct)
             ?? throw new NotFoundException("settlement.not_found", "Không tìm thấy bảng quyết toán.");
         var now = Now();
-        if (s.Status == "Draft")
-            throw new BusinessRuleException("settlement.not_proposed", "Cần công bố bảng và chờ hết hạn góp ý trước khi duyệt.");
         if (SettlementService.LockedStatuses.Contains(s.Status))
             throw new ConflictException("settlement.already_approved", "Bảng quyết toán đã được duyệt.");
-        if (s.SettlementFeedbacks.Any(f => f.Status == "Open"))
-            throw new BusinessRuleException("settlement.open_feedback", "Còn góp ý của nhà đầu tư chưa trả lời.");
-        if (s.FeedbackDeadline is not { } deadline)
-            throw new BusinessRuleException("settlement.not_proposed", "Bảng chưa công bố nên chưa có hạn góp ý.");
-        if (now < deadline)
-            throw new BusinessRuleException("settlement.window_open", $"Chưa hết hạn góp ý ({deadline.ToOffsetVietnam():dd/MM/yyyy HH:mm}).");
+        var isP = s.SettlementMode == "P";
+        if (isP)
+        {
+            // BR-202: lô P công bố cho nhà đầu tư phản hồi trong hạn; hết hạn và không còn phản hồi chưa xử lý thì Admin duyệt.
+            if (s.Status == "Draft")
+                throw new BusinessRuleException("settlement.not_proposed", "Cần công bố bảng và chờ hết hạn góp ý trước khi duyệt.");
+            if (s.SettlementFeedbacks.Any(f => f.Status == "Open"))
+                throw new BusinessRuleException("settlement.open_feedback", "Còn góp ý của nhà đầu tư chưa trả lời.");
+            if (s.FeedbackDeadline is not { } deadline)
+                throw new BusinessRuleException("settlement.not_proposed", "Bảng chưa công bố nên chưa có hạn góp ý.");
+            if (now < deadline)
+                throw new BusinessRuleException("settlement.window_open", $"Chưa hết hạn góp ý ({deadline.ToOffsetVietnam():dd/MM/yyyy HH:mm}).");
+        }
         if (s.Batch.BatchAccount is not { Status: "Open" } account)
             throw new BusinessRuleException("payment.batch_account_unavailable", "Tài khoản chuyên dùng của lô không ở trạng thái mở.");
+
+        // BR-196: lỗ vượt tổng vốn do người nuôi chịu, trừ vào phần Chi phí chuẩn chưa giải ngân.
+        var operatorAmount = isP ? s.OperatorRemuneration + Math.Max(0, s.UndisbursedCost - s.UncoveredLoss) : 0;
+        var required = isP ? s.SettlementLines.Sum(l => l.NetPayout) + operatorAmount + s.PlatformFee
+            : s.SettlementMode == "A" ? s.CommissionAmount + s.SupplierPayout : 0;
+        // BR-199, BR-205: chỉ duyệt khi số dư tài khoản của Lô theo đối soát (sau mọi lệnh chi khác) khớp tổng cần chi.
+        var balance = await LedgerBalanceAsync(account.BatchAccountId, ct);
+        if (s.SettlementMode != "T" && balance != required)
+            throw new BusinessRuleException("settlement.balance_mismatch",
+                $"Số dư tài khoản của Lô theo đối soát là {balance:N0} đ, khác tổng cần chi {required:N0} đ (BR-199, BR-205).");
 
         s.Status = "Approved";
         s.ApprovedBy = me.UserId;
@@ -60,20 +75,23 @@ public sealed class SettlementPayoutService(
             return i;
         }
 
-        // 1. Thuế người nuôi khai thay, nộp thay cho nhà đầu tư (đi thẳng tới kho bạc, không qua tay nền tảng)
-        if (s.TaxTotal > 0)
-            Add("TaxPayment", s.TaxTotal, null, null, $"Nộp thuế khai thay của nhà đầu tư lô {s.Batch.BatchCode} (người nộp: MST {s.Batch.Operator.TaxCode})");
-        // 2. Người nuôi: thù lao trên Pool dương + khấu hao thiết bị (thuộc chi phí chuẩn, trả khi quyết toán)
-        var operatorAmount = s.OperatorRemuneration + s.DepreciationAmount;
-        if (operatorAmount > 0)
-        {
-            var operatorAccount = await db.PayoutAccounts.AsNoTracking()
+        async Task<long> OperatorAccountAsync() => await db.PayoutAccounts.AsNoTracking()
                 .Where(p => p.OwnerOperatorId == s.Batch.OperatorId && p.Status == "Active")
                 .OrderByDescending(p => p.PayoutAccountId).Select(p => (long?)p.PayoutAccountId).FirstOrDefaultAsync(ct)
-                ?? throw new BusinessRuleException("payment.no_payout_account", "Hộ nuôi chưa có tài khoản nhận tiền đang dùng.");
-            Add("Payout", operatorAmount, operatorAccount, null, $"Thù lao {s.OperatorRemuneration:N0} đ + khấu hao {s.DepreciationAmount:N0} đ quyết toán lô {s.Batch.BatchCode}");
+            ?? throw new BusinessRuleException("payment.no_payout_account", "Đơn vị thực hiện chưa có tài khoản nhận tiền đang dùng.");
+        // BR-207: phí nền tảng cho nền tảng; phần Chi phí chuẩn chưa giải ngân (mốc cuối) và thù lao cho người nuôi; từng nhà đầu tư.
+        if (s.PlatformFee > 0 && isP)
+            Add("PlatformFee", s.PlatformFee, null, null, $"Phí nền tảng {s.PlatformFeeRatePct}% doanh thu thực thu lô {s.Batch.BatchCode}");
+        if (operatorAmount > 0)
+            Add("Payout", operatorAmount, await OperatorAccountAsync(), null,
+                $"Chi phí chuẩn chưa giải ngân {Math.Max(0, s.UndisbursedCost - s.UncoveredLoss):N0} đ + thù lao {s.OperatorRemuneration:N0} đ lô {s.Batch.BatchCode}");
+        // Lô A (BR-201): hoa hồng cho nền tảng, phần còn lại cho nhà cung cấp.
+        if (s.SettlementMode == "A")
+        {
+            if (s.CommissionAmount > 0) Add("Commission", s.CommissionAmount, null, null, $"Hoa hồng {s.CommissionPct}% lô {s.Batch.BatchCode}");
+            if (s.SupplierPayout > 0) Add("SupplierPayout", s.SupplierPayout, await OperatorAccountAsync(), null, $"Tiền hàng trả nhà cung cấp lô {s.Batch.BatchCode}");
         }
-        // 3. Từng nhà đầu tư, số sau thuế; tài khoản nhận tiền chọn lúc gửi nếu bây giờ chưa có
+        // Từng nhà đầu tư; tài khoản nhận tiền chọn lúc gửi nếu bây giờ chưa có
         var investorIds = s.SettlementLines.Select(l => l.InvestorId).ToList();
         var investorAccounts = await db.PayoutAccounts.AsNoTracking()
             .Where(p => p.OwnerUserId != null && investorIds.Contains(p.OwnerUserId.Value) && p.Status == "Active")
@@ -92,11 +110,22 @@ public sealed class SettlementPayoutService(
             await audit.WriteAsync("payment_instruction", i.InstructionId, "create", null,
                 new { type = i.InstructionType, amount = (long)i.Amount, i.SettlementLineId, i.PayoutAccountId, settlementId = s.SettlementId }, now, ct);
 
-        // Lô không có khoản chi nào cho nhà đầu tư (lỗ hết vốn): đóng ngay theo điều kiện TL-14 §6.6
-        if (!s.SettlementLines.Any(l => l.NetPayout > 0))
+        // Không còn khoản chi nào (lô T quyết toán nội bộ, hoặc không có gì để chi): đóng ngay (BR-209).
+        if (instructions.Count == 0)
             await SettlementClosing.CloseIfPaidAsync(db, audit, s.BatchId, now, ct);
         return await settlements.DescribeAsync(s.SettlementId, SettlementService.Viewer.Admin, ct);
     }, ct);
+
+    /// <summary>Số dư theo đối soát: tiền vào trừ tiền ra đã thực hiện, trừ các lệnh chi khác đã lập mà chưa thực hiện (hoàn tiền, giải ngân).</summary>
+    internal async Task<long> LedgerBalanceAsync(long batchAccountId, CancellationToken ct)
+    {
+        var moves = await db.ProviderTransactions.AsNoTracking().Where(t => t.BatchAccountId == batchAccountId)
+            .GroupBy(t => t.Direction).Select(g => new { g.Key, Amount = g.Sum(t => t.Amount) }).ToListAsync(ct);
+        var pending = await db.PaymentInstructions.AsNoTracking()
+            .Where(i => i.BatchAccountId == batchAccountId && (i.Status == "Created" || i.Status == "Sent"))
+            .SumAsync(i => (decimal?)i.Amount, ct) ?? 0;
+        return (long)(moves.Where(m => m.Key == "In").Sum(m => m.Amount) - moves.Where(m => m.Key == "Out").Sum(m => m.Amount) - pending);
+    }
 
     /// <summary>Gửi mọi lệnh chi quyết toán còn Created/Failed của lô (thuế, người nuôi, nhà đầu tư), từng lệnh một transaction.</summary>
     public async Task<SettlementResponse> SendPayoutsAsync(long settlementId, CancellationToken ct)
@@ -107,7 +136,8 @@ public sealed class SettlementPayoutService(
         if (s.Status != "Approved")
             throw new BusinessRuleException("settlement.not_approved", "Chỉ gửi lệnh chi của bảng đã duyệt và chưa chi xong.");
         var pending = await db.PaymentInstructions.AsNoTracking()
-            .Where(i => i.BatchAccountId == s.BatchAccountId && (i.InstructionType == "Payout" || i.InstructionType == "TaxPayment")
+            .Where(i => i.BatchAccountId == s.BatchAccountId && (i.InstructionType == "Payout" || i.InstructionType == "PlatformFee"
+                        || i.InstructionType == "Commission" || i.InstructionType == "SupplierPayout")
                         && (i.Status == "Created" || i.Status == "Failed"))
             .OrderBy(i => i.InstructionId).Select(i => i.InstructionId).ToListAsync(ct);
         foreach (var id in pending)
@@ -147,14 +177,15 @@ public static class SettlementClosing
 {
     public static async Task<bool> CloseIfPaidAsync(AppDbContext db, IAuditLog audit, long batchId, DateTimeOffset now, CancellationToken ct)
     {
-        var settlement = await db.Settlements.Include(s => s.Batch).Include(s => s.SettlementLines)
+        var settlement = await db.Settlements.Include(s => s.Batch).ThenInclude(b => b.BatchAccount).Include(s => s.SettlementLines)
             .SingleOrDefaultAsync(s => s.BatchId == batchId, ct);
-        if (settlement is not { Status: "Approved" }) return false;
+        if (settlement is not { Status: "Approved", ApprovedAt: { } approvedAt }) return false;
+        // BR-209: Lô đóng khi mọi lệnh chi của quyết toán đã thành công (nhà đầu tư, người nuôi, phí nền tảng, hoa hồng, nhà cung cấp).
+        var accountId = settlement.Batch.BatchAccount?.BatchAccountId ?? 0;
+        if (await db.PaymentInstructions.AnyAsync(i => i.BatchAccountId == accountId && i.CreatedAt >= approvedAt && i.Status != "Succeeded"
+                && (i.InstructionType == "Payout" || i.InstructionType == "PlatformFee" || i.InstructionType == "Commission" || i.InstructionType == "SupplierPayout"), ct))
+            return false;
         var lineIds = settlement.SettlementLines.Where(l => l.NetPayout > 0).Select(l => l.SettlementLineId).ToList();
-        var paid = await db.PaymentInstructions
-            .Where(i => i.SettlementLineId != null && lineIds.Contains(i.SettlementLineId.Value) && i.Status == "Succeeded")
-            .Select(i => i.SettlementLineId!.Value).Distinct().CountAsync(ct);
-        if (paid < lineIds.Count) return false;
 
         settlement.Status = "PaidOut";
         settlement.UpdatedAt = now;

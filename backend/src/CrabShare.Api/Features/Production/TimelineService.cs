@@ -66,6 +66,9 @@ public sealed partial class TimelineService(AppDbContext db, ICurrentUser me, Ev
                 UNION
                 SELECT CONVERT(date, SWITCHOFFSET(raised_at, '+07:00')) FROM dbo.alert
                     WHERE batch_id = {batchId} AND raised_at < {beforeAt}
+                UNION
+                SELECT CONVERT(date, SWITCHOFFSET(occurred_at, '+07:00')) FROM dbo.inventory_event
+                    WHERE batch_id = {batchId} AND occurred_at < {beforeAt} AND event_type NOT IN ('Allocated', 'Released')
             ) d ORDER BY d.[Value] DESC
             """).ToListAsync(ct);
         var hasMore = dates.Count > query.Days;

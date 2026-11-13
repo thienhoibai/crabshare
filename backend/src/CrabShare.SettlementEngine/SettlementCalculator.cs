@@ -21,7 +21,9 @@ public static class SettlementCalculator
         if (input.OperatorSharePct is < 0 or > 100 || input.TaxWithholdingPct is < 0 or > 100)
             throw new ArgumentOutOfRangeException(nameof(input), "Tỷ lệ phải trong khoảng 0–100%.");
 
-        var pool = input.ActualRevenue - input.LockedStandardCost;
+        // BR-189 (v1.5): Revenue Pool = doanh thu thực thu − phí nền tảng − chi phí trừ.
+        if (input.PlatformFee < 0) throw new ArgumentOutOfRangeException(nameof(input), "Phí nền tảng không âm.");
+        var pool = input.ActualRevenue - input.PlatformFee - input.LockedStandardCost;
         var remuneration = pool > 0 ? (long)decimal.Floor(pool * input.OperatorSharePct / 100m) : 0;
         var distributable = pool > 0 ? pool - remuneration : pool;
 
@@ -85,9 +87,10 @@ public static class SettlementCalculator
 /// <param name="OperatorSharePct">Tỷ lệ thù lao người nuôi trên Pool dương (5–10% theo lô).</param>
 /// <param name="TaxWithholdingPct">Tỷ lệ khấu trừ thuế người nuôi khai thay; 0 = chưa khai.</param>
 /// <param name="Shares">Vốn đã chốt của từng nhà đầu tư (capital_share).</param>
+/// <param name="PlatformFee">Phí nền tảng trên doanh thu thực thu (BR-188), trừ trước khi tính Pool.</param>
 public sealed record SettlementInput(
     long ActualRevenue, long LockedStandardCost, decimal OperatorSharePct, decimal TaxWithholdingPct,
-    IReadOnlyList<(long InvestorId, long Capital)> Shares);
+    IReadOnlyList<(long InvestorId, long Capital)> Shares, long PlatformFee = 0);
 
 /// <param name="ProfitShare">Phần chia (âm khi lỗ), trước thuế.</param>
 /// <param name="NetPayout">Số nhà đầu tư nhận = vốn + phần chia − thuế; không bao giờ âm.</param>

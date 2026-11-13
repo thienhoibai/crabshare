@@ -12,7 +12,10 @@ public static class Roles
     public const string PlatformAdmin = "PlatformAdmin";
     public const string EvidenceReviewer = "EvidenceReviewer";
 
-    public static readonly string[] All = [Investor, Customer, OperatorMember, PlatformAdmin, EvidenceReviewer];
+    /// <summary>Nhân viên kiểm phẩm thuộc pool của nền tảng, do Admin bật quyền (BR-017).</summary>
+    public const string QcInspector = "QcInspector";
+
+    public static readonly string[] All = [Investor, Customer, OperatorMember, PlatformAdmin, EvidenceReviewer, QcInspector];
 }
 
 /// <summary>Tên policy dùng trên controller hoặc action: [Authorize(Policy = Policies.Admin)]</summary>
@@ -23,4 +26,5 @@ public static class Policies
     public const string Investor = "Investor";
     public const string Customer = "Customer";
     public const string Reviewer = "Reviewer";
+    public const string Qc = "Qc";
 }

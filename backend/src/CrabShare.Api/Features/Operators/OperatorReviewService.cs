@@ -9,7 +9,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CrabShare.Api.Features.Operators;
 
-public sealed class OperatorReviewService(AppDbContext db, ICurrentUser me, TimeProvider clock, IAuditLog audit)
+public sealed class OperatorReviewService(AppDbContext db, ICurrentUser me, TimeProvider clock, IAuditLog audit,
+    CrabShare.Api.Features.Parties.PartyDirectory parties)
 {
     public async Task<PagedResult<AdminOperatorResponse>> ListAsync(OperatorListQuery filter, PageQuery paging, CancellationToken ct)
     {
@@ -59,6 +60,8 @@ public sealed class OperatorReviewService(AppDbContext db, ICurrentUser me, Time
             op.ApprovedAt = now;
             op.ApprovedBy = me.UserId;
         }
+        await db.SaveChangesAsync(ct);
+        await parties.SyncFarmDecisionAsync(op, action, reason, ct);
         await audit.WriteAsync("operator", id, action, oldValue, Snapshot(op, reason?.Trim()), now, ct);
         return new(op.OperatorId, op.LegalName, op.TaxCode, op.BusinessRegNo, op.FarmAddress,
             op.Status, op.ApprovedSlotCapacity, op.SubmittedAt, op.ApprovedAt, op.ApprovedBy);

@@ -147,11 +147,22 @@ public sealed class EvidenceService(AppDbContext db, ICurrentUser me, EvidenceAc
         var batch = await db.Batches.AsNoTracking().Include(b => b.Operator)
             .SingleOrDefaultAsync(b => b.BatchCode == request.BatchCode.Trim() && b.OperatorId == operatorId, ct)
             ?? throw new NotFoundException("evidence.batch_not_found", "Không tìm thấy lô của hộ nuôi.");
-        if (batch.Status is not ("Stocked" or "InProduction" or "Harvesting") || batch.Operator.Status != "Approved")
+        // BR v1.5: ảnh hộp chụp ngay trước khi xếp cua (thả lần đầu khi Lô đang nhận cua, hoặc thả bù khi đang nuôi).
+        var boxing = request.SlotEventType == "Boxed";
+        if (boxing && (!batch.HasHolding || batch.Status is not ("Sourcing" or "InProduction") || batch.Operator.Status != "Approved"))
+            throw new BusinessRuleException("evidence.batch_not_boxing", "Chỉ chụp ảnh xếp hộp khi Lô có lưu nuôi đang nhận cua hoặc đang nuôi.");
+        if (!boxing && (batch.Status is not ("Stocked" or "InProduction" or "Harvesting") || batch.Operator.Status != "Approved"))
             throw new BusinessRuleException("evidence.batch_inactive", "Chỉ gửi bằng chứng cho lô đang nuôi của hộ nuôi đã được duyệt.");
         var slot = await db.PhysicalSlots.AsNoTracking().SingleOrDefaultAsync(s => s.OperatorId == operatorId && s.SlotCode == request.SlotCode.Trim(), ct)
             ?? throw new NotFoundException("evidence.slot_not_found", "Không tìm thấy hộp nuôi của bạn.");
-        if (request.SlotEventType == "Restocked")
+        if (boxing)
+        {
+            if (request.CaptureRequestId is not null || slot.Status == "Maintenance"
+                || await db.SlotAllocations.AnyAsync(a => a.SlotId == slot.SlotId && a.ReleasedAt == null && a.BatchId != batch.BatchId, ct)
+                || await db.BoxAssignments.AnyAsync(a => a.SlotId == slot.SlotId && a.LeftAt == null, ct))
+                throw new BusinessRuleException("evidence.box_not_free", "Chỉ chụp ảnh xếp hộp cho hộp trống của trại, không bảo trì và không thuộc Lô khác.");
+        }
+        else if (request.SlotEventType == "Restocked")
         {
             var lastAllocation = await db.SlotAllocations.AsNoTracking().Where(a => a.SlotId == slot.SlotId)
                 .OrderByDescending(a => a.AllocatedAt).ThenByDescending(a => a.SlotAllocationId).FirstOrDefaultAsync(ct);

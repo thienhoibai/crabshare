@@ -36,17 +36,44 @@ public sealed class AuthService(AppDbContext db, TokenService tokens, TimeProvid
         };
         user.PasswordHash = Hasher.HashPassword(user, req.Password);
 
-        // Ai cũng mua hàng được; nhà đầu tư có thêm vai trò Investor và phải KYC trước khi góp vốn (UC02)
+        var organization = req.PartyType != "Individual";
+        if (organization && string.IsNullOrWhiteSpace(req.LegalName))
+            throw new BusinessRuleException("auth.legal_name_required", "Đối tác tổ chức phải khai tên pháp lý.");
+        var legalName = organization ? req.LegalName!.Trim() : user.FullName;
+        var registrationNo = string.IsNullOrWhiteSpace(req.RegistrationNo) ? null : req.RegistrationNo.Trim();
+        if (registrationNo is not null && await db.Parties.AnyAsync(p => p.RegistrationNo == registrationNo, ct))
+            throw new ConflictException("auth.registration_taken", "Số đăng ký này đã có đối tác trên nền tảng.");
+
+        // Ai cũng mua hàng được (khách B2B, BR-014); nhà đầu tư có thêm vai trò Investor và phải eKYC trước khi góp vốn (BR-009)
         user.AppUserRoles.Add(new AppUserRole { RoleCode = Roles.Customer, GrantedAt = now, CreatedAt = now });
-        user.Customer = new Customer { DisplayName = user.FullName, CreatedAt = now };
+        user.Customer = new Customer { DisplayName = legalName, CustomerType = req.CustomerType, CreatedAt = now };
         if (req.Role == SelfRegisterRole.Investor)
         {
             user.AppUserRoles.Add(new AppUserRole { RoleCode = Roles.Investor, GrantedAt = now, CreatedAt = now });
-            user.Investor = new Investor { InvestorKind = "Individual", VerificationStatus = "Unverified", CreatedAt = now };
+            user.Investor = new Investor
+            {
+                InvestorKind = organization ? "Organization" : "Individual", OrganizationName = organization ? legalName : null,
+                TaxCode = organization ? registrationNo : null, VerificationStatus = "Unverified", CreatedAt = now,
+            };
         }
 
-        db.AppUsers.Add(user);
-        await db.SaveChangesAsync(ct);
+        // Mỗi tài khoản thuộc đúng một đối tác (BR-001, BR-003); tổ chức dùng tài khoản do người đại diện đứng tên.
+        await db.InTransactionAsync(async () =>
+        {
+            var party = new Party
+            {
+                LegalName = legalName, PartyType = req.PartyType, RegistrationNo = registrationNo,
+                Representative = organization ? user.FullName : null, Phone = user.Phone,
+                VerificationStatus = "Unverified", RegisteredAt = now, CreatedAt = now, UpdatedAt = now,
+            };
+            party.Roles.Add(new PartnerRole { RoleType = "Customer", Status = "Active", ValidFrom = now, CreatedAt = now, UpdatedAt = now });
+            if (req.Role == SelfRegisterRole.Investor)
+                party.Roles.Add(new PartnerRole { RoleType = "Investor", Status = "Active", ValidFrom = now, CreatedAt = now, UpdatedAt = now });
+            db.Parties.Add(party);
+            await db.SaveChangesAsync(ct);
+            user.PartyId = party.PartyId;
+            db.AppUsers.Add(user);
+        }, ct);
         return await IssueTokenAsync(user, ct);
     }
 
