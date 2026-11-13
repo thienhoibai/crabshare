@@ -28,7 +28,7 @@ Thiết lập một lần, chỉ chủ project Vercel làm được (Settings �
 - **Không bao giờ chạy DbMigrator `--reset` vào Azure.** `--reset` xoá CSDL rồi DbUp tạo lại theo gói mặc định của Azure (General Purpose, vài trăm USD/tháng).
 - Migration mới phải chạy được trên CSDL đang có dữ liệu (đã có V006 làm mẫu: thêm cột cho phép NULL → điền dữ liệu → mới đặt NOT NULL).
 - API đăng nhập CSDL bằng managed identity (user `[crabshare-api]`, chỉ đọc/ghi dữ liệu); không có mật khẩu SQL nào.
-- Seed dữ liệu demo chỉ chạy ở Development nên trên Azure **không tự seed** (xem mục làm mới dữ liệu).
+- Seed dữ liệu demo chỉ chạy ở Development nên trên Azure **không tự seed**. Muốn có dữ liệu demo trên Azure thì làm theo mục "Bổ sung dữ liệu demo lên Azure" bên dưới.
 
 ## Cấu hình App Service
 `ASPNETCORE_ENVIRONMENT=Production`, `ConnectionStrings__Default` (Authentication=Active Directory Managed Identity), `Jwt__SigningKey` (ngẫu nhiên, chỉ nằm trên Azure), `Storage__RootPath=/home/data/storage` (deploy lại không xoá file đã tải lên), `Cors__Origins__0..n`, `Cors__OriginPatterns__0`.
@@ -55,6 +55,16 @@ Failure after maintenance begins does not automatically reopen an old binary. In
 `Security__DataProtectionKeyPath=/home/data/keys` is private and separate from `/home/data/storage`. CS-88 accepts forwarded headers only from configured proxies/networks, framework loopback defaults, and documented App Service private ingress ranges when running on that platform (RFC 1918 ranges plus the link-local `169.254.0.0/16` sandbox network that App Service for Linux uses to reach the container). Do not enable `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` or expose Kestrel directly. Reconfigure `Security__KnownProxies__0` / `Security__KnownNetworks__0` when changing ingress. If the smoke check `anonymous-private-route-401` ever fails with HTTP 400 again, `az webapp log tail` shows a `Rejected non-HTTPS request ... from <ip>` warning with the untrusted hop address to add.
 
 Demo data maintenance is an explicit owner action on the existing database. Do not delete/recreate the database or run Development seeding against Azure as a routine deploy step.
+
+### Bổ sung dữ liệu demo lên Azure (người quản hạ tầng làm, không xoá gì)
+
+Dùng khi CSDL trên Azure đã có tài khoản nhưng chưa có Lô nào, và cần bộ dữ liệu demo trong `database/README.md` để kiểm thử.
+
+1. Đặt cấu hình `Seed__DemoTopUp=true` cho App Service rồi khởi động lại API.
+2. Seeder chạy nền ngay trong API trên Azure, vì số tài khoản nhận tiền phải được mã hoá bằng khoá ở `/home/data/keys`. Không chạy seeder từ máy cá nhân vào CSDL Azure.
+3. Đợi tới khi `GET /api/batches` trả về Lô, hoặc log có dòng "Đã seed dữ liệu demo". Sau đó gỡ cấu hình `Seed__DemoTopUp`.
+
+Seeder dùng lại các tài khoản mẫu `...@crabshare.local` và hộ nuôi mẫu đang có (giữ nguyên mật khẩu và hồ sơ), tạo thêm phần còn thiếu, đổi mã hộp kiểu cũ 3 chữ số sang 4 chữ số và thêm hộp cho đủ 0001–1740. Tài khoản của người dùng khác không bị đụng tới. Toàn bộ nằm trong một giao dịch: lỗi ở đâu thì CSDL giữ nguyên như trước. Khi đã có Lô, seeder tự bỏ qua nên chạy lại không sinh trùng. Các tài khoản do seeder tạo mới dùng mật khẩu demo của nhóm.
 
 ## Optional container on an existing server
 
