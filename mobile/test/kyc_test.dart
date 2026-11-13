@@ -1,14 +1,7 @@
-import 'package:crabshare_mobile/features/investor/notifications/notification_repository.dart';
-
-import 'helpers/notification_fakes.dart';
-
-import 'package:crabshare_mobile/features/investor/data/portfolio_repository.dart';
-
 import 'dart:convert';
 
 import 'package:crabshare_mobile/app/theme/app_theme.dart';
 import 'package:crabshare_mobile/core/auth/session.dart';
-import 'package:crabshare_mobile/features/investor/data/investor_models.dart';
 import 'package:crabshare_mobile/features/investor/home/investor_home_page.dart';
 import 'package:crabshare_mobile/features/investor/kyc/kyc_camera.dart';
 import 'package:crabshare_mobile/features/investor/kyc/kyc_page.dart';
@@ -20,28 +13,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'helpers/investor_fixtures.dart';
+
 final _png = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jC9sAAAAASUVORK5CYII=',
 );
-const _user = AppUser(
-  userId: 1,
-  email: 'test@local',
-  fullName: 'KYC Test',
-  roles: [Roles.investor],
-);
-
-class _Session extends SessionController {
-  _Session() : super(const SessionState(token: 'test', user: _user));
-  void changeUser() => state = const SessionState(
-    token: 'other',
-    user: AppUser(
-      userId: 2,
-      email: 'other@local',
-      fullName: 'Other',
-      roles: [Roles.investor],
-    ),
-  );
-}
 
 class _Repository implements KycRepository {
   int submissions = 0;
@@ -134,6 +110,18 @@ void main() {
     expect(adapter.requests.last.path, '/api/me/kyc');
   });
 
+  test('status maps the failure reason and treats unknown codes as not verified', () {
+    final rejected = KycVerification.fromJson({
+      'verificationStatus': 'Rejected',
+      'verifiedAt': null,
+      'lastCheck': {'id': 1, 'result': 'Failed', 'failureReason': 'Ảnh khuôn mặt không khớp giấy tờ.'},
+    });
+    expect(rejected.status, KycStatus.rejected);
+    expect(rejected.failureReason, 'Ảnh khuôn mặt không khớp giấy tờ.');
+    expect(KycVerification.fromJson({'verificationStatus': 'Something'}).status, KycStatus.unverified);
+    expect(KycVerification.fromJson({'verificationStatus': 'Pending'}).status, KycStatus.pending);
+  });
+
   test('API validation failure propagates, never maps to Verified', () async {
     final adapter = _Adapter()
       ..responseStatus = 400
@@ -156,16 +144,9 @@ void main() {
   test('status refreshes after changing accounts', () async {
     final repository = _Repository()
       ..value = const KycVerification(status: KycStatus.verified);
-    final session = _Session();
+    final session = TestSession();
     final container = ProviderContainer(
       overrides: [
-        notificationPollIntervalProvider.overrideWithValue(null),
-        notificationRepositoryProvider.overrideWithValue(
-          EmptyNotificationRepository(),
-        ),
-        notificationReadStoreProvider.overrideWithValue(
-          MemoryNotificationReadStore(),
-        ),
         sessionProvider.overrideWith(() => session),
         kycRepositoryProvider.overrideWithValue(repository),
       ],
@@ -176,7 +157,7 @@ void main() {
       KycStatus.verified,
     );
     repository.value = const KycVerification(status: KycStatus.unverified);
-    session.changeUser();
+    session.change(2);
     expect(
       (await container.read(kycDetailsProvider.future)).status,
       KycStatus.unverified,
@@ -195,15 +176,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          notificationPollIntervalProvider.overrideWithValue(null),
-          notificationRepositoryProvider.overrideWithValue(
-            EmptyNotificationRepository(),
-          ),
-          notificationReadStoreProvider.overrideWithValue(
-            MemoryNotificationReadStore(),
-          ),
-          sessionProvider.overrideWith(_Session.new),
-          myContributionsProvider.overrideWith((ref) async => []),
+          sessionProvider.overrideWith(TestSession.new),
           kycRepositoryProvider.overrideWithValue(repository),
           kycCameraProvider.overrideWithValue(camera),
         ],
@@ -219,25 +192,25 @@ void main() {
       final repository = _Repository();
       final camera = _Camera();
       await showPage(tester, repository, camera);
+      expect(find.text('Chưa xác minh danh tính'), findsOneWidget);
       expect(
         tester
             .widget<FilledButton>(find.byKey(const ValueKey('kyc-submit')))
             .onPressed,
         isNull,
       );
-      expect(
-        tester
-            .widget<OutlinedButton>(find.byKey(const ValueKey('kyc-capture-0')))
-            .onPressed,
-        isNull,
-      );
+      // Chưa đồng ý thì bấm ô chụp không mở camera.
+      await tester.tap(find.byKey(const ValueKey('kyc-capture-0')));
+      await tester.pumpAndSettle();
+      expect(camera.selfieRequests, isEmpty);
+
       await tester.tap(find.byKey(const ValueKey('kyc-consent')));
       await tester.pumpAndSettle();
       for (var i = 0; i < 3; i++) {
-        final button = find.byKey(ValueKey('kyc-capture-$i'));
-        await tester.ensureVisible(button);
+        final tile = find.byKey(ValueKey('kyc-capture-$i'));
+        await tester.ensureVisible(tile);
         await tester.pumpAndSettle();
-        await tester.tap(button);
+        await tester.tap(tile);
         await tester.pumpAndSettle();
       }
       expect(camera.selfieRequests, [false, false, true]);
@@ -249,6 +222,7 @@ void main() {
       expect(repository.submissions, 1);
       expect(find.text('Đã xác minh danh tính'), findsOneWidget);
       expect(find.byType(Image), findsNothing);
+      expect(find.byKey(const ValueKey('kyc-submit')), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -271,33 +245,30 @@ void main() {
     );
   });
 
-  testWidgets('overview banner follows API status instead of mock KYC', (
-    tester,
-  ) async {
+  testWidgets('a rejected check shows the reason and lets the investor try again', (tester) async {
     final repository = _Repository()
-      ..value = const KycVerification(status: KycStatus.verified);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          notificationPollIntervalProvider.overrideWithValue(null),
-          notificationRepositoryProvider.overrideWithValue(
-            EmptyNotificationRepository(),
-          ),
-          notificationReadStoreProvider.overrideWithValue(
-            MemoryNotificationReadStore(),
-          ),
-          sessionProvider.overrideWith(_Session.new),
-          myContributionsProvider.overrideWith((ref) async => []),
-          kycRepositoryProvider.overrideWithValue(repository),
-        ],
-        child: MaterialApp(
-          theme: buildAppTheme(),
-          home: const InvestorHomePage(),
-        ),
-      ),
+      ..value = const KycVerification(status: KycStatus.rejected, failureReason: 'Ảnh giấy tờ bị mờ.');
+    await showPage(tester, repository, _Camera());
+    expect(find.text('Xác minh chưa đạt, hãy thử lại'), findsOneWidget);
+    expect(find.text('Ảnh giấy tờ bị mờ.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('kyc-submit')), findsOneWidget);
+  });
+
+  testWidgets('overview asks for identity verification only while the API says it is missing', (tester) async {
+    Future<void> showHome(String status) => pumpInvestor(
+      tester,
+      FakeApi()
+        ..get('/api/investor/portfolio', portfolioPage([]))
+        ..get('/api/me/kyc', {'verificationStatus': status, 'verifiedAt': null, 'lastCheck': null}),
+      home: const InvestorHomePage(),
     );
-    await tester.pumpAndSettle();
-    expect(find.text('Xác minh danh tính để góp vốn'), findsNothing);
-    expect(repository.reads, 1);
+    await showHome('Unverified');
+    expect(find.text('Xác minh danh tính'), findsOneWidget);
+    expect(find.text('Cần có trước khi góp vốn'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await showHome('Verified');
+    expect(find.text('Xác minh danh tính'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }

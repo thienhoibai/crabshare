@@ -1,227 +1,123 @@
-import 'dart:typed_data';
-
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
-import '../../../core/auth/session.dart';
+import '../../../core/api/json.dart';
+import '../../../core/capture/captured_photo.dart';
 import '../data/operator_models.dart';
+import '../data/operator_repository.dart';
 
-class EvidencePhoto {
-  EvidencePhoto({
-    required this.bytes,
-    required this.capturedAt,
-    required this.latitude,
-    required this.longitude,
-  }) {
-    if (bytes.isEmpty || bytes.length > 5 * 1024 * 1024) {
-      throw const FormatException(
-        'Ảnh cần có dung lượng từ 1 byte đến 5 MB. Hãy chụp lại.',
-      );
-    }
-    if (!latitude.isFinite ||
-        !longitude.isFinite ||
-        latitude < -90 ||
-        latitude > 90 ||
-        longitude < -180 ||
-        longitude > 180) {
-      throw const FormatException(
-        'Chưa có vị trí hợp lệ. Hãy bật GPS và chụp lại.',
-      );
-    }
-  }
-  final Uint8List bytes;
-  final DateTime capturedAt;
-  final double latitude;
-  final double longitude;
-  String get contentType {
-    if (bytes.length >= 3 &&
-        bytes[0] == 255 &&
-        bytes[1] == 216 &&
-        bytes[2] == 255) {
-      return 'image/jpeg';
-    }
-    if (bytes.length >= 8 &&
-        [
-          137,
-          80,
-          78,
-          71,
-          13,
-          10,
-          26,
-          10,
-        ].asMap().entries.every((e) => bytes[e.key] == e.value)) {
-      return 'image/png';
-    }
-    if (bytes.length >= 12 &&
-        String.fromCharCodes(bytes.take(4)) == 'RIFF' &&
-        String.fromCharCodes(bytes.skip(8).take(4)) == 'WEBP') {
-      return 'image/webp';
-    }
-    throw const FormatException(
-      'Ảnh cần có định dạng JPEG, PNG hoặc WebP. Hãy chụp lại.',
-    );
-  }
+/// Kết quả máy chủ trả về sau khi nhận một ảnh chụp tại hộp.
+class EvidenceResult {
+  const EvidenceResult({required this.id, required this.reviewStatus, this.duplicateMatch = 'None', this.crabDetected, this.captureRequestStatus});
+  final int id;
+
+  /// Accepted, Watch, Flagged hoặc Rejected.
+  final String reviewStatus;
+
+  /// None, Exact hoặc Similar.
+  final String duplicateMatch;
+  final bool? crabDetected;
+  final String? captureRequestStatus;
+
+  factory EvidenceResult.fromJson(Json j) => EvidenceResult(
+    id: intOf(j, 'id'),
+    reviewStatus: str(j, 'reviewStatus'),
+    duplicateMatch: str(j, 'duplicateMatch', 'None'),
+    crabDetected: asJsonOrNull(j['detection'])?['crabDetected'] as bool?,
+    captureRequestStatus: strOrNull(j, 'captureRequestStatus'),
+  );
 }
 
-class EvidenceResult {
-  const EvidenceResult({
-    required this.id,
-    required this.reviewStatus,
-    required this.duplicateMatch,
-    required this.receivedAt,
-    required this.modelVersion,
-    this.crabDetected,
-    this.confidence,
-    this.captureRequestStatus,
-  });
-  final int id;
-  final String reviewStatus;
-  final String duplicateMatch;
-  final DateTime receivedAt;
-  final String modelVersion;
-  final bool? crabDetected;
-  final double? confidence;
-  final String? captureRequestStatus;
-  factory EvidenceResult.fromJson(Map<String, dynamic> json) {
-    final detection = Map<String, dynamic>.from(json['detection'] as Map);
-    return EvidenceResult(
-      id: json['id'] as int,
-      reviewStatus: json['reviewStatus'] as String,
-      duplicateMatch: json['duplicateMatch'] as String,
-      receivedAt: DateTime.parse(json['receivedAt'] as String).toLocal(),
-      modelVersion: detection['modelVersion'] as String,
-      crabDetected: detection['crabDetected'] as bool?,
-      confidence: (detection['confidence'] as num?)?.toDouble(),
-      captureRequestStatus: json['captureRequestStatus'] as String?,
-    );
-  }
+/// Một trang hộp đang có cua để chọn hộp cần chụp.
+class BoxPage {
+  const BoxPage({required this.items, required this.total, this.hasMore = false});
+  final List<BoxSlot> items;
+
+  /// Số hộp khớp trên máy chủ; [hasMore] là còn hộp chưa nằm trong trang này.
+  final int total;
+  final bool hasMore;
 }
 
 abstract interface class EvidenceRepository {
-  Future<List<BoxSlot>> boxes({CancelToken? cancelToken});
-  Future<EvidenceResult> upload({
-    required BoxSlot box,
-    required EvidencePhoto photo,
-    int? captureRequestId,
-    String? slotEventType,
-  });
+  /// Hộp đang có cua của trại, lọc theo số hộp. Chỉ trả hộp đang gán cho một Lô.
+  Future<BoxPage> boxes({String search = '', CancelToken? cancelToken});
 
-  Future<EvidenceResult> uploadForTag({
-    required String tagCode,
-    required EvidencePhoto photo,
+  /// Gửi ảnh chụp tại hộp. [boxing] là ảnh hộp trống chụp ngay trước khi xếp cua vào (thả lần đầu hoặc thả bù);
+  /// [captureRequestId] là yêu cầu chụp đang trả lời.
+  Future<EvidenceResult> upload({
+    required String batchCode,
+    required String slotCode,
+    required CapturedPhoto photo,
+    int? captureRequestId,
+    bool boxing = false,
   });
 }
 
 class ApiEvidenceRepository implements EvidenceRepository {
   ApiEvidenceRepository(this.dio);
   final Dio dio;
+
+  static const pageSize = 60;
+
   @override
-  Future<List<BoxSlot>> boxes({CancelToken? cancelToken}) async {
-    final list = <BoxSlot>[];
-    for (var page = 1; ; page++) {
-      final response = await dio.get<Map<String, dynamic>>(
-        '/api/boxes',
-        queryParameters: {'status': 'Occupied', 'page': page, 'pageSize': 100},
-        cancelToken: cancelToken,
-      );
-      final json = response.data!;
-      final items = json['items'] as List;
-      for (final item in items) {
-        final data = Map<String, dynamic>.from(item as Map);
-        final batch = data['batchCode'] as String?;
-        if (batch != null && data['status'] == 'Occupied') {
-          list.add(
-            BoxSlot(
-              slotCode: data['slotCode'] as String,
-              status: SlotStatus.occupied,
-              batchCode: batch,
-              latestEvidence: data['latestEvidence'] == null
-                  ? null
-                  : BoxEvidenceSummary.fromJson(
-                      Map<String, dynamic>.from(data['latestEvidence'] as Map),
-                    ),
-            ),
-          );
-        }
-      }
-      if (items.isEmpty || page * 100 >= (json['total'] as int)) break;
-    }
-    return list;
+  Future<BoxPage> boxes({String search = '', CancelToken? cancelToken}) async {
+    final response = await dio.get<dynamic>(
+      '/api/boxes',
+      queryParameters: {'status': 'Occupied', if (search.trim().isNotEmpty) 'search': search.trim(), 'page': 1, 'pageSize': pageSize},
+      cancelToken: cancelToken,
+    );
+    final page = asJson(response.data);
+    final rows = asJsonList(page['items']);
+    final total = intOf(page, 'total');
+    return BoxPage(
+      items: [
+        for (final b in rows)
+          if (b['batchCode'] != null) BoxSlot.fromJson(b),
+      ],
+      total: total,
+      hasMore: total > rows.length,
+    );
   }
 
   @override
   Future<EvidenceResult> upload({
-    required BoxSlot box,
-    required EvidencePhoto photo,
+    required String batchCode,
+    required String slotCode,
+    required CapturedPhoto photo,
     int? captureRequestId,
-    String? slotEventType,
+    bool boxing = false,
   }) async {
     final type = photo.contentType;
     final form = FormData.fromMap({
-      'batchCode': box.batchCode,
-      'slotCode': box.slotCode,
-      'capturedAt': photo.capturedAt.toUtc().toIso8601String(),
-      'latitude': photo.latitude.toStringAsFixed(6),
-      'longitude': photo.longitude.toStringAsFixed(6),
-      if (captureRequestId != null)
-        'captureRequestId': captureRequestId.toString(),
-      'slotEventType': ?slotEventType,
-      'image': MultipartFile.fromBytes(
+      'BatchCode': batchCode,
+      'SlotCode': slotCode,
+      'CapturedAt': photo.capturedAt.toUtc().toIso8601String(),
+      'Latitude': photo.latitude.toStringAsFixed(6),
+      'Longitude': photo.longitude.toStringAsFixed(6),
+      if (captureRequestId != null) 'CaptureRequestId': '$captureRequestId',
+      if (boxing) 'SlotEventType': 'Boxed',
+      'Image': MultipartFile.fromBytes(
         photo.bytes,
-        filename:
-            'capture.${type == 'image/jpeg' ? 'jpg' : type.split('/').last}',
+        filename: 'capture.${type == 'image/jpeg' ? 'jpg' : type.split('/').last}',
         contentType: DioMediaType.parse(type),
       ),
     });
-    final response = await dio.post<Map<String, dynamic>>(
+    final response = await dio.post<dynamic>(
       '/api/evidence',
       data: form,
-      options: Options(
-        sendTimeout: const Duration(seconds: 60),
-        receiveTimeout: const Duration(seconds: 90),
-      ),
+      options: Options(sendTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 90)),
     );
-    return EvidenceResult.fromJson(response.data!);
-  }
-
-  @override
-  Future<EvidenceResult> uploadForTag({
-    required String tagCode,
-    required EvidencePhoto photo,
-  }) async {
-    final type = photo.contentType;
-    final form = FormData.fromMap({
-      'tagCode': tagCode,
-      'capturedAt': photo.capturedAt.toUtc().toIso8601String(),
-      'latitude': photo.latitude.toStringAsFixed(6),
-      'longitude': photo.longitude.toStringAsFixed(6),
-      'image': MultipartFile.fromBytes(
-        photo.bytes,
-        filename:
-            'capture.${type == 'image/jpeg' ? 'jpg' : type.split('/').last}',
-        contentType: DioMediaType.parse(type),
-      ),
-    });
-    final response = await dio.post<Map<String, dynamic>>(
-      '/api/evidence',
-      data: form,
-      options: Options(
-        sendTimeout: const Duration(seconds: 60),
-        receiveTimeout: const Duration(seconds: 90),
-      ),
-    );
-    return EvidenceResult.fromJson(response.data!);
+    return EvidenceResult.fromJson(asJson(response.data));
   }
 }
 
-final evidenceRepositoryProvider = Provider<EvidenceRepository>(
-  (ref) => ApiEvidenceRepository(ref.watch(dioProvider)),
-);
-final captureBoxesProvider = FutureProvider.autoDispose<List<BoxSlot>>((ref) {
-  ref.watch(sessionProvider.select((session) => session.user?.userId));
+final evidenceRepositoryProvider = Provider<EvidenceRepository>((ref) => ApiEvidenceRepository(ref.watch(dioProvider)));
+
+/// Hộp đang có cua khớp với số hộp đang gõ ở màn chụp ảnh.
+final captureBoxesProvider = FutureProvider.autoDispose.family<BoxPage, String>((ref, search) {
+  ref.watch(farmAccountProvider);
   final cancel = CancelToken();
-  ref.onDispose(() => cancel.cancel());
-  return ref.watch(evidenceRepositoryProvider).boxes(cancelToken: cancel);
+  ref.onDispose(cancel.cancel);
+  return ref.watch(evidenceRepositoryProvider).boxes(search: search, cancelToken: cancel);
 }, retry: (_, _) => null);

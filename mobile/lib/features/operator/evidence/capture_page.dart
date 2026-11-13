@@ -1,64 +1,58 @@
 import 'dart:async';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
-import '../../../core/auth/session.dart';
+import '../../../core/capture/captured_photo.dart';
 import '../../../core/format/dates.dart';
+import '../../../core/format/money.dart';
+import '../../../shared/widgets/app_parts.dart';
 import '../../../shared/widgets/app_ui.dart';
 import '../data/operator_models.dart';
-import 'evidence_camera.dart';
-import 'evidence_repository.dart';
+import '../data/operator_repository.dart';
 import 'capture_requests_repository.dart';
-import '../tags/tag_repository.dart';
+import 'evidence_explanation_repository.dart';
+import 'evidence_repository.dart';
 
+/// Chụp ảnh tại một hộp đang có cua: chọn hộp, chụp bằng camera trong ứng dụng, gửi.
+/// Mở từ một yêu cầu chụp ([captureRequestId]) thì hộp đã chọn sẵn và chỉ gửi được trước hạn.
 class CapturePage extends ConsumerStatefulWidget {
-  const CapturePage({
-    super.key,
-    this.initialSlot,
-    this.captureRequestId,
-    this.requestBatchCode,
-    this.requestDueAt,
-    this.tagCode,
-  });
+  const CapturePage({super.key, this.initialSlot, this.captureRequestId, this.requestBatchCode, this.requestDueAt});
   final String? initialSlot;
   final int? captureRequestId;
   final String? requestBatchCode;
   final DateTime? requestDueAt;
-  final String? tagCode;
+
   @override
   ConsumerState<CapturePage> createState() => _CapturePageState();
 }
 
 class _CapturePageState extends ConsumerState<CapturePage> {
-  final _search = TextEditingController();
-  String? _slot;
-  EvidencePhoto? _photo;
+  late final _search = TextEditingController(text: widget.initialSlot ?? '');
+  late String _query = widget.initialSlot ?? '';
+  Timer? _debounce;
+  Timer? _clock;
+
+  /// Hộp người dùng tự chọn. Chưa chọn thì lấy hộp mở sẵn theo [CapturePage.initialSlot], trừ khi đã bấm đổi hộp.
+  BoxSlot? _picked;
+  bool _preselect = true;
+  CapturedPhoto? _photo;
   EvidenceResult? _result;
   String? _error;
-  bool _capturing = false;
   bool _sending = false;
-  bool _activating = false;
-  String? _activationStatus;
-  String? _activationError;
-  bool get _tagMode => widget.tagCode != null;
-  bool get _busy => _capturing || _sending;
-  Timer? _requestTimer;
-  bool get _requestExpired =>
-      widget.requestDueAt != null &&
-      DateTime.now().isAfter(widget.requestDueAt!);
-  bool get _requestFinished =>
-      widget.captureRequestId != null &&
-      _result?.captureRequestStatus == 'Fulfilled';
+
+  bool get _forRequest => widget.captureRequestId != null;
+  bool get _expired => widget.requestDueAt != null && DateTime.now().isAfter(widget.requestDueAt!);
+  bool get _fulfilled => _forRequest && _result?.captureRequestStatus == 'Fulfilled';
+
   @override
   void initState() {
     super.initState();
-    _slot = widget.initialSlot;
-    if (widget.captureRequestId != null) {
-      _requestTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    // Yêu cầu chụp có hạn: đếm lùi và khoá nút khi quá hạn.
+    if (_forRequest) {
+      _clock = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) setState(() {});
       });
     }
@@ -66,48 +60,32 @@ class _CapturePageState extends ConsumerState<CapturePage> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _clock?.cancel();
     _search.dispose();
-    _requestTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _takePhoto() async {
-    if (_busy) return;
-    if (_requestExpired || _requestFinished) return;
-    final userId = ref.read(sessionProvider).user?.userId;
-    setState(() {
-      _capturing = true;
-      _error = null;
+  void _onSearch(String text) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) setState(() => _query = text.trim());
     });
-    try {
-      final photo = await ref.read(evidenceCameraProvider).capture();
-      if (!mounted || ref.read(sessionProvider).user?.userId != userId) return;
-      if (photo != null) {
-        setState(() {
-          _photo = photo;
-          _result = null;
-        });
-      }
-    } catch (error) {
-      if (!mounted || ref.read(sessionProvider).user?.userId != userId) return;
-      setState(() {
-        _error = error is EvidenceCaptureException
-            ? error.message
-            : error is FormatException
-            ? error.message
-            : error is PlatformException
-            ? 'Không mở được camera hoặc vị trí. Hãy kiểm tra quyền ứng dụng.'
-            : 'Chưa lấy được ảnh và vị trí. Hãy bật GPS và thử lại.';
-      });
-    } finally {
-      if (mounted) setState(() => _capturing = false);
-    }
   }
+
+  void _reset() => setState(() {
+    _picked = null;
+    _preselect = false;
+    _photo = null;
+    _result = null;
+    _error = null;
+    _sending = false;
+  });
 
   Future<void> _send(BoxSlot box) async {
-    if (_busy || _photo == null) return;
-    if (_requestExpired || _requestFinished) return;
-    final userId = ref.read(sessionProvider).user?.userId;
+    final photo = _photo;
+    if (_sending || photo == null || _expired || _fulfilled) return;
+    final account = ref.read(farmAccountProvider);
     setState(() {
       _sending = true;
       _error = null;
@@ -115,351 +93,108 @@ class _CapturePageState extends ConsumerState<CapturePage> {
     try {
       final result = await ref
           .read(evidenceRepositoryProvider)
-          .upload(
-            box: box,
-            photo: _photo!,
-            captureRequestId: widget.captureRequestId,
-          );
-      if (!mounted || ref.read(sessionProvider).user?.userId != userId) return;
+          .upload(batchCode: box.batchCode ?? '', slotCode: box.slotCode, photo: photo, captureRequestId: widget.captureRequestId);
+      if (!mounted || ref.read(farmAccountProvider) != account) return;
       setState(() {
         _result = result;
         _photo = null;
-        _slot = null;
       });
+      if (_fulfilled) _clock?.cancel();
       ref.invalidate(captureBoxesProvider);
       ref.invalidate(captureRequestsProvider);
-      if (_requestFinished) _requestTimer?.cancel();
+      ref.invalidate(operatorDashboardProvider);
+      if (result.reviewStatus == 'Flagged') ref.invalidate(flaggedEvidenceProvider);
     } catch (error) {
-      if (mounted && ref.read(sessionProvider).user?.userId == userId) {
-        setState(() => _error = apiErrorMessage(error));
-      }
+      if (mounted && ref.read(farmAccountProvider) == account) setState(() => _error = apiErrorMessage(error));
     } finally {
       if (mounted) setState(() => _sending = false);
-    }
-  }
-
-  Future<void> _sendTag() async {
-    if (_busy || _photo == null || widget.tagCode == null) return;
-    final userId = ref.read(sessionProvider).user?.userId;
-    setState(() {
-      _sending = true;
-      _error = null;
-    });
-    try {
-      final result = await ref
-          .read(evidenceRepositoryProvider)
-          .uploadForTag(tagCode: widget.tagCode!, photo: _photo!);
-      if (!mounted || ref.read(sessionProvider).user?.userId != userId) return;
-      setState(() {
-        _result = result;
-        _photo = null;
-        _activationStatus = null;
-        _activationError = null;
-      });
-    } catch (error) {
-      if (mounted && ref.read(sessionProvider).user?.userId == userId) {
-        setState(() => _error = apiErrorMessage(error));
-      }
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
-  }
-
-  Future<void> _activateTag() async {
-    final result = _result;
-    final code = widget.tagCode;
-    if (_activating ||
-        result == null ||
-        result.reviewStatus != 'Accepted' ||
-        code == null) {
-      return;
-    }
-    final session = ref.read(sessionProvider);
-    setState(() {
-      _activating = true;
-      _activationError = null;
-    });
-    try {
-      final lifecycle = await ref
-          .read(tagRepositoryProvider)
-          .activate(code, result.id);
-      if (!mounted ||
-          ref.read(sessionProvider).user?.userId != session.user?.userId ||
-          ref.read(sessionProvider).token != session.token) {
-        return;
-      }
-      setState(() => _activationStatus = lifecycle.status);
-      ref.invalidate(printedTagsProvider);
-      try {
-        final currentSession = ref.read(sessionProvider);
-        await ref.read(printedTagsProvider((currentSession, 1)).future);
-      } catch (_) {
-        // Activation succeeded; the tag list will show its own retry state.
-      }
-    } catch (error) {
-      if (mounted &&
-          ref.read(sessionProvider).user?.userId == session.user?.userId &&
-          ref.read(sessionProvider).token == session.token) {
-        setState(() => _activationError = apiErrorMessage(error));
-      }
-    } finally {
-      if (mounted) setState(() => _activating = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(sessionProvider.select((session) => session.user?.userId), (
-      previous,
-      next,
-    ) {
-      if (previous != next) {
-        setState(() {
-          _photo = null;
-          _result = null;
-          _slot = null;
-          _error = null;
-          _activating = false;
-          _activationStatus = null;
-          _activationError = null;
-        });
-      }
+    // Đổi tài khoản giữa chừng thì bỏ ảnh và hộp đang chọn.
+    ref.listen(farmAccountProvider, (previous, next) {
+      if (previous != next) _reset();
     });
-    final boxes = _tagMode
-        ? const AsyncData<List<BoxSlot>>([])
-        : ref.watch(captureBoxesProvider);
-    final list = boxes.isLoading || boxes.hasError
-        ? const <BoxSlot>[]
-        : boxes.value ?? const <BoxSlot>[];
-    final allowed = widget.captureRequestId == null
-        ? list
-        : list
-              .where(
-                (box) =>
-                    box.slotCode == widget.initialSlot &&
-                    box.batchCode == widget.requestBatchCode,
-              )
-              .map(
-                (box) => box.latestEvidence?.id != _result?.id
-                    ? BoxSlot(
-                        slotCode: box.slotCode,
-                        status: box.status,
-                        batchCode: box.batchCode,
-                      )
-                    : box,
-              )
-              .toList();
-    final selected = allowed.where((box) => box.slotCode == _slot).firstOrNull;
-    final visible = allowed
-        .where((box) => box.slotCode.contains(_search.text.trim()))
-        .toList();
+    final boxes = ref.watch(captureBoxesProvider(_query));
+    final page = boxes.value;
+    final list = [
+      for (final b in page?.items ?? const <BoxSlot>[])
+        if (!_forRequest || (b.slotCode == widget.initialSlot && b.batchCode == widget.requestBatchCode)) b,
+    ];
+    final selected = _picked ?? (_preselect && widget.initialSlot != null ? list.where((b) => b.slotCode == widget.initialSlot).firstOrNull : null);
+    final closed = _expired || _fulfilled;
+
     return Scaffold(
-      bottomNavigationBar: _tagMode
-          ? SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-                child: _TagCaptureSheet(
-                  tagCode: widget.tagCode!,
-                  photo: _photo,
-                  busy: _busy,
-                  capturing: _capturing,
-                  onShoot: _takePhoto,
-                  onSend: _sendTag,
-                ),
-              ),
-            )
-          : selected == null
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-                child: _CaptureSheet(
-                  box: selected,
-                  photo: _photo,
-                  busy: _busy,
-                  disabled: _requestExpired || _requestFinished,
-                  capturing: _capturing,
-                  onShoot: _takePhoto,
-                  onSend: () => _send(selected),
-                ),
-              ),
-            ),
       body: SafeArea(
         child: AppRefreshIndicator(
-          onRefresh: () => _tagMode
-              ? Future<void>.value()
-              : ref.refresh(captureBoxesProvider.future),
+          onRefresh: () => ref.refresh(captureBoxesProvider(_query).future),
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
                 sliver: SliverToBoxAdapter(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SubPageHeader(
-                        title: _tagMode
-                            ? 'Xác nhận tem ${widget.tagCode}'
-                            : 'Chụp bằng chứng',
-                      ),
+                      const SubPageHeader(title: 'Chụp ảnh tại hộp'),
                       const SizedBox(height: 14),
-                      if (widget.captureRequestId != null) ...[
-                        Text(
-                          _requestFinished
-                              ? 'Yêu cầu chụp đã hoàn thành'
-                              : _requestExpired
-                              ? 'Yêu cầu chụp đã quá hạn. Vui lòng quay lại Hôm nay để cập nhật.'
-                              : 'Chụp hộp ${widget.initialSlot} · ${widget.requestDueAt == null ? '' : formatDueIn(widget.requestDueAt!)}',
-                          style: TextStyle(
-                            color: _requestFinished
-                                ? AppColors.success
-                                : _requestExpired
-                                ? AppColors.danger
-                                : AppColors.accentText,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      AppCard(
-                        color: AppColors.ink,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _tagMode
-                                  ? 'Chụp cua gắn tem này'
-                                  : 'Số hộp phải rõ trong ảnh',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(color: Colors.white),
-                            ),
-                            const SizedBox(height: 6),
-                            const Text(
-                              'Chụp trực tiếp bằng camera. Vị trí và giờ chụp được gửi cùng ảnh để kiểm tra bằng chứng.',
-                              style: TextStyle(
-                                color: Color(0xFFD7D2CD),
-                                height: 1.45,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      if (!_tagMode)
-                        TextField(
-                          controller: _search,
-                          enabled: !_busy,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            prefixIcon: Icon(Icons.search_rounded),
-                            hintText: 'Tìm số hộp (0014, 0143…)',
-                          ),
-                          onChanged: (_) => setState(() {}),
-                        ),
-                      const SizedBox(height: 12),
-                      if (_error != null) ...[
-                        Text(
-                          _error!,
-                          style: const TextStyle(color: AppColors.danger),
-                        ),
-                        if (!_sending && _photo == null)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton(
-                              onPressed: () => ref
-                                  .read(evidenceCameraProvider)
-                                  .openSettings(),
-                              child: const Text('Mở cài đặt'),
-                            ),
-                          ),
-                        const SizedBox(height: 12),
-                      ],
+                      if (_forRequest) ...[_requestBanner(), const SizedBox(height: 12)],
                       if (_result != null) ...[
                         _ResultCard(result: _result!),
-                        if (_tagMode) ...[
-                          const SizedBox(height: 8),
-                          if (_result!.reviewStatus == 'Watch' ||
-                              _result!.reviewStatus == 'Flagged')
-                            const Text(
-                              'Đang chờ người thẩm định. Tem chưa được kích hoạt.',
-                            ),
-                          if (_result!.reviewStatus == 'Accepted' &&
-                              _activationStatus == null)
-                            FilledButton.icon(
-                              onPressed: _activating ? null : _activateTag,
-                              icon: const Icon(Icons.verified_outlined),
-                              label: Text(
-                                _activating
-                                    ? 'Đang kích hoạt…'
-                                    : 'Kích hoạt tem',
-                              ),
-                            ),
-                          if (_activationStatus != null)
-                            Text(
-                              'Tem đã kích hoạt · bằng chứng #${_result!.id}',
-                              style: const TextStyle(color: AppColors.success),
-                            ),
-                          if (_activationError != null)
-                            Text(
-                              _activationError!,
-                              style: const TextStyle(color: AppColors.danger),
-                            ),
+                        // Ảnh trả lời yêu cầu chụp mà bị gắn cờ thì yêu cầu vẫn mở: cho chụp lại đúng hộp đó.
+                        if (!_forRequest || !closed) ...[
+                          const SizedBox(height: 12),
+                          OutlinedButton(
+                            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                            onPressed: _forRequest ? () => setState(() => _result = null) : _reset,
+                            child: Text(_forRequest ? 'Chụp lại' : 'Chụp hộp khác'),
+                          ),
                         ],
-                        const SizedBox(height: 14),
+                      ] else if (selected != null && !closed)
+                        ..._shoot(selected)
+                      else if (selected == null) ...[
+                        if (!_forRequest)
+                          TextField(
+                            controller: _search,
+                            keyboardType: TextInputType.number,
+                            onChanged: _onSearch,
+                            decoration: const InputDecoration(prefixIcon: Icon(Icons.search_rounded), hintText: 'Tìm số hộp'),
+                          ),
+                        if (boxes.isLoading && !boxes.hasValue) const LoadingSkeleton(rows: 1),
+                        if (boxes.hasError && !boxes.isLoading)
+                          ErrorView(message: apiErrorMessage(boxes.error!), onRetry: () => ref.invalidate(captureBoxesProvider(_query))),
+                        if (boxes.hasValue && list.isEmpty)
+                          EmptyState(
+                            icon: Icons.inventory_2_outlined,
+                            title: _forRequest ? 'Hộp ${widget.initialSlot} không còn cua của Lô này' : 'Không có hộp đang có cua khớp số này',
+                          ),
+                        if (!_forRequest && page != null && page.hasMore)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: Text('Gõ số hộp để tìm trong ${formatCount(page.total)} hộp.', style: Theme.of(context).textTheme.bodySmall),
+                          ),
                       ],
-                      if (!_tagMode && boxes.isLoading)
-                        const LoadingSkeleton(rows: 1),
-                      if (!_tagMode && boxes.hasError)
-                        ErrorView(
-                          message: apiErrorMessage(boxes.error!),
-                          onRetry: () => ref.invalidate(captureBoxesProvider),
-                        ),
-                      if (_tagMode)
-                        const Text(
-                          'Ảnh sẽ được gắn với mã tem; thời gian chụp và vị trí GPS được gửi cùng bằng chứng.',
-                        ),
-                      if (!_tagMode && boxes.hasValue && visible.isEmpty)
-                        const EmptyState(
-                          icon: Icons.inventory_2_outlined,
-                          title: 'Chưa có hộp phù hợp',
-                          message:
-                              'Chỉ hiện hộp đang được gán cho lô đang nuôi.',
-                        ),
-                      if (!_tagMode && boxes.hasValue && visible.isNotEmpty)
-                        SectionHeader(
-                          title: 'Chọn hộp đang nuôi',
-                          actionLabel: '${visible.length}',
-                        ),
                     ],
                   ),
                 ),
               ),
-              if (!_tagMode)
+              if (selected == null && _result == null && !_forRequest)
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                   sliver: SliverGrid(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final box = visible[index];
-                      final selected = box.slotCode == _slot;
-                      return _BoxTile(
-                        box: box,
-                        selected: selected,
-                        onTap: _busy || _requestExpired || _requestFinished
-                            ? null
-                            : () => setState(() {
-                                _slot = box.slotCode;
-                                _photo = null;
-                                _error = null;
-                              }),
-                      );
-                    }, childCount: visible.length),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          mainAxisSpacing: 10,
-                          crossAxisSpacing: 10,
-                          childAspectRatio: 0.9,
-                        ),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: 1.25,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) => _BoxChoice(box: list[i], onTap: () => setState(() => _picked = list[i])),
+                      childCount: list.length,
+                    ),
                   ),
                 ),
             ],
@@ -468,327 +203,114 @@ class _CapturePageState extends ConsumerState<CapturePage> {
       ),
     );
   }
+
+  Widget _requestBanner() {
+    final (text, color) = _fulfilled
+        ? ('Yêu cầu chụp đã hoàn thành', AppColors.success)
+        : _expired
+        ? ('Yêu cầu chụp đã quá hạn', AppColors.danger)
+        : ('Chụp hộp ${widget.initialSlot} · ${widget.requestDueAt == null ? '' : formatDueIn(widget.requestDueAt!)}', AppColors.accentText);
+    return Text(
+      text,
+      style: TextStyle(color: color, fontWeight: FontWeight.w700),
+    );
+  }
+
+  List<Widget> _shoot(BoxSlot box) => [
+    Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Hộp ${box.slotCode}', style: Theme.of(context).textTheme.titleLarge),
+              Text(box.batchCode ?? '', style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+        ),
+        if (!_forRequest) TextButton(onPressed: _sending ? null : _reset, child: const Text('Đổi hộp')),
+      ],
+    ),
+    const SizedBox(height: 12),
+    IgnorePointer(
+      ignoring: _sending,
+      child: PhotoField(
+        photo: _photo,
+        label: 'Chụp rõ số hộp',
+        onChanged: (photo) => setState(() {
+          _photo = photo;
+          _error = null;
+        }),
+      ),
+    ),
+    if (_error != null) ...[const SizedBox(height: 10), Text(_error!, style: const TextStyle(color: AppColors.danger))],
+    const SizedBox(height: 16),
+    FilledButton(onPressed: _sending || _photo == null ? null : () => _send(box), child: Text(_sending ? 'Đang gửi…' : 'Gửi ảnh')),
+  ];
 }
 
-String _evidenceLabel(String status) => switch (status) {
-  'Flagged' => 'Cần kiểm tra',
-  'Rejected' => 'Chụp lại',
-  'Watch' => 'Theo dõi',
-  _ => 'Đã gửi',
-};
-
-class _BoxTile extends StatelessWidget {
-  const _BoxTile({
-    required this.box,
-    required this.selected,
-    required this.onTap,
-  });
+/// Một hộp trong lưới chọn hộp cần chụp. Ảnh gần nhất bị gắn cờ hoặc bị loại thì nhắc chụp lại.
+class _BoxChoice extends StatelessWidget {
+  const _BoxChoice({required this.box, required this.onTap});
   final BoxSlot box;
-  final bool selected;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final evidence = box.latestEvidence;
-    final needsAttention =
-        evidence?.reviewStatus == 'Flagged' ||
-        evidence?.reviewStatus == 'Rejected';
-    final color = needsAttention
-        ? AppColors.danger
-        : evidence?.reviewStatus == 'Watch'
-        ? AppColors.accentText
-        : AppColors.success;
+    final status = box.latestEvidence?.reviewStatus;
+    final retake = status == 'Flagged' || status == 'Rejected';
     return Material(
-      color: selected ? AppColors.ink : AppColors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: evidence == null || selected
-            ? BorderSide.none
-            : BorderSide(color: color),
-      ),
+      color: retake ? AppColors.danger.withValues(alpha: 0.14) : AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
         onTap: onTap,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                box.slotCode,
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: selected ? Colors.white : AppColors.ink,
-                ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(box.slotCode, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            if (retake)
+              const Text(
+                'Chụp lại',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.danger),
               ),
-              if (evidence != null) ...[
-                const SizedBox(height: 4),
-                Icon(
-                  needsAttention
-                      ? Icons.flag_outlined
-                      : evidence.reviewStatus == 'Watch'
-                      ? Icons.visibility_outlined
-                      : Icons.check_circle_outline_rounded,
-                  size: 16,
-                  color: color,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _evidenceLabel(evidence.reviewStatus),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: selected ? Colors.white : color,
-                  ),
-                ),
-              ],
-            ],
-          ),
+          ],
         ),
       ),
     );
   }
-}
-
-class _CaptureSheet extends StatelessWidget {
-  const _CaptureSheet({
-    required this.box,
-    required this.photo,
-    required this.busy,
-    this.disabled = false,
-    required this.capturing,
-    required this.onShoot,
-    required this.onSend,
-  });
-  final BoxSlot box;
-  final EvidencePhoto? photo;
-  final bool busy;
-  final bool disabled;
-  final bool capturing;
-  final VoidCallback onShoot;
-  final VoidCallback onSend;
-  @override
-  Widget build(BuildContext context) => AppCard(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: photo == null
-                  ? Container(
-                      width: 56,
-                      height: 56,
-                      color: AppColors.surfaceMuted,
-                      child: const Icon(Icons.photo_camera_outlined),
-                    )
-                  : Image.memory(
-                      photo!.bytes,
-                      width: 56,
-                      height: 56,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) =>
-                          const SizedBox(
-                            width: 56,
-                            height: 56,
-                            child: Icon(Icons.broken_image_outlined),
-                          ),
-                    ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Hộp ${box.slotCode}',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  Text(
-                    box.batchCode ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              width: 130,
-              child: FilledButton(
-                style: FilledButton.styleFrom(minimumSize: const Size(90, 46)),
-                onPressed: busy || disabled
-                    ? null
-                    : (photo == null ? onShoot : onSend),
-                child: Text(
-                  busy
-                      ? capturing
-                            ? 'Đang chụp…'
-                            : 'Đang gửi…'
-                      : photo == null
-                      ? 'Chụp'
-                      : 'Gửi ảnh',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-          ],
-        ),
-        if (photo != null)
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Đã lấy vị trí lúc chụp',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-              TextButton(
-                onPressed: busy || disabled ? null : onShoot,
-                child: const Text('Chụp lại'),
-              ),
-            ],
-          ),
-        if (photo == null && box.latestEvidence != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              '${_evidenceLabel(box.latestEvidence!.reviewStatus)} · ${formatTime(box.latestEvidence!.receivedAt)} ${formatDayMonth(box.latestEvidence!.receivedAt)}',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-      ],
-    ),
-  );
-}
-
-class _TagCaptureSheet extends StatelessWidget {
-  const _TagCaptureSheet({
-    required this.tagCode,
-    required this.photo,
-    required this.busy,
-    required this.capturing,
-    required this.onShoot,
-    required this.onSend,
-  });
-  final String tagCode;
-  final EvidencePhoto? photo;
-  final bool busy;
-  final bool capturing;
-  final VoidCallback onShoot;
-  final VoidCallback onSend;
-
-  @override
-  Widget build(BuildContext context) => AppCard(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: photo == null
-                  ? Container(
-                      width: 56,
-                      height: 56,
-                      color: AppColors.surfaceMuted,
-                      child: const Icon(Icons.photo_camera_outlined),
-                    )
-                  : Image.memory(
-                      photo!.bytes,
-                      width: 56,
-                      height: 56,
-                      fit: BoxFit.cover,
-                    ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Tem $tagCode',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            SizedBox(
-              width: 130,
-              child: FilledButton(
-                onPressed: busy
-                    ? null
-                    : photo == null
-                    ? onShoot
-                    : onSend,
-                child: Text(
-                  busy
-                      ? (capturing ? 'Đang chụp…' : 'Đang gửi…')
-                      : photo == null
-                      ? 'Chụp'
-                      : 'Gửi ảnh',
-                ),
-              ),
-            ),
-          ],
-        ),
-        if (photo != null)
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: busy ? null : onShoot,
-              child: const Text('Chụp lại'),
-            ),
-          ),
-      ],
-    ),
-  );
 }
 
 class _ResultCard extends StatelessWidget {
   const _ResultCard({required this.result});
   final EvidenceResult result;
+
   @override
   Widget build(BuildContext context) {
     final flagged = result.reviewStatus == 'Flagged';
     final title = flagged
         ? 'Ảnh cần thẩm định'
         : result.reviewStatus == 'Watch'
-        ? 'Đã lưu ảnh — cần theo dõi'
-        : 'Đã lưu bằng chứng';
+        ? 'Đã lưu ảnh, cần theo dõi'
+        : 'Đã lưu ảnh';
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                flagged
-                    ? Icons.flag_outlined
-                    : Icons.check_circle_outline_rounded,
-                color: flagged ? AppColors.danger : AppColors.success,
-              ),
+              Icon(flagged ? Icons.flag_outlined : Icons.check_circle_outline_rounded, color: flagged ? AppColors.danger : AppColors.success),
               const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
+              Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium)),
             ],
           ),
-          const SizedBox(height: 6),
-          Text('Bằng chứng #${result.id}'),
-          if (result.duplicateMatch != 'None')
+          if (result.duplicateMatch != 'None') ...[
+            const SizedBox(height: 6),
             Text(
-              result.duplicateMatch == 'Exact'
-                  ? 'Ảnh trùng với ảnh đã gửi trước đó.'
-                  : 'Ảnh tương tự bằng chứng đã có. Người thẩm định sẽ kiểm tra.',
+              result.duplicateMatch == 'Exact' ? 'Ảnh trùng với ảnh đã gửi trước đó.' : 'Ảnh giống một ảnh đã gửi, sẽ được kiểm tra lại.',
               style: const TextStyle(color: AppColors.danger),
             ),
-          if (result.crabDetected == null)
-            Text(
-              'Chưa có kết luận nhận diện cua.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+          ],
         ],
       ),
     );

@@ -10,6 +10,7 @@ abstract final class Roles {
   static const operatorMember = 'OperatorMember';
   static const platformAdmin = 'PlatformAdmin';
   static const evidenceReviewer = 'EvidenceReviewer';
+  static const qcInspector = 'QcInspector';
 }
 
 class AppUser {
@@ -29,6 +30,8 @@ class AppUser {
 
   bool get isOperator => roles.contains(Roles.operatorMember);
   bool get isInvestor => roles.contains(Roles.investor);
+  bool get isQc => roles.contains(Roles.qcInspector);
+  bool get isCustomer => roles.contains(Roles.customer);
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
     userId: json['userId'] as int,

@@ -89,6 +89,7 @@ class GreetingHeader extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(width: 10),
         Semantics(
           label: notificationCount > 0
               ? 'Thông báo, $notificationCount chưa đọc'

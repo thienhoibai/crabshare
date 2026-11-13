@@ -1,388 +1,233 @@
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../app/routes.dart';
 import '../../../app/theme/app_theme.dart';
-import '../../../core/api/api_client.dart';
 import '../../../core/auth/session.dart';
-import '../../../core/format/dates.dart';
 import '../../../core/format/money.dart';
+import '../../../shared/widgets/app_parts.dart';
 import '../../../shared/widgets/app_ui.dart';
 import '../../../shared/widgets/nav_shell.dart';
-import '../../../shared/widgets/segmented_gauge.dart';
-import '../data/investor_models.dart';
-import '../data/investor_repository.dart';
+import '../data/contract_repository.dart';
+import '../data/portfolio_repository.dart';
+import '../data/settlement_repository.dart';
+import '../investor_routes.dart';
 import '../kyc/kyc_repository.dart';
 import '../notifications/notification_repository.dart';
+import '../widgets/investor_ui.dart';
+import 'investor_todos.dart';
 
-/// Tab "Tổng quan" của nhà đầu tư — bố cục theo màn dashboard của mẫu:
-/// đồng hồ bán nguyệt (tiến độ chu kỳ nuôi), thanh "+", thẻ từng khoản góp.
-class InvestorHomePage extends ConsumerStatefulWidget {
+/// Tab "Tổng quan": số tiền tôi đã góp (kèm đã giải ngân theo mốc và còn giữ), việc cần làm, rồi các Lô của tôi.
+/// Chỉ có số đã ghi nhận, không có số dự kiến.
+class InvestorHomePage extends ConsumerWidget {
   const InvestorHomePage({super.key});
 
-  @override
-  ConsumerState<InvestorHomePage> createState() => _InvestorHomePageState();
-}
+  Future<void> _refresh(WidgetRef ref) {
+    ref.invalidate(kycDetailsProvider);
+    ref.invalidate(myContributionsProvider);
+    ref.invalidate(myContractsProvider);
+    ref.invalidate(mySettlementsProvider);
+    return ref.refresh(portfolioProvider.future);
+  }
 
-class _InvestorHomePageState extends ConsumerState<InvestorHomePage> {
-  String? _selectedCode;
-  int? _selectedUser;
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(sessionProvider).user;
-    if (_selectedUser != user?.userId) {
-      _selectedCode = null;
-      _selectedUser = user?.userId;
-    }
-    final contributions = ref.watch(myContributionsProvider);
+    final portfolio = ref.watch(portfolioProvider);
 
     return Scaffold(
       body: SafeArea(
         bottom: false,
         child: AsyncContent(
-          value: contributions,
-          onRefresh: () => Future.wait([
-            ref.refresh(myContributionsProvider.future),
-            ref.refresh(kycDetailsProvider.future),
-          ]),
-          data: (items) {
-            final index = items.indexWhere(
-              (c) => c.batch.code == _selectedCode,
-            );
-            final selectedIndex = index < 0 ? 0 : index;
-            final selected = items.isEmpty ? null : items[selectedIndex];
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, kNavBarClearance),
-              children: [
-                GreetingHeader(
-                  name: user?.fullName ?? '',
-                  subtitle: 'Danh mục góp vốn của bạn',
-                  notificationCount: ref.watch(unreadNotificationsProvider),
-                  onBell: () => context.go(Routes.investorNotifications),
+          value: portfolio,
+          onRefresh: () => _refresh(ref),
+          data: (items) => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, kNavBarClearance),
+            children: [
+              GreetingHeader(
+                name: user?.fullName ?? '',
+                subtitle: 'Nhà đầu tư',
+                notificationCount: ref.watch(unreadNotificationsProvider),
+                onBell: () => context.go(Routes.investorNotifications),
+              ),
+              const SizedBox(height: 16),
+              if (items.isNotEmpty) const _MoneyHero(),
+              const _Todos(),
+              if (items.isEmpty) ...[
+                const EmptyState(icon: Icons.savings_outlined, title: 'Bạn chưa góp vốn vào Lô nào'),
+                FilledButton(
+                  onPressed: () => context.go(Routes.investorBatches),
+                  child: const Text('Xem Lô đang gọi vốn'),
                 ),
-                const SizedBox(height: 14),
-                const _KycBanner(),
-                if (selected == null)
-                  const EmptyState(
-                    icon: Icons.savings_outlined,
-                    title: 'Bạn chưa góp vốn lô nào',
-                    message: 'Chọn một lô đang gọi vốn để bắt đầu.',
-                  )
-                else ...[
-                  _BatchSwitcher(
-                    items: items,
-                    selected: selectedIndex,
-                    onSelect: (i) =>
-                        setState(() => _selectedCode = items[i].batch.code),
-                  ),
-                  const SizedBox(height: 12),
-                  _CycleGaugeCard(contribution: selected),
-                ],
-                const SizedBox(height: 14),
-                AddBar(
-                  label: 'Góp vốn lô mới',
-                  onTap: () => context.go(Routes.investorBatches),
-                ),
-                SectionHeader(
-                  title: 'Khoản góp của tôi',
-                  actionLabel: '${items.length} lô',
-                ),
-                for (final c in items) ...[
-                  _ContributionCard(
-                    contribution: c,
-                    onTap: () =>
-                        context.push(Routes.portfolioBatch(c.batch.code)),
-                  ),
-                  const SizedBox(height: 12),
+              ] else ...[
+                const SizedBox(height: 18),
+                const _Shortcuts(),
+                const SectionHeader(title: 'Lô của tôi'),
+                for (final item in items) ...[
+                  _MyBatchCard(item: item, onTap: () => context.push(Routes.portfolioBatch(item.batch.code))),
+                  const SizedBox(height: 10),
                 ],
               ],
-            );
-          },
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _KycBanner extends ConsumerWidget {
-  const _KycBanner();
+class _MoneyHero extends ConsumerWidget {
+  const _MoneyHero();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final verification = ref.watch(kycStatusProvider);
-    if (verification.hasError) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 14),
-        child: ErrorView(
-          message: apiErrorMessage(verification.error!),
-          onRetry: () => ref.invalidate(kycDetailsProvider),
-        ),
-      );
-    }
-    final status = verification.value;
-    if (status == KycStatus.verified) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: AppCard(
-        color: AppColors.ink,
-        onTap: () => context.push(Routes.kyc),
-        child: Row(
-          children: [
-            const IconTile(
-              icon: Icons.verified_user_outlined,
-              background: AppColors.accent,
-              foreground: AppColors.ink,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    status == null
-                        ? 'Đang kiểm tra danh tính…'
-                        : status == KycStatus.rejected
-                        ? 'Xác minh chưa đạt — hãy thử lại'
-                        : 'Xác minh danh tính để góp vốn',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Chụp CCCD và ảnh khuôn mặt',
-                    style: TextStyle(color: Color(0xFFBDB7B1), fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right_rounded, color: Colors.white),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BatchSwitcher extends StatelessWidget {
-  const _BatchSwitcher({
-    required this.items,
-    required this.selected,
-    required this.onSelect,
-  });
-
-  final List<Contribution> items;
-  final int selected;
-  final ValueChanged<int> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 40,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final isSelected = i == selected;
-          return ChoiceChip(
-            label: Text(items[i].batch.code),
-            selected: isSelected,
-            onSelected: (_) => onSelect(i),
-            showCheckmark: false,
-            backgroundColor: AppColors.surface,
-            selectedColor: AppColors.ink,
-            labelStyle: TextStyle(
-              color: isSelected ? Colors.white : AppColors.ink,
-              fontWeight: FontWeight.w600,
-            ),
-            side: BorderSide.none,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _CycleGaugeCard extends StatelessWidget {
-  const _CycleGaugeCard({required this.contribution});
-
-  final Contribution contribution;
-
-  @override
-  Widget build(BuildContext context) {
-    final b = contribution.batch;
-    final text = Theme.of(context).textTheme;
-    final day = b.dayOfCycle;
-    return AppCard(
-      padding: const EdgeInsets.fromLTRB(16, 22, 16, 18),
-      child: Column(
+    return ref.watch(overviewMoneyProvider).when(
+      skipLoadingOnReload: true,
+      loading: () => const AppCard(color: AppColors.ink, child: SizedBox(height: 150, width: double.infinity)),
+      error: (error, _) => SectionError(error: error, onRetry: () => ref.invalidate(overviewMoneyProvider)),
+      data: (money) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SegmentedGauge(
-            value: b.cycleProgress,
-            center: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(day == null ? '—' : '$day', style: text.displaySmall),
-                    const SizedBox(width: 4),
-                    Text('ngày', style: text.titleMedium),
-                  ],
-                ),
-                Text('Chu kỳ ${b.cycleDays} ngày', style: text.bodySmall),
-              ],
-            ),
+          MoneyCard(
+            title: 'Tôi đã góp',
+            figures: money.figures,
+            sub: [
+              '${money.frozenBatches} Lô đã chốt vốn',
+              if (money.waitingAmount > 0) 'thêm ${formatVnd(money.waitingAmount)} chờ chốt vốn',
+            ].join(' · '),
           ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _GaugeFact(label: 'Trạng thái', value: b.status.label),
-              ),
-              Expanded(
-                child: _GaugeFact(
-                  label: 'Cua đang nuôi',
-                  value: b.aliveCount == null
-                      ? '—'
-                      : '${formatCount(b.aliveCount!)} con',
-                ),
-              ),
-              Expanded(
-                child: _GaugeFact(
-                  label: 'Dự kiến thu',
-                  value: b.expectedHarvestDate == null
-                      ? '—'
-                      : formatDayMonth(b.expectedHarvestDate!),
-                ),
-              ),
-            ],
-          ),
+          if (money.missing > 0) QuietNote('Chưa lấy được số tiền của ${money.missing} Lô.'),
         ],
       ),
     );
   }
 }
 
-class _GaugeFact extends StatelessWidget {
-  const _GaugeFact({required this.label, required this.value});
+class _Todos extends ConsumerWidget {
+  const _Todos();
 
-  final String label;
-  final String value;
+  static IconData _icon(TodoKind kind) => switch (kind) {
+    TodoKind.kyc => Icons.verified_user_outlined,
+    TodoKind.payment => Icons.qr_code_2_rounded,
+    TodoKind.contract => Icons.draw_outlined,
+    TodoKind.vote => Icons.how_to_vote_outlined,
+    TodoKind.settlement => Icons.receipt_long_outlined,
+  };
+
+  void _open(BuildContext context, WidgetRef ref, InvestorTodo todo) {
+    switch (todo.kind) {
+      case TodoKind.kyc:
+        context.push(Routes.kyc);
+      case TodoKind.payment:
+        openWeb(context, ref, WebPaths.contribute(todo.batchCode!));
+      case TodoKind.contract:
+        context.push(InvestorRoutes.contracts);
+      case TodoKind.vote:
+        context.push(InvestorRoutes.portfolioTab(todo.batchCode!, 'bieu-quyet'));
+      case TodoKind.settlement:
+        context.push(InvestorRoutes.settlement(todo.settlementId!));
+    }
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final todos = ref.watch(investorTodosProvider).value ?? const <InvestorTodo>[];
+    if (todos.isEmpty) return const SizedBox.shrink();
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+        const SectionHeader(title: 'Việc cần làm'),
+        AppCard(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            children: [
+              for (final todo in todos)
+                ListTile(
+                  onTap: () => _open(context, ref, todo),
+                  minVerticalPadding: 10,
+                  leading: IconTile(icon: _icon(todo.kind), size: 42),
+                  title: Text(todo.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(todo.sub, style: Theme.of(context).textTheme.bodySmall),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                ),
+            ],
+          ),
         ),
-        const SizedBox(height: 2),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }
 }
 
-/// Thẻ một khoản góp — bố cục theo thẻ bữa ăn của mẫu (ảnh, tên, giờ, số lớn, % cam, hàng chỉ số).
-class _ContributionCard extends StatelessWidget {
-  const _ContributionCard({required this.contribution, required this.onTap});
+class _Shortcuts extends StatelessWidget {
+  const _Shortcuts();
 
-  final Contribution contribution;
+  @override
+  Widget build(BuildContext context) {
+    Widget chip(IconData icon, String label, String path) =>
+        Expanded(child: CategoryChip(icon: icon, label: label, selected: false, onTap: () => context.push(path)));
+    return Row(
+      children: [
+        chip(Icons.draw_outlined, 'Hợp đồng', InvestorRoutes.contracts),
+        chip(Icons.how_to_vote_outlined, 'Biểu quyết', InvestorRoutes.votes),
+        chip(Icons.receipt_long_outlined, 'Quyết toán', InvestorRoutes.settlements),
+      ],
+    );
+  }
+}
+
+/// Thẻ gọn của một Lô tôi đã góp: ảnh, tên, trạng thái, số tiền và tỷ lệ vốn.
+class _MyBatchCard extends StatelessWidget {
+  const _MyBatchCard({required this.item, required this.onTap});
+  final PortfolioItem item;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final b = contribution.batch;
+    final b = item.batch;
+    final text = Theme.of(context).textTheme;
     return AppCard(
       onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.all(12),
+      child: Row(
         children: [
-          Row(
-            children: [
-              RoundedImage(b.crabType.image, width: 58, height: 58, radius: 14),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          RoundedImage(crabImage(b.crabType), width: 64, height: 64, radius: 16),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(b.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.titleMedium),
+                const SizedBox(height: 2),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: formatVnd(item.confirmedAmount), style: const TextStyle(fontWeight: FontWeight.w700)),
+                      TextSpan(text: ' · ${ratioText(item.capitalRatio)} vốn Lô', style: text.bodySmall),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
                   children: [
-                    Text(
-                      b.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      contribution.paidAt == null
-                          ? b.code
-                          : '${b.code} · góp ${formatDate(contribution.paidAt!)}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    StatusPill(kind: 'batch', value: b.status),
+                    if (b.openAlerts > 0)
+                      InfoChip(
+                        label: '${b.openAlerts} cảnh báo',
+                        background: AppColors.danger.withValues(alpha: 0.12),
+                        foreground: AppColors.danger,
+                      ),
                   ],
                 ),
-              ),
-              InfoChip(
-                label: b.status.label,
-                background: AppColors.accentSoft,
-                foreground: AppColors.accentText,
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 12,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(
-                formatVnd(contribution.amount),
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              Text(
-                contribution.ratioLabel,
-                style: const TextStyle(
-                  color: AppColors.accentText,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          MetricRow(
-            metrics: [
-              Metric(
-                'ngày nuôi',
-                b.dayOfCycle == null ? '—' : '${b.dayOfCycle}/${b.cycleDays}',
-              ),
-              Metric(
-                'con',
-                b.aliveCount == null ? '—' : formatCount(b.aliveCount!),
-                color: AppColors.ink,
-              ),
-              Metric(
-                'cảnh báo',
-                '${b.openAlerts}',
-                color: b.openAlerts > 0 ? AppColors.danger : AppColors.success,
-              ),
-            ],
-          ),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.inkMuted),
         ],
       ),
     );

@@ -1,0 +1,480 @@
+// TỆP TỰ SINH bằng tool/gen_status_labels.mjs từ web/src/shared/ui/console/status.ts. Không sửa tay.
+// Nhãn tiếng Việt và sắc thái cho các mã trạng thái backend trả về (BR v1.5).
+import 'package:material_ui/material_ui.dart';
+
+import '../app/theme/app_theme.dart';
+
+/// Sắc thái của một trạng thái, đổi sang màu bằng [toneColor].
+enum Tone { ok, warn, info, mute, gold, danger }
+
+Color toneColor(Tone tone) => switch (tone) {
+  Tone.ok => AppColors.success,
+  Tone.warn => AppColors.warning,
+  Tone.info => AppColors.info,
+  Tone.gold => AppColors.accentText,
+  Tone.danger => AppColors.danger,
+  Tone.mute => AppColors.inkMuted,
+};
+
+const Map<String, Map<String, (String, Tone)>> _maps = {
+  'batch': {
+    'Draft': ('Bản nháp', Tone.mute),
+    'PendingApproval': ('Chờ duyệt', Tone.warn),
+    'NeedsRevision': ('Cần sửa lại', Tone.warn),
+    'Rejected': ('Bị từ chối', Tone.danger),
+    'Funding': ('Đang gọi vốn', Tone.gold),
+    'Cancelled': ('Đã huỷ', Tone.mute),
+    'Sourcing': ('Đang mua nguồn', Tone.info),
+    'Stocked': ('Đã thả nuôi', Tone.info),
+    'InProduction': ('Đang lưu nuôi', Tone.ok),
+    'Harvesting': ('Đang thu hoạch', Tone.gold),
+    'Selling': ('Đang bán và giao', Tone.gold),
+    'Liquidating': ('Thanh lý sớm', Tone.danger),
+    'AwaitingSettlement': ('Chờ quyết toán', Tone.warn),
+    'Settling': ('Đang quyết toán', Tone.info),
+    'Settlement': ('Đang quyết toán', Tone.info),
+    'Closed': ('Đã đóng', Tone.mute),
+  },
+  'batchMode': {
+    'P': ('Lô P · góp vốn', Tone.gold),
+    'T': ('Lô T · thương mại', Tone.info),
+    'A': ('Lô A · đại lý', Tone.ok),
+  },
+  'order': {
+    'PendingDeposit': ('Chờ đặt cọc', Tone.warn),
+    'Deposited': ('Đã đặt cọc', Tone.info),
+    'Confirmed': ('Đã xác nhận', Tone.ok),
+    'Delivering': ('Đang giao theo đợt', Tone.gold),
+    'Delivered': ('Đã giao đủ', Tone.ok),
+    'Completed': ('Hoàn tất', Tone.ok),
+    'CancelRequested': ('Đã xin huỷ', Tone.warn),
+    'Cancelled': ('Đã huỷ', Tone.mute),
+    'Forfeited': ('Mất cọc', Tone.danger),
+    'Refunded': ('Đã hoàn tiền', Tone.mute),
+    'PendingPayment': ('Chờ thanh toán', Tone.warn),
+    'Paid': ('Đã thanh toán', Tone.ok),
+    'Returned': ('Đã trả hàng', Tone.mute),
+  },
+  'orderType': {
+    'PreOrder': ('Đơn đặt trước', Tone.gold),
+    'InvoicedSale': ('Đơn có hoá đơn', Tone.info),
+    'FinalOrder': ('Đơn hàng cuối', Tone.ok),
+  },
+  'deposit': {
+    'Pending': ('Chưa cọc', Tone.warn),
+    'Held': ('Đang giữ cọc', Tone.info),
+    'Applied': ('Đã trừ vào tiền hàng', Tone.ok),
+    'Forfeited': ('Mất cọc', Tone.danger),
+    'Refunded': ('Đã hoàn cọc', Tone.mute),
+  },
+  'deliveryTranche': {
+    'Planned': ('Đã lên lịch', Tone.mute),
+    'Allocated': ('Đã phân bổ cua', Tone.info),
+    'Dispatched': ('Đã xuất hàng', Tone.gold),
+    'Accepted': ('Đã nghiệm thu', Tone.ok),
+    'Completed': ('Hoàn tất', Tone.ok),
+    'Cancelled': ('Đã huỷ', Tone.mute),
+  },
+  'shipment': {
+    'Scheduled': ('Chờ xuất', Tone.mute),
+    'Dispatched': ('Đang giao', Tone.gold),
+    'Accepted': ('Đã nghiệm thu', Tone.ok),
+    'Refused': ('Khách từ chối nhận', Tone.danger),
+    'Cancelled': ('Đã huỷ', Tone.mute),
+  },
+  'acceptance': {
+    'Pending': ('Chờ khách xác nhận', Tone.warn),
+    'Confirmed': ('Khách đã xác nhận', Tone.ok),
+    'Refused': ('Khách từ chối', Tone.danger),
+  },
+  'allocation': {
+    'Active': ('Đang giữ', Tone.info),
+    'Shipped': ('Đã xuất', Tone.gold),
+    'Delivered': ('Đã giao', Tone.ok),
+    'Released': ('Đã nhả', Tone.mute),
+    'Returned': ('Đã trả về', Tone.mute),
+  },
+  'claim': {
+    'Open': ('Chờ người nuôi phản hồi', Tone.warn),
+    'OperatorAccepted': ('Người nuôi chấp nhận', Tone.ok),
+    'OperatorRejected': ('Người nuôi từ chối', Tone.danger),
+    'Escalated': ('Chuyển Admin quyết định', Tone.warn),
+    'Accepted': ('Chấp nhận', Tone.ok),
+    'Rejected': ('Không chấp nhận', Tone.mute),
+  },
+  'invoice': {
+    'Active': ('Còn hiệu lực', Tone.ok),
+    'Cancelled': ('Đã huỷ', Tone.mute),
+  },
+  'holdReason': {
+    'NearThreshold': ('Số đo sát ngưỡng', Tone.warn),
+    'ImageQuality': ('Ảnh chưa đạt', Tone.warn),
+    'LowConfidence': ('AI chưa chắc', Tone.warn),
+    'CaliperRequired': ('Cần đo thước kẹp', Tone.warn),
+    'SensoryPending': ('Chờ kiểm cảm quan', Tone.info),
+    'QcHold': ('Kiểm phẩm giữ lại', Tone.danger),
+  },
+  'measureMethod': {
+    'Scale': ('Cân của trạm', Tone.mute),
+    'ManualScale': ('Cân tay', Tone.mute),
+    'AI': ('AI đọc ảnh', Tone.mute),
+    'Caliper': ('Thước kẹp', Tone.mute),
+    'Computed': ('Tính từ số đo', Tone.mute),
+  },
+  'imageQuality': {
+    'Good': ('Ảnh tốt', Tone.ok),
+    'Poor': ('Ảnh kém', Tone.warn),
+    'Unusable': ('Ảnh không dùng được', Tone.danger),
+  },
+  'maturity': {
+    'Mature': ('Trưởng thành', Tone.mute),
+    'Immature': ('Chưa trưởng thành', Tone.mute),
+    'Unknown': ('Chưa rõ', Tone.mute),
+  },
+  'claimType': {
+    'Return': ('Trả hàng', Tone.info),
+    'Complaint': ('Khiếu nại', Tone.warn),
+  },
+  'issueType': {
+    'Dead': ('Cua chết', Tone.danger),
+    'Weak': ('Cua yếu', Tone.warn),
+    'WrongSize': ('Sai size', Tone.warn),
+    'WrongWeight': ('Sai khối lượng', Tone.warn),
+    'Late': ('Giao trễ', Tone.info),
+    'FoodSafety': ('An toàn thực phẩm', Tone.danger),
+  },
+  'contribution': {
+    'Reserved': ('Đang giữ chỗ', Tone.warn),
+    'Confirmed': ('Đã xác nhận', Tone.ok),
+    'Expired': ('Hết hạn giữ chỗ', Tone.mute),
+    'Refunded': ('Đã hoàn', Tone.mute),
+  },
+  'contract': {
+    'Draft': ('Chờ ký', Tone.warn),
+    'OperatorSigned': ('Người nuôi đã ký', Tone.info),
+    'FullySigned': ('Đủ chữ ký', Tone.ok),
+    'Void': ('Đã huỷ', Tone.mute),
+  },
+  'payment': {
+    'Pending': ('Chờ chuyển khoản', Tone.warn),
+    'Paid': ('Đã nhận tiền', Tone.ok),
+    'Expired': ('Hết hạn', Tone.mute),
+    'Cancelled': ('Đã huỷ', Tone.mute),
+  },
+  'instruction': {
+    'Created': ('Chờ gửi', Tone.warn),
+    'Sent': ('Đã gửi', Tone.info),
+    'Succeeded': ('Thành công', Tone.ok),
+    'Failed': ('Thất bại', Tone.danger),
+    'Disputed': ('Tranh chấp', Tone.danger),
+  },
+  'instructionType': {
+    'Disbursement': ('Giải ngân', Tone.gold),
+    'Payout': ('Chi trả nhà đầu tư', Tone.ok),
+    'Refund': ('Hoàn tiền', Tone.info),
+    'TaxPayment': ('Nộp thuế', Tone.mute),
+    'PlatformFee': ('Phí nền tảng', Tone.info),
+    'Commission': ('Hoa hồng', Tone.info),
+    'SupplierPayout': ('Trả nhà cung cấp', Tone.info),
+  },
+  'tranche': {
+    'Planned': ('Chưa tới mốc', Tone.mute),
+    'Requested': ('Đã xin giải ngân', Tone.warn),
+    'NeedsExplanation': ('Cần giải trình', Tone.danger),
+    'Released': ('Đã giải ngân', Tone.ok),
+    'Blocked': ('Bị dừng chi', Tone.danger),
+    'Stopped': ('Dừng do thanh lý', Tone.mute),
+  },
+  'settlement': {
+    'Draft': ('Bảng nháp', Tone.mute),
+    'Proposed': ('Đang lấy góp ý', Tone.warn),
+    'Disputed': ('Có góp ý chưa xử lý', Tone.danger),
+    'Approved': ('Đã duyệt', Tone.info),
+    'PaidOut': ('Đã chi trả', Tone.ok),
+    'Closed': ('Đã đóng', Tone.mute),
+  },
+  'decision': {
+    'Open': ('Đang biểu quyết', Tone.gold),
+    'Passed': ('Thông qua', Tone.ok),
+    'Rejected': ('Không thông qua', Tone.danger),
+    'Cancelled': ('Đã huỷ', Tone.mute),
+  },
+  'decisionKind': {
+    'EarlyLiquidation': ('Thanh lý sớm', Tone.danger),
+    'SurplusSale': ('Bán phần dư', Tone.info),
+  },
+  'verification': {
+    'Unverified': ('Chưa xác minh', Tone.mute),
+    'Pending': ('Chờ xác minh', Tone.warn),
+    'Verified': ('Đã xác minh', Tone.ok),
+    'Rejected': ('Bị từ chối', Tone.danger),
+    'Disputed': ('Đang tranh chấp', Tone.danger),
+  },
+  'partyRole': {
+    'Pending': ('Chờ duyệt', Tone.warn),
+    'Active': ('Đang hoạt động', Tone.ok),
+    'Suspended': ('Tạm dừng', Tone.danger),
+    'Revoked': ('Đã thu hồi', Tone.mute),
+  },
+  'roleType': {
+    'Farmer': ('Người nuôi', Tone.ok),
+    'Investor': ('Nhà đầu tư', Tone.gold),
+    'Customer': ('Khách hàng', Tone.info),
+    'Supplier': ('Nhà cung cấp', Tone.mute),
+    'OfftakeBuyer': ('Bên cam kết thu mua', Tone.mute),
+  },
+  'partyType': {
+    'Individual': ('Cá nhân', Tone.mute),
+    'Household': ('Hộ kinh doanh', Tone.mute),
+    'Company': ('Doanh nghiệp', Tone.mute),
+    'Cooperative': ('Hợp tác xã', Tone.mute),
+  },
+  'customerType': {
+    'Restaurant': ('Nhà hàng', Tone.mute),
+    'Trader': ('Thương lái', Tone.mute),
+    'Wholesaler': ('Đầu mối sỉ', Tone.mute),
+    'Agent': ('Đại lý', Tone.mute),
+    'CentralKitchen': ('Bếp trung tâm', Tone.mute),
+    'Other': ('Khác', Tone.mute),
+  },
+  'siteType': {
+    'Farm': ('Trại nuôi', Tone.ok),
+    'QcStation': ('Trạm kiểm phẩm', Tone.info),
+    'Warehouse': ('Kho', Tone.mute),
+    'DeliveryAddress': ('Địa chỉ giao', Tone.gold),
+  },
+  'operator': {
+    'Draft': ('Bản nháp', Tone.mute),
+    'Submitted': ('Chờ duyệt', Tone.warn),
+    'Approved': ('Đã duyệt', Tone.ok),
+    'Rejected': ('Bị từ chối', Tone.danger),
+    'Suspended': ('Tạm dừng', Tone.danger),
+  },
+  'user': {
+    'PendingVerification': ('Chờ xác minh', Tone.warn),
+    'Active': ('Đang hoạt động', Tone.ok),
+    'Locked': ('Đã khoá', Tone.danger),
+  },
+  'kyc': {
+    'Pending': ('Đang kiểm tra', Tone.warn),
+    'Passed': ('Đạt', Tone.ok),
+    'Failed': ('Không đạt', Tone.danger),
+    'ExceptionApproved': ('Duyệt ngoại lệ', Tone.info),
+  },
+  'procurement': {
+    'Ordered': ('Đã đặt mua', Tone.info),
+    'PartiallyReceived': ('Nhận một phần', Tone.warn),
+    'Received': ('Đã nhận đủ', Tone.ok),
+    'Cancelled': ('Đã huỷ', Tone.mute),
+  },
+  'receipt': {
+    'Inspecting': ('Đang kiểm đầu vào', Tone.warn),
+    'Completed': ('Đã kiểm xong', Tone.ok),
+    'Cancelled': ('Đã huỷ', Tone.mute),
+  },
+  'inspection': {
+    'Accepted': ('Đạt', Tone.ok),
+    'Rejected': ('Loại', Tone.danger),
+    'Hold': ('Giữ lại', Tone.warn),
+  },
+  'crabInventory': {
+    'Received': ('Mới nhận', Tone.mute),
+    'Holding': ('Đang lưu nuôi', Tone.ok),
+    'Graded': ('Đã phân hạng', Tone.info),
+    'Allocated': ('Đã phân bổ', Tone.gold),
+    'Shipped': ('Đã xuất', Tone.gold),
+    'Delivered': ('Đã giao', Tone.ok),
+    'Sold': ('Đã bán', Tone.ok),
+    'Dead': ('Đã chết', Tone.danger),
+    'Destroyed': ('Đã loại bỏ', Tone.danger),
+    'Returned': ('Trả về tồn', Tone.warn),
+  },
+  'crabCondition': {
+    'Healthy': ('Khoẻ', Tone.ok),
+    'Weak': ('Yếu', Tone.warn),
+    'Molting': ('Đang lột', Tone.info),
+    'Dead': ('Chết', Tone.danger),
+  },
+  'crabType': {
+    'FatteningMudCrab': ('Cua thịt vỗ béo', Tone.mute),
+    'RoeCrab': ('Cua gạch', Tone.mute),
+    'YoungFemaleCrab': ('Cua cái non', Tone.mute),
+    'OilRoeCrab': ('Cua gạch dầu', Tone.mute),
+    'SoftShellCrab': ('Cua lột', Tone.mute),
+  },
+  'sex': {
+    'Male': ('Đực', Tone.mute),
+    'Female': ('Cái', Tone.mute),
+  },
+  'box': {
+    'Available': ('Trống', Tone.mute),
+    'Occupied': ('Đang có cua', Tone.ok),
+    'Maintenance': ('Bảo trì', Tone.warn),
+  },
+  'device': {
+    'Active': ('Đang hoạt động', Tone.ok),
+    'Offline': ('Mất kết nối', Tone.danger),
+    'Removed': ('Đã gỡ', Tone.mute),
+  },
+  'deviceType': {
+    'Station': ('Trạm đo và phân hạng', Tone.gold),
+    'RailCamera': ('Camera chạy dàn', Tone.info),
+    'WaterSensor': ('Cảm biến nước', Tone.ok),
+    'Camera': ('Camera hộp', Tone.mute),
+  },
+  'readingQuality': {
+    'Calibrated': ('Đã hiệu chuẩn', Tone.ok),
+    'Uncalibrated': ('Chưa hiệu chuẩn', Tone.warn),
+    'Suspect': ('Nghi sai', Tone.danger),
+  },
+  'command': {
+    'Pending': ('Chờ thiết bị nhận', Tone.warn),
+    'Acked': ('Thiết bị đã nhận', Tone.ok),
+    'Cancelled': ('Đã huỷ', Tone.mute),
+  },
+  'commandType': {
+    'ScanRack': ('Quét cả dàn', Tone.info),
+    'ScanBox': ('Quét một hộp', Tone.info),
+    'Park': ('Về chỗ đỗ', Tone.mute),
+    'Calibrate': ('Hiệu chuẩn', Tone.mute),
+  },
+  'session': {
+    'Open': ('Chờ đặt cua vào trạm', Tone.warn),
+    'Received': ('Đã nhận bản tin', Tone.info),
+    'Measured': ('Đã có số đo', Tone.ok),
+    'Failed': ('Đo lỗi', Tone.danger),
+    'Cancelled': ('Đã huỷ', Tone.mute),
+  },
+  'ai': {
+    'Succeeded': ('AI đọc được', Tone.ok),
+    'LowConfidence': ('AI chưa chắc', Tone.warn),
+    'Failed': ('AI không đọc được', Tone.danger),
+  },
+  'grade': {
+    'Draft': ('Đề xuất, chờ duyệt', Tone.warn),
+    'Hold': ('Giữ lại kiểm thêm', Tone.warn),
+    'Approved': ('Đã duyệt hạng', Tone.ok),
+    'Rejected': ('Loại bỏ', Tone.danger),
+    'Superseded': ('Bản cũ', Tone.mute),
+  },
+  'gradeCode': {
+    'SPECIAL': ('Đặc cấp', Tone.gold),
+    'G1': ('Cấp 1', Tone.ok),
+    'BELOW': ('Dưới chuẩn', Tone.warn),
+    'REJECT': ('Loại', Tone.danger),
+  },
+  'sizeCode': {
+    'M': ('Size M', Tone.mute),
+    'L': ('Size L', Tone.mute),
+    'XL': ('Size XL', Tone.mute),
+    'OUT': ('Ngoài cỡ', Tone.warn),
+  },
+  'ruleKind': {
+    'Size': ('Phân size theo khối lượng', Tone.mute),
+    'PhysicalFactor': ('Chỉ số độ chắc', Tone.mute),
+    'Sensory': ('Kiểm cảm quan', Tone.mute),
+    'Exclusion': ('Điều kiện loại bỏ', Tone.mute),
+  },
+  'metric': {
+    'WeightG': ('Khối lượng', Tone.mute),
+    'CIndex': ('Chỉ số C', Tone.mute),
+    'EdgeBandMm': ('Dải mép khi soi đỏ', Tone.mute),
+    'CarapaceLengthCm': ('Dài mai', Tone.mute),
+    'CarapaceWidthCm': ('Rộng mai', Tone.mute),
+    'CarapaceAreaCm2': ('Diện tích mai', Tone.mute),
+    'Alive': ('Còn sống', Tone.mute),
+    'FoodSafe': ('An toàn thực phẩm', Tone.mute),
+  },
+  'ruleSet': {
+    'Draft': ('Bản nháp', Tone.warn),
+    'Active': ('Đang áp dụng', Tone.ok),
+    'Retired': ('Đã thay thế', Tone.mute),
+  },
+  'qcTask': {
+    'Assigned': ('Chờ làm', Tone.warn),
+    'Completed': ('Đã xong', Tone.ok),
+    'Reassigned': ('Đã chuyển người', Tone.mute),
+    'Cancelled': ('Đã huỷ', Tone.mute),
+  },
+  'qcKind': {
+    'IncomingInspection': ('Kiểm đầu vào', Tone.info),
+    'GradingSession': ('Duyệt phân hạng', Tone.gold),
+    'SecondReview': ('Xác nhận lần hai', Tone.warn),
+    'SiteVisit': ('Thăm trại giữa vụ', Tone.ok),
+    'Dispatch': ('Kiểm xuất hàng', Tone.info),
+    'Dispute': ('Kiểm khi tranh chấp', Tone.danger),
+  },
+  'evidence': {
+    'Accepted': ('Chấp nhận', Tone.ok),
+    'Watch': ('Theo dõi', Tone.warn),
+    'Flagged': ('Gắn cờ', Tone.danger),
+    'Rejected': ('Không chấp nhận', Tone.danger),
+  },
+  'alert': {
+    'Open': ('Đang mở', Tone.danger),
+    'Acknowledged': ('Đã ghi nhận', Tone.warn),
+    'Escalated': ('Đã chuyển cấp', Tone.danger),
+    'Resolved': ('Đã xử lý', Tone.ok),
+  },
+  'severity': {
+    'Low': ('Thấp', Tone.mute),
+    'Medium': ('Vừa', Tone.warn),
+    'High': ('Cao', Tone.danger),
+    'Critical': ('Nghiêm trọng', Tone.danger),
+  },
+  'alertType': {
+    'Mortality': ('Cua chết nhiều', Tone.danger),
+    'WaterQuality': ('Chất lượng nước', Tone.warn),
+    'MilestoneDelay': ('Trễ mốc', Tone.warn),
+    'LowStock': ('Tồn thấp', Tone.info),
+    'DataSilence': ('Thiếu dữ liệu', Tone.warn),
+    'EvidenceFlag': ('Bằng chứng bị gắn cờ', Tone.danger),
+    'DeviceOffline': ('Thiết bị mất kết nối', Tone.danger),
+    'NoCrabDetected': ('Ảnh hộp không thấy cua', Tone.warn),
+    'MissingCareLog': ('Thiếu nhật ký chăm sóc', Tone.warn),
+  },
+  'costCategory': {
+    'Seed': ('Mua cua nguồn', Tone.mute),
+    'Feed': ('Thức ăn', Tone.mute),
+    'Utilities': ('Điện nước', Tone.mute),
+    'Labour': ('Nhân công', Tone.mute),
+    'MortalityReserve': ('Dự phòng hao hụt', Tone.mute),
+    'Depreciation': ('Khấu hao', Tone.mute),
+    'Other': ('Khác', Tone.mute),
+  },
+  'saleReason': {
+    'LowGrade': ('Cua dưới chuẩn', Tone.warn),
+    'ForfeitResale': ('Bán lại do mất cọc', Tone.info),
+    'Surplus': ('Phần dư', Tone.ok),
+  },
+  'feedback': {
+    'Open': ('Chờ trả lời', Tone.warn),
+    'Answered': ('Đã trả lời', Tone.ok),
+    'Withdrawn': ('Đã rút', Tone.mute),
+    'Unresolved': ('Chưa thống nhất', Tone.danger),
+  },
+  'match': {
+    'Matched': ('Đã khớp', Tone.ok),
+    'Unmatched': ('Chưa khớp', Tone.danger),
+    'LatePayment': ('Trả trễ, sẽ hoàn', Tone.warn),
+  },
+};
+
+/// Nhãn tiếng Việt của một mã trạng thái; mã chưa có trong bảng thì trả nguyên mã.
+/// Ví dụ: statusLabel('batch', 'Funding') → 'Đang gọi vốn'.
+String statusLabel(String kind, String? value) => value == null ? '' : _maps[kind]?[value]?.$1 ?? value;
+
+/// Sắc thái của một mã trạng thái; mã lạ thì trung tính.
+Tone statusTone(String kind, String? value) => _maps[kind]?[value]?.$2 ?? Tone.mute;
+
+/// Các mã của một nhóm kèm nhãn, để dựng ô chọn.
+List<(String, String)> statusOptions(String kind) => [
+  for (final e in (_maps[kind] ?? const <String, (String, Tone)>{}).entries) (e.key, e.value.$1),
+];
+
+/// Tên quy cách dễ đọc: "Cua gạch · Size XL · Cấp 1".
+String specName(String? crabType, String? sizeCode, String? gradeCode) => [
+  if (crabType != null && crabType.isNotEmpty) statusLabel('crabType', crabType),
+  if (sizeCode != null && sizeCode.isNotEmpty) statusLabel('sizeCode', sizeCode),
+  if (gradeCode != null && gradeCode.isNotEmpty) statusLabel('gradeCode', gradeCode),
+].join(' · ');

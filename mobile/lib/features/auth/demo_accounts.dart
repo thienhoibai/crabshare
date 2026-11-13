@@ -1,4 +1,4 @@
-// Tài khoản demo — trùng với backend/src/CrabShare.Api/Infrastructure/Persistence/DevDataSeeder.cs
+// Tài khoản demo — trùng với backend/src/CrabShare.Api/Infrastructure/Persistence/DevDataSeeder.cs, Br15DemoSeeder.cs
 // và web/src/features/auth/demoAccounts.ts.
 import 'package:flutter/foundation.dart';
 
@@ -9,7 +9,9 @@ const showDemoAccounts = bool.fromEnvironment('DEMO_ACCOUNTS', defaultValue: kDe
 const demoPassword = 'CrabShare@2026';
 
 const demoAccounts = [
-  (label: 'Hộ nuôi (chủ)', email: 'operator@crabshare.local'),
-  (label: 'Nhân viên trại', email: 'staff@crabshare.local'),
+  (label: 'Người nuôi', email: 'operator@crabshare.local'),
+  (label: 'Kiểm phẩm 1', email: 'qc1@crabshare.local'),
+  (label: 'Kiểm phẩm 2', email: 'qc2@crabshare.local'),
   (label: 'Nhà đầu tư', email: 'investor1@crabshare.local'),
+  (label: 'Khách hàng', email: 'customer@crabshare.local'),
 ];

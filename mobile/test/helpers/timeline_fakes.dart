@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:crabshare_mobile/features/investor/data/timeline_repository.dart';
 import 'package:dio/dio.dart';
 
@@ -22,11 +20,4 @@ class EmptyTimelineRepository implements TimelineRepository {
       'nextBefore': null,
     });
   }
-
-  @override
-  Future<Uint8List> file(
-    String code,
-    String id, {
-    CancelToken? cancelToken,
-  }) => throw StateError('An empty timeline must not request evidence files.');
 }

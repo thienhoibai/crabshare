@@ -1,150 +1,86 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
-import 'package:crabshare_mobile/app/theme/app_theme.dart';
-import 'package:crabshare_mobile/features/operator/alerts/alerts_page.dart';
+import 'package:crabshare_mobile/app/routes.dart';
 import 'package:crabshare_mobile/features/operator/data/alert_repository.dart';
-import 'package:crabshare_mobile/features/operator/data/operator_models.dart';
-import 'package:dio/dio.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:crabshare_mobile/shared/widgets/app_parts.dart';
+import 'package:crabshare_mobile/shared/widgets/app_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
-Map<String, dynamic> _json({
-  String status = 'Open',
-  String? note,
-  String? acknowledgedAt,
-}) => {
-  'id': 37,
-  'batchCode': 'TEST-37',
-  'type': 'WaterQuality',
-  'severity': 'High',
-  'message': 'Cần điều chỉnh nước',
-  'raisedAt': '2026-10-12T03:00:00Z',
-  'ackDeadline': '2026-10-12T05:00:00Z',
-  'status': status,
-  'responseNote': note,
-  'acknowledgedAt': acknowledgedAt,
-};
-
-class _Repository implements AlertRepository {
-  int calls = 0;
-  bool fail = false;
-  @override
-  Future<List<AlertItem>> list() async => [AlertItem.fromJson(_json())];
-  @override
-  Future<AlertItem> acknowledge(int id, String note) async {
-    calls++;
-    expect(id, 37);
-    if (fail) {
-      throw DioException(
-        requestOptions: RequestOptions(),
-        response: Response(
-          requestOptions: RequestOptions(),
-          statusCode: 409,
-          data: {'detail': 'Trạng thái đã thay đổi.'},
-        ),
-      );
-    }
-    return AlertItem.fromJson(
-      _json(
-        status: 'Escalated',
-        note: note,
-        acknowledgedAt: '2026-10-12T06:00:00Z',
-      ),
-    );
-  }
-}
-
-class _Adapter implements HttpClientAdapter {
-  final requests = <RequestOptions>[];
-  @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? requestStream,
-    Future<void>? cancelFuture,
-  ) async {
-    requests.add(options);
-    if (requestStream != null) await requestStream.drain<void>();
-    return ResponseBody.fromString(
-      jsonEncode(
-        options.method == 'GET'
-            ? [_json()]
-            : _json(status: 'Acknowledged', note: 'Đã thay nước'),
-      ),
-      200,
-      headers: {
-        Headers.contentTypeHeader: ['application/json'],
-      },
-    );
-  }
-
-  @override
-  void close({bool force = false}) {}
-}
+import 'helpers/operator_core_fixtures.dart';
 
 void main() {
-  test('repository uses real endpoints and parses server result', () async {
-    final adapter = _Adapter();
-    final dio = Dio()..httpClientAdapter = adapter;
-    final repo = ApiAlertRepository(dio);
-    expect((await repo.list()).single.severity, AlertSeverity.high);
-    expect(
-      (await repo.acknowledge(37, 'Đã thay nước')).status,
-      AlertStatus.acknowledged,
-    );
-    expect(adapter.requests.map((r) => r.path), [
-      '/api/operators/me/alerts',
-      '/api/alerts/37/acknowledge',
-    ]);
-    expect(adapter.requests.last.data, {'responseNote': 'Đã thay nước'});
+  setUpAll(loadAppFonts);
+
+  test('repository gọi đúng endpoint và nhận cả loại cảnh báo mới của BR v1.5', () async {
+    final server = FarmServer()..alerts = [alertJson(), alertJson(id: 38, type: 'LoạiChưaBiết', status: 'Resolved')];
+    final repo = ApiAlertRepository(server.dio());
+
+    final alerts = await repo.list();
+    expect(alerts.map((a) => (a.type, a.isOpen, a.canAcknowledge)), [('DeviceOffline', true, true), ('LoạiChưaBiết', false, false)]);
+    expect(alerts.first.severity, 'High');
+
+    final acknowledged = await repo.acknowledge(37, 'Đã khởi động lại thiết bị');
+    expect((acknowledged.status, acknowledged.responseNote), ('Acknowledged', 'Đã khởi động lại thiết bị'));
+    expect(server.calls, ['GET /api/operators/me/alerts', 'POST /api/alerts/37/acknowledge']);
+    expect(server.requests.last.data, {'responseNote': 'Đã khởi động lại thiết bị'});
   });
 
-  testWidgets(
-    'empty note is rejected and late response keeps the server escalation status',
-    (tester) async {
-      final repo = _Repository();
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [alertRepositoryProvider.overrideWithValue(repo)],
-          child: MaterialApp(theme: buildAppTheme(), home: const AlertsPage()),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Xác nhận'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Gửi xác nhận'));
-      await tester.pumpAndSettle();
-      expect(find.text('Vui lòng ghi cách xử lý cảnh báo.'), findsOneWidget);
-      expect(repo.calls, 0);
-      await tester.enterText(find.byType(TextFormField), 'Đã thay nước');
-      await tester.tap(find.text('Gửi xác nhận'));
-      await tester.pumpAndSettle();
-      expect(repo.calls, 1);
-      expect(find.text('Phản hồi: Đã thay nước'), findsOneWidget);
-      expect(find.text('Xác nhận'), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('phản hồi bắt buộc ghi cách xử lý; gửi xong cảnh báo chuyển vào khối đã phản hồi', (tester) async {
+    final server = FarmServer()..alerts = [alertJson()];
+    await pumpFarmApp(tester, server, location: Routes.operatorAlerts);
 
-  testWidgets('API error is shown without changing the alert status', (
-    tester,
-  ) async {
-    final repo = _Repository()..fail = true;
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [alertRepositoryProvider.overrideWithValue(repo)],
-        child: MaterialApp(theme: buildAppTheme(), home: const AlertsPage()),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Xác nhận'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextFormField), 'Đã thay nước');
-    await tester.tap(find.text('Gửi xác nhận'));
-    await tester.pumpAndSettle();
+    // Màn con có nút quay lại.
+    expect(find.byType(SubPageHeader), findsOneWidget);
+    expect(find.text('Thiết bị mất kết nối'), findsOneWidget);
+    expect(find.text('Thiết bị WS-NC-01 không gửi dữ liệu quá 15 phút.'), findsOneWidget);
+
+    await tester.tap(find.text('Phản hồi'));
+    await tester.settle();
+    expect(find.text('Phản hồi cảnh báo'), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Gửi phản hồi')).onPressed, isNull);
+    await tester.enterText(find.byType(TextField), 'Đã khởi động lại thiết bị');
+    await tester.pump();
+    await tester.tap(find.text('Gửi phản hồi'));
+    await tester.settle();
+
+    expect(server.sent('POST', '/api/alerts/37/acknowledge').single.data, {'responseNote': 'Đã khởi động lại thiết bị'});
+    expect(find.text('Đã gửi phản hồi.'), findsOneWidget);
+    expect(find.text('Không có cảnh báo đang mở'), findsOneWidget);
+    expect(find.text('Phản hồi'), findsNothing);
+    await tester.tap(find.text('Đã phản hồi (1)'));
+    await tester.settle();
+    expect(find.text('Phản hồi: Đã khởi động lại thiết bị'), findsOneWidget);
+    expect(find.widgetWithText(StatusPill, 'Đã ghi nhận'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('lỗi máy chủ khi phản hồi được báo ra và cảnh báo vẫn mở', (tester) async {
+    final server = FarmServer()
+      ..alerts = [alertJson()]
+      ..failures['POST /api/alerts/37/acknowledge'] = (409, 'Trạng thái đã thay đổi.');
+    await pumpFarmApp(tester, server, location: Routes.operatorAlerts);
+
+    await tester.tap(find.text('Phản hồi'));
+    await tester.settle();
+    await tester.enterText(find.byType(TextField), 'Đã thay nước');
+    await tester.pump();
+    await tester.tap(find.text('Gửi phản hồi'));
+    await tester.settle();
+
     expect(find.text('Trạng thái đã thay đổi.'), findsOneWidget);
-    expect(find.text('Phản hồi: Đã thay nước'), findsNothing);
+    expect(find.text('Phản hồi'), findsOneWidget);
+    expect(find.textContaining('Phản hồi: '), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cảnh báo ảnh bị gắn cờ dẫn tới danh sách ảnh cần giải trình', (tester) async {
+    final server = FarmServer()..alerts = [alertJson(type: 'EvidenceFlag')];
+    final router = await pumpFarmApp(tester, server, location: Routes.operatorAlerts);
+
+    expect(find.text('Bằng chứng bị gắn cờ'), findsOneWidget);
+    await tester.tap(find.text('Xem ảnh'));
+    await tester.settle();
+    expect(router.state.uri.path, Routes.flaggedEvidence);
+    expect(find.text('Không có ảnh nào bị gắn cờ'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

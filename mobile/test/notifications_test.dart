@@ -2,17 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:crabshare_mobile/app/router.dart';
 import 'package:crabshare_mobile/app/routes.dart';
-import 'package:crabshare_mobile/app/theme/app_theme.dart';
 import 'package:crabshare_mobile/core/auth/session.dart';
-import 'package:crabshare_mobile/features/investor/data/investor_models.dart';
-import 'package:crabshare_mobile/features/investor/data/portfolio_repository.dart';
-import 'package:crabshare_mobile/features/investor/kyc/kyc_repository.dart';
 import 'package:crabshare_mobile/features/investor/notifications/notification_repository.dart';
 import 'package:crabshare_mobile/features/investor/notifications/notifications_page.dart';
 import 'package:crabshare_mobile/features/investor/portfolio/portfolio_detail_page.dart';
-import 'package:crabshare_mobile/shared/models/batch_enums.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,54 +14,28 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'helpers/investor_fixtures.dart';
 import 'helpers/notification_fakes.dart';
 
-Map<String, dynamic> _json([String id = 'PaymentConfirmed:65']) => {
+Map<String, dynamic> _json([String id = 'PaymentConfirmed:65', String type = 'PaymentConfirmed']) => {
   'id': id,
-  'type': 'PaymentConfirmed',
-  'title': 'Đã nhận tiền',
-  'body': 'Khoản góp 20.000.001 đ cho lô CS65-TEST đã được xác nhận.',
+  'type': type,
+  'title': type == 'AlertRaised' ? 'Cảnh báo vận hành' : 'Đã nhận tiền',
+  'body': 'Khoản góp 20.000.001 đ cho lô CS-P1 đã được xác nhận.',
   'at': '2026-10-15T01:00:00Z',
-  'batchCode': 'CS65-TEST',
+  'batchCode': 'CS-P1',
   'canOpenPortfolio': true,
   'amount': 20000001,
 };
-NotificationEvent _event([String id = 'PaymentConfirmed:65']) =>
-    NotificationEvent.fromJson(_json(id));
-SessionState _session(int id) => SessionState(
-  token: 'test',
-  user: AppUser(
-    userId: id,
-    fullName: 'Khôi',
-    email: '$id@test.local',
-    roles: const [Roles.investor],
-  ),
-);
-
-class _Session extends SessionController {
-  _Session() : super(_session(65));
-  void change(int id) => state = _session(id);
-}
-
-class _Kyc implements KycRepository {
-  @override
-  Future<KycVerification> status() async =>
-      const KycVerification(status: KycStatus.verified);
-  @override
-  Future<KycVerification> verify({
-    required List<KycImage> images,
-    required bool consent,
-  }) => throw UnimplementedError();
-}
+NotificationEvent _event([String id = 'PaymentConfirmed:65', String type = 'PaymentConfirmed']) =>
+    NotificationEvent.fromJson(_json(id, type));
 
 class _Repo implements NotificationRepository {
   List<NotificationEvent> items = [_event()];
   bool fail = false;
-  int reads = 0;
   final cancels = <CancelToken?>[];
   @override
   Future<List<NotificationEvent>> list({CancelToken? cancelToken}) async {
-    reads++;
     cancels.add(cancelToken);
     if (fail) {
       throw DioException(
@@ -127,66 +95,12 @@ class _SlowStore extends MemoryNotificationReadStore {
   }
 }
 
-Future<void> _show(
-  WidgetTester tester,
-  _Repo repo,
-  MemoryNotificationReadStore store, {
-  bool fullRouter = false,
-}) async {
-  tester.view.physicalSize = const Size(360, 780);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        portfolioDetailProvider('CS65-TEST').overrideWith(
-          (ref) async => PortfolioDetail(
-            position: Contribution(
-              batch: const BatchSummary(
-                code: 'CS65-TEST',
-                title: 'Test portfolio',
-                operatorName: 'Test farm',
-                crabType: CrabType.fattening,
-                status: BatchStatus.funding,
-                targetCapital: 50000001,
-                raisedCapital: 50000001,
-                minContribution: 1000000,
-                cycleDays: 90,
-                seedQuantity: 100,
-              ),
-              amount: 20000001,
-              sharePct: 40,
-              paidAt: DateTime.utc(2026, 10, 15),
-            ),
-            contributions: [],
-            timeline: [],
-          ),
-        ),
-        sessionProvider.overrideWith(_Session.new),
-        notificationRepositoryProvider.overrideWithValue(repo),
-        notificationReadStoreProvider.overrideWithValue(store),
-        notificationPollIntervalProvider.overrideWithValue(null),
-        myContributionsProvider.overrideWith((ref) async => []),
-        kycRepositoryProvider.overrideWithValue(_Kyc()),
-      ],
-      child: fullRouter
-          ? Consumer(
-              builder: (context, ref, child) => MaterialApp.router(
-                theme: buildAppTheme(),
-                routerConfig: ref.watch(routerProvider),
-              ),
-            )
-          : MaterialApp(
-              theme: buildAppTheme(),
-              home: const NotificationsPage(),
-            ),
-    ),
-  );
-  await tester.pumpAndSettle();
-}
+Future<void> _show(WidgetTester tester, _Repo repo, MemoryNotificationReadStore store) =>
+    pumpInvestor(tester, FakeApi(), home: const NotificationsPage(), notifications: repo, readStore: store);
 
 void main() {
   setUpAll(() => initializeDateFormatting('vi_VN'));
+
   test(
     'API keeps integer money, fetches every page and reuses server snapshot',
     () async {
@@ -199,6 +113,7 @@ void main() {
       expect(list.length, 2);
       expect(list.first.amount, 20000001);
       expect(list.first.title, 'Đã nhận tiền');
+      expect(adapter.requests.first.path, '/api/me/notifications');
       expect(
         adapter.requests.last.queryParameters['until'],
         '2026-10-15T02:00:00Z',
@@ -206,6 +121,7 @@ void main() {
       expect(adapter.requests.first.cancelToken, same(token));
     },
   );
+
   test('read marker round trips, preserves single reads and handles same-time arrivals', () {
     final n = _event();
     final later = _event('PaymentConfirmed:66');
@@ -223,133 +139,120 @@ void main() {
     });
     expect(all.all([older]).through, all.through);
   });
-  testWidgets(
-    'page displays actual receipt and opening does not clear unread count',
-    (tester) async {
-      final store = MemoryNotificationReadStore();
-      await _show(tester, _Repo(), store);
-      expect(find.text('Đã nhận tiền'), findsOneWidget);
-      expect(find.text('1 chưa đọc'), findsOneWidget);
-      expect(store.markers, isEmpty);
-      expect(tester.takeException(), isNull);
-    },
-  );
-  testWidgets('mark all persists on this device and account across a rebuild', (
-    tester,
-  ) async {
+
+  testWidgets('page shows the feed and counts unread without marking anything by itself', (tester) async {
+    final store = MemoryNotificationReadStore();
+    await _show(tester, _Repo(), store);
+    expect(find.text('Đã nhận tiền'), findsOneWidget);
+    expect(find.text('Đọc tất cả (1)'), findsOneWidget);
+    expect(find.byWidgetPredicate((w) => w is Semantics && w.properties.label == 'Chưa đọc'), findsOneWidget);
+    expect(store.markers, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('mark all persists on this device and account across a rebuild', (tester) async {
     final store = MemoryNotificationReadStore();
     final repo = _Repo();
     await _show(tester, repo, store);
-    await tester.tap(find.text('Đọc tất cả'));
-    await tester.pumpAndSettle();
-    expect(find.text('0 chưa đọc'), findsOneWidget);
-    expect(store.markers[65]!.through, repo.items.single.at);
+    await tester.tap(find.text('Đọc tất cả (1)'));
+    await settle(tester);
+    expect(find.textContaining('Đọc tất cả'), findsNothing);
+    expect(store.markers[42]!.through, repo.items.single.at);
+
     await tester.pumpWidget(const SizedBox());
-    await tester.pumpAndSettle();
+    await settle(tester);
     await _show(tester, repo, store);
-    expect(find.text('0 chưa đọc'), findsOneWidget);
+    expect(find.textContaining('Đọc tất cả'), findsNothing);
+
     repo.items = [_event('PaymentConfirmed:66'), _event()];
-    await tester.tap(find.byTooltip('Làm mới thông báo'));
-    await tester.pumpAndSettle();
-    expect(find.text('1 chưa đọc'), findsOneWidget);
+    ProviderScope.containerOf(tester.element(find.byType(NotificationsPage))).invalidate(investorNotificationsProvider);
+    await settle(tester);
+    expect(find.text('Đọc tất cả (1)'), findsOneWidget);
   });
-  testWidgets('save failure retains unread count and retry can save', (
-    tester,
-  ) async {
+
+  testWidgets('save failure retains unread count and retry can save', (tester) async {
     final store = MemoryNotificationReadStore()..fail = true;
     await _show(tester, _Repo(), store);
-    await tester.tap(find.text('Đọc tất cả'));
-    await tester.pumpAndSettle();
+    await tester.tap(find.text('Đọc tất cả (1)'));
+    await settle(tester);
     expect(find.textContaining('Không lưu được mốc đã đọc'), findsOneWidget);
-    expect(find.text('1 chưa đọc'), findsOneWidget);
+    expect(find.text('Đọc tất cả (1)'), findsOneWidget);
     store.fail = false;
-    await tester.tap(find.text('Đọc tất cả'));
-    await tester.pumpAndSettle();
-    expect(find.text('0 chưa đọc'), findsOneWidget);
+    await tester.tap(find.text('Đọc tất cả (1)'));
+    await settle(tester);
+    expect(find.textContaining('Đọc tất cả'), findsNothing);
   });
-  testWidgets(
-    'network error retries to an empty API feed without sample data',
-    (tester) async {
-      final repo = _Repo()..fail = true;
-      await _show(tester, repo, MemoryNotificationReadStore());
-      expect(find.text('Không tải được thông báo.'), findsOneWidget);
-      repo.fail = false;
-      repo.items = [];
-      await tester.tap(find.text('Thử lại'));
-      await tester.pumpAndSettle();
-      expect(find.text('Chưa có thông báo'), findsOneWidget);
-      expect(find.text('Đã nhận tiền'), findsNothing);
-    },
-  );
-  testWidgets(
-    'real investor nav badge opens notifications and private portfolio route',
-    (tester) async {
-      final repo = _Repo();
-      await _show(
-        tester,
-        repo,
-        MemoryNotificationReadStore(),
-        fullRouter: true,
-      );
-      final badge = find
-          .byWidgetPredicate(
-            (w) =>
-                w is Semantics && w.properties.label == 'Thông báo, 1 chưa đọc',
-          )
-          .last;
-      expect(badge, findsOneWidget);
-      await tester.tap(badge);
-      await tester.pumpAndSettle();
-      expect(find.byType(NotificationsPage), findsOneWidget);
-      final link = find.text('Xem lô CS65-TEST');
-      await tester.ensureVisible(link);
-      await tester.pumpAndSettle();
-      await tester.tap(link);
-      await tester.pumpAndSettle();
-      expect(find.byType(InvestorPortfolioDetailPage), findsOneWidget);
-      final context = tester.element(find.byType(InvestorPortfolioDetailPage));
-      expect(
-        GoRouterState.of(context).matchedLocation,
-        Routes.portfolioBatch('CS65-TEST'),
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
-  testWidgets(
-    'pending read write stays on the original user after switching accounts',
-    (tester) async {
-      final repo = _Repo();
-      final store = _SlowStore();
-      await _show(tester, repo, store);
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(NotificationsPage)),
-      );
-      await tester.tap(find.text('Đọc tất cả'));
-      await tester.pump();
-      final oldCancel = repo.cancels.single;
-      repo.items = [_event('PaymentConfirmed:other')];
-      (container.read(sessionProvider.notifier) as _Session).change(66);
-      await tester.pumpAndSettle();
-      store.gate.complete();
-      await tester.pumpAndSettle();
-      expect(find.text('1 chưa đọc'), findsOneWidget);
-      expect(store.markers[66], isNull);
-      expect(store.markers[65]!.through, isNotNull);
-      expect(oldCancel!.isCancelled, isTrue);
-    },
-  );
-  testWidgets(
-    'single-read action leaves other events unread on a narrow screen',
-    (tester) async {
-      final repo = _Repo()..items = [_event(), _event('PaymentConfirmed:66')];
-      await _show(tester, repo, MemoryNotificationReadStore());
-      final button = find.text('Đã đọc').first;
-      await tester.ensureVisible(button);
-      await tester.pumpAndSettle();
-      await tester.tap(button);
-      await tester.pumpAndSettle();
-      expect(find.text('1 chưa đọc'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
+
+  testWidgets('network error retries to an empty API feed without sample data', (tester) async {
+    final repo = _Repo()..fail = true;
+    await _show(tester, repo, MemoryNotificationReadStore());
+    expect(find.text('Không tải được thông báo.'), findsOneWidget);
+    repo.fail = false;
+    repo.items = [];
+    await tester.tap(find.text('Thử lại'));
+    await settle(tester);
+    expect(find.text('Chưa có thông báo'), findsOneWidget);
+    expect(find.text('Đã nhận tiền'), findsNothing);
+  });
+
+  testWidgets('nav badge opens notifications; tapping an alert marks it read and opens the batch timeline', (tester) async {
+    final repo = _Repo()..items = [_event('AlertRaised:3', 'AlertRaised'), _event()];
+    final store = MemoryNotificationReadStore();
+    final api = FakeApi()
+      ..get('/api/investor/portfolio', portfolioPage([portfolioItem()]))
+      ..get('/api/investor/portfolio/CS-P1', portfolioDetail(portfolioItem()))
+      ..get('/api/batches/CS-P1/timeline', {'batchCode': 'CS-P1', 'timeZone': 'Asia/Ho_Chi_Minh', 'groups': [], 'hasMore': false, 'nextBefore': null});
+    await pumpInvestor(tester, api, location: Routes.investorHome, notifications: repo, readStore: store);
+
+    final badge = find.byWidgetPredicate((w) => w is Semantics && w.properties.label == 'Thông báo, 2 chưa đọc').last;
+    expect(badge, findsOneWidget);
+    await tester.tap(badge);
+    await settle(tester);
+    expect(find.byType(NotificationsPage), findsOneWidget);
+
+    await tester.tap(find.text('Cảnh báo vận hành'));
+    await settle(tester);
+    expect(find.byType(PortfolioDetailPage), findsOneWidget);
+    final state = GoRouterState.of(tester.element(find.byType(PortfolioDetailPage)));
+    expect(state.uri.toString(), '/i/portfolio/CS-P1?tab=nhat-trinh');
+    expect(find.text('Chưa có ghi nhận nào'), findsOneWidget);
+    expect(store.markers[42]!.itemIds, {'AlertRaised:3'});
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('pending read write stays on the original user after switching accounts', (tester) async {
+    final repo = _Repo();
+    final store = _SlowStore();
+    await _show(tester, repo, store);
+    final container = ProviderScope.containerOf(tester.element(find.byType(NotificationsPage)));
+    await tester.tap(find.text('Đọc tất cả (1)'));
+    await tester.pump();
+    final oldCancel = repo.cancels.single;
+    repo.items = [_event('PaymentConfirmed:other')];
+    (container.read(sessionProvider.notifier) as TestSession).change(66);
+    await settle(tester);
+    store.gate.complete();
+    await settle(tester);
+    expect(find.text('Đọc tất cả (1)'), findsOneWidget);
+    expect(store.markers[66], isNull);
+    expect(store.markers[42]!.through, isNotNull);
+    expect(oldCancel!.isCancelled, isTrue);
+  });
+
+  testWidgets('tapping one notification leaves the others unread', (tester) async {
+    final store = MemoryNotificationReadStore();
+    // Thông báo không mở được Lô thì bấm vào chỉ đánh dấu đã đọc.
+    final repo = _Repo()
+      ..items = [
+        NotificationEvent.fromJson({..._json(), 'canOpenPortfolio': false}),
+        NotificationEvent.fromJson({..._json('PaymentConfirmed:66'), 'canOpenPortfolio': false}),
+      ];
+    await _show(tester, repo, store);
+    expect(find.text('Đọc tất cả (2)'), findsOneWidget);
+    await tester.tap(find.text('Đã nhận tiền').first);
+    await settle(tester);
+    expect(find.text('Đọc tất cả (1)'), findsOneWidget);
+    expect(store.markers[42]!.itemIds, {'PaymentConfirmed:65'});
+    expect(tester.takeException(), isNull);
+  });
 }
