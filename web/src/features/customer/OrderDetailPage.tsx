@@ -196,7 +196,7 @@ export default function OrderDetailPage() {
               <span><b>QR truy xuất của đơn</b><small>Mở trang truy xuất</small></span>
             </a>
           )}
-          <a className="op-link" href={`/lo/${encodeURIComponent(o.batchCode)}`}>Xem Lô {o.batchCode}</a>
+          <a className="op-link" href={`/khach/lo/${encodeURIComponent(o.batchCode)}`}>Xem Lô {o.batchCode}</a>
           {CANCELLABLE.includes(o.status) && <OpBtn variant="ghost" sm onClick={() => { setReason(''); cancel.reset(); setCancelling(true) }}>Huỷ đơn</OpBtn>}
         </OpAside>
       </div>

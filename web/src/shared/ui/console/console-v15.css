@@ -171,6 +171,16 @@ a.op-card:hover, button.op-card:hover { transform: translateY(-3px); box-shadow:
 .op-demo b { font-size: 14px; }
 .op-demo small { font-size: 12px; color: var(--muted); }
 
+/* ---------- menu tài khoản ở góc phải ---------- */
+.o2-acct { position: relative; }
+.o2-acct__btn { cursor: pointer; border: 0; }
+.o2-acct__btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.o2-acct__menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; display: grid; gap: 2px; min-width: 240px; max-width: 300px; padding: 8px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 18px 40px rgba(20, 16, 10, 0.14); }
+.o2-acct__who { display: grid; gap: 2px; padding: 8px 10px 10px; border-bottom: 1px solid var(--line); margin-bottom: 4px; min-width: 0; }
+.o2-acct__who small { font-size: 12px; color: var(--muted); }
+.o2-acct__menu a { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 14px; font-size: 14px; transition: background-color 0.2s; }
+.o2-acct__menu a:hover { background: var(--input); }
+
 /* ---------- giấy tờ của đối tác ---------- */
 .op-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
 .op-gallery__item { display: grid; gap: 6px; margin: 0; }

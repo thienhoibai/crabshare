@@ -4,7 +4,7 @@ import type { ContractResponse, ContractSummary, DecisionResponse, SettlementFee
 import { daysFromNow, expect, reply, signIn, test, vnd } from './support/app'
 import {
   DONE, LEGAL_NOTICE, OPEN, RUN, closed, contractDetail, contractToSign, contracts, decisionOpen, decisionPassed, fact, investor, mockInvestor, more, panel,
-  running, settlementDone, settlementPaid, viDateTime,
+  PDF, running, settlementDone, settlementPaid, viDateTime,
 } from './support/investor'
 
 test.beforeEach(async ({ page, api }) => {
@@ -127,6 +127,25 @@ test.describe('hợp đồng', () => {
     await page.getByRole('button', { name: 'Tải PDF hợp đồng HD-2608-0208' }).click()
     expect((await download).suggestedFilename()).toBe('HD-2608-0208.pdf')
     expect(api.sent('GET', '/api/contracts/208/file').map((c) => c.auth)).toEqual(['Bearer test-token'])
+    expect(api.writes()).toEqual([])
+  })
+
+  test('khoản góp hết thời gian giữ chỗ: không còn "tới lượt bạn ký", hợp đồng nói rõ không ký được và dẫn đi góp lại', async ({ page, api }) => {
+    const expired: ContractSummary = { ...contractToSign, contributionStatus: 'Expired' }
+    api.get('/api/me/contracts', [expired, ...contracts.slice(1)])
+    api.get('/api/contracts/731', contractDetail(expired, { canSign: false }))
+    api.get('/api/contracts/731/file', PDF)
+    await page.goto('/nha-dau-tu/hop-dong?id=731')
+
+    const row = page.getByRole('row').filter({ hasText: expired.contractNo })
+    await expect(row).toContainText('Hết hạn giữ chỗ')
+    await expect(row).not.toContainText('Tới lượt bạn ký')
+    await expect(row.getByRole('button', { name: 'Xem', exact: true })).toBeVisible()
+
+    const detail = panel(page, `Hợp đồng ${expired.contractNo}`)
+    await expect(detail).toContainText('Khoản góp đã hết thời gian giữ chỗ nên hợp đồng này không ký được nữa.')
+    await expect(detail.getByRole('link', { name: `Góp lại vào Lô ${OPEN}` })).toHaveAttribute('href', `/nha-dau-tu/gop-von/${OPEN}`)
+    await expect(detail.getByRole('button', { name: 'Ký số hợp đồng' })).toHaveCount(0)
     expect(api.writes()).toEqual([])
   })
 

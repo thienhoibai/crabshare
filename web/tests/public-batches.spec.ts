@@ -165,6 +165,26 @@ test.describe('/lo/:code', () => {
     await expect(aside.getByRole('link', { name: 'Đặt trước' })).toHaveCount(0)
   })
 
+  test('Lô còn nhận đặt trước nhưng chưa có bảng chào giá: không có nút Đặt trước, nói rõ lý do', async ({ page, api }) => {
+    mockPublic(api)
+    // Máy chủ coi Lô đang gọi vốn là nhận đặt trước, nhưng Lô chưa có quy cách nào để đặt.
+    api.get(`/api/batches/${batchPNoOffers.batchCode}/availability`, { ...availabilityP, batchCode: batchPNoOffers.batchCode, specs: [], sellableCrabs: 0, committedCrabs: 0, remainingCrabs: 0 })
+    await page.goto(`/lo/${batchPNoOffers.batchCode}`)
+    const aside = page.getByRole('complementary')
+    await expect(aside).toContainText('Lô chưa mở bảng chào giá nên chưa nhận đặt trước.')
+    await expect(aside.getByRole('link', { name: 'Đặt trước' })).toHaveCount(0)
+    await expect(aside.getByText('Nhận đặt trước', { exact: true })).toHaveCount(0)
+  })
+
+  test('Lô đã hết số lượng nhận đặt trước thì không còn nút Đặt trước', async ({ page, api }) => {
+    mockPublic(api)
+    api.get(`/api/batches/${batchP.batchCode}/availability`, { ...availabilityP, remainingCrabs: 0, specs: availabilityP.specs.map((s) => ({ ...s, remaining: 0 })) })
+    await page.goto(`/lo/${batchP.batchCode}`)
+    const aside = page.getByRole('complementary')
+    await expect(aside).toContainText('Đã hết số lượng nhận đặt trước của Lô này.')
+    await expect(aside.getByRole('link', { name: 'Đặt trước' })).toHaveCount(0)
+  })
+
   test('bản soạn thảo của người nuôi chưa công bố thì không hiện nội dung Lô', async ({ page, api }) => {
     // Người nuôi nhận BatchResponse (không có executorName) từ cùng đường dẫn; trang tìm bản công khai trong danh sách.
     const draft: Pick<BatchResponse, 'batchCode' | 'status' | 'title'> = { batchCode: 'P-DRAFT-9', status: 'Draft', title: 'Lô đang soạn' }

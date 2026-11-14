@@ -13,6 +13,7 @@ import { operatorRoutesA } from '../features/operator/routesA'
 import { operatorRoutesB } from '../features/operator/routesB'
 import { publicRoutes } from '../features/public/routes'
 import { qcRoutes } from '../features/qc/routes'
+import RouteError from './RouteError'
 
 /*
  * BẢN ĐỒ TRANG CỦA WEB (BR v1.5).
@@ -85,6 +86,7 @@ function Root() {
 export const router = createBrowserRouter([
   {
     element: <Root />,
+    errorElement: <RouteError />,
     children: [
       // ----- Công khai -----
       { path: '/', element: <Landing /> },

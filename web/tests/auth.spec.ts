@@ -29,7 +29,7 @@ for (const portal of PORTALS) {
     await expect(page).toHaveURL(new RegExp(`${portal.home}$`))
     const menu = page.getByRole('navigation', { name: portal.menu })
     await expect(menu.getByRole('link', { name: portal.link, exact: true })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Đăng xuất' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Tài khoản: / })).toBeVisible()
 
     const body: LoginRequest = { email: `${portal.role.toLowerCase()}@test.local`, password: 'mat-khau-thu' }
     expect(api.sent('POST', '/api/auth/login').map((c) => c.body)).toEqual([body])

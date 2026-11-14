@@ -172,6 +172,6 @@ test('Lô không còn nhận đặt trước thì không có form, chỉ dẫn v
   await signIn(page, 'Customer')
   await page.goto(URL)
   await expect(page.getByText('Lô này hiện không nhận đặt trước')).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Xem Lô đang mở' })).toHaveAttribute('href', '/lo')
+  await expect(page.getByRole('link', { name: 'Xem Lô nhận đặt trước' })).toHaveAttribute('href', '/khach/lo')
   await expect(page.getByRole('button', { name: 'Đặt trước' })).toHaveCount(0)
 })

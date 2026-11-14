@@ -1,8 +1,9 @@
 /* Khung điều hành dùng chung cho mọi cổng: menu trái, thanh trên, thanh dưới và menu trượt trên di động.
-   Dùng làm layout route: { element: <ConsoleLayout area="operator" />, children: [...] }. Trang con chỉ trả về nội dung. */
-import { useEffect, useState, type ReactNode } from 'react'
+   Dùng làm layout route: { element: <ConsoleLayout area="operator" />, children: [...] }. Trang con chỉ trả về nội dung.
+   Chuông và avatar chỉ ở góc phải; bấm avatar mở menu tài khoản (hồ sơ, đăng xuất). Menu trái không lặp lại hai thứ này. */
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Outlet, useLocation } from 'react-router'
-import { ArrowLeftRight, Bell, LogOut, Menu, X } from 'lucide-react'
+import { ArrowLeftRight, Bell, LogOut, Menu, UserRound, X } from 'lucide-react'
 import { useGet } from '../../api/hooks'
 import { useAuthStore } from '../../auth/authStore'
 import { Logo, Shell } from '../kit/kit'
@@ -42,6 +43,43 @@ function NavLinks({ area, active, roles, onPick }: { area: Area; active: string 
         )
       })}
     </nav>
+  )
+}
+
+/** Avatar ở góc phải: bấm mở menu tài khoản. Bấm ra ngoài hoặc Esc thì đóng. */
+function AccountMenu({ name, email, title, profile, onSignOut }: {
+  name: string
+  email?: string
+  title: string
+  profile?: { href: string; label: string }
+  onSignOut: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc) }
+  }, [open])
+  return (
+    <div className="o2-acct" ref={box}>
+      <button type="button" className="rd-avatar o2-acct__btn" aria-haspopup="menu" aria-expanded={open} aria-label={`Tài khoản: ${name}`} onClick={() => setOpen((v) => !v)}>
+        {initials(name)}
+      </button>
+      {open && (
+        <div className="o2-acct__menu" role="menu">
+          <div className="o2-acct__who">
+            <b className="truncate">{name}</b>
+            <small className="truncate">{email ?? title}</small>
+          </div>
+          {profile && <a role="menuitem" href={profile.href} onClick={() => setOpen(false)}><UserRound size={16} /> {profile.label}</a>}
+          <button type="button" role="menuitem" className="o2-out" onClick={onSignOut}><LogOut size={16} /> Đăng xuất</button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -104,14 +142,7 @@ export default function ConsoleLayout({ area, children }: { area: Area; children
           <Logo href={config.home} />
           {card}
           <NavLinks area={area} active={active} roles={roles} />
-          <div className="o2-side__foot">
-            {switcher}
-            <div className="o2-me">
-              <span className="rd-avatar">{initials(name)}</span>
-              <span><b className="truncate">{name}</b><small>{config.title}</small></span>
-            </div>
-            <button type="button" className="o2-out" onClick={signOut}><LogOut size={16} /> Đăng xuất</button>
-          </div>
+          {switcher && <div className="o2-side__foot">{switcher}</div>}
         </aside>
 
         <header className="o2-mhead">
@@ -124,7 +155,7 @@ export default function ConsoleLayout({ area, children }: { area: Area; children
             <p className="o2-top__where">{config.title} · <b>{new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' })}</b></p>
             <div className="o2-top__right">
               {bell}
-              <span className="rd-avatar" title={name}>{initials(name)}</span>
+              <AccountMenu name={name} email={user?.email} title={config.title} profile={config.profile} onSignOut={signOut} />
             </div>
           </div>
           {children ?? <Outlet />}
@@ -150,6 +181,7 @@ export default function ConsoleLayout({ area, children }: { area: Area; children
               </div>
               <NavLinks area={area} active={active} roles={roles} onPick={() => setMenuOpen(false)} />
               {switcher}
+              {config.profile && <a className="o2-out" href={config.profile.href}><UserRound size={16} /> {config.profile.label}</a>}
               <button type="button" className="o2-out" onClick={signOut}><LogOut size={16} /> Đăng xuất</button>
             </div>
           </div>

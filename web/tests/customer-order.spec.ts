@@ -64,7 +64,7 @@ test.describe('/khach', () => {
     await signIn(page, 'Customer')
     await page.goto('/khach')
     await expect(page.getByText('Bạn chưa có đơn đặt trước nào')).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Xem Lô nhận đặt trước' })).toHaveAttribute('href', '/lo')
+    await expect(page.getByRole('link', { name: 'Xem Lô nhận đặt trước' })).toHaveAttribute('href', '/khach/lo')
   })
 })
 

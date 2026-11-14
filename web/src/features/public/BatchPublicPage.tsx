@@ -1,22 +1,37 @@
 /* /lo/:code — Trang công khai của một Lô: thông tin, bảng chào giá theo quy cách, tiến độ, chi phí chuẩn.
    GET /api/batches/{code} (người nuôi và Admin nhận bản soạn thảo nên trang lấy thêm từ danh sách công khai),
-   GET /api/batches/{code}/progress (BR-143), GET /api/batches/{code}/availability (BR-055, BR-089). */
+   GET /api/batches/{code}/progress (BR-143), GET /api/batches/{code}/availability (BR-055, BR-089).
+   Cổng khách hàng dùng lại nội dung (BatchDetail embedded) ở /khach/lo/:code để giữ menu trái.
+   Nút đặt trước chỉ hiện khi Lô có bảng chào giá và còn số lượng; không thì nói rõ vì sao chưa đặt được. */
+import { type ReactNode } from 'react'
 import { useParams } from 'react-router'
 import { ArrowLeft, HandCoins, ShoppingBag } from 'lucide-react'
 import type { AvailabilityResponse, BatchProgressResponse, ExploreBatchResponse, PagedResultOfExploreBatchResponse } from '../../shared/api/api.gen'
 import { useAuthStore } from '../../shared/auth/authStore'
-import SiteShell from '../../shared/layout/SiteShell'
+import PublicShell from '../../shared/layout/SiteShell'
 import {
   Money, OpAside, OpBack, OpBadge, OpDl, OpError, OpFacts, OpKv, OpLoading, OpMeter, OpMore, OpNote, OpPanel, OpTable, StatusBadge, crabImg, formatDate,
   formatVnd, label, useGet,
 } from '../../shared/ui/console'
 import { MODE_NOTE, isFunding, takesPreorders } from './batchView'
 
+/** Khung rỗng khi nội dung nằm trong cổng có menu (đã có khung riêng). */
+function Plain({ children }: { children: ReactNode; narrow?: boolean }) {
+  return <>{children}</>
+}
+
 /** Người nuôi và Admin nhận BatchResponse (không có executorName) từ cùng đường dẫn. */
 const isExplore = (data: unknown): data is ExploreBatchResponse => !!data && typeof data === 'object' && 'executorName' in data
 
 export default function BatchPublicPage() {
   const { code = '' } = useParams()
+  return <BatchDetail code={code} />
+}
+
+/** Nội dung trang một Lô. embedded = true: nằm trong cổng khách hàng, không bọc khung trang công khai. */
+export function BatchDetail({ code, embedded = false }: { code: string; embedded?: boolean }) {
+  const SiteShell = embedded ? Plain : PublicShell
+  const listHref = embedded ? '/khach/lo' : '/lo'
   const user = useAuthStore((s) => s.user)
   const path = `/api/batches/${encodeURIComponent(code)}`
   const direct = useGet<unknown>(path)
@@ -32,7 +47,10 @@ export default function BatchPublicPage() {
   if (!batch) return <SiteShell narrow><OpNote tone="info">Lô {code} chưa được công bố. Người nuôi xem bản soạn thảo ở cổng người nuôi.</OpNote></SiteShell>
 
   const funding = isFunding(batch)
-  const preorder = availability.data?.acceptingPreorders ?? takesPreorders(batch)
+  // Lô có trạng thái nhận đặt trước nhưng chưa có bảng chào giá thì chưa đặt được (không dẫn khách vào trang trống).
+  const accepting = availability.data?.acceptingPreorders ?? takesPreorders(batch)
+  const preorder = accepting && batch.offers.length > 0
+  const soldOut = preorder && availability.data !== undefined && availability.data.remainingCrabs <= 0
   const specs = availability.data?.specs
   const isInvestor = !!user?.roles.includes('Investor')
   const isCustomer = !!user?.roles.includes('Customer')
@@ -40,7 +58,7 @@ export default function BatchPublicPage() {
 
   return (
     <SiteShell>
-      <OpBack href="/lo"><ArrowLeft size={16} /> Các Lô đang mở</OpBack>
+      <OpBack href={listHref}><ArrowLeft size={16} /> {embedded ? 'Lô nhận đặt trước' : 'Các Lô đang mở'}</OpBack>
 
       <div className="op-cover">
         <img src={crabImg(batch.crabType, 1400)} alt="" />
@@ -141,13 +159,16 @@ export default function BatchPublicPage() {
                 { label: 'Đặt cọc', value: availability.data ? `${availability.data.depositRatePct}%` : '—' },
                 { label: 'Hạn đặt trước', value: formatDate(batch.preorderDeadline) || '—' },
               ]} />
-              {(!user || isCustomer) && (
-                <a className={`rd-btn ${funding ? 'rd-btn--dark' : 'rd-btn--primary'} rd-btn--block`} href={loginNext(`/khach/dat-truoc/${encodeURIComponent(batch.batchCode)}`)}><ShoppingBag size={17} /> Đặt trước</a>
-              )}
+              {soldOut
+                ? <OpNote tone="info">Đã hết số lượng nhận đặt trước của Lô này.</OpNote>
+                : (!user || isCustomer) && (
+                  <a className={`rd-btn ${funding ? 'rd-btn--dark' : 'rd-btn--primary'} rd-btn--block`} href={loginNext(`/khach/dat-truoc/${encodeURIComponent(batch.batchCode)}`)}><ShoppingBag size={17} /> Đặt trước</a>
+                )}
             </>
           )}
 
-          {!funding && !preorder && <OpNote tone="info">Lô này hiện không nhận góp vốn và đặt trước.</OpNote>}
+          {accepting && !preorder && <OpNote tone="info">Lô chưa mở bảng chào giá nên chưa nhận đặt trước.</OpNote>}
+          {!funding && !accepting && <OpNote tone="info">Lô này hiện không nhận góp vốn và đặt trước.</OpNote>}
           <a className="op-link" href="/chuan-phan-hang">Chuẩn phân hạng</a>
         </OpAside>
       </div>

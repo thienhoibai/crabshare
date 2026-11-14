@@ -54,7 +54,7 @@ export default function PreorderBuilderPage() {
 
   const b = batch.data
   const a = availability.data
-  const back = <OpBack href={`/lo/${encodeURIComponent(code)}`}><ArrowLeft size={16} /> Lô {code}</OpBack>
+  const back = <OpBack href={`/khach/lo/${encodeURIComponent(code)}`}><ArrowLeft size={16} /> Lô {code}</OpBack>
 
   if (created?.deposit) {
     const d = created.deposit
@@ -124,7 +124,7 @@ export default function PreorderBuilderPage() {
         <OpHeading crumb={back} eyebrow={`${b.batchCode} · ${label('crabType', b.crabType)}`} title="Đặt trước" description={b.title} />
         <OpPanel>
           <OpEmpty title={a.acceptingPreorders ? 'Lô chưa có bảng chào giá' : 'Lô này hiện không nhận đặt trước'}>
-            <a className="rd-btn rd-btn--primary" href="/lo">Xem Lô đang mở</a>
+            <a className="rd-btn rd-btn--primary" href="/khach/lo">Xem Lô nhận đặt trước</a>
           </OpEmpty>
         </OpPanel>
       </>

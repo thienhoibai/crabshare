@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Download, FileSignature } from 'lucide-react'
 import type { ContractResponse } from '../api/api.gen'
 import { formatDateTime, formatVnd } from '../lib/format'
@@ -10,17 +10,22 @@ import './contracts.css'
 /**
  * Xem hợp đồng góp vốn: ghi chú pháp lý của bản demo, hai bước ký theo thứ tự (người nuôi trước, nhà đầu tư sau),
  * file PDF hiện hành và mã băm của nó. Không có khung bao: đặt trong OpPanel hoặc OpModal của trang gọi.
- * Bấm ký thì mở hộp xác nhận rồi mới gọi onSign.
+ * Bấm ký thì mở hộp xác nhận rồi mới gọi onSign. Nút ký đặt ngay dưới các bước ký (không phải cuộn qua file PDF);
+ * khoản góp đã hết thời gian giữ chỗ thì nói rõ hợp đồng không ký được nữa, kèm lối đi tiếp (closedAction) nếu trang gọi có.
  */
-export function ContractViewer({ contract, onSign, signing = false, signError, pdfHeight = 480 }: {
+export function ContractViewer({ contract, onSign, signing = false, signError, pdfHeight = 480, closedAction }: {
   contract: ContractResponse
   onSign?: () => void
   signing?: boolean
   signError?: string | null
   pdfHeight?: number
+  closedAction?: ReactNode
 }) {
   const pdf = useContractPdf(contract.contractId, contract.currentHash)
   const [confirming, setConfirming] = useState(false)
+  // Còn chờ người ký nhưng khoản góp đã hết hạn giữ chỗ hoặc đã hoàn: máy chủ không cho ký nữa.
+  const closed = !contract.canSign && contract.nextSigner !== null && contract.status !== 'Void'
+    && (contract.contributionStatus === 'Expired' || contract.contributionStatus === 'Refunded')
 
   // Ký xong thì API trả canSign = false: đóng hộp xác nhận.
   useEffect(() => {
@@ -56,6 +61,19 @@ export function ContractViewer({ contract, onSign, signing = false, signError, p
 
       <OpFlow steps={steps} />
 
+      {signError && !confirming && <OpNote tone="danger">{signError}</OpNote>}
+      {onSign && contract.canSign && (
+        <div className="op-inline">
+          <OpBtn onClick={() => setConfirming(true)} disabled={signing}><FileSignature size={17} /> Ký số hợp đồng</OpBtn>
+          <small className="rd-muted">Đọc file hợp đồng bên dưới trước khi ký.</small>
+        </div>
+      )}
+      {closed && (
+        <OpNote>
+          Khoản góp đã hết thời gian giữ chỗ nên hợp đồng này không ký được nữa. {closedAction}
+        </OpNote>
+      )}
+
       {pdf.error && <p className="rd-muted">Chưa xem được file PDF của hợp đồng này.</p>}
       {!pdf.error && !pdf.url && <OpLoading label="Đang tải file hợp đồng…" />}
       {pdf.url && (
@@ -75,13 +93,6 @@ export function ContractViewer({ contract, onSign, signing = false, signError, p
         ]} />
         <p className="ct-hash">Mã băm SHA-256: <code className="op-mono">{contract.currentHash}</code></p>
       </OpMore>
-
-      {signError && !confirming && <OpNote tone="danger">{signError}</OpNote>}
-      {onSign && contract.canSign && (
-        <div className="op-formfoot">
-          <OpBtn onClick={() => setConfirming(true)} disabled={signing}><FileSignature size={17} /> Ký số hợp đồng</OpBtn>
-        </div>
-      )}
 
       {confirming && onSign && (
         <OpConfirm

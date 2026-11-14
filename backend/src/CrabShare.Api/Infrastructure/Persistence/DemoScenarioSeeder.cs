@@ -64,9 +64,17 @@ public static class DemoScenarioSeeder
         var accessor = sp.GetRequiredService<IHttpContextAccessor>();
         try
         {
-            if (!await db.Database.CanConnectAsync(ct))
+            // Lúc App Service vừa khởi động, kết nối CSDL bằng managed identity có thể chưa sẵn: thử lại tới khoảng 3 phút.
+            var connected = false;
+            for (var attempt = 1; attempt <= 18 && !connected; attempt++)
             {
-                logger.LogWarning("Không kết nối được CSDL — bỏ qua kịch bản demo quyết toán.");
+                try { connected = await db.Database.CanConnectAsync(ct); }
+                catch (Exception e) when (e is not OperationCanceledException) { logger.LogDebug(e, "Chưa kết nối được CSDL (lần {Attempt}).", attempt); }
+                if (!connected) await Task.Delay(TimeSpan.FromSeconds(10), ct);
+            }
+            if (!connected)
+            {
+                logger.LogWarning("Không kết nối được CSDL sau khoảng 3 phút — bỏ qua kịch bản demo quyết toán.");
                 return [];
             }
             var existing = await db.Batches.Where(b => BatchCodes.Contains(b.BatchCode)).Select(b => b.BatchCode).ToListAsync(ct);

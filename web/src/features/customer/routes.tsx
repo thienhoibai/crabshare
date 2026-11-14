@@ -9,9 +9,13 @@ const DeliveriesPage = lazy(() => import('./DeliveriesPage'))
 const SitesPage = lazy(() => import('./SitesPage'))
 const ProfilePage = lazy(() => import('./ProfilePage'))
 const NotificationsPage = lazy(() => import('./NotificationsPage'))
+const BatchesPage = lazy(() => import('./BatchesPage'))
+const BatchPage = lazy(() => import('./BatchesPage').then((m) => ({ default: m.BatchPage })))
 
 export const customerRoutes: RouteObject[] = [
   { path: '/khach', element: <MyOrdersPage /> },
+  { path: '/khach/lo', element: <BatchesPage /> },
+  { path: '/khach/lo/:code', element: <BatchPage /> },
   { path: '/khach/dat-truoc/:code', element: <PreorderBuilderPage /> },
   { path: '/khach/don/:orderNo', element: <OrderDetailPage /> },
   { path: '/khach/giao-hang', element: <DeliveriesPage /> },

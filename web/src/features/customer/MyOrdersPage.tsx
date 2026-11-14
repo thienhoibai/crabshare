@@ -70,7 +70,7 @@ export default function MyOrdersPage() {
       <OpHeading
         eyebrow="Khách hàng"
         title="Đơn của tôi"
-        action={<a className="rd-btn rd-btn--ghost" href="/lo"><Sprout size={17} /> Đặt trước ở Lô khác</a>}
+        action={<a className="rd-btn rd-btn--ghost" href="/khach/lo"><Sprout size={17} /> Đặt trước ở Lô khác</a>}
       />
       <QueryView query={orders}>
         {(data) => {
@@ -78,7 +78,7 @@ export default function MyOrdersPage() {
             return (
               <OpPanel>
                 <OpEmpty title="Bạn chưa có đơn đặt trước nào">
-                  <a className="rd-btn rd-btn--primary" href="/lo">Xem Lô nhận đặt trước</a>
+                  <a className="rd-btn rd-btn--primary" href="/khach/lo">Xem Lô nhận đặt trước</a>
                 </OpEmpty>
               </OpPanel>
             )

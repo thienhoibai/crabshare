@@ -9,7 +9,9 @@ import {
   Money, OpBadge, OpBtn, OpEmpty, OpError, OpHeading, OpLoading, OpPanel, OpTable, QueryView, StatusBadge, errorMessage, openFile, useGet,
 } from '../../shared/ui/console'
 
-const waitsForMe = (c: ContractSummary) => c.nextSigner === 'Investor' && c.status !== 'Void'
+/** Hết thời gian giữ chỗ hoặc đã hoàn tiền: hợp đồng không ký được nữa. */
+const closed = (c: ContractSummary) => c.contributionStatus === 'Expired' || c.contributionStatus === 'Refunded'
+const waitsForMe = (c: ContractSummary) => c.nextSigner === 'Investor' && c.status !== 'Void' && !closed(c)
 
 export default function ContractsPage() {
   const [params, setParams] = useSearchParams()
@@ -42,7 +44,8 @@ export default function ContractsPage() {
                 {
                   key: 'status', header: 'Trạng thái', cell: (r) => (waitsForMe(r)
                     ? <OpBadge tone="gold">Tới lượt bạn ký</OpBadge>
-                    : <StatusBadge kind="contract" value={r.status} />),
+                    : closed(r) && r.status !== 'FullySigned' ? <StatusBadge kind="contribution" value={r.contributionStatus} />
+                      : <StatusBadge kind="contract" value={r.status} />),
                 },
                 {
                   key: 'act', header: '', cell: (r) => (
@@ -67,7 +70,8 @@ export default function ContractsPage() {
               <OpPanel title={`Hợp đồng ${c.contractNo}`} accent={c.canSign}>
                 {/* Ghim hợp đồng đang ký lên ?id=: ký xong nó không còn là "hợp đồng chờ tôi ký" nhưng vẫn phải hiện kết quả. */}
                 <ContractViewer contract={c} onSign={() => { setParams({ id: String(c.contractId) }, { replace: true }); sign.mutate(c.contractId) }}
-                  signing={sign.isPending} signError={sign.isError ? errorMessage(sign.error) : null} />
+                  signing={sign.isPending} signError={sign.isError ? errorMessage(sign.error) : null}
+                  closedAction={<a className="op-link" href={`/nha-dau-tu/gop-von/${encodeURIComponent(c.batchCode)}`}>Góp lại vào Lô {c.batchCode}</a>} />
               </OpPanel>
             )
       )}

@@ -3,7 +3,7 @@
 import {
   BadgeCheck, BellRing, Boxes, Building2, Camera, ClipboardCheck, ClipboardList, Coins, Cpu, FileSignature, Flag, Gavel, HandCoins, Handshake, Home,
   LayoutGrid, MapPin, MessageSquareWarning, NotebookPen, Package, Receipt, Ruler, ScanEye, ScrollText, Settings, ShieldCheck, ShoppingBag, Sprout, Truck,
-  UserRound, Users, Vote, Wallet, type LucideIcon,
+  Users, Vote, Wallet, type LucideIcon,
 } from 'lucide-react'
 import type { Role } from '../../auth/authStore'
 
@@ -30,6 +30,8 @@ export interface AreaConfig {
   roles: Role[]
   /** Chuông ở thanh trên trỏ tới đâu. */
   bell?: string
+  /** Trang hồ sơ của người dùng, mở từ menu khi bấm avatar ở góc phải (không lặp lại ở menu trái). */
+  profile?: { href: string; label: string }
   groups: { label: string; items: NavItem[] }[]
 }
 
@@ -160,6 +162,7 @@ export const AREAS: Record<Area, AreaConfig> = {
     title: 'Nhà đầu tư',
     roles: ['Investor'],
     bell: '/nha-dau-tu/thong-bao',
+    profile: { href: '/nha-dau-tu/ho-so', label: 'Hồ sơ và xác minh' },
     groups: [
       {
         label: 'Góp vốn',
@@ -175,8 +178,6 @@ export const AREAS: Record<Area, AreaConfig> = {
         items: [
           { href: '/nha-dau-tu/hop-dong', icon: FileSignature, label: 'Hợp đồng' },
           { href: '/nha-dau-tu/quyet-toan', icon: Receipt, label: 'Quyết toán', tab: true },
-          { href: '/nha-dau-tu/thong-bao', icon: BellRing, label: 'Thông báo' },
-          { href: '/nha-dau-tu/ho-so', icon: UserRound, label: 'Hồ sơ và xác minh' },
         ],
       },
     ],
@@ -187,12 +188,13 @@ export const AREAS: Record<Area, AreaConfig> = {
     title: 'Khách hàng',
     roles: ['Customer'],
     bell: '/khach/giao-hang',
+    profile: { href: '/khach/ho-so', label: 'Hồ sơ' },
     groups: [
       {
         label: 'Đặt trước',
         items: [
           { href: '/khach', icon: ShoppingBag, label: 'Đơn của tôi', short: 'Đơn', tab: true },
-          { href: '/lo', icon: Sprout, label: 'Lô nhận đặt trước', short: 'Đặt trước', tab: true },
+          { href: '/khach/lo', icon: Sprout, label: 'Lô nhận đặt trước', short: 'Đặt trước', tab: true },
           { href: '/khach/giao-hang', icon: Truck, label: 'Giao hàng và nghiệm thu', short: 'Giao hàng', tab: true },
         ],
       },
@@ -200,9 +202,6 @@ export const AREAS: Record<Area, AreaConfig> = {
         label: 'Tài khoản',
         items: [
           { href: '/khach/dia-diem', icon: MapPin, label: 'Địa điểm nhận hàng' },
-          // API thông báo hiện chỉ mở cho vai trò nhà đầu tư (Features/Portfolio), nên chỉ hiện với tài khoản có vai trò đó.
-          { href: '/khach/thong-bao', icon: BellRing, label: 'Thông báo', roles: ['Investor'] },
-          { href: '/khach/ho-so', icon: UserRound, label: 'Hồ sơ', tab: true },
         ],
       },
     ],

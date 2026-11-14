@@ -53,7 +53,8 @@ test('đăng xuất xoá phiên, về trang chủ, và trang trong cổng lại 
   await page.goto('/khach')
   await expect(page.getByRole('navigation', { name: 'Menu Khách hàng' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Đăng xuất' }).click()
+  await page.getByRole('button', { name: /^Tài khoản: / }).click()
+  await page.getByRole('menuitem', { name: 'Đăng xuất' }).click()
   await expect(page).toHaveURL(/127\.0\.0\.1:\d+\/$/)
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('crabshare-auth')!).state.token)).toBeNull()
   await page.goto('/khach')
