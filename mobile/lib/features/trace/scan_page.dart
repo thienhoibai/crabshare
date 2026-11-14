@@ -9,7 +9,7 @@ import '../../app/theme/app_theme.dart';
 import '../../shared/widgets/app_ui.dart';
 import 'trace_code_parser.dart';
 
-/// Quét tem truy xuất bằng camera hoặc nhập mã tem nếu camera không khả dụng.
+/// Quét mã QR in trên đơn bằng camera, hoặc nhập mã truy xuất khi camera không dùng được.
 class ScanPage extends StatefulWidget {
   const ScanPage({super.key});
 
@@ -47,7 +47,7 @@ class _ScanPageState extends State<ScanPage> {
     final code = _scanGate.accept(_code.text);
     if (code == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mã tem gồm 12 ký tự đúng định dạng.')),
+        const SnackBar(content: Text('Mã truy xuất chưa đúng. Mã gồm chữ QR và 10 ký tự.')),
       );
       return;
     }
@@ -104,7 +104,7 @@ class _ScanPageState extends State<ScanPage> {
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
-                      'Quét tem truy xuất',
+                      'Quét QR đơn hàng',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -160,19 +160,18 @@ class _ScanPageState extends State<ScanPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Nhập mã tem nếu không quét được',
+                    'Nhập mã truy xuất nếu không quét được',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _code,
-                    maxLength: 12,
                     textCapitalization: TextCapitalization.characters,
+                    autocorrect: false,
                     onSubmitted: (_) => _lookup(),
                     decoration: const InputDecoration(
-                      hintText: 'VD: CSAB23CD45EF',
+                      hintText: 'VD: QR7K2M9XQ4TB',
                       prefixIcon: Icon(Icons.qr_code_2_rounded),
-                      counterText: '',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -199,10 +198,10 @@ class TraceCameraError extends StatelessWidget {
     final denied = error.errorCode == MobileScannerErrorCode.permissionDenied;
     final unsupported = error.errorCode == MobileScannerErrorCode.unsupported;
     final message = denied
-        ? 'Quyền camera đã bị từ chối. Hãy cho phép camera trong cài đặt hoặc nhập mã tem bên dưới.'
+        ? 'Quyền camera đã bị từ chối. Hãy cho phép camera trong cài đặt hoặc nhập mã truy xuất bên dưới.'
         : unsupported
-            ? 'Thiết bị không hỗ trợ camera. Bạn có thể nhập mã tem bên dưới.'
-            : 'Không khởi tạo được camera. Hãy thử lại hoặc nhập mã tem bên dưới.';
+            ? 'Thiết bị không hỗ trợ camera. Bạn có thể nhập mã truy xuất bên dưới.'
+            : 'Không khởi tạo được camera. Hãy thử lại hoặc nhập mã truy xuất bên dưới.';
 
     return ColoredBox(
       color: Colors.black87,
@@ -275,7 +274,7 @@ class _ViewfinderState extends State<_Viewfinder> with SingleTickerProviderState
             ),
             const SizedBox(height: 10),
             const Text(
-              'Đưa tem QR vào khung hình',
+              'Đưa mã QR trên đơn vào khung hình',
               textAlign: TextAlign.center,
               style: TextStyle(color: Color(0xFFBDB7B1)),
             ),

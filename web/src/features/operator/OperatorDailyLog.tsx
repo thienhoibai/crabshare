@@ -1,241 +1,108 @@
+/* /operator/log — Ghi nhật ký chăm sóc hôm nay cho từng Lô đang lưu nuôi.
+   GET /api/operators/me/production-batches (Lô đang nuôi, đã ghi hôm nay chưa), ghi bằng POST /api/batches/{code}/production-logs (CareLogDialog).
+   Các bản đã ghi (GET /api/operators/me/production-logs?from=&to=) nằm trong khối gấp. */
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { RefreshCw } from 'lucide-react'
-import { errorMessage } from '../../shared/api/http'
-import { useAuthStore } from '../../shared/auth/authStore'
-import OperatorLayout from './OperatorLayout'
-import { OpBadge, OpBtn, OpHeading, OpNote, OpPanel } from './operatorUi'
-import { batchStatuses } from './batchesApi'
+import { CheckCircle2, NotebookPen } from 'lucide-react'
+import type { PagedResultOfProductionBatchResponse, PagedResultOfProductionLogResponse, ProductionBatchResponse } from '../../shared/api/api.gen'
 import {
-  productionBatches,
-  productionThresholds,
-  type ProductionBatch,
-  type ThresholdVersion
-} from './productionApi'
-import ProductionThresholds from './ProductionThresholds'
-import ProductionLogForm from './ProductionLogForm'
-import ProductionLogHistory from './ProductionLogHistory'
-import './productionLogs.css'
+  Input, OpBadge, OpBtn, OpEmpty, OpHeading, OpMore, OpPanel, OpRow, OpTable, QueryView, crabImg, formatDate, useGet,
+} from '../../shared/ui/console'
+import CareLogDialog from './CareLogDialog'
+import { logSourceLabel, num, plausibilityLabel } from './opA'
+import Pager from './Pager'
 
-function BatchDailyLog({
-  batch,
-  accountKey,
-  onBusy
-}: {
-  batch: ProductionBatch
-  accountKey: readonly unknown[]
-  onBusy: (busy: boolean) => void
-}) {
-  const client = useQueryClient()
-  const [busy, setBusy] = useState(false)
-  const key = [...accountKey, 'thresholds', batch.batchCode]
-  const query = useQuery({
-    queryKey: key,
-    queryFn: ({ signal }) => productionThresholds(batch.batchCode, signal),
-    retry: false,
-    refetchInterval: 60_000,
-    refetchOnWindowFocus: true
-  })
-  const setWorking = (value: boolean) => {
-    setBusy(value)
-    onBusy(value)
-  }
-  const refresh = () => {
-    void client.invalidateQueries({ queryKey: [...accountKey, 'logs', batch.batchCode] })
-    void client.invalidateQueries({ queryKey: [...accountKey, 'batches'] })
-    void client.invalidateQueries({ queryKey: key })
-  }
-  const savedThresholds = (current: ThresholdVersion) => {
-    client.setQueryData(key, query.data ? { ...query.data, current } : undefined)
-    refresh()
-  }
-  return (
-    <>
-      {query.isError && query.data && (
-        <OpPanel>
-          <div role="alert">
-            <OpNote tone="danger">
-              {errorMessage(query.error)} Bản nhập được giữ lại; cấu hình đang hiển thị là lần tải gần nhất.
-            </OpNote>
-          </div>
-          <OpBtn
-            disabled={busy || query.isFetching}
-            onClick={() => {
-              void query.refetch()
-            }}
-          >
-            Thử lại cấu hình
-          </OpBtn>
-        </OpPanel>
-      )}
-      {query.isPending ? (
-        <OpPanel>
-          <p role="status" aria-busy="true">
-            Đang tải cấu hình lô…
-          </p>
-        </OpPanel>
-      ) : !query.data ? (
-        <OpPanel>
-          <div role="alert">
-            <OpNote tone="danger">{errorMessage(query.error)}</OpNote>
-          </div>
-          <OpBtn
-            onClick={() => {
-              void query.refetch()
-            }}
-          >
-            Thử lại cấu hình
-          </OpBtn>
-        </OpPanel>
-      ) : (
-        <div className="production-workspace">
-          <ProductionLogForm
-            batch={batch}
-            state={query.data}
-            busy={busy}
-            onBusy={setWorking}
-            onRefresh={refresh}
-            onSaved={() => {
-              refresh()
-              void client.invalidateQueries({ queryKey: ['operator-alerts'] })
-            }}
-          />
-          <ProductionThresholds
-            code={batch.batchCode}
-            state={query.data}
-            busy={busy}
-            onBusy={setWorking}
-            onSaved={savedThresholds}
-            onReload={async () => {
-              const current = await productionThresholds(batch.batchCode)
-              client.setQueryData(key, current)
-              return current
-            }}
-          />
-        </div>
-      )}
-      <ProductionLogHistory code={batch.batchCode} accountKey={accountKey} />
-    </>
-  )
-}
-
-function DailyLogWorkspace({ userId, operatorId }: { userId: number; operatorId: number | null }) {
-  const accountKey = ['production', userId, operatorId] as const
-  const [selectedCode, setSelectedCode] = useState(
-    () => new URLSearchParams(window.location.search).get('code') ?? ''
-  )
-  const [busy, setBusy] = useState(false)
-  const batches = useQuery({
-    queryKey: [...accountKey, 'batches'],
-    queryFn: ({ signal }) => productionBatches(signal),
-    retry: false
-  })
-  const batch = batches.data?.find((item) => item.batchCode === selectedCode) ?? batches.data?.[0]
-  return (
-    <OperatorLayout activeTab="log">
-      <OpHeading
-        eyebrow="Nhật ký nuôi"
-        title="Ghi nhật ký hàng ngày"
-        description="Ghi chỉ số nước và lượng thức ăn thực tế cho từng lô đang chăm sóc."
-        action={
-          <OpBtn
-            variant="outline"
-            disabled={busy || batches.isFetching}
-            onClick={() => {
-              void batches.refetch()
-            }}
-          >
-            <RefreshCw size={16} />
-            Làm mới lô
-          </OpBtn>
-        }
-      />
-      {batches.isError && batches.data && (
-        <div role="alert">
-          <OpNote tone="danger">
-            {errorMessage(batches.error)} Bản nhập được giữ lại. Chọn Làm mới lô để thử lại.
-          </OpNote>
-        </div>
-      )}
-      {batches.isPending ? (
-        <OpPanel>
-          <p role="status" aria-busy="true">
-            Đang tải lô nuôi…
-          </p>
-        </OpPanel>
-      ) : batches.isError && !batches.data ? (
-        <OpPanel>
-          <div role="alert">
-            <OpNote tone="danger">{errorMessage(batches.error)}</OpNote>
-          </div>
-          <OpBtn
-            onClick={() => {
-              void batches.refetch()
-            }}
-          >
-            Thử lại
-          </OpBtn>
-        </OpPanel>
-      ) : !batch ? (
-        <OpPanel>
-          <div className="op-empty">
-            <b>Chưa có lô đang chăm sóc</b>
-            <span>
-              Nhật ký dành cho lô đang sản xuất hoặc đang thu hoạch. Lô đã thả giống có thể xem lịch sử và cấu
-              hình.
-            </span>
-          </div>
-        </OpPanel>
-      ) : (
-        <>
-          <OpPanel>
-            <div className="op-field">
-              <label htmlFor="production-batch">Lô nuôi</label>
-              <select
-                id="production-batch"
-                className="op-select"
-                value={batch.batchCode}
-                disabled={busy}
-                onChange={(event) => setSelectedCode(event.target.value)}
-              >
-                {batches.data?.map((item) => (
-                  <option key={item.batchCode} value={item.batchCode}>
-                    {item.batchCode} · {item.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="production-batch-meta">
-              <OpBadge tone={batch.status === 'Stocked' ? 'info' : 'ok'}>
-                {batchStatuses[batch.status]}
-              </OpBadge>
-              <span>
-                {batch.aliveCount}/{batch.seedQuantity} cua đang nuôi
-              </span>
-              {batch.dayOfCycle !== null && (
-                <span>
-                  Ngày {batch.dayOfCycle}/{batch.cycleDays} của chu kỳ
-                </span>
-              )}
-            </div>
-          </OpPanel>
-          <BatchDailyLog key={batch.batchCode} batch={batch} accountKey={accountKey} onBusy={setBusy} />
-        </>
-      )}
-    </OperatorLayout>
-  )
-}
+const PAGE_SIZE = 20
+/** API chỉ nhận nhật ký của Lô đang lưu nuôi hoặc đang thu hoạch. */
+const recordable = (b: ProductionBatchResponse) => b.status === 'InProduction' || b.status === 'Harvesting'
 
 export default function OperatorDailyLog() {
-  const user = useAuthStore((state) => state.user)
-  const token = useAuthStore((state) => state.token)
-  if (!user) return null
-  // Reset drafts and selection immediately when the authenticated account changes.
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [page, setPage] = useState(1)
+  const [recording, setRecording] = useState<ProductionBatchResponse | null>(null)
+  const batches = useGet<PagedResultOfProductionBatchResponse>('/api/operators/me/production-batches', { pageSize: 100 })
+  const logs = useGet<PagedResultOfProductionLogResponse>('/api/operators/me/production-logs', { from, to, page, pageSize: PAGE_SIZE })
+  const dueBatches = (batches.data?.items ?? []).filter((b) => recordable(b) && !b.loggedToday)
+  const due = dueBatches.length
+  // Chỉ Lô đầu tiên chưa ghi có nút chính.
+  const firstDue = dueBatches[0]?.batchCode
+
   return (
-    <DailyLogWorkspace
-      key={`${user.userId}:${user.operatorId}:${token}`}
-      userId={user.userId}
-      operatorId={user.operatorId}
-    />
+    <>
+      <OpHeading
+        eyebrow="Vận hành"
+        title="Nhật ký chăm sóc"
+        description="Mỗi Lô ghi một lần mỗi ngày."
+        action={due > 0 ? <OpBadge tone="warn">{due} Lô chưa ghi hôm nay</OpBadge> : undefined}
+      />
+
+      <QueryView query={batches}>
+        {(data) => data.items.length === 0 ? <OpEmpty title="Chưa có Lô nào đang lưu nuôi" icon={<NotebookPen size={30} />} /> : (
+          <OpPanel className="op-list">
+            {data.items.map((b) => (
+              <OpRow
+                key={b.batchCode}
+                // Lô cần ghi thì bấm để mở form; Lô đã ghi thì mở nhật ký của Lô.
+                href={recordable(b) && !b.loggedToday ? undefined : `/operator/batches/${encodeURIComponent(b.batchCode)}/nhat-ky`}
+                onClick={() => setRecording(b)}
+                media={crabImg(b.crabType)}
+                title={b.title}
+                sub={`${b.batchCode}${b.dayOfCycle ? ` · ngày nuôi ${b.dayOfCycle}/${b.cycleDays}` : ''}`}
+                mid={b.latestLog && (
+                  <small>
+                    {formatDate(b.latestLog.logDate)}: {num(b.latestLog.feedKg, ' kg')} thức ăn · pH {num(b.latestLog.ph)} · {num(b.latestLog.waterTempC, ' °C')} · {num(b.latestLog.salinityPpt, ' ‰')}
+                  </small>
+                )}
+                end={
+                  b.loggedToday ? <span className="op-inline op-ok"><CheckCircle2 size={16} /> Đã ghi</span>
+                    : recordable(b) ? <span className={`rd-btn rd-btn--sm ${b.batchCode === firstDue ? 'rd-btn--primary' : 'rd-btn--ghost'}`}><NotebookPen size={15} /> Ghi hôm nay</span>
+                      : null
+                }
+              />
+            ))}
+          </OpPanel>
+        )}
+      </QueryView>
+
+      <OpPanel>
+        <OpMore label="Các bản đã ghi" count={logs.data?.total}>
+          <div className="op-toolbar">
+            <Input type="date" value={from} max={to || undefined} onChange={(e) => { setFrom(e.target.value); setPage(1) }} aria-label="Từ ngày" />
+            <Input type="date" value={to} min={from || undefined} onChange={(e) => { setTo(e.target.value); setPage(1) }} aria-label="Đến ngày" />
+            {(from || to) && <OpBtn variant="ghost" sm onClick={() => { setFrom(''); setTo(''); setPage(1) }}>Bỏ lọc</OpBtn>}
+          </div>
+          <QueryView query={logs}>
+            {(data) => (
+              <>
+                <OpTable
+                  rows={data.items}
+                  rowKey={(l) => l.id}
+                  empty="Chưa có nhật ký nào"
+                  columns={[
+                    {
+                      key: 'date', header: 'Ngày', cell: (l) => (
+                        <>
+                          <b>{formatDate(l.logDate)}</b> · <a className="op-link" href={`/operator/batches/${encodeURIComponent(l.batchCode)}/nhat-ky`}>{l.batchCode}</a>
+                          {l.plausibilityFlag !== 'Ok' && <> <OpBadge tone="warn">{plausibilityLabel(l.plausibilityFlag)}</OpBadge></>}
+                          {l.source !== 'Manual' && <> <OpBadge>{logSourceLabel(l.source)}</OpBadge></>}
+                          {l.note && <><br /><small className="rd-muted">{l.note}</small></>}
+                        </>
+                      ),
+                    },
+                    { key: 'feed', header: 'Thức ăn', num: true, cell: (l) => num(l.feedKg, ' kg') },
+                    { key: 'ph', header: 'pH', num: true, cell: (l) => num(l.ph) },
+                    { key: 'temp', header: 'Nhiệt độ', num: true, cell: (l) => num(l.waterTempC, ' °C') },
+                    { key: 'sal', header: 'Độ mặn', num: true, cell: (l) => num(l.salinityPpt, ' ‰') },
+                  ]}
+                />
+                <Pager page={data.page} pageSize={PAGE_SIZE} total={data.total} unit="bản ghi" onChange={setPage} />
+              </>
+            )}
+          </QueryView>
+        </OpMore>
+      </OpPanel>
+
+      {recording && <CareLogDialog batchCode={recording.batchCode} batchTitle={recording.title} onClose={() => setRecording(null)} />}
+    </>
   )
 }

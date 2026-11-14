@@ -24,6 +24,22 @@ public sealed class RegisterRequest
 
     /// <summary>Gửi dạng chữ: "Customer" hoặc "Investor".</summary>
     public SelfRegisterRole Role { get; set; } = SelfRegisterRole.Customer;
+
+    /// <summary>Loại đối tác (BR-001): Individual, Household, Company, Cooperative. Mặc định cá nhân.</summary>
+    [RegularExpression("^(Individual|Household|Company|Cooperative)$")]
+    public string PartyType { get; set; } = "Individual";
+
+    /// <summary>Tên pháp lý của tổ chức (tên cửa hàng, doanh nghiệp). Bắt buộc khi không phải cá nhân.</summary>
+    [MaxLength(200)]
+    public string? LegalName { get; set; }
+
+    /// <summary>Mã số doanh nghiệp hoặc hộ kinh doanh, nếu có.</summary>
+    [MaxLength(30)]
+    public string? RegistrationNo { get; set; }
+
+    /// <summary>Loại khách B2B (BR-014): Restaurant, Trader, Wholesaler, Agent, CentralKitchen, Other.</summary>
+    [RegularExpression("^(Restaurant|Trader|Wholesaler|Agent|CentralKitchen|Other)$")]
+    public string? CustomerType { get; set; }
 }
 
 public sealed class LoginRequest

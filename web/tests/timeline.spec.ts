@@ -1,86 +1,159 @@
-import { test, expect, type Page } from '@playwright/test'
+/* Nhật trình của một Lô (GET /api/batches/{code}/timeline?days=&before=), nay nằm trong mục Nhật trình của trang Lô tôi đã góp:
+   /nha-dau-tu/danh-muc/:code?tab=nhat-trinh. Ghi nhận gom theo ngày; ảnh bằng chứng tải qua endpoint cần đăng nhập. */
+import type { TimelineItem, TimelinePage } from '../src/shared/api/api.gen'
+import { dateFromNow, expect, reply, signIn, test, type Page } from './support/app'
+import { RUN, TIMELINE_DAY, dmy, fact, lot, mockInvestor, more, timelineEntries, timelinePage } from './support/investor'
 
-const code = 'TL-2026-01'
-const item = (type: string, id: number, payload: object) => ({
-  id: `${type}:${id}`, type, sourceId: String(id), businessDate: '2026-10-20',
-  occurredAt: type === 'ProductionLog' ? null : '2026-10-20T01:30:00Z', timeBasis: type === 'ProductionLog' ? 'Date' : 'Occurred',
-  productionLog: null, slotEvent: null, evidence: null, alert: null, ...payload,
+const URL = lot(RUN, 'nhat-trinh')
+const TIMELINE = `/api/batches/${RUN}/timeline`
+const OLDER_DAY = dateFromNow(-9)
+
+/** Khối của một ngày trong nhật trình, tìm theo ngày ở cuối tiêu đề ("Thứ Năm, 12/11/2026"). */
+const dayPanel = (page: Page, date: string) => page.locator('section').filter({ has: page.getByRole('heading', { name: new RegExp(`${dmy(date)}$`) }) })
+
+const log = (id: number, date: string, extra: Partial<NonNullable<TimelineItem['productionLog']>> = {}): TimelineItem => ({
+  id: `ProductionLog:${id}`, type: 'ProductionLog', sourceId: String(id), businessDate: date, occurredAt: null, timeBasis: 'Date',
+  productionLog: { ph: 7.4, waterTempC: 27.5, salinityPpt: 19, feedKg: 2, source: 'Manual', plausibilityFlag: 'Ok', note: null, ...extra },
 })
-const entries = [
-  item('Alert', 1, { alert: { type: 'WaterQuality', severity: 'Medium', message: 'Độ mặn ngoài khoảng hộ nuôi đã cấu hình.', status: 'Acknowledged', acknowledgedAt: '2026-10-20T02:00:00Z', escalatedAt: null } }),
-  item('Evidence', 2, { evidence: { mediaType: 'Photo', source: 'InAppCapture', slotCode: '0012', reviewStatus: 'Accepted', fileUrl: `/api/batches/${code}/timeline/evidence/2/file` } }),
-  item('SlotEvent', 3, { slotEvent: { eventType: 'Relocated', slotCode: '0012', destinationSlotCode: '0018', quantity: 1, note: 'Chuyển sang hộp sạch' } }),
-  item('ProductionLog', 4, { productionLog: { ph: 7.5, waterTempC: 28, salinityPpt: 20, feedKg: 1.25, source: 'Manual', plausibilityFlag: 'Ok', note: 'Kiểm tra nước buổi sáng' } }),
-]
-const first = { batchCode: code, timeZone: 'Asia/Ho_Chi_Minh', groups: [{ date: '2026-10-20', items: entries }], nextBefore: '2026-10-20', hasMore: true }
-async function setup(page: Page) {
-  await page.addInitScript(() => localStorage.setItem('crabshare-auth', JSON.stringify({ state: {
-    token: 'timeline-token', expiresAt: '2099-01-01T00:00:00Z', user: { userId: 42, fullName: 'Nhà đầu tư', email: 'timeline@test.local', roles: ['Investor'], status: 'Active', phone: null, operatorId: null },
-  }, version: 0 })))
-  await page.route('**/api/investor/notifications**', r => r.fulfill({ json: { items: [], total: 0, unreadCount: 0 } }))
-  await page.route('**/api/batches/*', r => r.fulfill({ json: {
-    batchCode: code, title: 'Cua thịt Năm Căn', operatorName: 'HTX Năm Căn', crabType: 'FatteningMudCrab', status: 'InProduction',
-    seedQuantity: 120, expectedOutputKg: 65, cycleDays: 90, restockCutoffDays: 7, minViableCapital: 80000000, targetCapital: 100000000, maxCapital: 120000000, minContribution: 1000000, operatorSharePct: 20,
-    fundingOpenAt: '2026-10-01T00:00:00Z', fundingDeadline: '2026-10-30T00:00:00Z',
-    fundingProgress: { confirmedCapital: 100000000, reservedCapital: 0, investorCount: 8, pctOfTarget: 100, percentLabel: '100%' },
-    standardCost: { versionNo: 1, status: 'Locked', total: 80000000, items: [], lockedAt: '2026-09-30T00:00:00Z' },
-  } }))
-}
 
-test('production timeline renders real payloads, private photo and full-day pagination without duplicate refresh', async ({ page }) => {
-  await setup(page)
-  await page.route('**/timeline?**', r => {
-    expect(r.request().headers()['authorization']).toBe('Bearer timeline-token')
-    return r.fulfill({ json: new URL(r.request().url()).searchParams.has('before')
-      ? { ...first, groups: [{ date: '2026-10-18', items: [{ ...entries[3], id: 'ProductionLog:5', sourceId: '5', businessDate: '2026-10-18' }] }], hasMore: false, nextBefore: null } : first })
-  })
-  await page.route('**/timeline/evidence/2/file', r => {
-    expect(r.request().headers()['authorization']).toBe('Bearer timeline-token')
-    return r.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aEwAAAABJRU5ErkJggg==', 'base64') })
-  })
-  await page.goto(`/nha-dau-tu/lo/${code}`)
-  const timeline = page.getByRole('region', { name: 'Nhật trình sản xuất' })
-  await expect(timeline.getByRole('heading', { name: 'Nhật trình sản xuất' })).toBeVisible()
-  await expect(timeline.getByText('1,25')).toBeVisible()
-  await expect(timeline.getByText('°C', { exact: true })).toBeVisible()
-  await expect(timeline.getByText('Đã phản hồi', { exact: true })).toBeVisible()
-  await expect(timeline.getByText('0012 → 0018')).toBeVisible()
-  await timeline.getByRole('button', { name: 'Xem ảnh bằng chứng 2' }).scrollIntoViewIfNeeded()
-  await expect(timeline.getByRole('img', { name: 'Bằng chứng hộp 0012' })).toHaveAttribute('src', /^blob:/)
-  await timeline.getByRole('button', { name: 'Xem ảnh bằng chứng 2' }).click()
-  await expect(page.getByRole('dialog')).toBeVisible()
+/** Trang đầu còn ngày cũ hơn để tải thêm. */
+const firstOfTwo = (): TimelinePage => timelinePage({ hasMore: true, nextBefore: TIMELINE_DAY })
+
+test.beforeEach(async ({ page, api }) => {
+  mockInvestor(api)
+  await signIn(page, 'Investor')
+})
+
+test('mỗi loại ghi nhận hiện đúng nội dung; ảnh bằng chứng tải qua endpoint cần đăng nhập và xem lớn được', async ({ page, api }) => {
+  await page.goto(URL)
+  await expect(page.getByRole('tab', { name: 'Nhật trình' })).toHaveAttribute('aria-selected', 'true')
+  const entries = dayPanel(page, TIMELINE_DAY).getByRole('listitem')
+  await expect(entries).toHaveText([/^Chất lượng nước/, /^Ảnh bằng chứng/, /^Chuyển hộp/, /^Cua chết/, /^Nhật ký chăm sóc/])
+
+  // Cảnh báo: mức độ, trạng thái xử lý, nội dung, giờ Việt Nam.
+  await expect(entries.nth(0)).toContainText('09:30')
+  await expect(entries.nth(0).getByText('Vừa', { exact: true })).toBeVisible()
+  await expect(entries.nth(0).getByText('Đã ghi nhận', { exact: true })).toBeVisible()
+  await expect(entries.nth(0)).toContainText('Độ mặn ngoài khoảng hộ nuôi đã cấu hình.')
+
+  // Bằng chứng đã chấp nhận: ảnh riêng tư tải bằng token, bấm để xem lớn.
+  await expect(entries.nth(1).getByText('Chấp nhận', { exact: true })).toBeVisible()
+  await expect(entries.nth(1).getByText('Hộp A-12', { exact: true })).toBeVisible()
+  await expect(entries.nth(1).getByRole('img', { name: 'Ảnh bằng chứng hộp A-12 2' })).toHaveAttribute('src', /^blob:/)
+  await entries.nth(1).getByRole('button', { name: 'Xem lớn: Ảnh bằng chứng hộp A-12 2' }).click()
+  await expect(page.getByRole('dialog', { name: 'Ảnh bằng chứng hộp A-12 2' })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  await timeline.getByRole('button', { name: 'Xem những ngày trước' }).click()
-  await expect(timeline.locator('[data-timeline-id]')).toHaveCount(5)
-  await timeline.getByRole('button', { name: 'Làm mới nhật trình' }).click()
-  await expect(timeline.locator('[data-timeline-id]')).toHaveCount(4)
-  for (const width of [1440, 390, 320]) {
-    await page.setViewportSize({ width, height: 1000 })
-    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    if (width !== 320) await timeline.screenshot({ path: `test-results/timeline-${width}.png` })
-  }
+
+  // Sự kiện hộp và sự kiện của từng con cua.
+  await expect(entries.nth(2)).toContainText('Hộp A-12 sang hộp A-18 · 1 con')
+  await expect(entries.nth(2)).toContainText('Chuyển sang hộp sạch')
+  await expect(entries.nth(3)).toContainText('Cua C-000127 · hộp B-03 · Yếu sau lột xác · người nuôi ghi')
+
+  // Nhật ký chăm sóc ghi theo ngày nên không có giờ; trong ngưỡng thì không gắn nhãn.
+  const care = entries.nth(4)
+  await expect(fact(care, 'pH')).toContainText('7,5')
+  await expect(fact(care, 'Nhiệt độ nước')).toContainText('28 °C')
+  await expect(fact(care, 'Độ mặn')).toContainText('20 ‰')
+  await expect(fact(care, 'Thức ăn')).toContainText('1,25 kg')
+  await expect(care).toContainText('Kiểm tra nước buổi sáng')
+  await expect(care).not.toContainText('09:30')
+  await expect(care.getByText('Trong ngưỡng')).toHaveCount(0)
+
+  await expect(page.getByRole('button', { name: 'Xem những ngày trước' })).toHaveCount(0)
+  expect(api.sent('GET', TIMELINE).map((c) => c.query)).toEqual([{ days: '7' }])
+  const photo = api.sent('GET', `${TIMELINE}/evidence/2/file`)
+  expect(photo.map((c) => c.auth)).toEqual(['Bearer test-token'])
+  expect(api.writes()).toEqual([])
 })
 
-test('403 after loading more clears every old timeline item', async ({ page }) => {
-  await setup(page)
-  await page.route('**/timeline?**', r => new URL(r.request().url()).searchParams.has('before')
-    ? r.fulfill({ status: 403, json: { detail: 'Không có quyền.' } }) : r.fulfill({ json: first }))
-  await page.route('**/timeline/evidence/**', r => r.fulfill({ status: 404 }))
-  await page.goto(`/nha-dau-tu/lo/${code}`)
-  const timeline = page.getByRole('region', { name: 'Nhật trình sản xuất' })
-  await expect(timeline.locator('[data-timeline-id]')).toHaveCount(4)
-  await timeline.getByRole('button', { name: 'Xem những ngày trước' }).click()
-  await expect(timeline.getByRole('alert')).toContainText('quyền')
-  await expect(timeline.locator('[data-timeline-id]')).toHaveCount(0)
+test('ngày có hơn năm ghi nhận thì phần sau gấp lại; video, chứng từ và nhật ký ngoài ngưỡng có nhãn riêng', async ({ page, api }) => {
+  const extra: TimelineItem[] = [
+    { id: 'Evidence:6', type: 'Evidence', sourceId: '6', businessDate: TIMELINE_DAY, occurredAt: `${TIMELINE_DAY}T03:00:00Z`, timeBasis: 'Occurred',
+      evidence: { mediaType: 'Video', source: 'InAppCapture', slotCode: null, reviewStatus: 'Accepted', fileUrl: `${TIMELINE}/evidence/6/file` } },
+    { id: 'Evidence:7', type: 'Evidence', sourceId: '7', businessDate: TIMELINE_DAY, occurredAt: `${TIMELINE_DAY}T03:10:00Z`, timeBasis: 'Occurred',
+      evidence: { mediaType: 'Invoice', source: 'Upload', slotCode: null, reviewStatus: 'Accepted', fileUrl: `${TIMELINE}/evidence/7/file` } },
+    log(8, TIMELINE_DAY, { ph: 9.6, plausibilityFlag: 'OutOfRange', note: 'Nước đục sau mưa' }),
+  ]
+  api.get(TIMELINE, timelinePage({ groups: [{ date: TIMELINE_DAY, items: [...timelineEntries, ...extra] }] }))
+  await page.goto(URL)
+
+  const today = dayPanel(page, TIMELINE_DAY)
+  const folded = more(today, 'Ghi nhận khác trong ngày')
+  await expect(folded.locator('summary')).toContainText('3')
+  await expect(today.getByText('Video bằng chứng')).toBeHidden()
+  await expect(today.getByText('Kiểm tra nước buổi sáng')).toBeVisible()
+
+  await folded.locator('summary').click()
+  const rest = folded.getByRole('listitem')
+  await expect(rest).toHaveText([/^Video bằng chứng/, /^Chứng từ/, /^Nhật ký chăm sóc/])
+  await expect(rest.nth(0).getByRole('button', { name: 'Mở video' })).toBeVisible()
+  await expect(rest.nth(1).getByRole('button', { name: 'Mở chứng từ' })).toBeVisible()
+  await expect(rest.nth(2).getByText('Ngoài ngưỡng')).toBeVisible()
+  await expect(rest.nth(2)).toContainText('Nước đục sau mưa')
+  await expect(today.getByRole('listitem')).toHaveCount(8)
+  // Video và chứng từ chỉ tải khi bấm mở; chỉ có ảnh được tải sẵn.
+  expect(api.sent('GET', /\/timeline\/evidence\//).map((c) => c.path)).toEqual([`${TIMELINE}/evidence/2/file`])
 })
 
-test('empty timeline offers refresh without fabricated events', async ({ page }) => {
-  await setup(page)
-  await page.route('**/timeline?**', r => r.fulfill({ json: { ...first, groups: [], hasMore: false, nextBefore: null } }))
-  await page.goto(`/nha-dau-tu/lo/${code}`)
-  const timeline = page.getByRole('region', { name: 'Nhật trình sản xuất' })
-  await expect(timeline.getByText('Nhật trình đang chờ những ghi nhận đầu tiên')).toBeVisible()
-  await expect(timeline.getByRole('button', { name: 'Làm mới nhật trình' })).toBeEnabled()
-  await expect(timeline.locator('[data-timeline-id]')).toHaveCount(0)
+test('xem những ngày trước tải thêm trọn ngày cũ; ghi nhận trùng không hiện hai lần; làm mới không nhân đôi', async ({ page, api }) => {
+  // Trang cũ hơn trả kèm một ghi nhận đã có ở trang đầu (máy chủ nhận thêm dữ liệu giữa hai lần gọi).
+  const older: TimelinePage = timelinePage({
+    groups: [{ date: TIMELINE_DAY, items: [timelineEntries[0]] }, { date: OLDER_DAY, items: [log(31, OLDER_DAY, { note: 'Thay nước định kỳ' })] }],
+  })
+  api.get(TIMELINE, (call) => (call.query.before ? older : firstOfTwo()))
+  await page.goto(URL)
+  const today = dayPanel(page, TIMELINE_DAY).getByRole('listitem')
+  const before = dayPanel(page, OLDER_DAY).getByRole('listitem')
+  await expect(today).toHaveCount(5)
+  await expect(before).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Xem những ngày trước' }).click()
+  await expect(before).toHaveText([/Thay nước định kỳ/])
+  await expect(today).toHaveCount(5)
+  await expect(page.getByRole('button', { name: 'Xem những ngày trước' })).toHaveCount(0)
+  expect(api.sent('GET', TIMELINE).map((c) => c.query)).toEqual([{ days: '7' }, { days: '7', before: TIMELINE_DAY }])
+
+  // Làm mới tải lại các ngày đang xem, số ghi nhận giữ nguyên.
+  const refresh = page.getByRole('button', { name: 'Làm mới' })
+  await expect(refresh).toHaveCount(1)
+  await refresh.click()
+  await expect.poll(() => api.sent('GET', TIMELINE).length).toBe(4)
+  await expect(refresh).toBeEnabled()
+  await expect(today).toHaveCount(5)
+  await expect(before).toHaveCount(1)
+})
+
+test('mất quyền khi đang tải thêm: ẩn hết ghi nhận đã tải, chỉ còn lời báo dành cho người tham gia Lô', async ({ page, api }) => {
+  api.get(TIMELINE, (call) => (call.query.before ? reply(403, { status: 403, detail: 'Bạn không còn quyền xem nhật trình của Lô này.' }) : firstOfTwo()))
+  await page.goto(URL)
+  await expect(page.getByText('Kiểm tra nước buổi sáng')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Xem những ngày trước' }).click()
+  await expect(page.getByText('Nhật trình chỉ dành cho người tham gia Lô')).toBeVisible()
+  await expect(page.getByText('Bạn không còn quyền xem nhật trình của Lô này.')).toBeVisible()
+  await expect(page.getByText('Kiểm tra nước buổi sáng')).toHaveCount(0)
+  await expect(dayPanel(page, TIMELINE_DAY)).toHaveCount(0)
+})
+
+test('máy chủ lỗi thì có nút thử lại và tải được nhật trình', async ({ page, api }) => {
+  let down = true
+  api.get(TIMELINE, () => (down ? reply(500, { status: 500, detail: 'Chưa tải được nhật trình.' }) : timelinePage()))
+  await page.goto(URL)
+  await expect(page.getByRole('alert')).toContainText('Chưa tải được nhật trình.')
+  await expect(page.getByText('Nhật trình chỉ dành cho người tham gia Lô')).toHaveCount(0)
+
+  down = false
+  await page.getByRole('button', { name: 'Thử lại' }).click()
+  await expect(dayPanel(page, TIMELINE_DAY).getByRole('listitem')).toHaveCount(5)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+})
+
+test('Lô chưa có ghi nhận nào thì nói rõ, không dựng ghi nhận mẫu', async ({ page, api }) => {
+  api.get(TIMELINE, timelinePage({ groups: [] }))
+  await page.goto(URL)
+  await expect(page.getByText('Lô chưa có ghi nhận nào')).toBeVisible()
+  await expect(page.getByText('Nhật ký chăm sóc')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Làm mới' })).toHaveCount(0)
+  expect(api.sent('GET', /\/timeline\/evidence\//)).toEqual([])
 })

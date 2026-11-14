@@ -19,6 +19,7 @@ public partial class AppDbContext
         ConfigureProduction(modelBuilder);
         ConfigureSlotEvents(modelBuilder);
         ConfigureHarvest(modelBuilder);
+        ConfigureBr15(modelBuilder); // các bảng theo BR v1.5, xem AppDbContext.Br15.cs
         // Ví dụ: modelBuilder.Entity<Entities.Batch>().HasQueryFilter(b => b.Status != "Cancelled");
 
         // Hai người đổi giá cùng lúc: lần lưu sau bị từ chối thay vì ghi "giá cũ" sai vào lịch sử giá

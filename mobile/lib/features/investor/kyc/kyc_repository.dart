@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/auth/session.dart';
-import '../data/investor_models.dart';
 
+enum KycStatus { unverified, pending, verified, rejected }
+
+/// Trạng thái xác minh danh tính của nhà đầu tư và lý do nếu lần kiểm tra gần nhất không đạt.
 class KycVerification {
   const KycVerification({
     required this.status,
@@ -20,10 +22,10 @@ class KycVerification {
   factory KycVerification.fromJson(Map<String, dynamic> json) =>
       KycVerification(
         status: switch (json['verificationStatus']) {
-          'Unverified' => KycStatus.unverified,
           'Verified' => KycStatus.verified,
           'Rejected' => KycStatus.rejected,
-          _ => throw const FormatException('Trạng thái xác minh không hợp lệ.'),
+          'Pending' => KycStatus.pending,
+          _ => KycStatus.unverified,
         },
         failureReason: (json['lastCheck'] as Map?)?['failureReason'] as String?,
         verifiedAt: json['verifiedAt'] == null

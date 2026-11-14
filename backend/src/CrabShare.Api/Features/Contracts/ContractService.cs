@@ -363,6 +363,25 @@ public sealed class ContractService(
             // Mẫu viết "Khối lượng {{offtake.volume_kg}} kg, giá chốt {{offtake.price}}"
             ["offtake.volume_kg"] = offtake is null ? "0" : offtake.CommittedQtyKg.ToString("0.##", Vi),
             ["offtake.price"] = offtake is null ? "không áp dụng (Bên B không đăng ký bao tiêu)" : $"{offtake.FixedUnitPrice.ToString("N0", Vi)} đồng/kg",
+            // CT-2026-02 (Business Rule v1.5)
+            ["batch.crab_type"] = batch.CrabType switch
+            {
+                "FatteningMudCrab" => "cua thịt", "RoeCrab" => "cua gạch", "YoungFemaleCrab" => "cua cái non", "OilRoeCrab" => "cua gạch dầu", _ => batch.CrabType,
+            },
+            ["batch.planned_quantity"] = batch.SeedQuantity.ToString("N0", Vi),
+            ["batch.has_holding"] = batch.HasHolding ? "có" : "không",
+            ["batch.standard_cost_per_crab"] = (batch.StandardCostPerCrab ?? 0).ToString("N0", Vi),
+            ["batch.settlement_basis"] = batch.SettlementBasis == "ActualCost" ? "chi phí thực tế hợp lệ có chứng từ" : "Chi phí chuẩn đã khoá",
+            ["batch.platform_fee_rate_pct"] = (batch.PlatformFeeRatePct ?? 0).ToString("0.##", Vi),
+            ["batch.remuneration_tiers"] = string.Join("; ", (await db.RemunerationTiers.AsNoTracking().Where(t => t.BatchId == batch.BatchId).OrderBy(t => t.TierNo).ToListAsync(ct))
+                .Select(t => $"sống từ {t.SurvivalFromPct.ToString("0.##", Vi)}% đến dưới {t.SurvivalToPct.ToString("0.##", Vi)}%: {t.RatePct.ToString("0.##", Vi)}% Pool")),
+            ["batch.milestones"] = string.Join("; ", (await db.StandardCostTranchePlans.AsNoTracking().Where(p => p.CostVersion.BatchId == batch.BatchId && p.CostVersion.Status == "Locked")
+                .OrderBy(p => p.TrancheNo).ToListAsync(ct)).Select(p => $"mốc {p.TrancheNo} {p.MilestoneName ?? p.MilestoneKind} {p.Pct?.ToString("0.##", Vi)}%")),
+            ["batch.sale_days"] = (batch.SaleDays ?? 0).ToString(Vi),
+            ["batch.committed_buyer"] = batch.OfftakeBuyerPartyId is { } buyer
+                ? await db.Parties.Where(p => p.PartyId == buyer).Select(p => p.LegalName).SingleAsync(ct) : "không có",
+            ["batch.floor_price_per_kg"] = (batch.FloorPricePerKg ?? 0).ToString("N0", Vi),
+            ["settlement.feedback_days"] = "7",
         };
     }
 

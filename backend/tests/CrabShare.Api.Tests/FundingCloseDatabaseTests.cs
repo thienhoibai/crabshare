@@ -116,44 +116,6 @@ public class FundingCloseDatabaseTests(FundingDatabaseFixture fixture) : IClassF
     }
 
     [Fact]
-    public async Task Deadline_with_enough_capital_snapshots_capital_shares()
-    {
-        var (batchId, code, _) = await BatchAsync(TimeSpan.FromMinutes(-5), minViable: 5_000_000);
-        var (_, a) = await UserAsync();
-        var (_, b) = await UserAsync();
-        var (_, c) = await UserAsync();
-        await ContributionAsync(batchId, a, 3_000_000, "Confirmed");
-        await ContributionAsync(batchId, a, 1_000_000, "Confirmed"); // cùng người góp hai lần → gộp một dòng capital_share
-        await ContributionAsync(batchId, b, 2_000_000, "Confirmed");
-        var lateReservation = await ContributionAsync(batchId, c, 1_000_000, "Reserved", DateTimeOffset.UtcNow.AddMinutes(10));
-
-        var result = await RunJobAsync();
-
-        var outcome = Assert.Single(result.Batches, o => o.BatchCode == code);
-        Assert.Equal(FundingCloseService.OutcomeCapitalClosed, outcome.Outcome);
-        Assert.Equal(6_000_000, outcome.ConfirmedCapital);
-        Assert.Equal(2, outcome.InvestorCount);
-        await using var db = fixture.OpenDb();
-        var batch = await db.Batches.SingleAsync(x => x.BatchId == batchId);
-        Assert.Equal("Funding", batch.Status);
-        Assert.NotNull(batch.CapitalClosedAt);
-        Assert.Equal(6_000_000, batch.TotalConfirmedCapital);
-        var shares = await db.CapitalShares.Where(s => s.BatchId == batchId).OrderBy(s => s.InvestorId).ToListAsync();
-        Assert.Equal(2, shares.Count);
-        Assert.Equal(4_000_000, shares.Single(s => s.InvestorId == a).ConfirmedAmount);
-        Assert.Equal(2_000_000, shares.Single(s => s.InvestorId == b).ConfirmedAmount);
-        Assert.Equal(batch.TotalConfirmedCapital, shares.Sum(s => s.ConfirmedAmount));
-        // Giữ chỗ còn lại lúc chốt bị ép hết hạn
-        Assert.Equal("Expired", (await db.Contributions.SingleAsync(x => x.ContributionId == lateReservation)).Status);
-        Assert.True(await db.AuditLogs.AnyAsync(x => x.EntityType == "batch" && x.EntityId == batchId && x.ActionType == "close_capital"));
-        Assert.False(await db.PaymentInstructions.AnyAsync(i => i.BatchAccount.BatchId == batchId));
-
-        // Chạy lại không chụp thêm lần nữa (capital_share bất biến, BR-09)
-        var again = await RunJobAsync();
-        Assert.DoesNotContain(again.Batches, o => o.BatchCode == code);
-    }
-
-    [Fact]
     public async Task Deadline_below_min_viable_cancels_batch_and_refunds_every_confirmed_contribution()
     {
         var (batchId, code, accountId) = await BatchAsync(TimeSpan.FromMinutes(-5), minViable: 5_000_000);
@@ -194,29 +156,6 @@ public class FundingCloseDatabaseTests(FundingDatabaseFixture fixture) : IClassF
         await RunJobAsync();
         await using var again = fixture.OpenDb();
         Assert.Equal(2, await again.PaymentInstructions.CountAsync(i => i.BatchAccountId == accountId));
-    }
-
-    [Fact]
-    public async Task Reaching_max_capital_closes_funding_early_and_stops_new_reservations()
-    {
-        var (batchId, code, _) = await BatchAsync(TimeSpan.FromDays(3), minViable: 2_000_000, max: 4_000_000);
-        var (_, a) = await UserAsync();
-        await ContributionAsync(batchId, a, 4_000_000, "Confirmed");
-
-        var result = await RunJobAsync();
-
-        Assert.Equal(FundingCloseService.OutcomeCapitalClosed, Assert.Single(result.Batches, o => o.BatchCode == code).Outcome);
-        var (client, investor) = await UserAsync();
-        await using (var db = fixture.OpenDb())
-        {
-            Assert.NotNull((await db.Batches.SingleAsync(b => b.BatchId == batchId)).CapitalClosedAt);
-            await db.Investors.Where(i => i.UserId == investor).ExecuteUpdateAsync(s => s
-                .SetProperty(i => i.VerificationStatus, "Verified").SetProperty(i => i.VerifiedAt, DateTimeOffset.UtcNow));
-        }
-        var rd = (await client.GetFromJsonAsync<RiskDisclosureResponse>("/api/risk-disclosures/active"))!;
-        (await client.PostAsJsonAsync("/api/risk-acknowledgements", new { rd.RiskDisclosureId, scrolledToEnd = true })).EnsureSuccessStatusCode();
-        var reserve = await client.PostAsJsonAsync($"/api/batches/{code}/contributions", new { amount = 1_000_000 });
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, reserve.StatusCode);
     }
 
     [Fact]

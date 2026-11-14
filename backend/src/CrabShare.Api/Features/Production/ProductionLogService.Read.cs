@@ -47,7 +47,7 @@ public sealed partial class ProductionLogService
             var member = await MemberAsync(false, ct);
             var approved = member.OperatorId == batch.OperatorId && await db.Operators.AnyAsync(o => o.OperatorId == member.OperatorId && o.Status == "Approved", ct);
             canConfigure = approved && member.MemberRole == "Owner" && IsConfigurationState(batch.Status);
-            canRecord = approved && current is not null && IsRecordingState(batch.Status);
+            canRecord = approved && IsRecordingState(batch.Status);
         }
         return new(Today(), canConfigure, canRecord, current is null ? null : ThresholdResponse(current));
     }

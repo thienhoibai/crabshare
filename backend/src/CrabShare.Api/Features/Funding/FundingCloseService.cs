@@ -1,4 +1,5 @@
 using CrabShare.Api.Common.Auditing;
+using CrabShare.SettlementEngine;
 using CrabShare.Api.Features.Contracts;
 using CrabShare.Api.Features.Payments;
 using CrabShare.Api.Infrastructure.Persistence;
@@ -17,7 +18,9 @@ namespace CrabShare.Api.Features.Funding;
 /// Mỗi bước chạy trong transaction có khoá chuỗi audit. Webhook tiền về cũng khoá chuỗi audit trước, nên job và webhook chạy lần lượt:
 /// một khoản giữ chỗ chỉ đi tới đúng một trạng thái cuối (TL-17 §7).
 /// </summary>
-public sealed class FundingCloseService(AppDbContext db, IAuditLog audit, TimeProvider clock, RefundService refunds)
+public sealed class FundingCloseService(AppDbContext db, IAuditLog audit, TimeProvider clock, RefundService refunds,
+    CrabShare.Api.Common.Parameters.PlatformParameters parameters, CrabShare.Api.Features.Batches.IBatchLifecycleHooks hooks,
+    CrabShare.Api.Features.Parties.PartyDirectory parties)
 {
     public const string OutcomeCapitalClosed = "CapitalClosed";
     public const string OutcomeCancelled = "Cancelled";
@@ -56,14 +59,12 @@ public sealed class FundingCloseService(AppDbContext db, IAuditLog audit, TimePr
         return due.Count;
     }, ct);
 
-    /// <summary>Lô đang gọi vốn, chưa chốt, đã tới hạn hoặc đã đủ max_capital.</summary>
+    /// <summary>Lô đang gọi vốn, chưa chốt, đã tới hạn gọi vốn (BR-077: Lô mở hay không xét lúc hết hạn, vì đặt trước còn nhận tới hạn).</summary>
     public async Task<IReadOnlyList<long>> DueBatchIdsAsync(CancellationToken ct)
     {
         var now = clock.GetUtcNow();
         return await db.Batches.AsNoTracking()
-            .Where(b => b.Status == "Funding" && b.CapitalClosedAt == null && b.FundingDeadline != null
-                        && (b.FundingDeadline <= now
-                            || (b.Contributions.Where(c => c.Status == "Confirmed").Sum(c => (decimal?)c.Amount) ?? 0) >= b.MaxCapital))
+            .Where(b => b.Status == "Funding" && b.CapitalClosedAt == null && b.FundingDeadline != null && b.FundingDeadline <= now)
             .OrderBy(b => b.FundingDeadline)
             .Select(b => b.BatchId)
             .ToListAsync(ct);
@@ -84,57 +85,112 @@ public sealed class FundingCloseService(AppDbContext db, IAuditLog audit, TimePr
         var contributions = await db.Contributions.Where(c => c.BatchId == batchId).ToListAsync(ct);
         var confirmed = contributions.Where(c => c.Status == "Confirmed").ToList();
         var confirmedTotal = confirmed.Sum(c => c.Amount);
-        var deadlinePassed = deadline <= now;
-        if (!deadlinePassed && confirmedTotal < batch.MaxCapital) return null;
-        var reason = deadlinePassed ? "funding_deadline" : "max_capital_reached";
+        if (deadline > now) return null;
 
-        // Còn giữ chỗ lúc chốt thì ép hết hạn trước khi so min/max (TL-17 §8: không kéo dài cửa sổ đã công bố)
+        // Còn giữ chỗ lúc chốt thì ép hết hạn trước khi xét (TL-17 §8: không kéo dài cửa sổ đã công bố)
         foreach (var reserved in contributions.Where(c => c.Status == "Reserved"))
-            await ExpireAsync(reserved, deadlinePassed ? "Hết hạn gọi vốn" : "Lô đã nhận đủ vốn tối đa", now, ct);
+            await ExpireAsync(reserved, "Hết hạn gọi vốn", now, ct);
 
-        return confirmedTotal >= batch.MinViableCapital
-            ? await CloseCapitalAsync(batch, confirmed, confirmedTotal, reason, now, ct)
-            : await CancelUnderfundedAsync(batch, confirmed, confirmedTotal, now, ct);
+        // BR-077, BR-080: Lô mở khi vốn đã xác nhận ≥ vốn tối thiểu khả thi và tỷ lệ đặt trước ≥ tỷ lệ tối thiểu.
+        var perCrab = (long)(batch.StandardCostPerCrab ?? 0);
+        var funded = perCrab > 0 ? (int)Math.Min(batch.SeedQuantity, (long)confirmedTotal / perCrab) : 0;
+        var deposited = await hooks.DepositedPreorderCrabsAsync(batch.BatchId, ct);
+        var ratio = funded > 0 ? deposited * 100m / funded : 0;
+        var minRatio = await parameters.GetAsync(CrabShare.Api.Common.Parameters.ParamKeys.MinPreorderRatioPct, batch.FundingOpenAt, ct);
+        if (confirmedTotal < batch.MinViableCapital || funded == 0)
+            return await CancelUnderfundedAsync(batch, confirmed, confirmedTotal, "Vốn đã xác nhận thấp hơn vốn tối thiểu khả thi", now, ct);
+        if (ratio < minRatio)
+            return await CancelUnderfundedAsync(batch, confirmed, confirmedTotal,
+                $"Tỷ lệ đặt trước {ratio:0.##}% thấp hơn mức tối thiểu {minRatio:0.##}%", now, ct);
+        return await OpenBatchAsync(batch, confirmed, confirmedTotal, funded, perCrab, deposited, now, ct);
     }, ct);
 
-    private async Task<BatchCloseOutcome> CloseCapitalAsync(Batch batch, List<Contribution> confirmed, decimal total, string reason,
-        DateTimeOffset now, CancellationToken ct)
+    /// <summary>
+    /// Lô mở (BR-080…083): chỉ mua và nuôi số con được cấp vốn; phần vốn lẻ không đủ một con hoàn cho nhà đầu tư theo tỷ lệ vốn,
+    /// làm tròn phần dư lớn nhất; tỷ lệ vốn chốt trên phần vốn giữ lại; tạo các mốc giải ngân theo tỷ lệ (BR-146); Lô chuyển Sourcing.
+    /// </summary>
+    private async Task<BatchCloseOutcome> OpenBatchAsync(Batch batch, List<Contribution> confirmed, decimal total, int funded, long perCrab,
+        int deposited, DateTimeOffset now, CancellationToken ct)
     {
-        // Một nhà đầu tư có thể góp nhiều lần (lần lượt từng khoản giữ chỗ): gộp theo người, khoá PK (batch_id, investor_id)
-        var shares = confirmed.GroupBy(c => c.InvestorId)
-            .Select(g => new CapitalShare
-            {
-                BatchId = batch.BatchId, InvestorId = g.Key, ConfirmedAmount = g.Sum(c => c.Amount), SnapshottedAt = now, CreatedAt = now,
-            })
-            .OrderBy(s => s.InvestorId)
-            .ToList();
+        var retained = (long)funded * perCrab;
+        var oddCapital = (long)total - retained;
+        var byInvestor = confirmed.GroupBy(c => c.InvestorId).OrderBy(g => g.Key)
+            .Select(g => (Key: g.Key, Weight: (long)g.Sum(c => c.Amount))).ToList();
+        var refundShares = oddCapital > 0
+            ? LargestRemainderAllocator.Allocate(oddCapital, byInvestor).ToDictionary(s => s.Key, s => s.Amount)
+            : [];
+        var shares = byInvestor.Select(g => new CapitalShare
+        {
+            BatchId = batch.BatchId, InvestorId = g.Key, ConfirmedAmount = g.Weight - refundShares.GetValueOrDefault(g.Key),
+            SnapshottedAt = now, CreatedAt = now,
+        }).Where(s => s.ConfirmedAmount > 0).ToList();
         db.CapitalShares.AddRange(shares);
-        batch.TotalConfirmedCapital = total;
+        batch.TotalConfirmedCapital = retained;
         batch.CapitalClosedAt = now;
+        batch.FundedQuantity = funded;
+        batch.Status = "Sourcing";
+        batch.SourcingStartedAt = now;
         batch.UpdatedAt = now;
+
+        // BR-146: số tiền mốc = tỷ lệ của mốc × Chi phí chuẩn mỗi con × số con được cấp vốn; mốc cuối nhận phần làm tròn.
+        var plan = await db.StandardCostTranchePlans.AsNoTracking()
+            .Where(p => p.CostVersion.BatchId == batch.BatchId && p.CostVersion.Status == "Locked").OrderBy(p => p.TrancheNo).ToListAsync(ct);
+        var allocated = 0L;
+        for (var i = 0; i < plan.Count; i++)
+        {
+            var p = plan[i];
+            var amount = i == plan.Count - 1 ? retained - allocated : CrabShare.Api.Features.Batches.BatchService.MilestoneAmount(p.Pct ?? 0, perCrab, funded);
+            allocated += amount;
+            if (amount <= 0) continue;
+            db.DisbursementTranches.Add(new DisbursementTranche
+            {
+                BatchId = batch.BatchId, TrancheNo = p.TrancheNo, MilestoneKind = p.MilestoneKind ?? "Custom", MilestoneName = p.MilestoneName,
+                Pct = p.Pct, PlannedAmount = amount, UnlockCondition = p.UnlockCondition, Status = "Planned", CreatedAt = now, UpdatedAt = now,
+            });
+        }
         await db.SaveChangesAsync(ct);
-        await audit.WriteAsync("batch", batch.BatchId, "close_capital",
-            new { status = batch.Status, capitalClosedAt = (DateTimeOffset?)null, totalConfirmedCapital = (long?)null },
+
+        // Phần vốn lẻ hoàn qua tổ chức trung gian, gắn vào khoản góp lớn nhất của từng nhà đầu tư.
+        var refundCount = 0;
+        if (batch.BatchAccount is { } account)
+            foreach (var (investorId, amount) in refundShares.Where(r => r.Value > 0))
+            {
+                var contribution = confirmed.Where(c => c.InvestorId == investorId).OrderByDescending(c => c.Amount).First();
+                await refunds.CreateRefundAsync(account.BatchAccountId, amount, contribution.ContributionId, null,
+                    $"Hoàn phần vốn lẻ không đủ một con: Lô {batch.BatchCode}", now, ct);
+                refundCount++;
+            }
+
+        foreach (var investorId in shares.Select(s => s.InvestorId))
+            await parties.AddParticipantAsync(batch.BatchId, await parties.PartyIdOfUserAsync(investorId, ct),
+                CrabShare.Api.Features.Parties.ParticipantRoles.Investor, ct);
+        await hooks.OnBatchOpenedAsync(batch, ct);
+        await audit.WriteAsync("batch", batch.BatchId, "open",
+            new { status = "Funding", capitalClosedAt = (DateTimeOffset?)null },
             new
             {
-                batch.BatchCode, status = batch.Status, capitalClosedAt = now, totalConfirmedCapital = (long)total, reason,
-                minViableCapital = (long)batch.MinViableCapital, maxCapital = (long)batch.MaxCapital,
+                batch.BatchCode, status = batch.Status, capitalClosedAt = now, confirmedCapital = (long)total, retainedCapital = retained,
+                oddCapitalRefunded = oddCapital, fundedQuantity = funded, costPerCrab = perCrab, depositedPreorderCrabs = deposited,
                 shares = shares.Select(s => new { s.InvestorId, confirmedAmount = (long)s.ConfirmedAmount }),
             }, now, ct);
-        return new BatchCloseOutcome(batch.BatchCode, OutcomeCapitalClosed, (long)total, shares.Count, 0);
+        return new BatchCloseOutcome(batch.BatchCode, OutcomeCapitalClosed, retained, shares.Count, refundCount);
     }
 
-    private async Task<BatchCloseOutcome> CancelUnderfundedAsync(Batch batch, List<Contribution> confirmed, decimal total,
+    private async Task<BatchCloseOutcome> CancelUnderfundedAsync(Batch batch, List<Contribution> confirmed, decimal total, string reason,
         DateTimeOffset now, CancellationToken ct)
     {
         batch.Status = "Cancelled";
+        batch.CancelledAt = now;
+        batch.CancelReason = reason;
         batch.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
         await audit.WriteAsync("batch", batch.BatchId, "cancel_underfunded", new { status = "Funding" }, new
         {
             batch.BatchCode, status = batch.Status, confirmedCapital = (long)total, minViableCapital = (long)batch.MinViableCapital,
-            refundCount = confirmed.Count,
+            refundCount = confirmed.Count, reason,
         }, now, ct);
+        // BR-079: hoàn mọi khoản cọc đặt trước, kể cả đơn đã huỷ.
+        await hooks.OnBatchCancelledAsync(batch, reason, ct);
 
         // Hợp đồng chưa đủ chữ ký của lô huỷ không còn ký tiếp được; bản đã đủ chữ ký giữ làm hồ sơ
         await ContractVoiding.VoidUnsignedAsync(db, audit, confirmed.Select(c => c.ContributionId).ToList(), "Lô huỷ vì không đạt vốn tối thiểu", now, ct);

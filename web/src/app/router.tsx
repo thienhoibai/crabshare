@@ -1,80 +1,84 @@
-import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from 'react'
-import { createBrowserRouter, Navigate, Outlet } from 'react-router'
+import { lazy, Suspense, useEffect } from 'react'
+import { createBrowserRouter, Navigate, Outlet, useLocation, useNavigate, type RouteObject } from 'react-router'
 import { RequireRole } from '../shared/auth/RequireRole'
-import type { Role } from '../shared/auth/authStore'
+import SiteShell from '../shared/layout/SiteShell'
+import ConsoleLayout from '../shared/ui/console/ConsoleLayout'
+import { AREAS, type Area } from '../shared/ui/console/nav'
+import { ToastHost } from '../shared/ui/console/toast'
+import { adminRoutesA } from '../features/admin/routesA'
+import { adminRoutesB } from '../features/admin/routesB'
+import { customerRoutes } from '../features/customer/routes'
+import { investorRoutes } from '../features/investor/routes'
+import { operatorRoutesA } from '../features/operator/routesA'
+import { operatorRoutesB } from '../features/operator/routesB'
+import { publicRoutes } from '../features/public/routes'
+import { qcRoutes } from '../features/qc/routes'
 
 /*
- * BẢN ĐỒ TRANG CỦA WEB. Mỗi trang nằm trong src/features/<tính năng>/.
- * Thêm trang mới: tạo component trong feature của mình rồi thêm một dòng vào nhóm route tương ứng dưới đây.
- * Trang tải lười (lazy) nên thêm nhiều trang không làm chậm lần mở đầu.
+ * BẢN ĐỒ TRANG CỦA WEB (BR v1.5).
+ *   Công khai      /, /lo, /lo/:code, /chuan-phan-hang, /truy-xuat/:traceCode      features/public/routes.tsx
+ *   Khách hàng     /khach/…                                                         features/customer/routes.tsx
+ *   Nhà đầu tư     /nha-dau-tu/…                                                    features/investor/routes.tsx
+ *   Người nuôi     /operator/…                                                      features/operator/routesA.tsx, routesB.tsx
+ *   Kiểm phẩm      /qc/…                                                            features/qc/routes.tsx
+ *   Quản trị       /admin/…                                                         features/admin/routesA.tsx, routesB.tsx
+ * Thêm trang mới: tạo component trong feature, thêm một dòng vào tệp routes của cổng đó, và một mục menu trong
+ * shared/ui/console/nav.ts nếu trang cần có trên menu. Trang trong một cổng chỉ trả về nội dung; khung (menu trái,
+ * thanh trên) do ConsoleLayout lo.
  */
 
 const Landing = lazy(() => import('../features/landing/Landing'))
 const LoginPage = lazy(() => import('../features/auth/LoginPage'))
 const RegisterPage = lazy(() => import('../features/auth/RegisterPage'))
-const StorePage = lazy(() => import('../features/store/StorePage'))
-const CommercePage = lazy(() => import('../features/orders/CommercePage'))
-const CheckoutPage = lazy(() => import('../features/orders/CheckoutPage'))
-const OrderConfirmationPage = lazy(() => import('../features/orders/OrderConfirmationPage'))
-const OrderHistoryPage = lazy(() => import('../features/orders/OrderHistoryPage'))
-const OrderTrackingPage = lazy(() => import('../features/orders/OrderTrackingPage'))
-const RateOrderPage = lazy(() => import('../features/orders/RateOrderPage'))
-const PreorderPage = lazy(() => import('../features/orders/PreorderPage'))
-const PreorderConfirmPage = lazy(() => import('../features/orders/PreorderConfirmPage'))
-const TracePage = lazy(() => import('../features/trace/TracePage'))
-const InvestorPortal = lazy(() => import('../features/investor/InvestorPortal'))
-const ContributePage = lazy(() => import('../features/investor/funding/ContributePage'))
-const CustomerAddresses = lazy(() => import('../features/accounts/CustomerAddresses'))
-const OperatorPayoutAccount = lazy(() => import('../features/operator/OperatorPayoutAccount'))
-
-const OperatorDashboard = lazy(() => import('../features/operator/OperatorDashboard'))
-const OperatorKyc = lazy(() => import('../features/operator/OperatorKyc'))
+const NotFoundPage = lazy(() => import('../features/public/NotFoundPage'))
+const BatchWorkspace = lazy(() => import('../features/operator/batch/BatchWorkspace'))
 const OperatorRegistration = lazy(() => import('../features/operator/OperatorRegistration'))
-const OperatorCreateBatch = lazy(() => import('../features/operator/OperatorCreateBatch'))
-const OperatorContract = lazy(() => import('../features/operator/OperatorContract'))
-const OperatorDisbursements = lazy(() => import('../features/operator/OperatorDisbursements'))
-const OperatorHarvest = lazy(() => import('../features/operator/OperatorHarvest'))
-const OperatorSettlement = lazy(() => import('../features/operator/OperatorSettlement'))
-const OperatorFarmMap = lazy(() => import('../features/operator/OperatorFarmMap'))
-const OperatorDailyLog = lazy(() => import('../features/operator/OperatorDailyLog'))
-const OperatorBatchStatus = lazy(() => import('../features/operator/OperatorBatchStatus'))
-const OperatorBatchDetail = lazy(() => import('../features/operator/OperatorBatchDetail'))
-const OperatorAlerts = lazy(() => import('../features/operator/OperatorAlerts'))
-const OperatorEvidence = lazy(() => import('../features/operator/OperatorEvidence'))
-const OperatorListings = lazy(() => import('../features/operator/OperatorListings'))
-const OperatorMembers = lazy(() => import('../features/operator/OperatorMembers'))
-const OperatorOrders = lazy(() => import('../features/operator/OperatorOrders'))
-const OperatorTags = lazy(() => import('../features/operator/OperatorTags'))
 
-const AdminDashboard = lazy(() => import('../features/admin/AdminDashboard'))
-const AdminAuditLog = lazy(() => import('../features/admin/AdminAuditLog'))
-const AdminUsers = lazy(() => import('../features/admin/AdminUsers'))
-const AdminUserDetail = lazy(() => import('../features/admin/AdminUserDetail'))
-const AdminBatches = lazy(() => import('../features/admin/AdminBatches'))
-const AdminBatchDetail = lazy(() => import('../features/admin/AdminBatchDetail'))
-const AdminStorefront = lazy(() => import('../features/admin/AdminStorefront'))
-const AdminFinance = lazy(() => import('../features/admin/AdminFinance'))
-const AdminSettlementDetail = lazy(() => import('../features/admin/AdminSettlementDetail'))
-const AdminAlerts = lazy(() => import('../features/admin/AdminAlerts'))
-const AdminEvidence = lazy(() => import('../features/admin/AdminEvidence'))
-const AdminEvidenceDetail = lazy(() => import('../features/admin/AdminEvidenceDetail'))
-const AdminDisputes = lazy(() => import('../features/admin/AdminDisputes'))
-const AdminSettings = lazy(() => import('../features/admin/AdminSettings'))
+/** Một cổng: kiểm tra vai trò rồi dựng khung điều hành quanh các trang con. */
+const area = (name: Area, children: RouteObject[]): RouteObject => ({
+  element: (
+    <RequireRole roles={AREAS[name].roles}>
+      <ConsoleLayout area={name} />
+    </RequireRole>
+  ),
+  children,
+})
 
-const page = (C: LazyExoticComponent<ComponentType>) => <C />
-
-/** Nhóm route cần đăng nhập với một số vai trò. */
-const guarded = (roles: Role[]) => (
-  <RequireRole roles={roles}>
-    <Outlet />
-  </RequireRole>
-)
+/**
+ * Bộ kit dùng thẻ <a href> thường. Chặn cú bấm vào liên kết nội bộ để chuyển trang không tải lại cả ứng dụng;
+ * liên kết ra ngoài, tải tệp, mở tab mới và đường dẫn /api/ vẫn đi theo trình duyệt.
+ */
+function useInternalLinks() {
+  const navigate = useNavigate()
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      const link = (event.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
+      if (!link || link.target || link.hasAttribute('download') || link.origin !== window.location.origin) return
+      const href = link.getAttribute('href') ?? ''
+      if (!href.startsWith('/') || href.startsWith('/api/')) return
+      event.preventDefault()
+      navigate(link.pathname + link.search + link.hash)
+    }
+    document.addEventListener('click', onClick)
+    return () => document.removeEventListener('click', onClick)
+  }, [navigate])
+}
 
 function Root() {
+  useInternalLinks()
+  const { pathname, hash } = useLocation()
+  useEffect(() => {
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView()
+    else window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
+  }, [pathname, hash])
   return (
-    <Suspense fallback={<div style={{ padding: 40, fontFamily: 'sans-serif' }}>Đang tải…</div>}>
-      <Outlet />
-    </Suspense>
+    <>
+      <Suspense fallback={<div className="app-wait">Đang tải…</div>}>
+        <Outlet />
+      </Suspense>
+      <ToastHost />
+    </>
   )
 }
 
@@ -83,94 +87,29 @@ export const router = createBrowserRouter([
     element: <Root />,
     children: [
       // ----- Công khai -----
-      { path: '/', element: page(Landing) },
-      { path: '/dang-nhap', element: page(LoginPage) },
-      { path: '/dang-ky', element: page(RegisterPage) },
-      { path: '/cua-hang/:listingId?', element: page(StorePage) },
-      { path: '/truy-xuat/:tagCode', element: page(TracePage) },
-      { path: '/san-pham', element: page(CommercePage) },
+      { path: '/', element: <Landing /> },
+      { path: '/dang-nhap', element: <LoginPage /> },
+      { path: '/dang-ky', element: <RegisterPage /> },
+      ...publicRoutes,
+      // Tài khoản đã đăng nhập nhưng chưa thuộc hộ nuôi nào: nộp hồ sơ hộ nuôi ở đây, được duyệt rồi mới vào cổng người nuôi.
+      { path: '/dang-ky-ho-nuoi', element: <RequireRole><SiteShell><OperatorRegistration /></SiteShell></RequireRole> },
 
-      // ----- Khách hàng: giỏ hàng, thanh toán, đơn hàng -----
-      {
-        element: guarded(['Customer', 'Investor']),
-        children: [
-          { path: '/gio-hang', element: <Navigate to="/thanh-toan" replace /> },
-          { path: '/thanh-toan', element: page(CheckoutPage) },
-          { path: '/xac-nhan-don-hang', element: page(OrderConfirmationPage) },
-          { path: '/dat-truoc/:listingId', element: page(PreorderPage) },
-          { path: '/xac-nhan-dat-truoc', element: page(PreorderConfirmPage) },
-          { path: '/lich-su-don-hang', element: page(OrderHistoryPage) },
-          { path: '/theo-doi-don-hang', element: page(OrderTrackingPage) },
-          { path: '/theo-doi-don-hang/:orderNo', element: page(OrderTrackingPage) },
-          { path: '/huy-tra-hang', element: page(OrderHistoryPage) },
-          { path: '/danh-gia-don-hang', element: page(RateOrderPage) },
-          { path: '/danh-gia-don-hang/:orderNo', element: page(RateOrderPage) },
-        ],
-      },
+      // ----- Các cổng theo vai trò -----
+      area('customer', customerRoutes),
+      area('investor', investorRoutes),
+      area('operator', [{ path: '/operator/batches/:code/:tab?', element: <BatchWorkspace /> }, ...operatorRoutesA, ...operatorRoutesB]),
+      area('qc', qcRoutes),
+      area('admin', [...adminRoutesA, ...adminRoutesB]),
 
-      { element: guarded(['Customer']), children: [{ path: '/tai-khoan/dia-chi', element: page(CustomerAddresses) }] },
+      // ----- Đường dẫn của bản cũ -----
+      { path: '/cua-hang/*', element: <Navigate to="/lo" replace /> },
+      { path: '/san-pham', element: <Navigate to="/lo" replace /> },
+      { path: '/investor', element: <Navigate to="/nha-dau-tu" replace /> },
+      { path: '/lich-su-don-hang', element: <Navigate to="/khach" replace /> },
+      { path: '/theo-doi-don-hang/*', element: <Navigate to="/khach" replace /> },
+      { path: '/tai-khoan/dia-chi', element: <Navigate to="/khach/dia-diem" replace /> },
 
-      // ----- Nhà đầu tư -----
-      {
-        element: guarded(['Investor']),
-        children: [
-          { path: '/nha-dau-tu/gop-von/:code', element: page(ContributePage) },
-          { path: '/nha-dau-tu/*', element: page(InvestorPortal) },
-        ],
-      },
-
-      // UC04: mọi tài khoản đã đăng nhập đều được đăng ký hộ nuôi.
-      { path: '/operator/register', element: <RequireRole>{page(OperatorRegistration)}</RequireRole> },
-
-      // ----- Người nuôi -----
-      {
-        element: guarded(['OperatorMember']),
-        children: [
-          { path: '/operator', element: page(OperatorDashboard) },
-          { path: '/operator/kyc', element: page(OperatorKyc) },
-          { path: '/operator/payout-account', element: page(OperatorPayoutAccount) },
-          { path: '/operator/create-batch', element: page(OperatorCreateBatch) },
-          { path: '/operator/contract', element: page(OperatorContract) },
-          { path: '/operator/disbursements', element: page(OperatorDisbursements) },
-          { path: '/operator/harvest', element: page(OperatorHarvest) },
-          { path: '/operator/tags', element: page(OperatorTags) },
-          { path: '/operator/settlement', element: page(OperatorSettlement) },
-          { path: '/operator/boxes', element: page(OperatorFarmMap) },
-          { path: '/operator/log', element: page(OperatorDailyLog) },
-          { path: '/operator/batch', element: page(OperatorBatchStatus) },
-          { path: '/operator/batch/detail', element: page(OperatorBatchDetail) },
-          { path: '/operator/alerts', element: page(OperatorAlerts) },
-          { path: '/operator/evidence', element: page(OperatorEvidence) },
-          { path: '/operator/evidence/:id', element: page(OperatorEvidence) },
-          { path: '/operator/listings', element: page(OperatorListings) },
-          { path: '/operator/members', element: page(OperatorMembers) },
-          { path: '/operator/orders', element: page(OperatorOrders) },
-          { path: '/operator/orders/:orderNo', element: page(OperatorOrders) },
-        ],
-      },
-
-      // ----- Quản trị (và Kiểm định viên) -----
-      {
-        element: guarded(['PlatformAdmin', 'EvidenceReviewer']),
-        children: [
-          { path: '/admin', element: page(AdminDashboard) },
-          { path: '/admin/audit-log', element: page(AdminAuditLog) },
-          { path: '/admin/evidence', element: <RequireRole roles={['EvidenceReviewer']}>{page(AdminEvidence)}</RequireRole> },
-          { path: '/admin/evidence/:id', element: <RequireRole roles={['EvidenceReviewer']}>{page(AdminEvidenceDetail)}</RequireRole> },
-          { path: '/admin/users', element: <RequireRole roles={['PlatformAdmin']}>{page(AdminUsers)}</RequireRole> },
-          { path: '/admin/users/detail', element: <RequireRole roles={['PlatformAdmin']}>{page(AdminUserDetail)}</RequireRole> },
-          { path: '/admin/batches', element: page(AdminBatches) },
-          { path: '/admin/batches/detail', element: page(AdminBatchDetail) },
-          { path: '/admin/storefront', element: page(AdminStorefront) },
-          { path: '/admin/finance', element: page(AdminFinance) },
-          { path: '/admin/finance/settlement', element: page(AdminSettlementDetail) },
-          { path: '/admin/alerts', element: <RequireRole roles={['PlatformAdmin']}>{page(AdminAlerts)}</RequireRole> },
-          { path: '/admin/disputes', element: page(AdminDisputes) },
-          { path: '/admin/settings', element: page(AdminSettings) },
-        ],
-      },
-
-      { path: '*', element: page(Landing) },
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
 ])

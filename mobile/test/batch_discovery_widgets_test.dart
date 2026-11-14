@@ -1,281 +1,142 @@
-import 'dart:async';
-
-import 'package:crabshare_mobile/app/theme/app_theme.dart';
-import 'package:crabshare_mobile/core/api/api_client.dart';
+import 'package:crabshare_mobile/app/routes.dart';
 import 'package:crabshare_mobile/core/auth/session.dart';
 import 'package:crabshare_mobile/features/investor/batches/batch_detail_page.dart';
 import 'package:crabshare_mobile/features/investor/batches/batch_explore_page.dart';
-import 'package:crabshare_mobile/features/investor/data/investor_repository.dart';
-import 'package:crabshare_mobile/features/investor/data/timeline_repository.dart';
-import 'package:crabshare_mobile/shared/models/batch_enums.dart';
-import 'package:crabshare_mobile/shared/widgets/app_ui.dart';
-import 'package:dio/dio.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'helpers/discovery_fakes.dart';
-import 'helpers/timeline_fakes.dart';
+import 'helpers/investor_fixtures.dart';
 
-SessionState discoverySession(int id) => SessionState(
-  token: 'test',
-  user: AppUser(
-    userId: id,
-    email: 'test@local',
-    fullName: 'Nhà đầu tư',
-    roles: [Roles.investor],
-  ),
+Map<String, dynamic> _tradeBatch() => exploreBatch(
+  code: 'CS-T1',
+  mode: 'T',
+  status: 'Sourcing',
+  crabType: 'FatteningMudCrab',
+  preorderDeadline: '2099-12-20T00:00:00Z',
+  offers: [exploreOffer(code: 'FAT-XL-G1', price: 520000), exploreOffer(price: 380000)],
 );
 
-class DiscoverySessionController extends SessionController {
-  DiscoverySessionController() : super(discoverySession(42));
-  void changeUser(int id) => state = discoverySession(id);
-}
+Map<String, dynamic> _availability({bool accepting = true}) => {
+  'batchCode': 'CS-T1', 'acceptingPreorders': accepting, 'sellableCrabs': 300, 'committedCrabs': 30, 'remainingCrabs': 270,
+  'specs': [
+    {'specCode': 'FAT-XL-G1', 'specName': 'Cua thịt FAT-XL-G1', 'pricePerKg': 520000, 'conversionWeightG': 420, 'offeredQuantity': 75, 'committed': 10, 'remaining': 65},
+  ],
+  'minOrderCrabs': 10, 'depositRatePct': 20.0, 'holdMinutes': 15,
+};
 
 void main() {
   setUpAll(() => initializeDateFormatting('vi_VN'));
-  test(
-    'discovery requires investor and reloads for an account change',
-    () async {
-      var calls = 0;
-      final dio = discoveryDio((request) {
-        calls++;
-        return jsonResponse(
-          request.path == '/api/batches'
-              ? {'items': [], 'page': 1, 'pageSize': 20, 'total': 0}
-              : discoveryBatch(),
-        );
-      });
-      final signedOut = ProviderContainer(
-        overrides: [dioProvider.overrideWithValue(dio)],
-      );
-      addTearDown(signedOut.dispose);
-      await expectLater(
-        signedOut.read(batchesProvider.future),
-        throwsStateError,
-      );
-      await expectLater(
-        signedOut.read(batchDetailProvider('CS42').future),
-        throwsStateError,
-      );
-      expect(calls, 0);
-      final container = ProviderContainer(
-        overrides: [
-          sessionProvider.overrideWith(DiscoverySessionController.new),
-          timelineRepositoryProvider.overrideWithValue(EmptyTimelineRepository()),
-          dioProvider.overrideWithValue(dio),
-        ],
-      );
-      addTearDown(container.dispose);
-      final listSub = container.listen(batchesProvider, (_, _) {});
-      final detailSub = container.listen(
-        batchDetailProvider('CS42'),
-        (_, _) {},
-      );
-      addTearDown(listSub.close);
-      addTearDown(detailSub.close);
-      await container.read(batchesProvider.future);
-      await container.read(batchDetailProvider('CS42').future);
-      expect(calls, 2);
-      (container.read(sessionProvider.notifier) as DiscoverySessionController)
-          .changeUser(43);
-      await container.read(batchesProvider.future);
-      await container.read(batchDetailProvider('CS42').future);
-      expect(calls, 4);
-    },
-  );
-  testWidgets('cancelled detail does not imply later lifecycle stages', (
-    tester,
-  ) async {
-    final data = discoveryBatch()..['status'] = 'Cancelled';
-    final dio = discoveryDio((_) => jsonResponse(data));
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          sessionProvider.overrideWith(DiscoverySessionController.new),
-          timelineRepositoryProvider.overrideWithValue(EmptyTimelineRepository()),
-          dioProvider.overrideWithValue(dio),
-        ],
-        child: MaterialApp(
-          theme: buildAppTheme(),
-          home: const BatchDetailPage(code: 'CS42'),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('Tiến trình lô'),
-      250,
-      scrollable: find.descendant(
-        of: find.byType(ListView),
-        matching: find.byType(Scrollable),
-      ).first,
-    );
-    expect(find.text('Đã huỷ'), findsWidgets);
-    expect(find.text('Đang quyết toán'), findsNothing);
-    expect(find.text('Đã đóng'), findsNothing);
+
+  testWidgets('Lô tab lists open batches and filters by purpose and crab type', (tester) async {
+    final api = FakeApi()
+      ..get('/api/batches', {'items': [exploreBatch(), _tradeBatch()], 'page': 1, 'pageSize': 100, 'total': 2});
+    await pumpInvestor(tester, api, home: const BatchExplorePage());
+
+    expect(find.byType(BatchCard), findsNWidgets(2));
+    expect(find.text('30 triệu / 60 triệu'), findsOneWidget);
+    expect(find.text('380.000 đ – 520.000 đ / kg'), findsOneWidget);
+    expect(find.text('Lô P · góp vốn'), findsOneWidget);
+    expect(api.requests.single.queryParameters['scope'], 'open');
+
+    await tester.tap(find.text('Gọi vốn'));
+    await settle(tester);
+    expect(find.byType(BatchCard), findsOneWidget);
+    expect(find.text('Lô CS42 đã công bố'), findsOneWidget);
+
+    await tester.tap(find.text('Đặt trước'));
+    await settle(tester);
+    expect(find.text('Lô CS-T1 đã công bố'), findsOneWidget);
+    expect(find.text('Lô CS42 đã công bố'), findsNothing);
+
+    await tester.tap(find.text('Cua gạch'));
+    await settle(tester);
+    expect(find.text('Không có Lô nào khớp bộ lọc'), findsOneWidget);
+    expectNoProjection();
+    expect(tester.takeException(), isNull);
   });
-  testWidgets('loading, error retry, empty and server filters/paging', (
-    tester,
-  ) async {
-    final gate = Completer<void>();
-    var attempts = 0;
-    final requests = <Map<String, dynamic>>[];
-    final dio = discoveryDio((request) {
-      requests.add(Map.of(request.queryParameters));
-      attempts++;
-      if (attempts == 1) {
-        return jsonResponse({'detail': 'Máy chủ tạm lỗi'}, 500);
-      }
-      return jsonResponse({
-        'items': [],
-        'page': request.queryParameters['page'],
-        'pageSize': 20,
-        'total': 25,
-      });
-    });
-    dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          await gate.future;
-          handler.next(options);
-        },
-      ),
-    );
-    final container = ProviderContainer(
-      overrides: [
-        sessionProvider.overrideWith(DiscoverySessionController.new),
-        timelineRepositoryProvider.overrideWithValue(EmptyTimelineRepository()),
-        dioProvider.overrideWithValue(dio),
-      ],
-    );
-    addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          theme: buildAppTheme(),
-          home: const BatchExplorePage(),
-        ),
-      ),
-    );
-    expect(find.byType(LoadingSkeleton), findsOneWidget);
-    gate.complete();
-    await tester.pumpAndSettle();
-    expect(find.text('Máy chủ tạm lỗi'), findsOneWidget);
-    await tester.tap(find.text('Thử lại'));
-    await tester.pumpAndSettle();
-    expect(find.text('Không có lô phù hợp'), findsOneWidget);
-    await tester.tap(find.text('Trang sau'));
-    await tester.pumpAndSettle();
-    expect(requests.last['page'], 2);
-    await tester.tap(find.byType(DropdownButtonFormField<CrabType>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Cua gạch').last);
-    await tester.pumpAndSettle();
-    expect(requests.last['crabType'], 'RoeCrab');
-    expect(requests.last['page'], 1);
-    await tester.tap(find.byType(DropdownButtonFormField<BatchStatus>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Đã đóng').last);
-    await tester.pumpAndSettle();
-    expect(requests.last['status'], 'Closed');
+
+  testWidgets('Lô tab with nothing open shows one empty state and no crab type row', (tester) async {
+    final api = FakeApi()..get('/api/batches', {'items': [], 'page': 1, 'pageSize': 100, 'total': 0});
+    await pumpInvestor(tester, api, home: const BatchExplorePage());
+    expect(find.text('Chưa có Lô nào đang mở'), findsOneWidget);
+    expect(find.text('Mọi loại cua'), findsNothing);
   });
-  testWidgets(
-    'list navigates by batch code and renders backend percent identically',
-    (tester) async {
-      final paths = <String>[];
-      final dio = discoveryDio((request) {
-        paths.add(request.path);
-        return jsonResponse(
-          request.path == '/api/batches'
-              ? {
-                  'items': [discoveryBatch()],
-                  'page': 1,
-                  'pageSize': 20,
-                  'total': 1,
-                }
-              : discoveryBatch(),
-        );
-      });
-      final router = GoRouter(
-        initialLocation: '/i/batches',
-        routes: [
-          GoRoute(
-            path: '/i/batches',
-            builder: (_, _) => const BatchExplorePage(),
-          ),
-          GoRoute(
-            path: '/batches/:code',
-            builder: (_, state) =>
-                BatchDetailPage(code: state.pathParameters['code']!),
-          ),
-        ],
-      );
-      addTearDown(router.dispose);
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sessionProvider.overrideWith(DiscoverySessionController.new),
-            timelineRepositoryProvider.overrideWithValue(EmptyTimelineRepository()),
-            dioProvider.overrideWithValue(dio),
-          ],
-          child: MaterialApp.router(
-            theme: buildAppTheme(),
-            routerConfig: router,
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('33,33%'), findsOneWidget);
-      await tester.tap(find.text('Lô đã công bố'));
-      await tester.pumpAndSettle();
-      expect(paths, contains('/api/batches/CS42'));
-      final detailScroll = find.descendant(
-        of: find.byType(ListView),
-        matching: find.byType(Scrollable),
-      ).first;
-      await tester.scrollUntilVisible(
-        find.text('33,33% mục tiêu'), 250, scrollable: detailScroll,
-      );
-      expect(find.text('33,33% mục tiêu'), findsOneWidget);
-      expect(find.textContaining('ROI'), findsNothing);
-      await tester.scrollUntilVisible(
-        find.text('Chi phí chuẩn đã khóa'), 250, scrollable: detailScroll,
-      );
-      expect(find.text('Chi phí chuẩn đã khóa'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
-  testWidgets('unavailable detail explains and supports retry', (tester) async {
-    var unavailable = true;
-    final dio = discoveryDio(
-      (_) =>
-          unavailable ? jsonResponse({}, 404) : jsonResponse(discoveryBatch()),
+
+  testWidgets('investor sees the funding block and opens the web contribution flow', (tester) async {
+    final api = FakeApi()
+      ..get('/api/batches/CS42', exploreBatch())
+      ..get('/api/batches/CS42/progress', progressJson(participant: false))
+      ..get('/api/batches/CS42/availability', {..._availability(), 'specs': [], 'remainingCrabs': 0});
+    final opened = await pumpInvestor(tester, api, home: const BatchDetailPage(code: 'CS42'));
+
+    expect(find.text('Lô CS42 đã công bố'), findsOneWidget);
+    expect(find.text('30.000.000 đ'), findsNWidgets(2)); // đã xác nhận và còn nhận
+    expect(find.text('/ 60.000.000 đ'), findsOneWidget);
+    expect(find.text('Góp tối thiểu'), findsOneWidget);
+    expect(find.text('38 con'), findsOneWidget);
+    expect(find.text('Góp vốn có rủi ro, nền tảng không cam kết kết quả tài chính.'), findsOneWidget);
+    expect(find.text('Đặt trước trên web'), findsNothing);
+    expectNoProjection();
+
+    await tester.tap(find.text('Góp vốn trên web'));
+    await settle(tester);
+    expect(opened.single.toString(), 'http://localhost:5173/nha-dau-tu/gop-von/CS42');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('customer without the investor role sees prices and opens the web pre-order flow', (tester) async {
+    final api = FakeApi()
+      ..get('/api/batches/CS-T1', _tradeBatch())
+      ..get('/api/batches/CS-T1/progress', progressJson(participant: false))
+      ..get('/api/batches/CS-T1/availability', _availability());
+    final opened = await pumpInvestor(
+      tester,
+      api,
+      home: const BatchDetailPage(code: 'CS-T1'),
+      session: testSession(roles: [Roles.customer]),
     );
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          sessionProvider.overrideWith(DiscoverySessionController.new),
-          timelineRepositoryProvider.overrideWithValue(EmptyTimelineRepository()),
-          dioProvider.overrideWithValue(dio),
-        ],
-        child: MaterialApp(
-          theme: buildAppTheme(),
-          home: const BatchDetailPage(code: 'CS42'),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      find.text('Lô không tồn tại hoặc không còn được phép xem.'),
-      findsOneWidget,
-    );
-    unavailable = false;
-    await tester.tap(find.text('Thử lại'));
-    await tester.pumpAndSettle();
-    expect(find.text('Lô đã công bố'), findsOneWidget);
+
+    expect(find.text('Bảng giá theo quy cách'), findsOneWidget);
+    expect(find.text('520.000 đ/kg'), findsOneWidget);
+    expect(find.text('khoảng 330 g/con · còn 65 con'), findsOneWidget);
+    expect(find.text('khoảng 330 g/con'), findsOneWidget);
+    expect(find.textContaining('Còn đặt được 270 con · đặt cọc 20%'), findsOneWidget);
+    expect(find.text('Góp vốn trên web'), findsNothing);
+    expect(find.text('Vốn đã xác nhận'), findsNothing);
+
+    await tester.tap(find.text('Đặt trước trên web'));
+    await settle(tester);
+    expect(opened.single.toString(), 'http://localhost:5173/khach/dat-truoc/CS-T1');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a batch that takes nothing has no action bar; an unpublished one says so', (tester) async {
+    final api = FakeApi()
+      ..get('/api/batches/CS-OLD', exploreBatch(code: 'CS-OLD', status: 'Closed'))
+      ..get('/api/batches/DRAFT', {'batchCode': 'DRAFT', 'status': 'Draft'})
+      ..get('/api/batches', {'items': [], 'page': 1, 'pageSize': 100, 'total': 0});
+    await pumpInvestor(tester, api, home: const BatchDetailPage(code: 'CS-OLD'));
+    expect(find.text('Lô này hiện không nhận góp vốn và đặt trước.'), findsOneWidget);
+    expect(find.byType(FilledButton), findsNothing);
+
+    await tester.pumpWidget(const SizedBox());
+    await pumpInvestor(tester, api, home: const BatchDetailPage(code: 'DRAFT'));
+    expect(find.text('Lô này chưa được công bố'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a card on the Lô tab opens the public batch screen', (tester) async {
+    final api = FakeApi()
+      ..get('/api/batches', {'items': [exploreBatch()], 'page': 1, 'pageSize': 100, 'total': 1})
+      ..get('/api/batches/CS42', exploreBatch())
+      ..get('/api/investor/portfolio', portfolioPage([]));
+    await pumpInvestor(tester, api, location: Routes.investorBatches);
+    await tester.tap(find.byType(BatchCard));
+    await settle(tester);
+    expect(find.byType(BatchDetailPage), findsOneWidget);
+    expect(find.text('Góp vốn trên web'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

@@ -57,8 +57,10 @@ public abstract class SettlementTestBase(FundingDatabaseFixture fixture)
             SeedQuantity = 2000, ExpectedOutputKg = 600, CycleDays = 90, RestockCutoffDays = 15,
             MinViableCapital = Math.Max(1, total / 2), TargetCapital = Math.Max(1, total), MaxCapital = Math.Max(1, total),
             MinContribution = 1_000, OperatorSharePct = 7, FrozenStockCapMonths = 4, OfftakePreorderCapPct = 60, OfftakeDepositPct = 15,
-            Status = "Harvesting", FundingOpenAt = now.AddDays(-120), FundingDeadline = now.AddDays(-100), CapitalClosedAt = now.AddDays(-100),
+            // BR v1.5: đủ sáu điều kiện thì Lô chờ quyết toán (BR-183); Chi phí chuẩn trừ = Chi phí chuẩn mỗi con × số con được cấp vốn (BR-187).
+            Status = "AwaitingSettlement", FundingOpenAt = now.AddDays(-120), FundingDeadline = now.AddDays(-100), CapitalClosedAt = now.AddDays(-100),
             TotalConfirmedCapital = total, StockedAt = now.AddDays(-95), CreatedAt = now, UpdatedAt = now,
+            BatchMode = "P", SettlementBasis = "StandardCost", PlatformFeeRatePct = 0, FundedQuantity = 2000, StandardCostPerCrab = cost / 2000,
             BatchAccount = new BatchAccount { ProviderName = "Sandbox", ProviderAccountNo = "SBX" + code[3..], Status = "Open", OpenedAt = now, CreatedAt = now, UpdatedAt = now },
         };
         db.Batches.Add(batch);
@@ -71,18 +73,33 @@ public abstract class SettlementTestBase(FundingDatabaseFixture fixture)
         db.StandardCostVersions.Add(version);
         foreach (var (investorId, capital) in shares)
             db.CapitalShares.Add(new CapitalShare { BatchId = batch.BatchId, InvestorId = investorId, ConfirmedAmount = capital, SnapshottedAt = now.AddDays(-100), CreatedAt = now });
+        var orders = new List<SalesOrder>();
         if (revenue > 0)
         {
             var (_, customerId) = await UserAsync("Khách mua cua");
             foreach (var part in new[] { revenue / 3, revenue - revenue / 3 })
-                db.SalesOrders.Add(new SalesOrder
+            {
+                var order = new SalesOrder
                 {
-                    OrderNo = "OD" + Guid.NewGuid().ToString("N")[..12].ToUpperInvariant(), CustomerId = customerId, BatchId = batch.BatchId,
-                    OrderType = "Retail", Status = "Completed", TotalAmount = part, RecipientName = "Khách", RecipientPhone = "0900000000",
+                    OrderNo = "OD" + Guid.NewGuid().ToString("N")[..11].ToUpperInvariant(), CustomerId = customerId, BatchId = batch.BatchId,
+                    OrderType = "InvoicedSale", SaleReason = "LowGrade", Status = "Completed", TotalAmount = part, RecipientName = "Khách", RecipientPhone = "0900000000",
                     ShippingAddress = "Cà Mau", PlacedAt = now.AddDays(-10), PaidAt = now.AddDays(-10), CompletedAt = now.AddDays(-2),
                     CreatedAt = now, UpdatedAt = now,
-                });
+                };
+                db.SalesOrders.Add(order);
+                orders.Add(order);
+            }
         }
+        await db.SaveChangesAsync();
+        // Doanh thu thực thu = tổng dòng doanh thu (BR-184, BR-185); tiền góp và tiền hàng đã vào tài khoản của Lô theo đối soát (BR-205).
+        foreach (var order in orders)
+            db.RevenueLines.Add(new RevenueLine { BatchId = batch.BatchId, SourceType = "InvoicedSale", OrderId = order.OrderId, Amount = order.TotalAmount, RecognizedAt = now });
+        if (total + revenue > 0)
+            db.ProviderTransactions.Add(new ProviderTransaction
+            {
+                ProviderTxnId = $"TEST-{Guid.NewGuid():N}", BatchAccountId = batch.BatchAccount.BatchAccountId, Direction = "In", Amount = total + revenue,
+                ReferenceCode = "GV-TEST", MatchStatus = "Matched", OccurredAt = now, ReceivedAt = now,
+            });
         await db.SaveChangesAsync();
         await db.StandardCostVersions.Where(v => v.CostVersionId == version.CostVersionId)
             .ExecuteUpdateAsync(s => s.SetProperty(v => v.Status, "Locked").SetProperty(v => v.LockedAt, now.AddDays(-110)));
@@ -122,7 +139,7 @@ public class SettlementDatabaseTests(FundingDatabaseFixture fixture) : Settlemen
         Assert.Equal(100_000_000, s.LockedStandardCost);
         Assert.Equal(50_000_001, s.RevenuePool);
         Assert.Equal(3_500_000, s.OperatorRemuneration); // 7% × 50.000.001 làm tròn xuống
-        Assert.Equal(5_000_000, s.DepreciationAmount);
+        Assert.Equal(0, s.DepreciationAmount); // BR v1.5: khấu hao nằm trong Chi phí chuẩn, không trả riêng
         Assert.Equal(46_500_001, s.Distributable);
         Assert.Equal(s.Distributable, s.Lines.Sum(l => l.ProfitShare));
         Assert.Equal(0, s.ReconciliationDifference);
@@ -131,7 +148,7 @@ public class SettlementDatabaseTests(FundingDatabaseFixture fixture) : Settlemen
         Assert.Equal(100_000_000, s.TotalCapital);
 
         await using var db = Fixture.OpenDb();
-        Assert.Equal("Settlement", (await db.Batches.SingleAsync(x => x.BatchId == batchId)).Status);
+        Assert.Equal("Settling", (await db.Batches.SingleAsync(x => x.BatchId == batchId)).Status);
         var reconciliation = await db.VSettlementReconciliations.SingleAsync(v => v.SettlementId == s.SettlementId);
         Assert.Equal(0, reconciliation.Difference);
         Assert.True(await db.AuditLogs.AnyAsync(x => x.EntityType == "settlement" && x.EntityId == s.SettlementId && x.ActionType == "calculate"));
@@ -315,13 +332,13 @@ public class SettlementPayoutDatabaseTests(FundingDatabaseFixture fixture) : Set
         await using (var db = Fixture.OpenDb())
         {
             var instructions = await db.PaymentInstructions.Where(i => i.BatchAccountId == accountId).OrderBy(i => i.InstructionId).ToListAsync();
-            Assert.Equal(["TaxPayment", "Payout", "Payout", "Payout"], instructions.Select(i => i.InstructionType));
-            Assert.Equal(s.TaxTotal, instructions[0].Amount);
-            Assert.Equal(s.OperatorRemuneration + s.DepreciationAmount, instructions[1].Amount);
+            Assert.Equal(["Payout", "Payout", "Payout"], instructions.Select(i => i.InstructionType));
+            // BR-207: người nuôi nhận phần Chi phí chuẩn chưa giải ngân và thù lao; v1.5 không khấu trừ thuế trên bảng.
+            Assert.Equal(s.OperatorRemuneration + s.Breakdown.UndisbursedCost, instructions[0].Amount);
             Assert.Equal(s.TotalNetPayout, instructions.Where(i => i.SettlementLineId != null).Sum(i => i.Amount));
             // Trigger BR-30: số liệu bảng đã duyệt không sửa được kể cả bằng SQL trực tiếp
             await Assert.ThrowsAnyAsync<Exception>(() => db.Settlements.Where(x => x.SettlementId == s.SettlementId)
-                .ExecuteUpdateAsync(u => u.SetProperty(x => x.TaxTotal, 0)));
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.OperatorRemuneration, x => x.OperatorRemuneration + 1)));
         }
 
         var paid = await admin.PostAsync($"/api/admin/settlements/{draft.SettlementId}/send-payouts", null);
@@ -338,7 +355,7 @@ public class SettlementPayoutDatabaseTests(FundingDatabaseFixture fixture) : Set
         var batch = await check.Batches.SingleAsync(x => x.BatchId == batchId);
         Assert.Equal("Closed", batch.Status);
         Assert.NotNull(batch.ClosedAt);
-        Assert.Equal(4, await check.ProviderTransactions.CountAsync(t => t.BatchAccountId == accountId && t.Direction == "Out"));
+        Assert.Equal(3, await check.ProviderTransactions.CountAsync(t => t.BatchAccountId == accountId && t.Direction == "Out"));
         foreach (var action in new[] { "calculate", "propose", "approve", "paid_out", "close" })
             Assert.True(await check.AuditLogs.AnyAsync(x => x.EntityType == "settlement" && x.EntityId == s.SettlementId && x.ActionType == action), action);
         Assert.True(await check.AuditLogs.AnyAsync(x => x.EntityType == "batch" && x.EntityId == batchId && x.ActionType == "close"));

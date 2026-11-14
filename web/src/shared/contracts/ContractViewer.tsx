@@ -1,69 +1,100 @@
-import { AlertTriangle, CheckCircle2, Circle, Download, FileSignature } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Download, FileSignature } from 'lucide-react'
+import type { ContractResponse } from '../api/api.gen'
 import { formatDateTime, formatVnd } from '../lib/format'
-import { contractStatuses, useContractPdf, type Contract, type SignerRole } from './contractsApi'
+import { OpConfirm, OpFlow, OpKv, OpLoading, StatusBadge, type FlowStep } from '../ui/console/parts'
+import { OpBtn, OpMore, OpNote } from '../ui/console/ui'
+import { useContractPdf } from './contractsApi'
 import './contracts.css'
 
 /**
- * Xem hợp đồng góp vốn: cảnh báo bản demo, hai bước ký theo thứ tự, file PDF hiện hành và mã băm của nó.
- * Dùng chung cho màn 3 luồng góp vốn (nhà đầu tư) và trang Hợp đồng của người nuôi.
+ * Xem hợp đồng góp vốn: ghi chú pháp lý của bản demo, hai bước ký theo thứ tự (người nuôi trước, nhà đầu tư sau),
+ * file PDF hiện hành và mã băm của nó. Không có khung bao: đặt trong OpPanel hoặc OpModal của trang gọi.
+ * Bấm ký thì mở hộp xác nhận rồi mới gọi onSign.
  */
 export function ContractViewer({ contract, onSign, signing = false, signError, pdfHeight = 480 }: {
-  contract: Contract
+  contract: ContractResponse
   onSign?: () => void
   signing?: boolean
   signError?: string | null
   pdfHeight?: number
 }) {
   const pdf = useContractPdf(contract.contractId, contract.currentHash)
-  const signedBy = (role: SignerRole) => contract.signatures.find(s => s.role === role)
-  const steps: { role: SignerRole; label: string; name: string }[] = [
-    { role: 'Operator', label: 'Bên A — người nuôi ký trước', name: contract.operatorName },
-    { role: 'Investor', label: 'Bên B — nhà đầu tư ký sau', name: contract.investorName },
+  const [confirming, setConfirming] = useState(false)
+
+  // Ký xong thì API trả canSign = false: đóng hộp xác nhận.
+  useEffect(() => {
+    if (!contract.canSign) setConfirming(false)
+  }, [contract.canSign])
+
+  const parties: { role: string; label: string; name: string }[] = [
+    { role: 'Operator', label: 'Người nuôi', name: contract.operatorName },
+    { role: 'Investor', label: 'Nhà đầu tư', name: contract.investorName },
   ]
+  const steps: FlowStep[] = parties.map((p) => {
+    const signed = contract.signatures.find((s) => s.role === p.role)
+    const waiting = contract.nextSigner === p.role
+    return {
+      title: `${p.label}: ${p.name}`,
+      sub: signed
+        ? `Đã ký ${formatDateTime(signed.signedAt)}`
+        : contract.status === 'Void' ? 'Hợp đồng đã huỷ' : waiting ? 'Đang chờ ký' : contract.status === 'FullySigned' ? 'Đã ký ngoài hệ thống' : 'Chưa tới lượt',
+      state: signed || contract.status === 'FullySigned' ? 'done' : contract.status === 'Void' ? 'bad' : waiting ? 'now' : 'todo',
+    }
+  })
 
   return (
-    <div className="ct">
-      <p className="ct-notice" role="note"><AlertTriangle size={16} /> {contract.legalNotice}</p>
+    <div className="op-stack">
+      <OpNote tone="danger">{contract.legalNotice}</OpNote>
 
-      <dl className="ct-meta">
-        <div><dt>Số hợp đồng</dt><dd>{contract.contractNo}</dd></div>
-        <div><dt>Lô</dt><dd>{contract.batchCode}</dd></div>
-        <div><dt>Vốn góp</dt><dd>{formatVnd(contract.amount)}</dd></div>
-        <div><dt>Trạng thái</dt><dd className={`ct-status ct-status--${contract.status}`}>{contractStatuses[contract.status]}</dd></div>
-      </dl>
+      <OpKv items={[
+        { label: 'Số hợp đồng', value: <span className="op-mono">{contract.contractNo}</span> },
+        { label: 'Lô', value: contract.batchCode },
+        { label: 'Vốn góp', value: formatVnd(contract.amount) },
+        { label: 'Trạng thái', value: <StatusBadge kind="contract" value={contract.status} /> },
+      ]} />
 
-      <ol className="ct-steps" aria-label="Thứ tự ký">
-        {steps.map(step => {
-          const s = signedBy(step.role)
-          const waiting = contract.nextSigner === step.role
-          return (
-            <li key={step.role} className={s ? 'is-done' : waiting ? 'is-on' : ''}>
-              {s ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-              <div>
-                <b>{step.label}</b>
-                <span>{step.name}</span>
-                <small>{s ? `Đã ký ${formatDateTime(s.signedAt)} · ${s.signerName}` : waiting ? 'Đang chờ ký' : contract.status === 'Void' ? 'Hợp đồng đã huỷ' : 'Chưa tới lượt'}</small>
-              </div>
-            </li>
-          )
-        })}
-      </ol>
+      <OpFlow steps={steps} />
 
-      {pdf.error && <p className="ct-error" role="alert">Không tải được file PDF của hợp đồng.</p>}
-      {!pdf.error && !pdf.url && <p className="ct-muted" role="status">Đang tải file hợp đồng…</p>}
+      {pdf.error && <p className="rd-muted">Chưa xem được file PDF của hợp đồng này.</p>}
+      {!pdf.error && !pdf.url && <OpLoading label="Đang tải file hợp đồng…" />}
       {pdf.url && (
         <>
           <iframe className="ct-pdf" title={`Hợp đồng ${contract.contractNo}`} src={pdf.url} style={{ height: pdfHeight }} />
-          <a className="ct-download" href={pdf.url} download={`${contract.contractNo}.pdf`}><Download size={15} /> Tải file PDF</a>
+          <div className="op-between">
+            <a className="rd-btn rd-btn--ghost rd-btn--sm" href={pdf.url} download={`${contract.contractNo}.pdf`}><Download size={15} /> Tải file PDF</a>
+            <a className="op-link" href={pdf.url} target="_blank" rel="noopener">Mở ở tab mới</a>
+          </div>
         </>
       )}
-      <p className="ct-hash">Mã băm SHA-256 của bản đang xem: <code>{contract.currentHash}</code></p>
 
-      {signError && <p className="ct-error" role="alert">{signError}</p>}
+      <OpMore label="Chi tiết kỹ thuật">
+        <OpKv items={[
+          { label: 'Mẫu hợp đồng', value: contract.templateVersion },
+          { label: 'Cách ký', value: contract.signingMethod === 'OfflineUpload' ? 'Ký ngoài hệ thống' : 'Ký số' },
+        ]} />
+        <p className="ct-hash">Mã băm SHA-256: <code className="op-mono">{contract.currentHash}</code></p>
+      </OpMore>
+
+      {signError && !confirming && <OpNote tone="danger">{signError}</OpNote>}
       {onSign && contract.canSign && (
-        <button type="button" className="rd-btn rd-btn--primary rd-btn--lg" disabled={signing} onClick={onSign}>
-          <FileSignature size={18} /> {signing ? 'Đang ký số…' : 'Ký số hợp đồng'}
-        </button>
+        <div className="op-formfoot">
+          <OpBtn onClick={() => setConfirming(true)} disabled={signing}><FileSignature size={17} /> Ký số hợp đồng</OpBtn>
+        </div>
+      )}
+
+      {confirming && onSign && (
+        <OpConfirm
+          title={`Ký số hợp đồng ${contract.contractNo}`}
+          sub={`Lô ${contract.batchCode} · vốn góp ${formatVnd(contract.amount)}`}
+          confirmLabel="Ký số"
+          pending={signing}
+          onConfirm={onSign}
+          onClose={() => setConfirming(false)}
+        >
+          <p className="rd-muted">Sau khi ký không sửa được nội dung hợp đồng.</p>
+          {signError && <OpNote tone="danger">{signError}</OpNote>}
+        </OpConfirm>
       )}
     </div>
   )

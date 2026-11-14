@@ -1,306 +1,118 @@
-import 'dart:convert';
-
-import 'package:crabshare_mobile/app/router.dart';
 import 'package:crabshare_mobile/app/routes.dart';
-import 'package:crabshare_mobile/app/theme/app_theme.dart';
-import 'package:crabshare_mobile/core/auth/session.dart';
-import 'package:crabshare_mobile/features/operator/data/operator_models.dart';
-import 'package:crabshare_mobile/features/operator/data/operator_orders_repository.dart';
-import 'package:crabshare_mobile/features/operator/evidence/capture_page.dart';
 import 'package:crabshare_mobile/features/operator/evidence/capture_requests_repository.dart';
-import 'package:crabshare_mobile/features/operator/evidence/capture_requests_section.dart';
-import 'package:crabshare_mobile/features/operator/evidence/evidence_camera.dart';
-import 'package:crabshare_mobile/features/operator/evidence/evidence_repository.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
-import 'package:intl/date_symbol_data_local.dart';
 import 'package:material_ui/material_ui.dart';
 
-class _Requests implements CaptureRequestsRepository {
-  bool fail = false;
-  List<CaptureRequest> items = [
-    CaptureRequest(
-      id: 50,
-      batchCode: 'CS50-TEST',
-      slotCode: '0014',
-      dueAt: DateTime.now().add(const Duration(hours: 2)),
-    ),
-  ];
-  @override
-  Future<List<CaptureRequest>> list({CancelToken? cancelToken}) async {
-    if (fail) {
-      throw DioException(
-        requestOptions: RequestOptions(),
-        response: Response(
-          requestOptions: RequestOptions(),
-          statusCode: 503,
-          data: {'detail': 'Không tải được yêu cầu chụp.'},
-        ),
-      );
-    }
-    return items;
-  }
-}
-
-class _Evidence implements EvidenceRepository {
-  _Evidence(this.requests);
-  final _Requests requests;
-  int uploads = 0;
-  @override
-  Future<List<BoxSlot>> boxes({CancelToken? cancelToken}) async => [
-    BoxSlot(
-      slotCode: '0014',
-      status: SlotStatus.occupied,
-      batchCode: 'CS50-TEST',
-      latestEvidence: BoxEvidenceSummary(
-        id: 9,
-        receivedAt: DateTime.now().subtract(const Duration(days: 1)),
-        reviewStatus: 'Accepted',
-      ),
-    ),
-    const BoxSlot(
-      slotCode: '0015',
-      status: SlotStatus.occupied,
-      batchCode: 'CS50-TEST',
-    ),
-  ];
-  @override
-  Future<EvidenceResult> upload({
-    required BoxSlot box,
-    required EvidencePhoto photo,
-    int? captureRequestId,
-    String? slotEventType,
-  }) async {
-    uploads++;
-    expect(captureRequestId, 50);
-    expect(box.slotCode, '0014');
-    expect(box.batchCode, 'CS50-TEST');
-    requests.items = [];
-    return EvidenceResult(
-      id: 1,
-      reviewStatus: 'Accepted',
-      duplicateMatch: 'None',
-      receivedAt: DateTime.now(),
-      modelVersion: 'none',
-      captureRequestStatus: 'Fulfilled',
-    );
-  }
-
-  @override
-  Future<EvidenceResult> uploadForTag({
-    required String tagCode,
-    required EvidencePhoto photo,
-  }) => throw UnimplementedError();
-}
-
-class _Camera implements EvidenceCamera {
-  @override
-  Future<EvidencePhoto?> capture() async => EvidencePhoto(
-    bytes: base64Decode(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
-    ),
-    capturedAt: DateTime.now(),
-    latitude: 10,
-    longitude: 106,
-  );
-  @override
-  Future<void> openSettings() async {}
-}
-
-class _Adapter implements HttpClientAdapter {
-  final queries = <Map<String, dynamic>>[];
-  @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? stream,
-    Future<void>? cancelFuture,
-  ) async {
-    queries.add(options.queryParameters);
-    return ResponseBody.fromString(
-      jsonEncode({
-        'total': 101,
-        'items': [
-          {
-            'id': options.queryParameters['page'],
-            'batchCode': 'CS50-TEST',
-            'slotCode': '0014',
-            'dueAt': '2026-10-21T05:00:00Z',
-            'status': 'Open',
-          },
-        ],
-      }),
-      200,
-      headers: {
-        Headers.contentTypeHeader: ['application/json'],
-      },
-    );
-  }
-
-  @override
-  void close({bool force = false}) {}
-}
+import 'helpers/operator_core_fixtures.dart';
 
 void main() {
-  setUpAll(() async {
-    await initializeDateFormatting('vi_VN');
-    final loader = FontLoader('DM Sans');
-    for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold']) {
-      loader.addFont(rootBundle.load('assets/fonts/DMSans-$weight.ttf'));
-    }
-    await loader.load();
+  setUpAll(loadAppFonts);
+
+  test('repository lấy mọi trang yêu cầu đang mở, hạn gần nhất đứng trước', () async {
+    final pages = <Map<String, dynamic>>[];
+    final dio = Dio(BaseOptions(baseUrl: 'http://test.local'));
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          pages.add(options.queryParameters);
+          final page = options.queryParameters['page'] as int;
+          handler.resolve(
+            Response(
+              requestOptions: options,
+              statusCode: 200,
+              data: {
+                'total': 101,
+                'items': [
+                  {'id': page, 'batchCode': 'CS-P1', 'slotCode': '170$page', 'dueAt': '2026-11-12T0${6 - page}:00:00Z', 'status': 'Open'},
+                ],
+              },
+            ),
+          );
+        },
+      ),
+    );
+
+    final requests = await ApiCaptureRequestsRepository(dio).list();
+    expect(requests.map((r) => r.id), [2, 1]);
+    expect(requests.first.dueAt, DateTime.utc(2026, 11, 12, 4));
+    expect(pages.map((q) => q['page']), [1, 2]);
+    expect(pages.every((q) => q['status'] == 'Open' && q['pageSize'] == 100), isTrue);
   });
-  test(
-    'API requests fetch every page with Open filter and preserve request IDs',
-    () async {
-      final adapter = _Adapter();
-      final dio = Dio(BaseOptions(baseUrl: 'http://test.local'))
-        ..httpClientAdapter = adapter;
-      final requests = await ApiCaptureRequestsRepository(dio).list();
-      expect(requests.map((r) => r.id), [1, 2]);
-      expect(requests.first.status, 'Open');
-      expect(adapter.queries.map((q) => q['page']), [1, 2]);
-      expect(adapter.queries.every((q) => q['status'] == 'Open'), isTrue);
-    },
-  );
-  testWidgets(
-    'Today preserves packing routes and opens the exact capture request through fulfillment',
-    (tester) async {
-      final requests = _Requests();
-      final evidence = _Evidence(requests);
-      late GoRouter router;
-      tester.view.physicalSize = const Size(360, 780);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      addTearDown(() => tester.pumpWidget(const SizedBox()));
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sessionProvider.overrideWith(
-              () => SessionController(
-                const SessionState(
-                  token: 'test',
-                  user: AppUser(
-                    userId: 1,
-                    email: 'test@local',
-                    fullName: 'Test',
-                    roles: [Roles.operatorMember],
-                    operatorId: 1,
-                  ),
-                ),
-              ),
-            ),
-            captureRequestsRepositoryProvider.overrideWithValue(requests),
-            evidenceRepositoryProvider.overrideWithValue(evidence),
-            evidenceCameraProvider.overrideWithValue(_Camera()),
-            operatorOrdersRepositoryProvider.overrideWithValue(
-              MockOperatorOrdersRepository(),
-            ),
-          ],
-          child: Consumer(
-            builder: (context, ref, _) {
-              router = ref.watch(routerProvider);
-              return MaterialApp.router(
-                theme: buildAppTheme(),
-                routerConfig: router,
-              );
-            },
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      // CS-50 and CS-53 both add entry points on Today: keep both flows usable.
-      await tester.ensureVisible(find.text('Đóng gói đơn — quét tem'));
-      await tester.tap(find.text('Đóng gói đơn — quét tem'));
-      await tester.pumpAndSettle();
-      expect(router.state.uri.path, Routes.operatorPack);
-      await tester.tap(find.text('ODPACKDEMO01'));
-      await tester.pumpAndSettle();
-      expect(router.state.uri.path, Routes.operatorPackOrder('ODPACKDEMO01'));
-      router.pop();
-      await tester.pumpAndSettle();
-      router.pop();
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Hộp 0014'));
-      await tester.tap(find.text('Hộp 0014'));
-      await tester.pumpAndSettle();
-      expect(router.state.uri.queryParameters['requestId'], '50');
-      expect(router.state.uri.queryParameters['batch'], 'CS50-TEST');
-      expect(find.text('0015'), findsNothing);
-      expect(find.text('0014'), findsOneWidget);
-      expect(find.text('Đã gửi'), findsNothing);
-      await tester.tap(find.text('Chụp'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Gửi ảnh'));
-      await tester.pumpAndSettle();
-      expect(evidence.uploads, 1);
-      expect(find.text('Yêu cầu chụp đã hoàn thành'), findsOneWidget);
-      router.pop();
-      await tester.pumpAndSettle();
-      expect(find.text('Hộp 0014'), findsNothing);
-      expect(find.text('Không có yêu cầu chụp đang chờ.'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
-  testWidgets(
-    'API error shows retry without mock requests and expired capture disables the camera',
-    (tester) async {
-      final requests = _Requests()..fail = true;
-      addTearDown(() => tester.pumpWidget(const SizedBox()));
-      await tester.pumpWidget(
-        ProviderScope(
-          retry: (count, error) => null,
-          overrides: [
-            captureRequestsRepositoryProvider.overrideWithValue(requests),
-          ],
-          child: MaterialApp(
-            theme: buildAppTheme(),
-            home: const Scaffold(
-              body: SingleChildScrollView(child: CaptureRequestsSection()),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Không tải được yêu cầu chụp.'), findsOneWidget);
-      expect(find.text('Hộp 0014'), findsNothing);
-      requests.fail = false;
-      await tester.tap(find.text('Thử lại'));
-      await tester.pumpAndSettle();
-      expect(find.text('Hộp 0014'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            evidenceRepositoryProvider.overrideWithValue(_Evidence(requests)),
-          ],
-          child: MaterialApp(
-            theme: buildAppTheme(),
-            home: CapturePage(
-              initialSlot: '0014',
-              captureRequestId: 50,
-              requestBatchCode: 'CS50-TEST',
-              requestDueAt: DateTime.now().subtract(const Duration(seconds: 1)),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        find.text(
-          'Yêu cầu chụp đã quá hạn. Vui lòng quay lại Hôm nay để cập nhật.',
-        ),
-        findsOneWidget,
-      );
-      expect(
-        tester
-            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Chụp'))
-            .onPressed,
-        isNull,
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
+
+  testWidgets('từ Hôm nay mở đúng yêu cầu chụp, gửi ảnh kèm mã yêu cầu, xong thì việc biến mất', (tester) async {
+    final server = FarmServer()
+      ..careBatches = [careBatchJson(loggedToday: true)]
+      ..captureRequests = [captureRequestJson()];
+    final camera = FakeCamera();
+    final router = await pumpFarmApp(tester, server, location: Routes.operatorToday, camera: camera);
+
+    await tester.tap(find.text('Chụp ảnh hộp 1701'));
+    await tester.settle();
+    expect(router.state.uri.queryParameters['requestId'], '50');
+    // Hộp của yêu cầu được chọn sẵn, không cho đổi sang hộp khác.
+    expect(find.text('Hộp 1701'), findsOneWidget);
+    expect(find.textContaining('Chụp hộp 1701 · còn'), findsOneWidget);
+    expect(find.text('Đổi hộp'), findsNothing);
+    expect(find.byType(TextField), findsNothing);
+
+    await tester.tap(find.text('Chụp rõ số hộp'));
+    await tester.settle();
+    await tester.tap(find.text('Gửi ảnh'));
+    await tester.settle();
+
+    final fields = {for (final f in (server.sent('POST', '/api/evidence').single.data as FormData).fields) f.key: f.value};
+    expect((fields['BatchCode'], fields['SlotCode'], fields['CaptureRequestId']), ('CS-P1', '1701', '50'));
+    expect(find.text('Yêu cầu chụp đã hoàn thành'), findsOneWidget);
+    expect(find.text('Đã lưu ảnh'), findsOneWidget);
+    expect(find.text('Chụp lại'), findsNothing);
+
+    router.pop();
+    await tester.settle();
+    expect(find.text('Chụp ảnh hộp 1701'), findsNothing);
+    expect(find.text('Hôm nay không còn việc đang chờ'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ảnh trả lời bị gắn cờ thì yêu cầu vẫn mở và được chụp lại', (tester) async {
+    final server = FarmServer()
+      ..captureRequests = [captureRequestJson()]
+      ..evidenceStatus = 'Flagged';
+    final request = captureRequestJson();
+    await pumpFarmApp(
+      tester,
+      server,
+      location: Routes.captureRequest(id: 50, slotCode: '1701', batchCode: 'CS-P1', dueAt: DateTime.parse('${request['dueAt']}')),
+    );
+
+    await tester.tap(find.text('Chụp rõ số hộp'));
+    await tester.settle();
+    await tester.tap(find.text('Gửi ảnh'));
+    await tester.settle();
+    expect(find.text('Ảnh cần thẩm định'), findsOneWidget);
+    expect(find.text('Yêu cầu chụp đã hoàn thành'), findsNothing);
+
+    await tester.tap(find.text('Chụp lại'));
+    await tester.settle();
+    expect(find.text('Chụp rõ số hộp'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('yêu cầu quá hạn khoá việc chụp; hộp không còn thuộc Lô thì báo rõ', (tester) async {
+    final server = FarmServer();
+    final router = await pumpFarmApp(
+      tester,
+      server,
+      location: Routes.captureRequest(id: 50, slotCode: '1701', batchCode: 'CS-P1', dueAt: DateTime.now().subtract(const Duration(seconds: 1))),
+    );
+    expect(find.text('Yêu cầu chụp đã quá hạn'), findsOneWidget);
+    expect(find.text('Chụp rõ số hộp'), findsNothing);
+    expect(find.text('Gửi ảnh'), findsNothing);
+
+    router.go(Routes.captureRequest(id: 51, slotCode: '1701', batchCode: 'CS-KHAC', dueAt: DateTime.now().add(const Duration(hours: 1))));
+    await tester.settle();
+    expect(find.text('Hộp 1701 không còn cua của Lô này'), findsOneWidget);
+    expect(find.text('Chụp rõ số hộp'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

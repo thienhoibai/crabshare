@@ -1,295 +1,153 @@
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../app/theme/app_theme.dart';
-import '../../../core/api/api_client.dart';
-import '../../../core/format/dates.dart';
 import '../../../core/format/money.dart';
+import '../../../shared/status_labels.dart';
+import '../../../shared/widgets/app_parts.dart';
 import '../../../shared/widgets/app_ui.dart';
-import '../data/portfolio_repository.dart';
-import '../data/timeline_repository.dart';
 import '../batches/batch_timeline.dart';
+import '../data/batch_repository.dart';
+import '../data/decision_repository.dart';
+import '../data/device_repository.dart';
+import '../data/portfolio_repository.dart';
+import '../data/settlement_repository.dart';
+import '../data/timeline_repository.dart';
+import '../widgets/investor_ui.dart';
+import 'portfolio_sections.dart';
 
-const _paymentStates = {
-  'Confirmed': 'Đã xác nhận',
-  'Reserved': 'Đang giữ chỗ',
-  'Expired': 'Hết hạn',
-  'Refunded': 'Đã hoàn',
-};
-const _contractStates = {
-  'Draft': 'Nháp',
-  'OperatorSigned': 'Hộ nuôi đã ký',
-  'FullySigned': 'Đã đủ chữ ký',
-  'Void': 'Đã huỷ',
-};
-String _time(DateTime at) => '${formatDate(at)} ${formatTime(at)}';
+/// Các mục của màn Lô tôi đã góp; [slug] là giá trị của `?tab=` trên đường dẫn.
+enum PortfolioTab {
+  contributions('khoan-gop', 'Khoản góp'),
+  timeline('nhat-trinh', 'Nhật trình'),
+  devices('thiet-bi', 'Thiết bị'),
+  votes('bieu-quyet', 'Biểu quyết'),
+  settlement('quyet-toan', 'Quyết toán');
 
-class InvestorPortfolioDetailPage extends ConsumerWidget {
-  const InvestorPortfolioDetailPage({super.key, required this.code});
+  const PortfolioTab(this.slug, this.label);
+  final String slug, label;
+
+  static PortfolioTab fromSlug(String? slug) =>
+      values.firstWhere((t) => t.slug == slug, orElse: () => PortfolioTab.contributions);
+}
+
+/// Một Lô tôi đã góp: ba số tiền của tôi và tiến độ ở đầu, rồi mỗi lúc một mục
+/// (khoản góp, nhật trình, thiết bị, biểu quyết, quyết toán).
+class PortfolioDetailPage extends ConsumerStatefulWidget {
+  const PortfolioDetailPage({super.key, required this.code, this.initialTab});
   final String code;
+  final String? initialTab;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final provider = portfolioDetailProvider(code);
-    final query = ref.watch(provider);
-    final text = Theme.of(context).textTheme;
+  ConsumerState<PortfolioDetailPage> createState() => _PortfolioDetailPageState();
+}
+
+class _PortfolioDetailPageState extends ConsumerState<PortfolioDetailPage> {
+  late PortfolioTab _tab = PortfolioTab.fromSlug(widget.initialTab);
+
+  Future<void> _refresh() {
+    final code = widget.code;
+    ref.read(timelineRefreshProvider.notifier).refresh();
+    ref.invalidate(moneySummaryProvider(code));
+    ref.invalidate(batchProgressProvider(code));
+    ref.invalidate(batchDecisionsProvider(code));
+    ref.invalidate(boxImagesProvider(code));
+    ref.invalidate(settlementReadinessProvider(code));
+    ref.invalidate(mySettlementsProvider);
+    return ref.refresh(portfolioDetailProvider(code).future);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final detail = ref.watch(portfolioDetailProvider(widget.code));
     return Scaffold(
-      body: SafeArea(
-        child: AppRefreshIndicator(
-          onRefresh: () async {
-            ref.read(timelineRefreshProvider.notifier).refresh();
-            ref.invalidate(provider);
-            await ref.read(provider.future);
-          },
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-            children: [
-              const SubPageHeader(title: 'Chi tiết danh mục'),
-              const SizedBox(height: 16),
-              ...query.when(
-                loading: () => [const LoadingSkeleton(rows: 2)],
-                error: (e, _) => [
-                  ErrorView(
-                    message: apiErrorMessage(e),
-                    onRetry: () => ref.invalidate(provider),
+      body: SubPageBody<PortfolioDetail>(
+        title: 'Lô ${widget.code}',
+        value: detail,
+        onRefresh: _refresh,
+        children: (d) {
+          final item = d.position;
+          final b = item.batch;
+          final text = Theme.of(context).textTheme;
+          return [
+            Text(b.title, style: text.titleLarge),
+            const SizedBox(height: 2),
+            Text([statusLabel('crabType', b.crabType), b.operatorName].join(' · '), style: text.bodySmall),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                StatusPill(kind: 'batch', value: b.status),
+                if (b.openAlerts > 0)
+                  InfoChip(
+                    label: '${b.openAlerts} cảnh báo',
+                    background: AppColors.danger.withValues(alpha: 0.12),
+                    foreground: AppColors.danger,
                   ),
-                ],
-                data: (detail) {
-                  final p = detail.position;
-                  final b = p.batch;
-                  final log = detail.latestProduction;
-                  final s = p.settlement;
-                  return [
-                    AppCard(
-                      color: AppColors.ink,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${b.code} · ${b.status.label}',
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            formatVnd(p.amount),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 30,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          Text(
-                            p.ratioLabel,
-                            style: const TextStyle(color: AppColors.accent),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            p.capitalFrozen ? 'Vốn đã chốt' : 'Vốn đã xác nhận, tỷ lệ tạm tính đến khi chốt vốn',
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SectionHeader(title: b.title),
-                    Text(b.operatorName, style: text.bodySmall),
-                    const SizedBox(height: 12),
-                    AppCard(
-                      child: Column(
-                        children: [
-                          MetricRow(
-                            metrics: [
-                              Metric(
-                                'ngày nuôi',
-                                b.dayOfCycle == null
-                                    ? '—'
-                                    : '${b.dayOfCycle}/${b.cycleDays}',
-                              ),
-                              Metric(
-                                'con',
-                                b.aliveCount == null
-                                    ? '—'
-                                    : formatCount(b.aliveCount!),
-                              ),
-                              Metric('cảnh báo', '${b.openAlerts}'),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          LinearProgressIndicator(
-                            value: b.cycleProgress,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          const SizedBox(height: 12),
-                          _Fact(
-                            'Dự kiến thu',
-                            b.expectedHarvestDate == null
-                                ? 'Chưa có lịch'
-                                : formatDate(b.expectedHarvestDate!),
-                          ),
-                          _Fact(
-                            'Vốn xác nhận của lô',
-                            formatVnd(b.raisedCapital),
-                          ),
-                        ],
-                      ),
-                    ),
-                    BatchTimeline(code: b.code),
-                    const SectionHeader(title: 'Lịch sử khoản góp'),
-                    if (detail.contributions.isEmpty)
-                      Text('Chưa có lịch sử khoản góp.', style: text.bodySmall),
-                    for (final c in detail.contributions) ...[
-                      AppCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '#${c.id} · ${formatVnd(c.amount)}',
-                              style: text.titleMedium,
-                            ),
-                            Text(_paymentStates[c.status] ?? c.status),
-                            Text(
-                              c.confirmedAt == null
-                                  ? 'Giữ chỗ ${_time(c.reservedAt)}'
-                                  : 'Xác nhận ${_time(c.confirmedAt!)}',
-                              style: text.bodySmall,
-                            ),
-                            if (c.contractNo != null)
-                              Text(
-                                'Hợp đồng ${c.contractNo} · ${_contractStates[c.contractStatus] ?? c.contractStatus}',
-                                style: text.bodySmall,
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    const SectionHeader(title: 'Nhật ký nuôi mới nhất'),
-                    AppCard(
-                      child: log == null
-                          ? const Text('Chưa có nhật ký nuôi.')
-                          : Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  formatDate(log.logDate),
-                                  style: text.titleMedium,
-                                ),
-                                _Fact('pH', '${log.ph ?? '—'}'),
-                                _Fact(
-                                  'Nhiệt độ',
-                                  log.waterTempC == null
-                                      ? '—'
-                                      : '${log.waterTempC} °C',
-                                ),
-                                _Fact(
-                                  'Độ mặn',
-                                  log.salinityPpt == null
-                                      ? '—'
-                                      : '${log.salinityPpt} ‰',
-                                ),
-                                _Fact(
-                                  'Thức ăn',
-                                  log.feedKg == null ? '—' : '${log.feedKg} kg',
-                                ),
-                                Text(
-                                  log.verifiedAt == null
-                                      ? 'Chưa kiểm tra'
-                                      : 'Đã kiểm tra ${_time(log.verifiedAt!)}',
-                                  style: text.bodySmall,
-                                ),
-                                if (log.plausibilityFlag != 'Ok')
-                                  Text(
-                                    'Có dấu hiệu cần kiểm tra',
-                                    style: text.bodySmall,
-                                  ),
-                              ],
-                            ),
-                    ),
-                    const SectionHeader(title: 'Quyết toán đã duyệt'),
-                    AppCard(
-                      child: s == null
-                          ? const Text('Chưa có quyết toán được duyệt.')
-                          : Column(
-                              children: [
-                                _Fact('Hoàn vốn', formatVnd(s.capitalReturn)),
-                                _Fact(
-                                  'Phần chia thực tế',
-                                  formatVnd(s.profitShare),
-                                ),
-                                _Fact(
-                                  'Thuế khấu trừ',
-                                  formatVnd(s.taxWithheld),
-                                ),
-                                _Fact(
-                                  'Tiền nhận theo quyết toán',
-                                  formatVnd(s.netPayout),
-                                ),
-                                _Fact('Hiện vật', '${s.inKindQtyKg} kg'),
-                                _Fact(
-                                  'Trạng thái',
-                                  s.status == 'PaidOut'
-                                      ? 'Đã chi trả'
-                                      : s.status == 'Closed'
-                                      ? 'Đã đóng'
-                                      : 'Đã duyệt, chờ chi trả',
-                                ),
-                              ],
-                            ),
-                    ),
-                    const SectionHeader(title: 'Hành trình lô'),
-                    if (detail.timeline.isEmpty)
-                      Text('Chưa có sự kiện.', style: text.bodySmall),
-                    for (final event in detail.timeline) ...[
-                      AppCard(
-                        child: Row(
-                          children: [
-                            const IconTile(icon: Icons.history_rounded),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(event.label, style: text.titleSmall),
-                                  Text(_time(event.at), style: text.bodySmall),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-                  ];
-                },
-              ),
-            ],
-          ),
-        ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _Summary(item: item),
+            const SizedBox(height: 16),
+            PillTabs<PortfolioTab>(
+              items: [for (final t in PortfolioTab.values) (t, t.label)],
+              value: _tab,
+              onChanged: (tab) => setState(() => _tab = tab),
+              wrap: true,
+            ),
+            const SizedBox(height: 10),
+            switch (_tab) {
+              PortfolioTab.contributions => ContributionsSection(detail: d),
+              PortfolioTab.timeline => BatchTimeline(code: b.code),
+              PortfolioTab.devices => DevicesSection(code: b.code),
+              PortfolioTab.votes => VotesSection(item: item),
+              PortfolioTab.settlement => SettlementSection(item: item),
+            },
+          ];
+        },
       ),
     );
   }
 }
 
-class _Fact extends StatelessWidget {
-  const _Fact(this.label, this.value);
-  final String label, value;
+/// Ba số tiền của tôi ở Lô này và một dòng tiến độ.
+class _Summary extends ConsumerWidget {
+  const _Summary({required this.item});
+  final PortfolioItem item;
+
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final code = item.batch.code;
+    final money = item.frozen ? ref.watch(moneySummaryProvider(code)) : null;
+    final mine = money?.value?.mine;
+    final progress = ref.watch(batchProgressProvider(code)).value;
+    final share = '${ratioText(item.capitalRatio)} vốn của Lô';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+        MoneyCard(
+          title: 'Tôi đã góp vào Lô này',
+          figures: mine ?? MoneyFigures(contributed: item.confirmedAmount),
+          partsKnown: mine != null,
+          sub: item.frozen ? share : '$share · Lô chưa chốt vốn',
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.end,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+        if (money != null && money.hasError) const QuietNote('Chưa lấy được số đã giải ngân.'),
+        if (progress != null && progress.hasData) ...[
+          const SizedBox(height: 10),
+          AppCard(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: MetricRow(
+              metrics: [
+                Metric('con đang nuôi', formatCount(progress.crabsAlive), color: AppColors.success),
+                if (progress.daysRaised != null) Metric('ngày nuôi', '${progress.daysRaised}', color: AppColors.ink),
+                if (progress.deadCrabs != null) Metric('con chết', formatCount(progress.deadCrabs!), color: AppColors.danger),
+              ],
+            ),
           ),
-        ),
+        ],
       ],
-    ),
-  );
+    );
+  }
 }

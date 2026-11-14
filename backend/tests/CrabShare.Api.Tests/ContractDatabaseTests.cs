@@ -113,7 +113,7 @@ public class ContractDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtu
         Assert.Equal(ContractStatuses.Draft, draft.Status);
         Assert.Equal(ContractStatuses.Operator, draft.NextSigner);
         Assert.False(draft.CanSign);
-        Assert.Equal("CT-2026-01", draft.TemplateVersion);
+        Assert.Equal("CT-2026-02", draft.TemplateVersion); // V026: mẫu hợp đồng theo Business Rule v1.5
         Assert.Equal(draft.DraftHash, draft.CurrentHash);
         var again = await investor.PostAsync($"/api/contributions/{contributionId}/contract", null);
         Assert.Equal(HttpStatusCode.OK, again.StatusCode);

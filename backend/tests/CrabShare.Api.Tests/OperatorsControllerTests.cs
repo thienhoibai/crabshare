@@ -19,8 +19,6 @@ public class OperatorsAuthenticationTests(WebApplicationFactory<Program> factory
     [InlineData("PUT", "/api/operators/me")]
     [InlineData("POST", "/api/operators/me/submit")]
     [InlineData("GET", "/api/operators/me/members")]
-    [InlineData("POST", "/api/operators/me/members")]
-    [InlineData("DELETE", "/api/operators/me/members/1")]
     [InlineData("GET", "/api/admin/operators")]
     [InlineData("POST", "/api/admin/operators/1/approve")]
     [InlineData("POST", "/api/admin/operators/1/reject")]

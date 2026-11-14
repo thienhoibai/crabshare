@@ -1,224 +1,105 @@
 import 'package:crabshare_mobile/core/api/api_client.dart';
-import 'package:crabshare_mobile/core/auth/session.dart';
-import 'package:crabshare_mobile/features/operator/data/api_operator_repository.dart';
-import 'package:crabshare_mobile/features/operator/data/operator_models.dart';
+import 'package:crabshare_mobile/features/operator/data/care_log_repository.dart';
 import 'package:crabshare_mobile/features/operator/data/operator_repository.dart';
-import 'package:crabshare_mobile/shared/models/batch_enums.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'helpers/discovery_fakes.dart';
-import 'helpers/production_fakes.dart';
+import 'helpers/operator_core_fixtures.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-  test(
-    'history maps exact precision, actor, source and immutable threshold version',
-    () async {
-      final repo = ApiOperatorRepository(
-        discoveryDio((request) {
-          expect(request.path, '/api/operators/me/production-logs');
-          expect(request.queryParameters['from'], '2026-10-01');
-          expect(request.queryParameters['to'], '2026-10-21');
-          return jsonResponse(
-            productionPage([
-              productionLogJson(),
-              productionLogJson(legacy: true),
-            ], total: 2),
-          );
-        }),
-      );
-      final logs = await repo.logs(
-        from: DateTime(2026, 10, 1),
-        to: DateTime(2026, 10, 21),
-      );
-      expect(logs.first.logDate, DateTime(2026, 10, 21));
-      expect(logs.first.feedKg, 1.234);
-      expect(logs.first.salinityPpt, 17.3);
-      expect(logs.first.recordedBy, 7);
-      expect(logs.first.source, 'Manual');
-      expect(logs.first.flag, PlausibilityFlag.outOfRange);
-      expect(logs.first.thresholdVersion, 2);
-      expect(logs.first.thresholdsApplied!.waterTempMinC, -2.5);
-      expect(logs.last.flag, PlausibilityFlag.inconsistent);
-      expect(logs.last.thresholdsApplied, isNull);
-    },
-  );
+  test('Lô đang lưu nuôi kèm tình trạng nhật ký hôm nay', () async {
+    final server = FarmServer()
+      ..careBatches = [
+        careBatchJson(loggedToday: true),
+        careBatchJson(code: 'CS-H1', status: 'Harvesting'),
+        careBatchJson(code: 'CS-S1', status: 'Stocked'),
+      ];
+    final batches = await ApiCareLogRepository(server.dio()).batches();
 
-  test(
-    'active batches loads every page and retains Harvesting for harvest callers',
-    () async {
-      final pages = <int>[];
-      final repo = ApiOperatorRepository(
-        discoveryDio((request) {
-          final page = request.queryParameters['page'] as int;
-          pages.add(page);
-          return jsonResponse({
-            'items': [
-              productionBatchJson(status: page == 1 ? 'Stocked' : 'Harvesting'),
-            ],
-            'page': page,
-            'pageSize': 1,
-            'total': 2,
-          });
-        }),
-      );
-      final batches = await repo.activeBatches();
-      expect(pages, [1, 2]);
-      expect(batches.last.status, BatchStatus.harvesting);
-      expect(batches.last.businessDate, DateTime(2026, 10, 21));
-    },
-  );
-
-  test(
-    'today progress counts real daily logs in both recording statuses',
-    () async {
-      final server = ProductionServer()
-        ..batches = [
-          productionBatchJson(status: 'Stocked', loggedToday: true),
-          productionBatchJson(loggedToday: true),
-          productionBatchJson(status: 'Harvesting', configured: false),
-        ];
-      final summary = await ApiOperatorRepository(server.dio()).todaySummary();
-      expect(summary.done, 1);
-      expect(summary.total, 2);
-      expect(summary.businessDate, DateTime(2026, 10, 21));
-    },
-  );
-
-  test(
-    'submit sends only measurement contract and preserves server conflict',
-    () async {
-      final repo = ApiOperatorRepository(
-        discoveryDio((request) {
-          expect(request.method, 'POST');
-          expect(request.path, '/api/batches/REAL-01/production-logs');
-          expect(request.data, {
-            'ph': 8.3,
-            'waterTempC': -1.2,
-            'salinityPpt': 17.3,
-            'feedKg': 1.234,
-            'note': null,
-          });
-          return jsonResponse({
-            'code': 'production.log_exists',
-            'detail': 'Đã ghi hôm nay.',
-          }, 409);
-        }),
-      );
-      await expectLater(
-        repo.submitLog(
-          const DailyLogInput(
-            batchCode: 'REAL-01',
-            ph: 8.3,
-            waterTempC: -1.2,
-            salinityPpt: 17.3,
-            feedKg: 1.234,
-          ),
-        ),
-        throwsA(
-          isA<DioException>().having(
-            (error) => error.response?.statusCode,
-            'status',
-            409,
-          ),
-        ),
-      );
-    },
-  );
-
-  test(
-    'threshold contract uses server permissions and expected version without defaults',
-    () async {
-      final server = ProductionServer()..canConfigure = false;
-      final repo = ApiOperatorRepository(server.dio());
-      final config = await repo.thresholds('REAL-01');
-      expect(config.canConfigure, isFalse);
-      expect(config.businessDate, DateTime(2026, 10, 21));
-      expect(config.current!.salinityMaxPpt, 17.3);
-      await repo.saveThresholds(
-        'REAL-01',
-        const ProductionThresholdInput(
-          expectedVersionNo: 2,
-          phMin: 6.1,
-          phMax: 8.2,
-          waterTempMinC: -2.5,
-          waterTempMaxC: 31.7,
-          salinityMinPpt: 5.3,
-          salinityMaxPpt: 17.3,
-        ),
-      );
-      final put = server.requests.last;
-      expect(put.method, 'PUT');
-      expect(put.data, {
-        'expectedVersionNo': 2,
-        'phMin': 6.1,
-        'phMax': 8.2,
-        'waterTempMinC': -2.5,
-        'waterTempMaxC': 31.7,
-        'salinityMinPpt': 5.3,
-        'salinityMaxPpt': 17.3,
-      });
-    },
-  );
-
-  test('failed daily API never falls back to sample records', () async {
-    final repo = ApiOperatorRepository(
-      discoveryDio((_) => jsonResponse({'detail': 'Unavailable'}, 503)),
-    );
-    await expectLater(repo.logs(), throwsA(isA<DioException>()));
-    await expectLater(repo.activeBatches(), throwsA(isA<DioException>()));
+    expect(batches.map((b) => (b.code, b.recordable, b.loggedToday)), [('CS-P1', true, true), ('CS-H1', true, false), ('CS-S1', false, false)]);
+    expect((batches.first.dayOfCycle, batches.first.cycleDays), (13, 35));
+    expect(batches.first.latestLog?.feedKg, 0.72);
+    expect(server.requests.single.path, '/api/operators/me/production-batches');
+    expect(server.requests.single.queryParameters, {'page': 1, 'pageSize': 100});
   });
 
-  test('account change reloads daily providers and thresholds', () async {
-    FlutterSecureStorage.setMockInitialValues({});
-    final server = ProductionServer()..logs = [productionLogJson()];
-    final container = ProviderContainer(
-      overrides: [dioProvider.overrideWithValue(server.dio())],
+  test('các bản đã ghi: một trang mới nhất, giữ cờ ngoài khoảng và nguồn', () async {
+    final server = FarmServer()
+      ..logs = [
+        careLogJson(id: 1, flag: 'OutOfRange', note: 'Mưa lớn'),
+        careLogJson(id: 2, source: 'Device'),
+        for (var i = 3; i <= 40; i++) careLogJson(id: i),
+      ];
+    final page = await ApiCareLogRepository(server.dio()).logs();
+
+    expect((page.items.length, page.total), (30, 40));
+    expect((page.items.first.flag, page.items.first.note, page.items[1].source), ('OutOfRange', 'Mưa lớn', 'Device'));
+    expect(page.items.first.logDate, DateTime(2026, 11, 11));
+    expect((page.items.first.ph, page.items.first.waterTempC, page.items.first.salinityPpt), (7.8, 27.5, 15.0));
+    expect(server.requests.single.path, '/api/operators/me/production-logs');
+    expect(server.requests.single.queryParameters, {'page': 1, 'pageSize': 30});
+  });
+
+  test('ghi nhật ký gửi đúng bốn số đo; số đo cảm biến mới nhất để điền sẵn', () async {
+    final server = FarmServer()
+      ..water = [
+        {
+          'measuredAt': '2026-11-12T00:05:00Z',
+          'temperatureC': 28.1,
+          'salinityPpt': 15.1,
+          'ph': 7.85,
+          'quality': 'Calibrated',
+          'deviceCode': 'WS-NC-01',
+        },
+        {
+          'measuredAt': '2026-11-12T06:05:00Z',
+          'temperatureC': 27.64,
+          'salinityPpt': 15.25,
+          'ph': 7.98,
+          'quality': 'Calibrated',
+          'deviceCode': 'WS-NC-01',
+        },
+      ];
+    final repo = ApiCareLogRepository(server.dio());
+
+    final reading = await repo.latestWater('CS-P1');
+    expect((reading!.measuredAt, reading.temperatureC, reading.salinityPpt, reading.ph), (DateTime.utc(2026, 11, 12, 6, 5), 27.64, 15.25, 7.98));
+    expect(server.requests.last.path, '/api/batches/CS-P1/water-readings');
+    server.water = [];
+    expect(await repo.latestWater('CS-P1'), isNull);
+
+    final log = await repo.submit(
+      const DailyLogInput(batchCode: 'CS-P1', feedKg: 0.725, ph: 8, waterTempC: 27.6, salinityPpt: 15.3, note: 'Thay nước'),
     );
+    expect(log.batchCode, 'CS-P1');
+    expect(server.requests.last.method, 'POST');
+    expect(server.requests.last.path, '/api/batches/CS-P1/production-logs');
+    // Máy chủ từ chối trường lạ: chỉ gửi năm trường này.
+    expect(server.requests.last.data, {'ph': 8.0, 'waterTempC': 27.6, 'salinityPpt': 15.3, 'feedKg': 0.725, 'note': 'Thay nước'});
+  });
+
+  test('ghi xong thì tải lại tình trạng hôm nay; lỗi tải số đo cảm biến không chặn việc ghi', () async {
+    final server = FarmServer()..failures['GET /api/batches/CS-P1/water-readings'] = (403, 'Không có quyền.');
+    final container = ProviderContainer(retry: (count, error) => null, overrides: [dioProvider.overrideWithValue(server.dio())]);
     addTearDown(container.dispose);
-    final subscriptions = [
-      container.listen(dailyLogsProvider, (_, _) {}),
-      container.listen(activeBatchesProvider, (_, _) {}),
-      container.listen(todaySummaryProvider, (_, _) {}),
-      container.listen(productionThresholdsProvider('REAL-01'), (_, _) {}),
-    ];
-    addTearDown(() {
-      for (final subscription in subscriptions) {
-        subscription.close();
-      }
-    });
-    await container.read(dailyLogsProvider.future);
-    await container.read(activeBatchesProvider.future);
-    await container.read(todaySummaryProvider.future);
-    await container.read(productionThresholdsProvider('REAL-01').future);
-    server.requests.clear();
-    server.logs = [];
-    await container
-        .read(sessionProvider.notifier)
-        .signIn(
-          'another-token',
-          const AppUser(
-            userId: 22,
-            email: 'b@test.local',
-            fullName: 'B',
-            roles: [Roles.operatorMember],
-            operatorId: 2,
-          ),
-        );
-    expect(await container.read(dailyLogsProvider.future), isEmpty);
-    await container.read(activeBatchesProvider.future);
-    await container.read(todaySummaryProvider.future);
-    await container.read(productionThresholdsProvider('REAL-01').future);
-    expect(
-      server.requests.where((r) => r.path.endsWith('/production-logs')),
-      hasLength(1),
+    final batches = container.listen(careBatchesProvider, (_, _) {});
+    final dashboard = container.listen(operatorDashboardProvider, (_, _) {});
+
+    expect(await container.read(latestWaterProvider('CS-P1').future), isNull);
+    expect((await container.read(careBatchesProvider.future)).single.loggedToday, isFalse);
+    expect((await container.read(operatorDashboardProvider.future)).logsDue, hasLength(1));
+
+    await container.read(careLogActionsProvider).submit(const DailyLogInput(batchCode: 'CS-P1', feedKg: 1, ph: 8, waterTempC: 28, salinityPpt: 15));
+    expect((await container.read(careBatchesProvider.future)).single.loggedToday, isTrue);
+    expect((await container.read(operatorDashboardProvider.future)).logsDue, isEmpty);
+
+    server.failures['POST /api/batches/CS-P1/production-logs'] = (409, 'Lô này đã có nhật ký thủ công cho hôm nay.');
+    await expectLater(
+      container.read(careLogActionsProvider).submit(const DailyLogInput(batchCode: 'CS-P1', feedKg: 1, ph: 8, waterTempC: 28, salinityPpt: 15)),
+      throwsA(isA<DioException>().having(apiErrorMessage, 'câu báo lỗi', 'Lô này đã có nhật ký thủ công cho hôm nay.')),
     );
-    expect(
-      server.requests.where((r) => r.path.endsWith('/production-thresholds')),
-      hasLength(1),
-    );
+    batches.close();
+    dashboard.close();
   });
 }

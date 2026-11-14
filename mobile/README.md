@@ -1,35 +1,26 @@
-# Mobile — Flutter
+# Mobile — Flutter (BR v1.5)
 
-CS-69 / KH-13: đã bổ sung skeleton, lỗi/mất mạng, kéo tải lại và kiểm tra màn nhỏ.
-Xem [bảng API/mock và kết quả kiểm thử](../docs/validation/CS-69-mobile-midterm.md).
-Nhật ký, thu hoạch và truy xuất hiện vẫn là minh hoạ, có nhãn ngay trên màn hình.
+App di động của CrabShare theo mô hình BR v1.5. App làm những việc cần điện thoại tại chỗ: chụp ảnh bằng camera trong ứng dụng
+(kèm giờ chụp và vị trí), làm việc tại hộp nuôi và trạm đo, nghiệm thu khi nhận hàng, quét QR trên đơn. Các luồng cần VietQR hoặc
+form dài (đặt trước, góp vốn, ký hợp đồng, tạo Lô) mở sang web tại `WEB_URL`.
 
-CS-42 / UC09: Khám phá lô và chi tiết dùng `GET /api/batches` và
-`GET /api/batches/{code}` qua client có JWT. Lọc `status`, `crabType`, phân trang
-`page` (bắt đầu từ 1), `pageSize=20` trên máy chủ. Chỉ hiển thị bộ lọc các trạng
-thái đã công bố. Chi tiết gồm điều khoản, phiên bản chi phí đã khóa, vốn xác nhận,
-vốn giữ chỗ và số nhà đầu tư. Nhãn phần trăm dùng nguyên `fundingProgress.percentLabel`
-của API; thanh tiến độ dùng `pctOfTarget / 100` và giới hạn phần vẽ trong 0–1.
-Lỗi API không thay bằng dữ liệu mẫu; có thử lại, danh sách trống và lô không còn
-xem được. Kiểm tra: `flutter test test/batch_discovery_test.dart test/batch_discovery_widgets_test.dart`.
+| Khu | Đường dẫn | Việc chính | Tệp route |
+|---|---|---|---|
+| Người nuôi | `/o/…` | Hôm nay, lưới hộp của Lô (thả cua, thả bù, báo chết kèm ảnh, chuyển hộp), nhật ký chăm sóc, cảnh báo, chụp bằng chứng, giải trình, đo cua tại trạm, chuyến giao với hai lần cân | `features/operator/operator_routes.dart`, `operator_core_routes.dart`, `operator_work_routes.dart` |
+| Nhân viên kiểm phẩm | `/q/…` | Việc được giao, kiểm đầu vào từng con, duyệt phân hạng, thăm trại giữa vụ | `features/qc/qc_routes.dart` |
+| Nhà đầu tư | `/i/…` | Tổng quan ba con số tiền, Lô đang mở, Lô đã góp (nhật trình, ảnh thiết bị, biểu quyết, điều kiện quyết toán), sao kê, thông báo, eKYC | `features/investor/investor_routes.dart` |
+| Khách hàng | `/c/…` | Đơn của tôi, xác nhận hoặc từ chối nghiệm thu, báo vấn đề kèm ảnh, đánh giá | `features/customer/customer_routes.dart` |
+| Công khai | `/scan`, `/trace/:code`, `/batches/:code` | Quét QR trên đơn, trang truy xuất, trang một Lô | `features/trace/trace_routes.dart` |
 
+Người có nhiều vai đổi khu ở tab Tài khoản. QR gắn theo đơn và theo Lô; không có tem hay QR cho từng con cua.
 
-CS-65: Tab Thông báo và badge nhà đầu tư dùng `GET /api/me/notifications`.
-Mốc đã đọc lưu trong secure storage riêng theo tài khoản, gồm cả ID để không bỏ sót
-thông báo cùng giờ. Chọn Đã đọc/Đọc tất cả hoặc mở lô để lưu; có kéo làm mới và
-cập nhật mỗi 30 giây khi app mở. Test: `flutter test test/notifications_test.dart`.
+Giao diện giữ mẫu sẵn có của app: nền be ấm, nhấn cam, thẻ trắng bo lớn, thanh điều hướng tối có nút tròn cam ở giữa
+(`shared/widgets/app_ui.dart`, `nav_shell.dart`). Thành phần bổ sung cho v1.5 ở `shared/widgets/app_parts.dart`
+(`StatusPill`, `FactGrid`, `KeyValueList`, `MoreSection`, `showConfirmSheet`, `PhotoField`, `AuthImage`). Quy tắc gọn: mỗi màn một việc,
+tối đa bốn con số, một nút chính, ít chữ, chi tiết phụ gấp trong `MoreSection`, không ghi số quy tắc trên màn hình.
 
-CS-61: Tổng quan nhà đầu tư và chi tiết danh mục dùng `/api/investor/portfolio`.
-Vốn đã chốt lấy từ view; vốn mới xác nhận hiển thị tỷ lệ tạm tính. Không dùng khoản
-góp mock hay lợi suất. Chạm thẻ khoản góp để xem hợp đồng, nhật ký và hành trình
-thật; tài khoản chưa góp vốn có danh mục trống. Test: `flutter test test/portfolio_test.dart`.
-
-KH-03: Tài khoản → Tài khoản nhận tiền đã dùng `GET/PUT /api/me/payout-account`.
-Hai vai có thể chọn Cá nhân/Hộ nuôi; quyền chủ hộ kiểm tra trên backend. Form dùng
-AppCard, AppColors, AppRadius và theme chung. Test luồng: `flutter test test/payout_test.dart`.
-
-App cho **nhà đầu tư** (theo dõi lô, eKYC, thông báo, quét tem) và **hộ nuôi** (nhật ký, chụp bằng chứng, cảnh báo, thu hoạch & in tem).
-Giao diện theo mẫu *AI calorie tracker*: nền be ấm, nhấn cam, thẻ trắng bo lớn, đồng hồ bán nguyệt chia vạch, thanh điều hướng tối có nút tròn cam ở giữa.
+Mã dùng chung: `core/api/json.dart` (đọc JSON, `dio.getJson/postJson`), `core/capture/` (camera trong ứng dụng kèm GPS),
+`shared/status_labels.dart` (nhãn trạng thái tiếng Việt, sinh từ bảng của web bằng `node tool/gen_status_labels.mjs`).
 
 ## Chạy
 
@@ -144,8 +135,10 @@ cần khoá ký riêng và API/web HTTPS; bản HTTP LAN chỉ dùng trong debug
 
 ## Font, icon và quyền thiết bị
 
-- **DM Sans** 400/500/600/700 nằm trong `assets/fonts/`, có giấy phép OFL đi kèm.
-  Theme dùng font asset trực tiếp; không tải font khi mở app hoặc khi chạy test.
+- **Bricolage Grotesque**, cùng phông với web (đủ chữ tiếng Việt), nằm trong `assets/fonts/`, có giấy phép OFL đi kèm.
+  Chữ thường dùng các tệp tĩnh 400–800; tiêu đề trang và con số lớn dùng tệp biến thiên với dáng hẹp như web.
+  Lấy kiểu chữ qua `AppFonts` trong `lib/app/theme/app_theme.dart` (`AppFonts.heading`, `AppFonts.figure`);
+  không ghi tên family trong các màn. Theme dùng font asset trực tiếp; không tải font khi mở app hoặc khi chạy test.
 - Tên hiển thị Android/iOS là **CrabShare**. Icon cua có bản Android thường,
   adaptive, monochrome và bộ icon iOS. Nguồn ở `assets/icon/`; để tạo lại trên
   Windows: `powershell -File tools/generate-launcher-icons.ps1`. Script vẽ lại
@@ -162,7 +155,7 @@ cần khoá ký riêng và API/web HTTPS; bản HTTP LAN chỉ dùng trong debug
 | Lệnh | Việc |
 |---|---|
 | `flutter analyze` | kiểm tra code (CI chạy) |
-| `flutter test` | unit test + 24 màn ở 360×780 và 320×568/chữ lớn, cuộn và mất mạng (CI chạy) |
+| `flutter test` | unit test và widget test của từng khu (CI chạy) |
 | `flutter build apk` | ra file APK để cài thử |
 | `flutter build web --pwa-strategy=none` | bản web để xem trên trình duyệt |
 
@@ -250,7 +243,7 @@ Mock đơn hàng chỉ dùng trong test. Chi tiết các phần còn lại nằm
 |---|---|
 | `mobile_scanner` | Quét QR trên tem (truy xuất, đóng gói đơn) |
 | `geolocator` | Lấy vị trí khi chụp bằng chứng |
-| Font DM Sans trong `assets/fonts/` | Font offline cho app và test |
+| Font Bricolage Grotesque trong `assets/fonts/` | Font offline cho app và test, cùng phông với web |
 | `flutter_launcher_icons` (dev) | Sinh icon Android/iOS từ `assets/icon/` |
 
 Demo HTTPS release, private signing, GitHub draft and installation: [docs/demo-app.md](../docs/demo-app.md).

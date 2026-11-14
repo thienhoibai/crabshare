@@ -1,88 +1,44 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:crabshare_mobile/features/trace/trace_repository.dart';
 
+import '../../helpers/discovery_fakes.dart';
+import '../../helpers/trace_fixtures.dart';
+
 void main() {
-  test('lookup requests the public route and parses the allowlisted response', () async {
-    const tagCode = '23456789ABCD';
-    final payload = <String, dynamic>{
-      'tagCode': tagCode,
-      'batchCode': 'BT-TRACE-001',
-      'crabType': 'FatteningMudCrab',
-      'itemStatus': 'Harvested',
-      'weightG': 250,
-      'gradeCode': 'L3',
-      'gradeName': 'Hạng 3',
-      'stockedAt': '2026-09-01T00:00:00Z',
-      'harvestedAt': '2026-10-01T00:00:00Z',
-      'slotCode': '0001',
-      'events': [
-        {
-          'eventType': 'TagActivated',
-          'occurredAt': '2026-10-01T00:00:00Z',
-          'note': 'PRIVATE-NOTE',
-        },
-      ],
-      'operatorName': 'PRIVATE-OPERATOR',
-      'farmAddress': 'PRIVATE-ADDRESS',
-      'itemUuid': 'PRIVATE-UUID',
-      'harvestPhotoUri': 'https://private.example/photo.jpg',
-      'orderNo': 'PRIVATE-ORDER',
-    };
-    var requestedPath = '';
-    final dio = Dio(BaseOptions(baseUrl: 'https://api.test'))
-      ..interceptors.add(InterceptorsWrapper(
-        onRequest: (options, handler) {
-          requestedPath = options.uri.path;
-          handler.resolve(Response(
-            requestOptions: options,
-            statusCode: 200,
-            data: payload,
-          ));
-        },
-      ));
+  test('lookup requests the public order trace route and parses the response', () async {
+    final paths = <String>[];
+    final dio = discoveryDio((options) {
+      paths.add('${options.method} ${options.uri.path}');
+      return jsonResponse(orderTraceJson());
+    });
 
-    final result = await ApiTraceRepository(dio).lookup(tagCode);
+    final trace = await ApiTraceRepository(dio).lookup('QR7K2M9XQ4TB');
 
-    expect(requestedPath, '/api/trace/$tagCode');
-    expect(result.tagCode, tagCode);
-    expect(result.batchCode, 'BT-TRACE-001');
-    expect(result.weightG, 250);
-    expect(result.gradeCode, 'L3');
-    expect(result.stockedAt, DateTime(2026, 9, 1));
-    expect(result.harvestedAt, DateTime(2026, 10, 1));
-    expect(result.slotCode, '0001');
-    expect(result.events.single.eventType, 'TagActivated');
+    expect(paths, ['GET /api/trace/orders/QR7K2M9XQ4TB']);
+    expect(trace.traceCode, 'QR7K2M9XQ4TB');
+    expect(trace.batchCode, 'CS-2611-T1');
+    expect(trace.batchTitle, 'Cua thịt thu mua Năm Căn');
+    expect(trace.crabType, 'FatteningMudCrab');
+    expect(trace.farmName, 'HTX Cua Năm Căn');
+    expect(trace.sourceLots.first.originRegion, 'Năm Căn, Cà Mau');
+    expect(trace.sourceLots.first.harvestedOn, DateTime(2026, 10, 20));
+    expect(trace.sourceLots.last.originRegion, isNull);
+    expect(trace.sourceLots.last.harvestedOn, isNull);
+    expect(trace.lines.map((l) => l.crabs), [20, 10]);
+    expect(trace.totalCrabs, 30);
+    expect(trace.deliveries.single.toUtc(), DateTime.utc(2026, 11, 10, 5));
+    expect(trace.standardNote, contains('T/SCFA 0014-2024'));
   });
 
-  test('lookup accepts null harvest fields from an eligible public response', () async {
-    final dio = Dio(BaseOptions(baseUrl: 'https://api.test'))
-      ..interceptors.add(InterceptorsWrapper(
-        onRequest: (options, handler) => handler.resolve(Response(
-          requestOptions: options,
-          statusCode: 200,
-          data: {
-            'tagCode': '23456789ABCD',
-            'batchCode': 'BT-TRACE-002',
-            'crabType': 'RoeCrab',
-            'itemStatus': 'InStock',
-            'weightG': null,
-            'gradeCode': null,
-            'gradeName': null,
-            'stockedAt': '2026-09-01T00:00:00Z',
-            'harvestedAt': null,
-            'slotCode': '0002',
-            'events': [],
-          },
-        )),
-      ));
+  test('lookup accepts an order with nothing delivered yet', () async {
+    final dio = discoveryDio((options) => jsonResponse({...orderTraceJson(), 'sourceLots': [], 'lines': [], 'deliveries': []}));
 
-    final result = await ApiTraceRepository(dio).lookup('23456789ABCD');
+    final trace = await ApiTraceRepository(dio).lookup('QR7K2M9XQ4TB');
 
-    expect(result.weightG, isNull);
-    expect(result.gradeCode, isNull);
-    expect(result.harvestedAt, isNull);
-    expect(result.events, isEmpty);
+    expect(trace.sourceLots, isEmpty);
+    expect(trace.lines, isEmpty);
+    expect(trace.deliveries, isEmpty);
+    expect(trace.totalCrabs, 0);
   });
 }

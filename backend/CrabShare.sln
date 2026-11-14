@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrabShare.SettlementEngine.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrabShare.Load", "tools\CrabShare.Load\CrabShare.Load.csproj", "{C3AAE917-C302-4505-B26B-0D1D4AC1B847}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrabShare.DeviceSimulator", "tools\CrabShare.DeviceSimulator\CrabShare.DeviceSimulator.csproj", "{73D4B48D-3880-4E51-AED2-670CF23EB52E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -103,6 +105,18 @@ Global
 		{C3AAE917-C302-4505-B26B-0D1D4AC1B847}.Release|x64.Build.0 = Release|Any CPU
 		{C3AAE917-C302-4505-B26B-0D1D4AC1B847}.Release|x86.ActiveCfg = Release|Any CPU
 		{C3AAE917-C302-4505-B26B-0D1D4AC1B847}.Release|x86.Build.0 = Release|Any CPU
+		{73D4B48D-3880-4E51-AED2-670CF23EB52E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{73D4B48D-3880-4E51-AED2-670CF23EB52E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{73D4B48D-3880-4E51-AED2-670CF23EB52E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{73D4B48D-3880-4E51-AED2-670CF23EB52E}.Debug|x64.Build.0 = Debug|Any CPU
+		{73D4B48D-3880-4E51-AED2-670CF23EB52E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{73D4B48D-3880-4E51-AED2-670CF23EB52E}.Debug|x86.Build.0 = Debug|Any CPU
+		{73D4B48D-3880-4E51-AED2-670CF23EB52E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{73D4B48D-3880-4E51-AED2-670CF23EB52E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{73D4B48D-3880-4E51-AED2-670CF23EB52E}.Release|x64.ActiveCfg = Release|Any CPU
+		{73D4B48D-3880-4E51-AED2-670CF23EB52E}.Release|x64.Build.0 = Release|Any CPU
+		{73D4B48D-3880-4E51-AED2-670CF23EB52E}.Release|x86.ActiveCfg = Release|Any CPU
+		{73D4B48D-3880-4E51-AED2-670CF23EB52E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -114,5 +128,6 @@ Global
 		{2DB05232-32D4-4747-94EB-8B2B5A21F5DC} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{E92FFD11-1C67-45B8-B809-229F924F4236} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{C3AAE917-C302-4505-B26B-0D1D4AC1B847} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
+		{73D4B48D-3880-4E51-AED2-670CF23EB52E} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal

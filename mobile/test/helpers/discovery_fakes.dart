@@ -2,19 +2,32 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
-Map<String, dynamic> discoveryBatch() => {
-  'batchCode': 'CS42', 'title': 'Lô đã công bố', 'operatorName': 'HTX',
-  'crabType': 'RoeCrab', 'status': 'Funding', 'seedQuantity': 100,
-  'expectedOutputKg': 12.5, 'cycleDays': 75, 'restockCutoffDays': 15,
-  'minViableCapital': 200, 'targetCapital': 300, 'maxCapital': 400,
-  'minContribution': 10, 'operatorSharePct': 20,
-  'fundingOpenAt': '2026-10-01T00:00:00Z',
-  'fundingDeadline': '2026-11-01T00:00:00Z',
-  'fundingProgress': {'confirmedCapital': 100, 'reservedCapital': 5,
-    'investorCount': 2, 'pctOfTarget': 33.333333, 'percentLabel': '33,33%'},
-  'standardCost': {'versionNo': 2, 'status': 'Locked', 'total': 200,
-    'lockedAt': '2026-09-30T00:00:00Z',
-    'items': [{'category': 'Seed', 'amount': 200}]},
+/// Một Lô đã công bố theo dạng của GET /api/batches (BR v1.5). Mặc định: lô P đang gọi vốn, chưa có bảng giá.
+Map<String, dynamic> exploreBatch({
+  String code = 'CS42',
+  String mode = 'P',
+  String status = 'Funding',
+  String crabType = 'RoeCrab',
+  List<Map<String, dynamic>> offers = const [],
+  String? preorderDeadline,
+}) => {
+  'batchCode': code, 'batchMode': mode, 'status': status, 'title': 'Lô $code đã công bố', 'crabType': crabType,
+  'executorName': 'HTX Năm Căn', 'plannedQuantity': 250, 'fundedQuantity': null, 'hasHolding': true, 'holdingDays': 90,
+  'saleDays': 14, 'expectedAvgWeightG': 420, 'expectedGrade': 'Cấp 1', 'expectedReceiptDate': '2026-10-29',
+  'deliveryRadiusKm': 400.0, 'distanceKm': null, 'standardCostTotal': 42500000, 'standardCostPerCrab': null,
+  'offers': offers, 'floorPricePerKg': 300000, 'offtakeBuyerName': 'Công ty Phương Nam', 'platformFeeRatePct': null,
+  'settlementBasis': 'StandardCost',
+  'targetCapital': mode == 'P' ? 60000000 : 0, 'confirmedCapital': mode == 'P' ? 30000000 : 0, 'reservedCapital': 0,
+  'remainingCapital': mode == 'P' ? 30000000 : 0, 'investorCount': mode == 'P' ? 3 : 0, 'minContribution': 1000000,
+  'sellableCrabs': 300, 'depositedPreorderCrabs': 30, 'preorderRatioPct': 10,
+  'fundingOpenAt': '2026-11-08T09:00:00+07:00', 'fundingDeadline': mode == 'P' ? '2099-11-22T09:00:00+07:00' : null,
+  'preorderDeadline': preorderDeadline,
+  'costByCategory': [{'category': 'Feed', 'amount': 12500000}, {'category': 'Seed', 'amount': 30000000}],
+};
+
+Map<String, dynamic> exploreOffer({String code = 'FAT-L-G1', int price = 430000}) => {
+  'specCode': code, 'specName': 'Cua thịt $code', 'sizeCode': 'L', 'gradeCode': 'G1',
+  'pricePerKg': price, 'conversionWeightG': 330, 'offeredQuantity': 75,
 };
 
 class DiscoveryAdapter implements HttpClientAdapter {
@@ -32,4 +45,3 @@ Dio discoveryDio(ResponseBody Function(RequestOptions) respond) =>
 ResponseBody jsonResponse(Object value, [int status = 200]) =>
   ResponseBody.fromString(jsonEncode(value), status,
     headers: {Headers.contentTypeHeader: ['application/json']});
-

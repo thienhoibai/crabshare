@@ -27,18 +27,8 @@ public sealed class OperatorsController(OperatorService operators) : ControllerB
     public async Task<ActionResult<OperatorResponse>> Submit(CancellationToken ct)
         => Ok(await operators.SubmitAsync(ct));
 
+    // BR-007: mỗi hộ nuôi một tài khoản do người đại diện đứng tên, không khai nhân viên. Chỉ còn xem danh sách (dữ liệu cũ).
     [HttpGet("me/members")]
     public async Task<ActionResult<IReadOnlyList<OperatorMemberResponse>>> Members(CancellationToken ct)
         => Ok(await operators.ListMembersAsync(ct));
-
-    [HttpPost("me/members")]
-    public async Task<ActionResult<OperatorMemberResponse>> AddMember(AddOperatorMemberRequest req, CancellationToken ct)
-        => CreatedAtAction(nameof(Members), await operators.AddMemberAsync(req, ct));
-
-    [HttpDelete("me/members/{userId:long}")]
-    public async Task<IActionResult> RemoveMember(long userId, CancellationToken ct)
-    {
-        await operators.RemoveMemberAsync(userId, ct);
-        return NoContent();
-    }
 }

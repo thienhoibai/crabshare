@@ -1,385 +1,250 @@
-import 'package:crabshare_mobile/features/investor/notifications/notification_repository.dart';
-
-import 'helpers/notification_fakes.dart';
-import 'helpers/timeline_fakes.dart';
-
-import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
-
-import 'package:crabshare_mobile/app/router.dart';
 import 'package:crabshare_mobile/app/routes.dart';
-import 'package:crabshare_mobile/app/theme/app_theme.dart';
+import 'package:crabshare_mobile/core/api/api_client.dart';
 import 'package:crabshare_mobile/core/auth/session.dart';
-import 'package:crabshare_mobile/features/investor/data/investor_models.dart';
+import 'package:crabshare_mobile/features/investor/contracts/contracts_page.dart';
 import 'package:crabshare_mobile/features/investor/data/portfolio_repository.dart';
-import 'package:crabshare_mobile/features/investor/data/timeline_repository.dart';
 import 'package:crabshare_mobile/features/investor/home/investor_home_page.dart';
-import 'package:crabshare_mobile/features/investor/kyc/kyc_repository.dart';
+import 'package:crabshare_mobile/features/investor/investor_routes.dart';
 import 'package:crabshare_mobile/features/investor/portfolio/portfolio_detail_page.dart';
-import 'package:crabshare_mobile/shared/widgets/segmented_gauge.dart';
+import 'package:crabshare_mobile/features/investor/settlement/settlement_statement_page.dart';
+import 'package:crabshare_mobile/features/investor/votes/decision_card.dart';
+import 'package:crabshare_mobile/features/investor/widgets/investor_ui.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:material_ui/material_ui.dart';
 
-Map<String, dynamic> position({
-  String code = 'CS61-REAL-01',
-  bool frozen = true,
-  double? ratio = .25,
-}) => {
-  'batch': <String, dynamic>{
-    'code': code,
-    'title': 'Cua thịt Năm Căn',
-    'operatorName': 'HTX Năm Căn',
-    'crabType': 'FatteningMudCrab',
-    'status': 'InProduction',
-    'targetCapital': 100000004,
-    'raisedCapital': 100000004,
-    'minContribution': 1000000,
-    'cycleDays': 90,
-    'seedQuantity': 100,
-    'dayOfCycle': 44,
-    'aliveCount': 97,
-    'openAlerts': 2,
-    'expectedHarvestDate': '2026-12-01',
-  },
-  'confirmedAmount': 25000001,
-  'capitalRatio': ratio,
-  'capitalBasis': frozen ? 'Frozen' : 'LiveConfirmed',
-  'lastConfirmedAt': '2026-08-30T08:00:00Z',
-  'settlement': null,
-};
-Map<String, dynamic> detailJson([Map<String, dynamic>? p]) => {
-  'position': p ?? position(),
-  'contributions': [
-    {
-      'id': 61,
-      'amount': 25000001,
-      'status': 'Confirmed',
-      'reservedAt': '2026-08-30T07:50:00Z',
-      'confirmedAt': '2026-08-30T08:00:00Z',
-      'contractNo': 'CT-61',
-      'contractStatus': 'FullySigned',
-    },
-  ],
-  'timeline': [
-    {'type': 'Stocked', 'label': 'Thả giống', 'at': '2026-09-01T00:00:00Z'},
-  ],
-  'latestProduction': {
-    'logDate': '2026-10-14',
-    'ph': 7.8,
-    'waterTempC': 28,
-    'salinityPpt': 15,
-    'feedKg': 2,
-    'plausibilityFlag': 'Ok',
-    'verifiedAt': null,
-  },
-};
-SessionState session(int id, {bool investor = true}) => SessionState(
-  token: 'test',
-  user: AppUser(
-    userId: id,
-    email: 'test@local',
-    fullName: 'Khôi',
-    roles: [investor ? Roles.investor : Roles.customer],
-  ),
-);
+import 'helpers/discovery_fakes.dart';
+import 'helpers/investor_fixtures.dart';
 
-class _Session extends SessionController {
-  _Session() : super(session(61));
-  void change(int id) => state = session(id);
-}
-
-class _Kyc implements KycRepository {
-  @override
-  Future<KycVerification> status() async =>
-      const KycVerification(status: KycStatus.verified);
-  @override
-  Future<KycVerification> verify({
-    required List<KycImage> images,
-    required bool consent,
-  }) => throw UnimplementedError();
-}
-
-class _Repo implements PortfolioRepository {
-  List<Contribution> items = [portfolioPositionFromJson(position())];
-  PortfolioDetail detail = portfolioDetailFromJson(detailJson());
-  bool fail = false;
-  int listReads = 0;
-  String? requestedCode;
-  final cancels = <CancelToken?>[];
-  @override
-  Future<List<Contribution>> list({CancelToken? cancelToken}) async {
-    listReads++;
-    cancels.add(cancelToken);
-    if (fail) {
-      throw DioException(
-        requestOptions: RequestOptions(),
-        response: Response(
-          requestOptions: RequestOptions(),
-          statusCode: 503,
-          data: {'detail': 'Danh mục tạm thời không tải được.'},
-        ),
-      );
-    }
-    return items;
-  }
-
-  @override
-  Future<PortfolioDetail> get(String code, {CancelToken? cancelToken}) async {
-    requestedCode = code;
-    return detail;
-  }
-}
-
-class _Adapter implements HttpClientAdapter {
-  final requests = <RequestOptions>[];
-  @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? requestStream,
-    Future<void>? cancelFuture,
-  ) async {
-    requests.add(options);
-    return ResponseBody.fromString(
-      jsonEncode(
-        options.path.endsWith('/CS61-REAL-01')
-            ? detailJson()
-            : {
-                'items': [
-                  position(code: 'PAGE-${options.queryParameters['page']}'),
-                ],
-                'total': 101,
-              },
-      ),
-      200,
-      headers: {
-        'content-type': ['application/json'],
-      },
-    );
-  }
-
-  @override
-  void close({bool force = false}) {}
-}
-
-Future<void> _showHome(WidgetTester tester, _Repo repo) async {
-  tester.view.physicalSize = const Size(360, 780);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
-  final router = GoRouter(
-    initialLocation: Routes.investorHome,
-    routes: [
-      GoRoute(
-        path: Routes.investorHome,
-        builder: (_, _) => const InvestorHomePage(),
-      ),
-      GoRoute(
-        path: '/i/portfolio/:code',
-        builder: (_, s) =>
-            InvestorPortfolioDetailPage(code: s.pathParameters['code']!),
-      ),
-    ],
-  );
-  addTearDown(router.dispose);
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        notificationPollIntervalProvider.overrideWithValue(null),
-        timelineRepositoryProvider.overrideWithValue(EmptyTimelineRepository()),
-        notificationRepositoryProvider.overrideWithValue(
-          EmptyNotificationRepository(),
-        ),
-        notificationReadStoreProvider.overrideWithValue(
-          MemoryNotificationReadStore(),
-        ),
-        sessionProvider.overrideWith(_Session.new),
-        portfolioRepositoryProvider.overrideWithValue(repo),
-        kycRepositoryProvider.overrideWithValue(_Kyc()),
-      ],
-      child: MaterialApp.router(theme: buildAppTheme(), routerConfig: router),
-    ),
-  );
-  await tester.pumpAndSettle();
-}
+/// Nhà đầu tư có một Lô đã chốt vốn (CS-P1) và một Lô còn gọi vốn (CS-F1), kèm mỗi loại việc cần làm một việc.
+FakeApi _investorApi() => FakeApi()
+  ..get('/api/investor/portfolio', portfolioPage([
+    portfolioItem(alerts: 2),
+    portfolioItem(code: 'CS-F1', frozen: false, status: 'Funding', amount: 5000000),
+  ]))
+  ..get('/api/investor/portfolio/CS-P1', portfolioDetail(portfolioItem(alerts: 2)))
+  ..get('/api/investor/portfolio/CS-F1', portfolioDetail(portfolioItem(code: 'CS-F1', frozen: false, status: 'Funding', amount: 5000000)))
+  ..get('/api/batches/CS-P1/money-summary', moneySummary())
+  ..get('/api/batches/CS-P1/progress', progressJson())
+  ..get('/api/batches/CS-P1/decisions', [decisionJson(no: 'QD0000', status: 'Rejected', canVote: false), decisionJson()])
+  ..get('/api/batches/CS-P1/settlement-readiness', readinessJson())
+  ..get('/api/batches/CS-P1/device-images', [deviceImageJson(3, '1702'), deviceImageJson(2, '1701'), deviceImageJson(1, '1701')])
+  ..get('/api/batches/CS-P1/timeline', {'batchCode': 'CS-P1', 'timeZone': 'Asia/Ho_Chi_Minh', 'groups': [], 'hasMore': false, 'nextBefore': null})
+  ..routes['GET /api/device-images/3/file'] = ((_) => ResponseBody.fromBytes(onePixelPng, 200))
+  ..routes['GET /api/device-images/2/file'] = ((_) => ResponseBody.fromBytes(onePixelPng, 200))
+  ..get('/api/me/kyc', {'verificationStatus': 'Unverified', 'verifiedAt': null, 'lastCheck': null})
+  ..get('/api/me/contributions', [myContributionJson(), myContributionJson(status: 'Confirmed')])
+  ..get('/api/me/contracts', [contractJson(), contractJson(id: 11, nextSigner: null, status: 'FullySigned')])
+  ..get('/api/me/settlements', [settlementSummaryJson()])
+  ..get('/api/settlements/7', settlementJson());
 
 void main() {
   setUpAll(() => initializeDateFormatting('vi_VN'));
-  test(
-    'API paginates all positions and reads the real private detail',
-    () async {
-      final adapter = _Adapter();
-      final dio = Dio(BaseOptions(baseUrl: 'https://test.local'))
-        ..httpClientAdapter = adapter;
-      final repo = ApiPortfolioRepository(dio);
-      final cancel = CancelToken();
-      final list = await repo.list(cancelToken: cancel);
-      final detail = await repo.get('CS61-REAL-01');
-      expect(list.map((p) => p.batch.code), ['PAGE-1', 'PAGE-2']);
-      expect(list.first.amount, 25000001);
-      expect(list.first.sharePct, 25);
-      expect(
-        adapter.requests.take(2).map((r) => r.queryParameters['pageSize']),
-        [100, 100],
-      );
-      expect(adapter.requests.first.cancelToken, same(cancel));
-      expect(detail.position.amount, 25000001);
-      expect(detail.contributions.single.contractNo, 'CT-61');
-      expect(detail.latestProduction!.ph, 7.8);
-      expect(detail.timeline.single.label, 'Thả giống');
-      expect(
-        adapter.requests.last.path,
-        '/api/investor/portfolio/CS61-REAL-01',
-      );
-    },
-  );
-  test(
-    'unknown fields stay unknown; gauge clamps without changing actual days',
-    () {
-      final json = position(ratio: null);
-      json['lastConfirmedAt'] = null;
-      json['batch']['aliveCount'] = null;
-      json['batch']['dayOfCycle'] = 100;
-      final p = portfolioPositionFromJson(json);
-      expect(p.sharePct, isNull);
-      expect(p.paidAt, isNull);
-      expect(p.batch.aliveCount, isNull);
-      expect(p.ratioLabel, 'Chưa có tỷ lệ vốn');
-      expect(p.batch.dayOfCycle, 100);
-      expect(p.batch.cycleProgress, 1);
-      expect(
-        portfolioPositionFromJson(position(frozen: false)).ratioLabel,
-        'Tạm tính 25% vốn lô',
-      );
-    },
-  );
-  test('approved payout keeps integer amounts and negative actual profit', () {
-    final json = position();
-    json['settlement'] = {
-      'status': 'Approved',
-      'capitalReturn': 25000001,
-      'profitShare': -1000000,
-      'taxWithheld': 0,
-      'netPayout': 24000001,
-      'inKindQtyKg': 2.5,
-    };
-    final p = portfolioPositionFromJson(json);
-    expect(p.settlement!.netPayout, 24000001);
-    expect(p.settlement!.profitShare, -1000000);
-    expect(p.settlement!.inKindQtyKg, 2.5);
+
+  test('repository reads every portfolio page and maps the frozen capital basis', () async {
+    final pages = <Object?>[];
+    final repo = ApiPortfolioRepository(discoveryDio((request) {
+      expect(request.path, '/api/investor/portfolio');
+      expect(request.queryParameters['pageSize'], 100);
+      pages.add(request.queryParameters['page']);
+      final page = portfolioPage([portfolioItem(), portfolioItem(code: 'CS-F1', frozen: false)]);
+      return jsonResponse({...page, 'total': 101});
+    }));
+    final items = await repo.list();
+    expect(pages, [1, 2]);
+    expect(items, hasLength(4));
+    expect(items.first.frozen, isTrue);
+    expect(items.first.capitalRatio, 0.6);
+    expect(items.first.confirmedAmount, 10200000);
+    expect(items[1].frozen, isFalse);
+    expect(items.first.batch.openAlerts, 0);
+    expect(items.first.settlement, isNull);
   });
-  testWidgets(
-    'home gauge and contribution open real detail with no sample finances',
-    (tester) async {
-      final repo = _Repo();
-      await _showHome(tester, repo);
-      expect(find.text('44'), findsOneWidget);
-      expect(
-        tester.widget<SegmentedGauge>(find.byType(SegmentedGauge)).value,
-        closeTo(44 / 90, .00001),
-      );
-      final card = find.text('25.000.001 đ');
-      await tester.ensureVisible(card);
-      await tester.pumpAndSettle();
-      await tester.tap(card);
-      await tester.pumpAndSettle();
-      expect(repo.requestedCode, 'CS61-REAL-01');
-      expect(find.text('Chi tiết danh mục'), findsOneWidget);
-      expect(find.text('Vốn đã chốt'), findsOneWidget);
-      final contract = find.text('Hợp đồng CT-61 · Đã đủ chữ ký');
-      await tester.scrollUntilVisible(
-        contract,
-        300,
-        scrollable: find.descendant(
-          of: find.byType(ListView),
-          matching: find.byType(Scrollable),
-        ).first,
-      );
-      await tester.pumpAndSettle();
-      expect(contract, findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
-  testWidgets(
-    'network failure retries; empty response shows no mock positions',
-    (tester) async {
-      final repo = _Repo()..fail = true;
-      await _showHome(tester, repo);
-      expect(find.text('Danh mục tạm thời không tải được.'), findsOneWidget);
-      repo.fail = false;
-      repo.items = [];
-      await tester.tap(find.text('Thử lại'));
-      await tester.pumpAndSettle();
-      expect(find.text('Bạn chưa góp vốn lô nào'), findsOneWidget);
-      expect(find.byType(SegmentedGauge), findsNothing);
-      expect(repo.listReads, 2);
-      expect(tester.takeException(), isNull);
-    },
-  );
-  testWidgets('live ratio and large amounts fit phone cards', (tester) async {
-    final json = position(frozen: false);
-    json['confirmedAmount'] = 125000000001;
-    final repo = _Repo()..items = [portfolioPositionFromJson(json)];
-    await _showHome(tester, repo);
-    final label = find.text('Tạm tính 25% vốn lô');
-    await tester.ensureVisible(label);
-    await tester.pumpAndSettle();
-    expect(label, findsOneWidget);
+
+  test('repository reads detail, the three money numbers and my contributions from their endpoints', () async {
+    final paths = <String>[];
+    final repo = ApiPortfolioRepository(discoveryDio((request) {
+      paths.add(request.path);
+      return jsonResponse(switch (request.path) {
+        '/api/investor/portfolio/CS-P1' => portfolioDetail(portfolioItem(
+          settlement: {'status': 'Approved', 'capitalReturn': 10200000, 'profitShare': 1272000, 'taxWithheld': 72000, 'netPayout': 11400000, 'inKindQtyKg': 0},
+        )),
+        '/api/batches/CS-P1/money-summary' => moneySummary(),
+        _ => [myContributionJson(), myContributionJson(status: 'Expired')],
+      });
+    }));
+    final detail = await repo.detail('CS-P1');
+    expect(detail.contributions.single.contractNo, 'HD-P1-005');
+    expect(detail.contributions.single.confirmedAt, DateTime.utc(2026, 10, 9, 12, 5, 47));
+    expect(detail.position.settlement!.netPayout, 11400000);
+    final money = await repo.money('CS-P1');
+    expect(money.mine!.contributed, 10200000);
+    expect(money.mine!.disbursed, 4200000);
+    expect(money.mine!.held, 6000000);
+    expect(money.batch.held, 10000000);
+    final contributions = await repo.contributions();
+    expect(contributions.first.waitingForPayment(), isTrue);
+    expect(contributions.last.waitingForPayment(), isFalse);
+    expect(paths, ['/api/investor/portfolio/CS-P1', '/api/batches/CS-P1/money-summary', '/api/me/contributions']);
+  });
+
+  test('overview sums recorded money of frozen batches only and needs the investor role', () async {
+    final api = _investorApi()..get('/api/investor/portfolio', portfolioPage([
+      portfolioItem(),
+      portfolioItem(code: 'CS-P2'),
+      portfolioItem(code: 'CS-F1', frozen: false, amount: 5000000),
+    ]));
+    final container = ProviderContainer(overrides: [
+      sessionProvider.overrideWith(TestSession.new),
+      dioProvider.overrideWithValue(api.dio),
+    ]);
+    addTearDown(container.dispose);
+    final money = await container.read(overviewMoneyProvider.future);
+    expect(money.figures.contributed, 10200000);
+    expect(money.figures.disbursed, 4200000);
+    expect(money.figures.held, 6000000);
+    expect(money.frozenBatches, 2);
+    expect(money.missing, 1); // CS-P2 chưa lấy được số tiền
+    expect(money.waitingAmount, 5000000);
+    expect(api.paths('GET'), isNot(contains('/api/batches/CS-F1/money-summary')));
+
+    final customer = ProviderContainer(overrides: [
+      sessionProvider.overrideWith(() => TestSession(testSession(roles: [Roles.customer]))),
+      dioProvider.overrideWithValue(api.dio),
+    ]);
+    addTearDown(customer.dispose);
+    await expectLater(customer.read(portfolioProvider.future), throwsStateError);
+  });
+
+  testWidgets('Tổng quan leads with recorded money, lists what to do next, then my batches', (tester) async {
+    final api = _investorApi();
+    final opened = await pumpInvestor(tester, api, location: Routes.investorHome);
+
+    expect(find.text('Tôi đã góp'), findsOneWidget);
+    expect(find.text('10.200.000 đ'), findsWidgets); // số lớn (và thẻ của Lô CS-P1 khi đã dựng)
+    expect(find.text('Đã giải ngân'), findsOneWidget);
+    expect(find.text('4.200.000 đ'), findsOneWidget);
+    expect(find.text('6.000.000 đ'), findsOneWidget);
+    expect(find.text('1 Lô đã chốt vốn · thêm 5.000.000 đ chờ chốt vốn'), findsOneWidget);
+
+    expect(find.text('Việc cần làm'), findsOneWidget);
+    expect(find.text('Xác minh danh tính'), findsOneWidget);
+    expect(find.text('Chuyển khoản cho Lô CS-F1'), findsOneWidget);
+    expect(find.text('Ký hợp đồng HD-15'), findsOneWidget);
+    expect(find.text('Biểu quyết: Thanh lý sớm'), findsOneWidget);
+    expect(find.text('Xem bảng quyết toán Lô CS-P1'), findsOneWidget);
+
+    await tapVisible(tester, find.text('Chuyển khoản cho Lô CS-F1'));
+    expect(opened.single.toString(), 'http://localhost:5173/nha-dau-tu/gop-von/CS-F1');
+
+    await tester.scrollUntilVisible(find.text('Cua thịt hộp CS-F1'), 200);
+    expect(find.text('Lô của tôi'), findsOneWidget);
+    expect(find.text('2 cảnh báo'), findsOneWidget);
+    expect(find.textContaining('60% vốn Lô'), findsNWidgets(2));
+    expectNoProjection();
+
+    await tester.drag(find.byType(ListView), const Offset(0, 3000));
+    await settle(tester);
+    await tapVisible(tester, find.text('Ký hợp đồng HD-15'));
+    expect(find.byType(ContractsPage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
-  testWidgets(
-    'switching user removes old holdings and cancels disposed reads',
-    (tester) async {
-      final repo = _Repo();
-      await _showHome(tester, repo);
-      final scope = ProviderScope.containerOf(
-        tester.element(find.byType(InvestorHomePage)),
-      );
-      final firstCancel = repo.cancels.single;
-      repo.items = [];
-      (scope.read(sessionProvider.notifier) as _Session).change(62);
-      await tester.pumpAndSettle();
-      expect(find.text('Bạn chưa góp vốn lô nào'), findsOneWidget);
-      expect(find.textContaining('CS61-REAL-01'), findsNothing);
-      expect(firstCancel!.isCancelled, isTrue);
-      expect(repo.listReads, 2);
-    },
-  );
-  test(
-    'non-investor providers and routes deny private portfolio access',
-    () async {
-      final repo = _Repo();
-      final container = ProviderContainer(
-        overrides: [
-          notificationPollIntervalProvider.overrideWithValue(null),
-          notificationRepositoryProvider.overrideWithValue(
-            EmptyNotificationRepository(),
-          ),
-          notificationReadStoreProvider.overrideWithValue(
-            MemoryNotificationReadStore(),
-          ),
-          sessionProvider.overrideWith(
-            () => SessionController(session(62, investor: false)),
-          ),
-          portfolioRepositoryProvider.overrideWithValue(repo),
-        ],
-      );
-      addTearDown(container.dispose);
-      await expectLater(
-        container.read(myContributionsProvider.future),
-        throwsStateError,
-      );
-      expect(repo.listReads, 0);
-      expect(
-        redirectFor(
-          session(62, investor: false),
-          Routes.portfolioBatch('CS61-REAL-01'),
-        ),
-        Routes.unsupported,
-      );
-    },
-  );
+
+  testWidgets('a new investor sees one empty state with the next step', (tester) async {
+    final api = FakeApi()
+      ..get('/api/investor/portfolio', portfolioPage([]))
+      ..get('/api/me/kyc', {'verificationStatus': 'Verified', 'verifiedAt': null, 'lastCheck': null})
+      ..get('/api/me/contributions', [])
+      ..get('/api/me/contracts', [])
+      ..get('/api/me/settlements', []);
+    await pumpInvestor(tester, api, home: const InvestorHomePage());
+    expect(find.text('Bạn chưa góp vốn vào Lô nào'), findsOneWidget);
+    expect(find.text('Xem Lô đang gọi vốn'), findsOneWidget);
+    expect(find.text('Việc cần làm'), findsNothing);
+    expect(find.text('Tôi đã góp'), findsNothing);
+    expect(find.text('Lô của tôi'), findsNothing);
+  });
+
+  testWidgets('my batch shows three money numbers and progress, then one section at a time', (tester) async {
+    final api = _investorApi();
+    await pumpInvestor(tester, api, location: Routes.portfolioBatch('CS-P1'));
+
+    expect(find.text('Tôi đã góp vào Lô này'), findsOneWidget);
+    expect(find.text('10.200.000 đ'), findsNWidgets(2)); // số lớn và dòng khoản góp
+    expect(find.text('4.200.000 đ'), findsOneWidget);
+    expect(find.text('60% vốn của Lô'), findsOneWidget);
+    expect(find.textContaining('con đang nuôi'), findsOneWidget);
+    expect(find.text('HD-P1-005'), findsOneWidget);
+    expect(find.text('Đủ chữ ký'), findsOneWidget);
+    expect(find.text('Điều kiện quyết toán'), findsNothing);
+    expectNoProjection();
+
+    await tapVisible(tester, find.text('Thiết bị'));
+    expect(find.text('Hộp 1701'), findsOneWidget); // chỉ ảnh mới nhất của mỗi hộp
+    expect(find.text('Hộp 1702'), findsOneWidget);
+    expect(api.paths('GET'), isNot(contains('/api/device-images/1/file')));
+    expect(find.text('HD-P1-005'), findsNothing);
+
+    await tapVisible(tester, find.text('Nhật trình'));
+    expect(find.text('Chưa có ghi nhận nào'), findsOneWidget);
+
+    await tapVisible(tester, find.text('Quyết toán'));
+    expect(find.text('Còn 1 điều kiện'), findsOneWidget);
+    expect(find.text('Còn 40 mục'), findsOneWidget);
+    expect(find.text('11.400.000 đ'), findsOneWidget);
+    await tapVisible(tester, find.text('Bảng quyết toán'));
+    expect(find.byType(SettlementStatementPage), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('voting asks for confirmation, posts the choice and shows my recorded vote', (tester) async {
+    final api = _investorApi()
+      ..routes['POST /api/decisions/QD0001/votes'] = ((request) {
+        expect(request.data, {'choice': 'Yes'});
+        return decisionJson(status: 'Passed', canVote: false, myChoice: 'Yes', yes: 10200000);
+      });
+    await pumpInvestor(tester, api, location: InvestorRoutes.portfolioTab('CS-P1', 'bieu-quyet'));
+
+    expect(find.byType(DecisionCard), findsNWidgets(2));
+    expect(find.text('Đồng ý'), findsNWidgets(3)); // hai nhãn thanh vốn và một nút
+    await tapVisible(tester, find.widgetWithText(FilledButton, 'Đồng ý'));
+    expect(find.text('Biểu quyết: Đồng ý'), findsOneWidget);
+    expect(find.textContaining('không đổi lại được'), findsOneWidget);
+    expect(api.paths('POST'), isEmpty);
+
+    await tester.tap(find.text('Gửi phiếu đồng ý'));
+    await settle(tester);
+    expect(api.paths('POST'), ['/api/decisions/QD0001/votes']);
+    expect(find.text('Đã ghi nhận phiếu của bạn.'), findsOneWidget);
+    expect(find.textContaining('Bạn đã chọn: Đồng ý'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Đồng ý'), findsNothing);
+    expect(find.text('Thông qua'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a refused vote keeps the buttons and shows the server message', (tester) async {
+    final api = _investorApi()
+      ..routes['POST /api/decisions/QD0001/votes'] = ((_) => jsonResponse({'detail': 'Cuộc biểu quyết đã kết thúc.'}, 422));
+    await pumpInvestor(tester, api, location: InvestorRoutes.portfolioTab('CS-P1', 'bieu-quyet'));
+    await tapVisible(tester, find.widgetWithText(OutlinedButton, 'Không đồng ý'));
+    await tester.tap(find.text('Gửi phiếu không đồng ý'));
+    await settle(tester);
+    expect(find.text('Cuộc biểu quyết đã kết thúc.'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Đồng ý'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a batch whose capital is not closed shows only what I contributed', (tester) async {
+    final api = _investorApi();
+    await pumpInvestor(tester, api, home: const PortfolioDetailPage(code: 'CS-F1', initialTab: 'bieu-quyet'));
+    expect(find.text('60% vốn của Lô · Lô chưa chốt vốn'), findsOneWidget);
+    expect(find.text('Đã giải ngân'), findsNothing);
+    expect(find.text('Lô chưa chốt vốn nên chưa có biểu quyết'), findsOneWidget);
+    expect(api.paths('GET'), isNot(contains('/api/batches/CS-F1/money-summary')));
+    expect(api.paths('GET'), isNot(contains('/api/batches/CS-F1/decisions')));
+    expect(find.byType(MoneyCard), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

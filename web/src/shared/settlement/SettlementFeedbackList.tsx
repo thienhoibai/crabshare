@@ -1,34 +1,67 @@
 import { useState } from 'react'
+import type { SettlementResponse } from '../api/api.gen'
 import { errorMessage } from '../api/http'
 import { formatDateTime } from '../lib/format'
-import { useAnswerFeedback, type Settlement } from './settlementApi'
+import { Checkbox, Field, OpBtn, OpNote, StatusBadge, TextArea } from '../ui/console'
+import { useAnswerFeedback } from './settlementApi'
 
-const statusLabel = { Open: 'Chờ trả lời', Answered: 'Đã trả lời', Withdrawn: 'Đã rút', Unresolved: 'Chưa thống nhất' } as const
-
-/** Góp ý của nhà đầu tư trên bảng quyết toán (TL-14 Bước 4). `canAnswer`: admin trả lời ngay tại chỗ. */
-export function SettlementFeedbackList({ s, canAnswer = false }: { s: Settlement; canAnswer?: boolean }) {
+/**
+ * Góp ý của nhà đầu tư trên bảng quyết toán. `canAnswer`: Admin trả lời ngay tại chỗ; đánh dấu "chưa thống nhất" thì bảng vẫn chốt được
+ * kèm ghi chú công khai. Không có khung bao: đặt trong OpPanel.
+ */
+export function SettlementFeedbackList({ s, canAnswer = false }: { s: SettlementResponse; canAnswer?: boolean }) {
   const answer = useAnswerFeedback()
   const [openFor, setOpenFor] = useState<number | null>(null)
   const [text, setText] = useState('')
   const [unresolved, setUnresolved] = useState(false)
-  if (s.feedback.length === 0) return <p className="st-note">Chưa có góp ý nào.</p>
+
+  if (s.feedback.length === 0) return <p className="rd-muted">Chưa có góp ý nào.</p>
+
+  const start = (feedbackId: number) => {
+    setOpenFor(feedbackId)
+    setText('')
+    setUnresolved(false)
+    answer.reset()
+  }
+
   return (
-    <ul className="st-feedback">
-      {s.feedback.map(f => (
-        <li key={f.feedbackId}>
-          <div className="st-feedback__head"><b>{f.authorName}{f.isMine && ' (bạn)'}</b><span>{formatDateTime(f.createdAt)} · {statusLabel[f.status]}</span></div>
-          <p>{f.content}</p>
-          {f.response && <p className="st-feedback__reply">Trả lời: {f.response}</p>}
-          {canAnswer && f.status === 'Open' && (openFor === f.feedbackId
-            ? <form className="st-feedback__form" onSubmit={e => { e.preventDefault(); answer.mutate({ feedbackId: f.feedbackId, response: text, unresolved }, { onSuccess: () => { setOpenFor(null); setText('') } }) }}>
-                <textarea required minLength={5} maxLength={1000} value={text} onChange={e => setText(e.target.value)} aria-label="Nội dung trả lời" placeholder="Căn cứ dữ liệu, giao dịch hoặc chứng từ" />
-                <label><input type="checkbox" checked={unresolved} onChange={e => setUnresolved(e.target.checked)} /> Hai bên chưa thống nhất (vẫn chốt được, kèm ghi chú công khai)</label>
-                {answer.isError && <span className="st-error" role="alert">{errorMessage(answer.error)}</span>}
-                <div><button disabled={answer.isPending}>{answer.isPending ? 'Đang gửi…' : 'Gửi trả lời'}</button> <button type="button" onClick={() => setOpenFor(null)}>Huỷ</button></div>
-              </form>
-            : <button type="button" className="st-link" onClick={() => { setOpenFor(f.feedbackId); setText(''); setUnresolved(false); answer.reset() }}>Trả lời</button>)}
-        </li>
+    <div className="op-stack">
+      {s.feedback.map((f) => (
+        <div key={f.feedbackId} className="op-subform">
+          <div className="op-between is-wide">
+            <b>{f.authorName}{f.isMine ? ' (bạn)' : ''}</b>
+            <span className="op-inline"><small className="rd-muted">{formatDateTime(f.createdAt)}</small><StatusBadge kind="feedback" value={f.status} /></span>
+          </div>
+          <p className="is-wide" style={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>{f.content}</p>
+          {f.response && (
+            <OpNote tone={f.status === 'Unresolved' ? 'danger' : 'ok'} className="is-wide">
+              <b>Trả lời{f.respondedAt ? ` lúc ${formatDateTime(f.respondedAt)}` : ''}:</b> {f.response}
+            </OpNote>
+          )}
+          {canAnswer && f.status === 'Open' && (openFor === f.feedbackId ? (
+            <form
+              className="op-form is-wide"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (text.trim().length < 5 || answer.isPending) return
+                answer.mutate({ feedbackId: f.feedbackId, response: text.trim(), unresolved }, { onSuccess: () => setOpenFor(null) })
+              }}
+            >
+              <Field label="Nội dung trả lời" hint="Từ 5 ký tự, nêu căn cứ.">
+                <TextArea value={text} maxLength={1000} onChange={(e) => setText(e.target.value)} />
+              </Field>
+              <Checkbox checked={unresolved} onChange={setUnresolved}>Hai bên chưa thống nhất</Checkbox>
+              {answer.isError && <OpNote tone="danger">{errorMessage(answer.error)}</OpNote>}
+              <div className="op-formfoot">
+                <OpBtn type="button" variant="ghost" sm onClick={() => setOpenFor(null)}>Đóng</OpBtn>
+                <OpBtn type="submit" sm disabled={text.trim().length < 5 || answer.isPending}>{answer.isPending ? 'Đang gửi…' : 'Gửi trả lời'}</OpBtn>
+              </div>
+            </form>
+          ) : (
+            <div className="is-wide"><OpBtn variant="ghost" sm onClick={() => start(f.feedbackId)}>Trả lời góp ý</OpBtn></div>
+          ))}
+        </div>
       ))}
-    </ul>
+    </div>
   )
 }

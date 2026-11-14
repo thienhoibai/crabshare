@@ -62,7 +62,8 @@ public static class AuthSetup
             .AddPolicy(Policies.Operator, p => p.RequireRole(Roles.OperatorMember))
             .AddPolicy(Policies.Investor, p => p.RequireRole(Roles.Investor))
             .AddPolicy(Policies.Customer, p => p.RequireRole(Roles.Customer, Roles.Investor))
-            .AddPolicy(Policies.Reviewer, p => p.RequireRole(Roles.EvidenceReviewer));
+            .AddPolicy(Policies.Reviewer, p => p.RequireRole(Roles.EvidenceReviewer))
+            .AddPolicy(Policies.Qc, p => p.RequireRole(Roles.QcInspector));
 
         return services;
     }

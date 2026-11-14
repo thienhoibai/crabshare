@@ -21,7 +21,7 @@ class UnsupportedRolePage extends ConsumerWidget {
               const EmptyState(
                 icon: Icons.desktop_windows_outlined,
                 title: 'Tài khoản này dùng trên web',
-                message: 'Ứng dụng di động dành cho nhà đầu tư và hộ nuôi. Quản trị, thẩm định và mua hàng vui lòng dùng web CrabShare.',
+                message: 'Quản trị và thẩm định bằng chứng làm việc trên web CrabShare.',
               ),
               FilledButton(onPressed: () => ref.read(sessionProvider.notifier).signOut(), child: const Text('Đăng xuất')),
             ],

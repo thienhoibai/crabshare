@@ -1,0 +1,24 @@
+/* Kiểu riêng của nhóm B cổng quản trị (tiền tố ab-). Chỉ dùng biến màu của bộ kit. */
+
+/* ô bảng hai dòng: dòng chính và dòng phụ nhỏ */
+.ab-cell { display: grid; gap: 2px; min-width: 0; }
+.ab-cell small { font-size: 12px; color: var(--muted); font-weight: 400; }
+
+/* chuỗi dài không có khoảng trắng (mã băm, mã giao dịch) */
+.ab-wrap { overflow-wrap: anywhere; }
+
+/* đoạn văn do người dùng nhập: giữ xuống dòng */
+.ab-quote { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.55; }
+
+/* bảng tính quyết toán: nhóm dòng, dòng cộng, dòng trừ */
+.ab-sheet { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.ab-sheet th, .ab-sheet td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-weight: 400; }
+.ab-sheet td { text-align: right; white-space: nowrap; font-weight: 600; }
+.ab-sheet th small { display: block; font-size: 12px; color: var(--muted); }
+.ab-sheet tr:last-child th, .ab-sheet tr:last-child td { border-bottom: 0; }
+.ab-sheet .is-head th { padding-top: 18px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.ab-sheet .is-sub th { padding-left: 28px; color: var(--muted); }
+.ab-sheet .is-sub td { color: var(--muted); font-weight: 500; }
+.ab-sheet .is-total th, .ab-sheet .is-total td { font-size: 16px; font-weight: 700; background: var(--input); }
+.ab-sheet .is-total th:first-child { border-radius: 12px 0 0 12px; }
+.ab-sheet .is-total td:last-child { border-radius: 0 12px 12px 0; }

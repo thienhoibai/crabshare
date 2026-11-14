@@ -1,17 +1,8 @@
-# Web — React 19 + Vite + TypeScript
+# Web — React 19 + Vite + TypeScript (BR v1.5)
 
-KH-03: nhà đầu tư đăng ký tài khoản nhận tiền tại Hồ sơ & eKYC; chủ hộ nuôi tại
-`/operator/payout-account`; khách hàng mở Sổ địa chỉ từ Cửa hàng (`/tai-khoan/dia-chi`).
-Form dùng API thật và style rd/OperatorLayout hiện có. `npm run test:kyc` chạy cả
-test eKYC và tài khoản/địa chỉ. Test trình duyệt dùng API mock; backend test LocalDB
-kiểm tra lưu dữ liệu, quyền và cập nhật đồng thời.
-KH-04: Quản trị → Quản lý Người dùng có các tab Người dùng và Ngoại lệ KYC, dùng API
-quản trị thật. Chi tiết `/admin/users/detail?id=<id số>` hiển thị metadata KYC, không
-có ảnh CCCD/selfie. Thao tác khoá, mở khoá và duyệt ngoại lệ yêu cầu lý do. Chạy
-`npm run test:kyc` để kiểm tra cả eKYC và luồng quản trị.
-
-Giao diện lấy từ bản demo `cs-ui-demo` (đã bỏ phần chọn phiên bản):
-**Cửa hàng = bản 1 (nền sáng)**, **Nhà đầu tư = bản 2**, **trang chủ 3D giữ nguyên** (sẽ chỉnh sau).
+Web của CrabShare theo mô hình BR v1.5: Lô P / T / A, khách đặt trước theo quy cách và nhận theo đợt, nhà đầu tư góp vốn vào Lô P,
+đo và phân hạng từng con tại trạm, Nhân viên kiểm phẩm duyệt hạng, quyết toán theo Lô. Không còn cửa hàng bán lẻ, giỏ hàng,
+niêm yết hay tem từng con.
 
 ## Chạy
 
@@ -27,107 +18,96 @@ npm run dev                    # http://localhost:5173
 | `npm run dev` | chạy dev, tự tải lại khi sửa |
 | `npm run build` | kiểm tra TypeScript + build ra `dist/` (CI chạy lệnh này) |
 | `npm run lint` | chỉ kiểm tra TypeScript |
-| `npm run test:kyc` | test eKYC bằng Chrome; CI dùng Chromium của Playwright |
+| `npx playwright test` | chạy bộ kiểm thử giao diện trong `tests/` (CI chạy lệnh này qua `npm run test:kyc`); không cần backend |
+| `node scripts/gen-api-types.mjs <url hoặc file openapi>` | sinh lại `src/shared/api/api.gen.ts` và `endpoints.gen.md` sau khi backend đổi API |
 
-Khi chạy dev, trang Đăng nhập có nút **đăng nhập nhanh** bằng tài khoản demo (`features/auth/demoAccounts.ts`).
+Khi chạy dev, trang Đăng nhập có nút đăng nhập nhanh bằng tài khoản mẫu (`features/auth/demoAccounts.ts`).
 
 ## Cấu trúc
 
 ```
 src/
-├── main.tsx
 ├── app/
-│   ├── router.tsx          ← MỌI route ở đây, nhóm theo vai trò (RequireRole)
-│   ├── providers.tsx       ← TanStack Query
+│   ├── router.tsx            ← bản đồ trang; mỗi cổng ghép từ tệp routes của feature
+│   ├── providers.tsx         ← TanStack Query
 │   └── index.css
 ├── shared/
-│   ├── api/http.ts         ← axios: gắn token, 401 → đăng xuất, errorMessage()
-│   ├── auth/               ← authStore (zustand), RequireRole, homePathFor
-│   ├── lib/format.ts       ← formatVnd, formatDate, formatDateTime
-│   ├── layout/SiteChrome.tsx
-│   ├── payments/           ← <VietQrBox> + usePaymentRequest: chuyển khoản VietQR cho góp vốn, đơn hàng, cọc
-│   └── ui/kit/             ← bộ khối giao diện dùng chung + mock-data (sẽ bỏ dần)
+│   ├── api/
+│   │   ├── http.ts           ← axios: gắn token, 401 → đăng xuất, errorMessage()
+│   │   ├── hooks.ts          ← useGet, useSend, useBlobUrl, openFile
+│   │   ├── api.gen.ts        ← kiểu dữ liệu tự sinh từ OpenAPI (không sửa tay)
+│   │   └── endpoints.gen.md  ← bảng endpoint tự sinh để tra cứu
+│   ├── auth/                 ← authStore (zustand), RequireRole, homePathFor
+│   ├── layout/SiteShell.tsx  ← khung trang công khai
+│   ├── lib/format.ts         ← formatVnd, formatDate, formatDateTime
+│   ├── payments/             ← <VietQrBox>, usePaymentRequest, nút giả lập chuyển khoản (chỉ dev)
+│   ├── contracts/, settlement/ ← xem hợp đồng, sao kê quyết toán dùng chung
+│   └── ui/
+│       ├── kit/              ← vỏ trang .rd, logo, biến màu, phông
+│       └── console/          ← bộ thành phần op-*, khung ConsoleLayout, menu nav.ts, nhãn status.ts, README.md
 └── features/
-    ├── landing/            ← trang chủ 3D
-    ├── auth/               ← đăng nhập, đăng ký (đã gọi API thật)
-    ├── store/              ← cửa hàng (bản 1)
-    ├── orders/             ← giỏ hàng → thanh toán → theo dõi → lịch sử → huỷ/trả → đánh giá
-    ├── investor/           ← cổng nhà đầu tư (bản 2)
-    ├── operator/           ← khu vực hộ nuôi
-    ├── admin/              ← khu vực quản trị
-    └── trace/              ← trang truy xuất /truy-xuat/:tagCode (URL in trong QR trên tem)
+    ├── landing/              ← trang chủ
+    ├── auth/                 ← đăng nhập, đăng ký
+    ├── public/               ← /lo, /lo/:code, /chuan-phan-hang, /truy-xuat/:traceCode
+    ├── customer/             ← cổng khách hàng /khach
+    ├── investor/             ← cổng nhà đầu tư /nha-dau-tu
+    ├── operator/             ← cổng người nuôi /operator (batch/ là trang làm việc một Lô, sales/ là bán và tiền)
+    ├── qc/                   ← cổng Nhân viên kiểm phẩm /qc
+    ├── admin/                ← cổng quản trị /admin (quality/, finance/)
+    ├── accounts/             ← eKYC, tài khoản nhận tiền
+    └── timeline/             ← nhật trình của Lô
 ```
 
-## Route theo vai trò
+## Cổng theo vai trò
 
-| Vai trò | Đường dẫn | File |
+| Vai trò | Đường dẫn gốc | Tệp route |
 |---|---|---|
-| Ai cũng vào | `/`, `/dang-nhap`, `/dang-ky`, `/cua-hang`, `/san-pham`, `/truy-xuat/:tagCode` | `landing/`, `auth/`, `store/`, `orders/`, `trace/` |
-| Customer, Investor | `/thanh-toan` (`/gio-hang` chuyển về đây), `/xac-nhan-don-hang` | `orders/CheckoutPage.tsx`, `orders/OrderConfirmationPage.tsx` |
-| Customer, Investor | `/theo-doi-don-hang`, `/lich-su-don-hang`, `/huy-tra-hang`, `/danh-gia-don-hang` | `orders/CommercePage.tsx` (bản mẫu) |
-| Investor | `/nha-dau-tu/*` | `investor/InvestorPortal.tsx` |
-| OperatorMember | `/operator`, `/operator/kyc`, `/operator/create-batch`, `/operator/contract`, `/operator/harvest`, `/operator/settlement`, `/operator/boxes`, `/operator/log`, `/operator/batch`, `/operator/batch/detail`, `/operator/alerts`, `/operator/listings` | `operator/*.tsx` |
-| PlatformAdmin, EvidenceReviewer | `/admin`, `/admin/users`, `/admin/batches`, `/admin/storefront`, `/admin/finance`, `/admin/alerts`, `/admin/disputes`, `/admin/settings` (+ trang chi tiết) | `admin/*.tsx` |
+| Ai cũng vào | `/`, `/dang-nhap`, `/dang-ky`, `/lo`, `/lo/:code`, `/chuan-phan-hang`, `/truy-xuat/:traceCode` | `features/public/routes.tsx` |
+| Đã đăng nhập, chưa thuộc hộ nuôi | `/dang-ky-ho-nuoi` | `app/router.tsx` |
+| Customer | `/khach/…` | `features/customer/routes.tsx` |
+| Investor | `/nha-dau-tu/…` | `features/investor/routes.tsx` |
+| OperatorMember | `/operator/…`, trang làm việc một Lô `/operator/batches/:code/:tab` | `features/operator/routesA.tsx`, `routesB.tsx`, `batch/tabsA.tsx`, `batch/tabsB.tsx` |
+| QcInspector | `/qc/…` | `features/qc/routes.tsx` |
+| PlatformAdmin, EvidenceReviewer | `/admin/…` | `features/admin/routesA.tsx`, `routesB.tsx` |
 
-> `/operator/boxes` là trang **Hộp nuôi**: đánh số hộp, tạo hàng loạt, tìm kiếm, lọc trạng thái và quản lý bảo trì (VI-03).
-
-## Xác minh danh tính (CS-27)
-
-Nhà đầu tư mở **Hồ sơ & eKYC** tại `/nha-dau-tu/ho-so`, chọn/chụp CCCD mặt trước,
-mặt sau và ảnh khuôn mặt, đồng ý điều khoản rồi gửi xác minh. Mỗi ảnh JPEG/PNG/WebP
-tối đa 5 MB. GET `/api/me/kyc` và POST `/api/kyc/ekyc` dùng HTTP client JWT chung;
-cache trạng thái theo userId. Kết quả và banner ở Tổng quan cập nhật từ API.
-Ảnh xem trước dùng URL cục bộ được thu hồi khi thay ảnh/đóng form, không đưa vào
-localStorage. Hộ nuôi không có vai Investor nhận hướng dẫn hồ sơ pháp lý riêng,
-không hiện kết quả eKYC mẫu hoặc gọi API Investor.
-
-Đăng ký Investor mới để thử gửi; các tài khoản demo đã Verified. Backend hiện dùng
-provider giả lập. Các test Playwright trong `tests/kyc.spec.ts` dùng ảnh mẫu và API
-mock để kiểm tra consent, multipart, lỗi 400 và đổi tài khoản. Chạy local cần Chrome;
-CI cài Chromium bằng `npx playwright install --with-deps chromium`.
-
-## Gọi API — mẫu
-
-```ts
-// features/batches/batchesApi.ts
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { http } from '../../shared/api/http'
-
-export type BatchSummary = { code: string; title: string; status: string; targetCapital: number; raisedCapital: number }
-
-export function useFundingBatches() {
-  return useQuery({
-    queryKey: ['batches', 'funding'],
-    queryFn: async () => (await http.get<BatchSummary[]>('/api/batches', { params: { status: 'Funding' } })).data,
-  })
-}
-
-export function useSubmitBatch() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (code: string) => http.post(`/api/batches/${code}/submit`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['batches'] }),
-  })
-}
-```
-
-Trong trang: `const { data, isLoading, error } = useFundingBatches()`; báo lỗi bằng `errorMessage(error)`.
+Thêm trang mới: tạo component trong feature, thêm một dòng vào tệp route của cổng, thêm một mục trong
+`shared/ui/console/nav.ts` nếu trang cần có trên menu. Trang trong một cổng chỉ trả về nội dung; khung do `ConsoleLayout` lo.
 
 ## Quy tắc giao diện
-- Tiền hiển thị bằng `formatVnd()`; **không** hiển thị lợi suất kỳ vọng.
-- Thay dần dữ liệu trong `shared/ui/kit/mock-data.ts` bằng dữ liệu API; trang nào xong thì xoá phần mock tương ứng.
-- Giữ phong cách sẵn có của từng khu vực (CSS trong `store.css`, `investor.css`, `operator.css`).
-- Mã chuyển khoản dùng `<VietQrBox payment={...} status={...} />` (`shared/payments/VietQrBox.tsx`, thư viện `qrcode.react`): cạnh mã QR chỉ có số tiền, nội dung, đồng hồ hạn; số tài khoản nằm sau nút "chuyển khoản thủ công" kèm cảnh báo (TL-10 §6.1). Trạng thái mới nhất lấy bằng `usePaymentRequest(id)` (tự hỏi lại 3 giây/lần khi còn chờ). Khi chạy dev có thêm `<SimulatePaymentButton payment={...} />` ("Giả lập đã chuyển khoản", TH-06) gọi `POST /api/dev/payments/simulate`; bản build production không render nút này.
 
-## VI-02 — Duyệt hộ nuôi và nhân viên
+Đọc `src/shared/ui/console/README.md` trước khi viết trang. Tóm tắt:
 
-- Admin: `/admin/users?tab=operators`, chỉ PlatformAdmin thấy tab Hộ nuôi; mặc định Chờ duyệt. Lọc Đã duyệt để đình chỉ. Các form xác nhận gọi API thật, nhận sức chứa hoặc lý do và cập nhật danh sách sau thành công. Tab Người dùng & eKYC vẫn là màn hình mẫu trước đây.
-- Operator: `/operator/members`, có trong sidebar và menu mobile. Owner thêm Staff bằng email tài khoản có sẵn và xóa Staff có xác nhận; Staff chỉ xem. Thành viên mới cần đăng nhập lại để cập nhật quyền giao diện.
-- Hook API ở `features/admin/adminOperatorsApi.ts` và `features/operator/operatorsApi.ts`; hộp thoại dùng `shared/ui/ActionDialog.tsx`. Không thêm dependency.
-- Chạy `npm run lint` và `npm run build`; API ở `http://localhost:5233`, web dev nên mở `http://localhost:5173` theo cấu hình CORS mặc định.
+- Một ngôn ngữ thiết kế cho mọi trang: bộ kit `.rd` và các thành phần `op-*`. Không tự chế màu, không thêm phông.
+- Gọn và dễ dùng: một trang một việc, tối đa 3–4 con số chính, một nút chính, giải thích nằm sau nút (i) hoặc khối "Xem thêm",
+  không ghi số quy tắc (BR-xxx) trên màn hình.
+- Tiền là số nguyên đồng, hiện bằng `formatVnd()` hoặc `<Money>`. Không hiển thị lợi suất, lợi nhuận kỳ vọng hay bất kỳ con số dự phóng nào.
+- Dữ liệu lấy bằng `useGet` / `useSend` với kiểu từ `api.gen.ts`. Không dựng dữ liệu giả trong trang.
+- QR gắn theo đơn và theo Lô. Không có tem hay QR cho từng con cua.
 
-## NH-07 — Theo dõi đơn, lịch sử, huỷ đơn (CS-46)
+## Kiểm thử
 
-- `/lich-su-don-hang` và `/huy-tra-hang` → `orders/OrderHistoryPage.tsx` (GET `/api/orders`).
-- `/theo-doi-don-hang` và `/theo-doi-don-hang/:orderNo` → `orders/OrderTrackingPage.tsx` (GET `/api/orders/{orderNo}`, POST `.../cancel`).
-- API client: `orders/orderTrackingApi.ts`. Giữ `/danh-gia-don-hang` bản mẫu trên `CommercePage.tsx`.
+- `npm run lint` và `npm run build` phải sạch.
+- `npx playwright test` phải qua hết. Bộ spec trong `tests/` kiểm thử giao diện BR v1.5 mà không cần backend: mọi lời gọi `/api/**`
+  được giả lập, máy chủ dev tự bật ở cổng 5175 (đổi bằng biến `PW_PORT`). Trên máy của nhóm bộ spec chạy bằng Chrome đã cài; trên CI
+  chạy bằng Chromium của Playwright.
+
+| Tệp | Kiểm thử gì |
+|---|---|
+| `tests/support/app.ts` | `test` có fixture `api` (giả lập và ghi lại lời gọi API), `signIn(page, vai trò)`, các hàm tiện ích |
+| `tests/support/<cổng>.ts` | dữ liệu giả lập có kiểu từ `api.gen.ts`, hàm `mock<Cổng>(api)` và danh sách trang `<CỔNG>_PAGES` |
+| `auth`, `session-security` | đăng nhập, chuyển hướng theo vai trò, chặn trang theo vai trò, phiên hết hạn |
+| `public-batches`, `order-trace` | `/lo`, `/lo/:code`, `/chuan-phan-hang`, `/truy-xuat/:traceCode` |
+| `customer-*` | đặt trước tới bước QR đặt cọc, chi tiết đơn và nghiệm thu, giao hàng, địa điểm nhận hàng |
+| `investor-*`, `kyc`, `notifications`, `timeline`, `payment-profiles` | tổng quan, góp vốn, danh mục, hợp đồng, quyết toán, xác minh, thông báo, nhật trình |
+| `operator-*`, `batches`, `boxes`, `production-logs`, `evidence-explanation`, `dashboard` | trang làm việc một Lô, nhật ký chăm sóc, lượt đo, chuyến giao, hộp nuôi, bằng chứng |
+| `qc-*` | việc được giao, kiểm đầu vào, duyệt phân hạng, thăm trại, chuẩn phân hạng |
+| `admin-*`, `batch-review`, `evidence-review`, `alerts`, `audit-log` | duyệt Lô, giải ngân theo mốc, gọi vốn, quyết toán, người dùng, cảnh báo, nhật ký kiểm toán |
+| `no-return-promises` | mở lại mọi trang trong các danh sách `*_PAGES` và soát chữ: không có "ROI", "lợi suất", "lợi nhuận kỳ vọng", không có số quy tắc |
+
+Viết spec mới: nhập `test`, `expect`, `signIn` từ `./support/app`, gọi `mock<Cổng>(api)` rồi ghi đè endpoint cần đổi bằng
+`api.get/post/put/delete(...)` (đăng ký sau thắng đăng ký trước). Lời gọi API chưa giả lập làm test hỏng, nên dữ liệu giả lập luôn khớp
+với những gì trang thật sự gọi. Kiểm tra bằng nhãn tiếng Việt trên màn hình và bằng `api.sent(method, path)` (method, đường dẫn, body).
+Thêm trang mới vào `<CỔNG>_PAGES` để trang đó cũng được soát chữ. Kiểm tra kiểu của spec: `npx tsc -p tests/tsconfig.json --noEmit`.
+
+Ngày trong dữ liệu giả lập tính bằng `dateFromNow` / `daysFromNow` (giờ Việt Nam), không viết cứng. Trình duyệt của bộ spec luôn ở giờ
+Việt Nam; `PW_SHIFT_HOURS=12 npx playwright test` chạy cả bộ với đồng hồ lệch 12 giờ để kiểm tra spec không phụ thuộc giờ trong ngày.
