@@ -10,6 +10,7 @@ import {
   Field, OpBack, OpBtn, OpConfirm, OpHeading, OpKv, OpNote, OpPanel, OpTable, QueryView, Select, StatusBadge, formatDate, label, options, useGet, useSend,
 } from '../../shared/ui/console'
 import { ReasonField } from './adminPartA'
+import { PartyDossier } from './PartyDossier'
 
 type Dialog =
   | { kind: 'verify' }
@@ -58,6 +59,8 @@ export default function AdminPartyDetail() {
               }
             />
             {p.verificationStatus === 'Rejected' && p.rejectReason && <OpNote tone="danger">Lý do từ chối: {p.rejectReason}</OpNote>}
+
+            {!p.isPlatform && <PartyDossier party={p} />}
 
             <OpPanel
               title="Vai trò"
@@ -116,7 +119,9 @@ export default function AdminPartyDetail() {
             {dialog?.kind === 'verify' && (
               <OpConfirm
                 title="Xác minh đối tác"
-                sub={`${p.legalName} · đã đối chiếu giấy tờ`}
+                sub={p.partyType === 'Individual'
+                  ? `${p.legalName} · đã xem kết quả eKYC trong mục Căn cứ xác minh`
+                  : `${p.legalName} · đã đối chiếu giấy tờ trong mục Căn cứ xác minh với tên pháp lý và mã số thuế`}
                 confirmLabel="Xác minh"
                 pending={verify.isPending}
                 error={verify.error}

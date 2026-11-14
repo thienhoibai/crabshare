@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router'
 import type { KycStatusResponse, PartyResponse, UpdatePartyRequest } from '../../shared/api/api.gen'
 import KycVerification from '../accounts/KycVerification'
 import PayoutAccountForm from '../accounts/PayoutAccountForm'
+import { PartyDocuments } from '../../shared/party/PartyDocuments'
 import {
   Field, Input, OpBadge, OpBtn, OpConfirm, OpHeading, OpKv, OpLoading, OpMore, OpNote, OpPanel, OpTabs, QueryView, Select, StatusBadge, errorMessage, label,
   options, useGet, useSend,
@@ -125,9 +126,12 @@ export default function ProfilePage() {
       {tab === 'xac-minh' && <OpPanel title="Xác minh danh tính"><KycVerification /></OpPanel>}
       {tab === 'tai-khoan' && <OpPanel title="Tài khoản nhận tiền"><PayoutAccountForm owner="Investor" /></OpPanel>}
       {tab === 'ho-so' && (
-        <OpPanel title="Hồ sơ đối tác">
-          <QueryView query={party}>{(p) => <PartyForm key={`${p.partyId}-${p.legalName}-${p.verificationStatus}`} party={p} />}</QueryView>
-        </OpPanel>
+        <>
+          <OpPanel title="Hồ sơ đối tác">
+            <QueryView query={party}>{(p) => <PartyForm key={`${p.partyId}-${p.legalName}-${p.verificationStatus}`} party={p} />}</QueryView>
+          </OpPanel>
+          {party.data && <PartyDocuments party={party.data} />}
+        </>
       )}
     </>
   )

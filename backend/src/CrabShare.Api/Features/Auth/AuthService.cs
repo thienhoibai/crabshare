@@ -1,3 +1,4 @@
+using CrabShare.Api.Common;
 using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Errors;
 using CrabShare.Api.Infrastructure.Persistence;
@@ -24,12 +25,21 @@ public sealed class AuthService(AppDbContext db, TokenService tokens, TimeProvid
         if (await db.AppUsers.AnyAsync(u => u.Email == email, ct))
             throw new ConflictException("auth.email_taken", "Email này đã được đăng ký.");
 
+        // Mỗi số điện thoại chỉ gắn với một tài khoản; "0767…" và "+84767…" là cùng một số.
+        var phone = string.IsNullOrWhiteSpace(req.Phone) ? null : req.Phone.Trim();
+        if (phone is not null)
+        {
+            var variants = PhoneNumbers.Variants(phone);
+            if (await db.AppUsers.AnyAsync(u => u.Phone != null && variants.Contains(u.Phone), ct))
+                throw new ConflictException("auth.phone_taken", "Số điện thoại này đã được dùng cho một tài khoản khác.");
+        }
+
         var now = clock.GetUtcNow();
         var user = new AppUser
         {
             Email = email,
             FullName = req.FullName.Trim(),
-            Phone = string.IsNullOrWhiteSpace(req.Phone) ? null : req.Phone.Trim(),
+            Phone = phone,
             Status = "Active",
             CreatedAt = now,
             UpdatedAt = now,

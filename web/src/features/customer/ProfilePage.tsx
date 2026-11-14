@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { MapPin, Pencil } from 'lucide-react'
 import type { PartyResponse, UpdatePartyRequest } from '../../shared/api/api.gen'
 import { useAuthStore } from '../../shared/auth/authStore'
+import { PartyDocuments } from '../../shared/party/PartyDocuments'
 import {
   Field, Input, OpAside, OpBadge, OpBtn, OpConfirm, OpHeading, OpKv, OpMore, OpNote, OpPanel, OpTable, QueryView, Select, StatusBadge, formatDate, label, options,
   tone, useGet, useSend,
@@ -93,6 +94,7 @@ export default function ProfilePage() {
                   />
                 </OpMore>
               </OpPanel>
+              <PartyDocuments party={p} />
             </div>
 
             <OpAside>

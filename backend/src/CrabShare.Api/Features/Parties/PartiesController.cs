@@ -9,11 +9,36 @@ namespace CrabShare.Api.Features.Parties;
 [ApiController]
 [Authorize]
 [Route("api/me")]
-public sealed class MyPartyController(PartyService parties) : ControllerBase
+public sealed class MyPartyController(PartyService parties, PartyDocumentService documents) : ControllerBase
 {
+    private const long DocumentLimit = 12 * 1024 * 1024;
+
     [HttpGet("party")]
     [EndpointSummary("Hồ sơ đối tác của tôi, các vai trò và địa điểm")]
     public async Task<ActionResult<PartyResponse>> Get(CancellationToken ct) => Ok(await parties.GetMineAsync(ct));
+
+    [HttpGet("party/documents")]
+    [EndpointSummary("Giấy tờ pháp lý tôi đã gửi để Admin xác minh (đối tác tổ chức)")]
+    public async Task<ActionResult<IReadOnlyList<PartyDocumentResponse>>> Documents(CancellationToken ct) => Ok(await documents.ListMineAsync(ct));
+
+    [HttpPost("party/documents"), Consumes("multipart/form-data"), RequestSizeLimit(DocumentLimit)]
+    [EndpointSummary("Gửi ảnh giấy tờ pháp lý; đối tác chưa xác minh chuyển sang chờ Admin xem (BR-009)")]
+    public async Task<ActionResult<PartyDocumentResponse>> UploadDocument([FromForm] UploadPartyDocumentRequest req, CancellationToken ct)
+        => StatusCode(StatusCodes.Status201Created, await documents.UploadMineAsync(req, ct));
+
+    [HttpGet("party/documents/{documentId:long}/file")]
+    public async Task<IActionResult> DocumentFile(long documentId, CancellationToken ct)
+    {
+        var (content, type) = await documents.MyFileAsync(documentId, ct);
+        return File(content, type);
+    }
+
+    [HttpDelete("party/documents/{documentId:long}")]
+    public async Task<IActionResult> RemoveDocument(long documentId, CancellationToken ct)
+    {
+        await documents.RemoveMineAsync(documentId, ct);
+        return NoContent();
+    }
 
     [HttpPut("party")]
     [EndpointSummary("Sửa hồ sơ đối tác; đổi tên pháp lý thì phải xác minh lại")]
@@ -79,7 +104,7 @@ public sealed class PartiesController(PartyService parties) : ControllerBase
 [ApiController]
 [Authorize(Policy = Policies.Admin)]
 [Route("api/admin/parties")]
-public sealed class AdminPartiesController(PartyService parties) : ControllerBase
+public sealed class AdminPartiesController(PartyService parties, PartyDocumentService documents) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<PagedResult<PartySummaryResponse>>> List([FromQuery] PartyListQuery filter, [FromQuery] PageQuery paging, CancellationToken ct)
@@ -87,6 +112,17 @@ public sealed class AdminPartiesController(PartyService parties) : ControllerBas
 
     [HttpGet("{partyId:long}")]
     public async Task<ActionResult<PartyResponse>> Get(long partyId, CancellationToken ct) => Ok(await parties.GetAsync(partyId, ct));
+
+    [HttpGet("{partyId:long}/dossier")]
+    [EndpointSummary("Căn cứ để xác minh: tài khoản đứng tên, kết quả eKYC và giấy tờ pháp lý đã gửi (BR-009)")]
+    public async Task<ActionResult<PartyDossierResponse>> Dossier(long partyId, CancellationToken ct) => Ok(await documents.DossierAsync(partyId, ct));
+
+    [HttpGet("{partyId:long}/documents/{documentId:long}/file")]
+    public async Task<IActionResult> DocumentFile(long partyId, long documentId, CancellationToken ct)
+    {
+        var (content, type) = await documents.AdminFileAsync(partyId, documentId, ct);
+        return File(content, type);
+    }
 
     [HttpPost]
     [EndpointSummary("Admin ghi nhận nhà cung cấp hoặc bên cam kết thu mua (đã xác minh)")]

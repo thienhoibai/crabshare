@@ -109,6 +109,7 @@ public static class FeatureRegistry
         services.AddScoped<ParameterAdminService>();
         services.AddScoped<PartyDirectory>();          // G0 đối tác, vai trò, người tham gia Lô
         services.AddScoped<PartyService>();
+        services.AddScoped<PartyDocumentService>();
         services.AddScoped<IBatchLifecycleHooks, PreorderLedger>();     // G2 sổ đặt trước: tỷ lệ đặt trước, Lô mở, Lô huỷ
         services.AddScoped<CrabShare.Api.Features.Sales.PreorderService>(); // G2 đặt trước theo quy cách (BR-084…097, BR-234)
         services.AddScoped<IPaymentPurposeHandler, PreorderDepositHandler>();

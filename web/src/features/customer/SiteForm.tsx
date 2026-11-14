@@ -1,6 +1,7 @@
 /* Form thêm hoặc sửa một địa điểm nhận hàng (POST, PUT /api/me/sites, loại DeliveryAddress).
-   Dùng ở trang Địa điểm nhận hàng và ngay trong trang đặt trước. Toạ độ bắt buộc vì đơn đặt trước tính khoảng cách
-   từ điểm xuất hàng của Lô tới địa chỉ giao (BR-084, BR-085). */
+   Dùng ở trang Địa điểm nhận hàng và ngay trong trang đặt trước. Toạ độ không bắt buộc khi lưu địa điểm; nó chỉ cần
+   lúc đặt trước, vì đơn tính khoảng cách từ điểm xuất hàng của Lô tới địa chỉ giao (BR-084, BR-085). Form mở từ
+   trang đặt trước truyền needLocation để vẫn đòi toạ độ, vì địa điểm đó dùng cho đơn ngay. */
 import { useState, type FormEvent } from 'react'
 import { LocateFixed } from 'lucide-react'
 import type { PartySiteResponse, SiteRequest } from '../../shared/api/api.gen'
@@ -17,7 +18,13 @@ export function parseCoords(text: string): { latitude: number; longitude: number
   return Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 ? { latitude, longitude } : null
 }
 
-export function SiteForm({ site, onDone, onCancel }: { site?: PartySiteResponse; onDone: (site: PartySiteResponse) => void; onCancel: () => void }) {
+export function SiteForm({ site, onDone, onCancel, needLocation = false }: {
+  site?: PartySiteResponse
+  onDone: (site: PartySiteResponse) => void
+  onCancel: () => void
+  /** true khi địa điểm sẽ dùng ngay cho một đơn đặt trước: lúc đó phải có toạ độ. */
+  needLocation?: boolean
+}) {
   const [name, setName] = useState(site?.name ?? '')
   const [addressLine, setAddressLine] = useState(site?.addressLine ?? '')
   const [province, setProvince] = useState(site?.province ?? '')
@@ -54,17 +61,19 @@ export function SiteForm({ site, onDone, onCancel }: { site?: PartySiteResponse;
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     event.stopPropagation()
-    const point = parseCoords(coords)
+    const typed = coords.trim()
+    const point = typed ? parseCoords(typed) : null
     if (!name.trim() || !addressLine.trim()) return setMessage('Nhập tên địa điểm và địa chỉ.')
-    if (!point) return setMessage('Toạ độ chưa đúng. Ví dụ: 10.7769, 106.7009.')
+    if (typed && !point) return setMessage('Toạ độ chưa đúng. Ví dụ: 10.7769, 106.7009.')
+    if (!point && needLocation) return setMessage('Cần toạ độ để tính khoảng cách giao của đơn. Bấm "Dùng vị trí hiện tại" hoặc dán toạ độ từ bản đồ.')
     setMessage('')
     save.mutate({
       siteType: 'DeliveryAddress',
       name: name.trim(),
       addressLine: addressLine.trim(),
       province: province.trim() || null,
-      latitude: point.latitude,
-      longitude: point.longitude,
+      latitude: point?.latitude ?? null,
+      longitude: point?.longitude ?? null,
       contactName: contactName.trim() || null,
       contactPhone: contactPhone.trim() || null,
       isDefault,
@@ -84,7 +93,8 @@ export function SiteForm({ site, onDone, onCancel }: { site?: PartySiteResponse;
       <Field label="Địa chỉ" required>
         <Input value={addressLine} maxLength={300} autoComplete="street-address" onChange={(e) => setAddressLine(e.target.value)} />
       </Field>
-      <Field label="Toạ độ" required hint="Chép từ bản đồ: vĩ độ, kinh độ">
+      <Field label="Toạ độ" required={needLocation}
+        hint={needLocation ? 'Chép từ bản đồ: vĩ độ, kinh độ' : 'Chưa bắt buộc. Khi đặt trước mới cần, để tính khoảng cách giao.'}>
         <Input value={coords} inputMode="decimal" placeholder="10.7769, 106.7009" onChange={(e) => setCoords(e.target.value)} />
       </Field>
       <div>

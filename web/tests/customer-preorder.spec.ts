@@ -47,7 +47,9 @@ test('đặt theo số con và theo kg, chọn nơi nhận, gửi đơn, quét Q
   // Nơi nhận: mặc định là địa chỉ mặc định; địa chỉ thiếu toạ độ không chọn được.
   await expect(page.getByRole('radio', { name: /Nhà hàng Biển Xanh/ })).toBeChecked()
   await expect(page.getByRole('radio', { name: /Kho Thủ Đức/ })).toBeDisabled()
-  await expect(page.getByText('Thiếu toạ độ')).toBeVisible()
+  await expect(page.getByText('Thiếu toạ độ', { exact: true })).toBeVisible()
+  // Có lời chỉ cách sửa: địa điểm thiếu toạ độ thì sang trang Địa điểm nhận hàng để bổ sung.
+  await expect(page.getByRole('link', { name: 'Bổ sung toạ độ' })).toHaveAttribute('href', '/khach/dia-diem')
   // Mỗi địa chỉ là một thẻ bấm: ô radio nằm ẩn dưới nhãn, người dùng bấm vào thẻ.
   await page.getByText('Bếp trung tâm Quận 7', { exact: true }).click()
   await expect(page.getByRole('radio', { name: /Bếp trung tâm Quận 7/ })).toBeChecked()

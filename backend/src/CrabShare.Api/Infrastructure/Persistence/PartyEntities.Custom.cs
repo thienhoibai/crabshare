@@ -57,6 +57,23 @@ public sealed class Party
     public List<PartySite> Sites { get; set; } = [];
 }
 
+/// <summary>V027 — Giấy tờ pháp lý của đối tác tổ chức để Admin xác minh (BR-009, BR-016). Không dùng cho eKYC cá nhân (BR-010).</summary>
+[Table("party_document")]
+public sealed class PartyDocument
+{
+    [Key, Column("document_id")] public long DocumentId { get; set; }
+    [Column("party_id")] public long PartyId { get; set; }
+    /// <summary>BusinessRegistration, License, Authorization, Other.</summary>
+    [Column("doc_type"), MaxLength(30), Unicode(false)] public string DocType { get; set; } = "BusinessRegistration";
+    [Column("file_uri"), MaxLength(500)] public string FileUri { get; set; } = "";
+    [Column("content_type"), MaxLength(50), Unicode(false)] public string ContentType { get; set; } = "";
+    [Column("sha256"), MaxLength(64), Unicode(false)] public string Sha256 { get; set; } = "";
+    [Column("note"), MaxLength(200)] public string? Note { get; set; }
+    [Column("uploaded_by")] public long UploadedBy { get; set; }
+    [Column("uploaded_at"), Precision(3)] public DateTimeOffset UploadedAt { get; set; }
+    [Column("removed_at"), Precision(3)] public DateTimeOffset? RemovedAt { get; set; }
+}
+
 [Table("partner_role")]
 public sealed class PartnerRole
 {

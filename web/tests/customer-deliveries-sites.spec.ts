@@ -97,6 +97,27 @@ test.describe('/khach/dia-diem', () => {
     await expect(dialog).toHaveCount(0)
   })
 
+  test('thêm địa điểm không cần toạ độ: để trống vẫn lưu, gửi vĩ độ và kinh độ rỗng', async ({ page, api }) => {
+    await open(page, api, '/khach/dia-diem')
+    const created: PartySiteResponse = { ...sites[1], siteId: 15, siteCode: 'DA-15', name: 'Kho Bình Thạnh', addressLine: '8 Điện Biên Phủ, Bình Thạnh', latitude: null, longitude: null }
+    api.post('/api/me/sites', () => reply(201, created))
+
+    await page.getByRole('button', { name: 'Thêm địa điểm' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Thêm địa điểm nhận hàng' })
+    await expect(dialog).toContainText('Chưa bắt buộc. Khi đặt trước mới cần, để tính khoảng cách giao.')
+    await dialog.getByLabel('Tên địa điểm').fill('Kho Bình Thạnh')
+    await dialog.getByLabel('Địa chỉ').fill('8 Điện Biên Phủ, Bình Thạnh')
+    await dialog.getByRole('button', { name: 'Thêm địa điểm' }).click()
+
+    const body: SiteRequest = {
+      siteType: 'DeliveryAddress', name: 'Kho Bình Thạnh', addressLine: '8 Điện Biên Phủ, Bình Thạnh', province: null,
+      latitude: null, longitude: null, contactName: null, contactPhone: null, isDefault: false,
+    }
+    await expect(page.getByRole('status').filter({ hasText: 'Đã thêm địa điểm nhận hàng.' })).toBeVisible()
+    expect(api.sent('POST', '/api/me/sites').map((c) => c.body)).toEqual([body])
+    await expect(dialog).toHaveCount(0)
+  })
+
   test('sửa địa điểm gửi PUT theo mã địa điểm', async ({ page, api }) => {
     await open(page, api, '/khach/dia-diem')
     api.put('/api/me/sites/12', { ...sites[1], name: 'Bếp trung tâm Quận 7 (cổng sau)' })

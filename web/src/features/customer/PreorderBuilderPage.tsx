@@ -186,6 +186,9 @@ export default function PreorderBuilderPage() {
                 options={sites.data.map((s) => ({ value: String(s.siteId), label: s.name, hint: located(s) ? s.addressLine : 'Thiếu toạ độ', disabled: !located(s) }))}
               />
             )}
+            {sites.data?.some((s) => !located(s)) && (
+              <small className="rd-muted">Địa điểm thiếu toạ độ chưa chọn được vì chưa tính được khoảng cách giao. <a href="/khach/dia-diem">Bổ sung toạ độ</a></small>
+            )}
             {!split && lines.length > 0 && (
               <div><OpBtn variant="ghost" sm onClick={() => setSplit(startSplit(splitLines, firstDate))}>Chia nhiều đợt giao</OpBtn></div>
             )}
@@ -214,7 +217,7 @@ export default function PreorderBuilderPage() {
 
       {addingSite && (
         <OpModal title="Thêm địa điểm nhận hàng" onClose={() => setAddingSite(false)} wide>
-          <SiteForm onCancel={() => setAddingSite(false)} onDone={(site) => { setSiteId(site.siteId); setAddingSite(false) }} />
+          <SiteForm needLocation onCancel={() => setAddingSite(false)} onDone={(site) => { setSiteId(site.siteId); setAddingSite(false) }} />
         </OpModal>
       )}
     </>

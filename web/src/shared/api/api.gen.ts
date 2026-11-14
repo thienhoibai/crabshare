@@ -1523,8 +1523,34 @@ export interface PartnerRoleResponse {
   note: string | null
 }
 
+export interface PartyAccountResponse {
+  userId: number
+  email: string
+  fullName: string
+  phone: string | null
+  status: string
+  roles: string[]
+  investorVerification: string | null
+  ekycResult: string | null
+  ekycCheckedAt: string | null
+  ekycFailureReason: string | null
+}
+
 export interface PartyDecisionRequest {
   reason?: string | null
+}
+
+export interface PartyDocumentResponse {
+  documentId: number
+  docType: string
+  contentType: string
+  note: string | null
+  uploadedAt: string
+}
+
+export interface PartyDossierResponse {
+  accounts: PartyAccountResponse[]
+  documents: PartyDocumentResponse[]
 }
 
 export interface PartyRefResponse {

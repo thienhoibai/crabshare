@@ -45,6 +45,27 @@ public sealed class PartyTests(Br15Fixture f) : IClassFixture<Br15Fixture>
         Assert.Equal("auth.legal_name_required", await Br15Fixture.ErrorCode(response));
     }
 
+    [Theory]
+    [InlineData("0")]
+    [InlineData("+84")]
+    public async Task A_phone_number_already_in_use_is_refused_in_plain_words(string prefixOfSecondAttempt)
+    {
+        using var anon = f.Factory.CreateClient();
+        var subscriber = $"76{Random.Shared.Next(1000000, 9999999)}";
+        object Body(string phone) => new { email = $"p-{Guid.NewGuid():N}@test.local", password = "Test-password-123", fullName = "Người Dùng Số", phone };
+
+        Assert.Equal(HttpStatusCode.OK, (await anon.PostAsJsonAsync("/api/auth/register", Body("+84" + subscriber))).StatusCode);
+
+        // Cùng số đó, gõ lại y hệt hoặc gõ theo kiểu trong nước, đều là trùng
+        var second = await anon.PostAsJsonAsync("/api/auth/register", Body(prefixOfSecondAttempt + subscriber));
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+        var problem = await second.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("auth.phone_taken", problem.GetProperty("code").GetString());
+        var detail = problem.GetProperty("detail").GetString()!;
+        Assert.Equal("Số điện thoại này đã được dùng cho một tài khoản khác.", detail);
+        Assert.DoesNotContain(subscriber, detail);
+    }
+
     [Fact]
     public async Task Supplier_recorded_by_farmer_waits_for_admin_then_appears_in_directory()
     {

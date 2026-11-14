@@ -113,7 +113,7 @@ export default function RegisterPage() {
                 <Field label="Mã số thuế">
                   <Input value={registrationNo} onChange={(e) => setRegistrationNo(e.target.value)} inputMode="numeric" />
                 </Field>
-                <Field label="Tên pháp lý" className="is-wide">
+                <Field label="Tên pháp lý" className="is-wide" hint="Sau khi đăng ký, gửi ảnh giấy tờ ở trang Hồ sơ để được xác minh.">
                   <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} />
                 </Field>
               </div>

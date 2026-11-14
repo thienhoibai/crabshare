@@ -11,6 +11,7 @@ public partial class AppDbContext
     public DbSet<RelatedParty> RelatedParties => Set<RelatedParty>();
     public DbSet<BatchParticipant> BatchParticipants => Set<BatchParticipant>();
     public DbSet<PlatformParameter> PlatformParameters => Set<PlatformParameter>();
+    public DbSet<PartyDocument> PartyDocuments => Set<PartyDocument>();
 
     private static void ConfigureParties(ModelBuilder model)
     {
@@ -21,6 +22,7 @@ public partial class AppDbContext
         model.Entity<PartySite>().ToTable("party_site");
         model.Entity<RelatedParty>().ToTable("related_party");
         model.Entity<BatchParticipant>().ToTable("batch_participant");
+        model.Entity<PartyDocument>().ToTable("party_document");
         // Bảng có trigger chặn sửa/xoá: EF không được dùng OUTPUT khi chèn.
         model.Entity<PlatformParameter>().ToTable("platform_parameter", t => t.UseSqlOutputClause(false));
     }

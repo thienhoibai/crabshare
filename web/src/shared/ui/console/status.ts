@@ -243,6 +243,13 @@ const MAPS = {
     Failed: ['Không đạt', 'danger'],
     ExceptionApproved: ['Duyệt ngoại lệ', 'info'],
   },
+  /** Giấy tờ pháp lý của đối tác tổ chức. */
+  partyDocument: {
+    BusinessRegistration: ['Giấy chứng nhận đăng ký', 'info'],
+    License: ['Giấy phép kinh doanh', 'info'],
+    Authorization: ['Giấy uỷ quyền', 'info'],
+    Other: ['Giấy tờ khác', 'mute'],
+  },
   /** Mua nguồn và nhận hàng. */
   procurement: {
     Ordered: ['Đã đặt mua', 'info'],

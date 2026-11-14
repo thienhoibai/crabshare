@@ -58,6 +58,8 @@ Kiểu dữ liệu ở `api.gen.ts`. `[form]` là multipart/form-data.
 
 | Method | Path | Query | Body | Trả về | Ghi chú |
 |---|---|---|---|---|---|
+| GET | `/api/admin/parties/{partyId}/documents/{documentId}/file` |  |  |  |  |
+| GET | `/api/admin/parties/{partyId}/dossier` |  |  | PartyDossierResponse | Căn cứ để xác minh: tài khoản đứng tên, kết quả eKYC và giấy tờ pháp lý đã gửi (BR-009) |
 | GET | `/api/admin/parties/{partyId}` |  |  | PartyResponse |  |
 | GET | `/api/admin/parties` | Search, RoleType, VerificationStatus, Page, PageSize |  | PagedResultOfPartySummaryResponse |  |
 | POST | `/api/admin/parties/{partyId}/reject` |  | PartyDecisionRequest | PartyResponse |  |
@@ -207,13 +209,13 @@ Kiểu dữ liệu ở `api.gen.ts`. `[form]` là multipart/form-data.
 
 | Method | Path | Query | Body | Trả về | Ghi chú |
 |---|---|---|---|---|---|
-| POST | `/api/dev/payments/simulate` |  | SimulatePaymentRequest | WebhookResult | Chỉ Development — giả lập ngân hàng báo có cho một mã đối chiếu (để trống amount thì chuyển đúng số tiền yêu cầu) |
+| POST | `/api/dev/payments/simulate` |  | SimulatePaymentRequest | WebhookResult | Công cụ demo — giả lập ngân hàng báo có cho một mã đối chiếu (để trống amount thì chuyển đúng số tiền yêu cầu) |
 
 ## DevSettlements
 
 | Method | Path | Query | Body | Trả về | Ghi chú |
 |---|---|---|---|---|---|
-| POST | `/api/dev/settlements/{id}/end-feedback-window` |  |  | SettlementResponse | Chỉ Development — kết thúc hạn góp ý ngay (dời mốc công bố về quá khứ, giữ cửa sổ ≥ 7 ngày) để duyệt được |
+| POST | `/api/dev/settlements/{id}/end-feedback-window` |  |  | SettlementResponse | Công cụ demo — kết thúc hạn góp ý ngay (dời mốc công bố về quá khứ, giữ cửa sổ ≥ 7 ngày) để duyệt được |
 
 ## DeviceManagement
 
@@ -372,11 +374,15 @@ Kiểu dữ liệu ở `api.gen.ts`. `[form]` là multipart/form-data.
 
 | Method | Path | Query | Body | Trả về | Ghi chú |
 |---|---|---|---|---|---|
+| DELETE | `/api/me/party/documents/{documentId}` |  |  |  |  |
 | DELETE | `/api/me/related-parties/{id}` |  |  |  |  |
 | DELETE | `/api/me/sites/{siteId}` |  |  |  |  |
+| GET | `/api/me/party/documents/{documentId}/file` |  |  |  |  |
+| GET | `/api/me/party/documents` |  |  | PartyDocumentResponse[] | Giấy tờ pháp lý tôi đã gửi để Admin xác minh (đối tác tổ chức) |
 | GET | `/api/me/party` |  |  | PartyResponse | Hồ sơ đối tác của tôi, các vai trò và địa điểm |
 | GET | `/api/me/related-parties` |  |  | RelatedPartyResponse[] | Bên liên quan của người nuôi (BR-008) |
 | GET | `/api/me/sites` | siteType |  | PartySiteResponse[] | Địa điểm của tôi: trại, trạm kiểm phẩm, kho, địa chỉ giao |
+| POST | `/api/me/party/documents` |  | { DocType?: string Note?: string File?: IFormFile } [form] | PartyDocumentResponse | Gửi ảnh giấy tờ pháp lý; đối tác chưa xác minh chuyển sang chờ Admin xem (BR-009) |
 | POST | `/api/me/related-parties` |  | RelatedPartyRequest | RelatedPartyResponse |  |
 | POST | `/api/me/sites` |  | SiteRequest | PartySiteResponse |  |
 | PUT | `/api/me/party` |  | UpdatePartyRequest | PartyResponse | Sửa hồ sơ đối tác; đổi tên pháp lý thì phải xác minh lại |
