@@ -1,167 +1,198 @@
-import { test, expect, type Page } from '@playwright/test'
-async function fillSchedule(page: Page) {
-  await expect(page.getByRole('button', { name: 'Lưu nháp', exact: true })).toBeEnabled()
-  await page.getByLabel('Mốc tính lịch đợt 1').selectOption('FundingReady')
-  await page.getByLabel('Số ngày sau mốc đợt 1').fill('0')
-  await page.getByLabel('Điều kiện đợt 1').fill('Đủ vốn và hợp đồng hai bên đầy đủ chữ ký')
-  await expect(page.getByLabel('Mốc tính lịch đợt 1')).toHaveValue('FundingReady')
-  await expect(page.getByLabel('Số ngày sau mốc đợt 1')).toHaveValue('0')
-  await expect(page.getByLabel('Điều kiện đợt 1')).toHaveValue('Đủ vốn và hợp đồng hai bên đầy đủ chữ ký')
-}
+/* Soạn một Lô P (/operator/batches/new và /operator/batches/:code/edit) qua bốn bước: Lô → Giá và vốn → Chi phí → Gửi duyệt.
+   Danh sách Lô nằm ở operator-lists.spec.ts, trang làm việc của Lô ở operator-workspace.spec.ts. */
+import type { BatchRequest, BatchResponse, CostPlanRequest, OperatorResponse } from '../src/shared/api/api.gen'
+import { dateFromNow, expect, reply, signIn, test, vnd } from './support/app'
+import { CODE, batchDraft, batchOf, batchRaising, fact, farm, mockOperator, more, noDevReload, panel } from './support/operator'
 
-/** CS-72 / TL-30: gửi duyệt bắt buộc ≥ 1 giá bao tiêu theo hạng. */
-async function fillOfftakePrice(page: Page, unitPrice = '260000') {
-  await page.getByLabel('Cua Nhất (L1)').fill(unitPrice)
-  await expect(page.getByLabel('Cua Nhất (L1)')).toHaveValue(unitPrice)
-}
+const NEW_URL = '/operator/batches/new'
+const DRAFT = batchDraft.batchCode
+const EDIT_URL = `/operator/batches/${DRAFT}/edit`
+const SPEC_L = 'Cua gạch · Size L · Cấp 1'
 
-const profile = { operatorId: 1, legalName: 'HTX VI04', taxCode: '1234567890', businessRegNo: 'VI04', farmAddress: 'Cà Mau', status: 'Approved', memberRole: 'Owner', canEdit: false, canSubmit: false, submittedAt: null }
-const batch = { batchCode: 'B-TEST', operatorId: 1, title: 'Lô thử', crabType: 'SoftShellCrab', seedQuantity: 1500, expectedOutputKg: 300, cycleDays: 45, restockCutoffDays: 10, minViableCapital: 60000000, targetCapital: 75000000, maxCapital: 90000000, minContribution: 1000000, operatorSharePct: 7, status: 'Draft', standardCost: null, canEdit: true, canSubmit: true }
-async function setup(page: Page) {
-  await page.addInitScript(() => localStorage.setItem('crabshare-auth', JSON.stringify({ state: { token: 'test-token', expiresAt: '2099-01-01T00:00:00Z', user: { userId: 1, email: 'vi04@test.local', fullName: 'VI04', phone: null, status: 'Active', roles: ['OperatorMember'], operatorId: 1 } }, version: 0 })))
-  await page.route('**/api/operators/me', route => route.fulfill({ json: profile }))
-  await page.route('**/api/operators/me/batches*', route => route.fulfill({ json: { items: [{ ...batch, status: 'PendingApproval', canEdit: false, canSubmit: false }], page: 1, pageSize: 20, total: 1 } }))
-  await page.route('**/api/operators/me/batches/B-TEST', route => route.fulfill({ json: batch }))
-}
+test.beforeEach(async ({ page, api }) => {
+  mockOperator(api)
+  await noDevReload(page)
+  await signIn(page, 'OperatorMember')
+})
 
-test('dual-role member reloads the editable operator contract from its own route', async ({ page }) => {
-  await setup(page)
-  await page.addInitScript(() => {
-    const saved = JSON.parse(localStorage.getItem('crabshare-auth')!)
-    saved.state.user.roles.push('Investor')
-    localStorage.setItem('crabshare-auth', JSON.stringify(saved))
+test('tạo Lô P nháp qua hai bước ngắn rồi sang bước chi phí', async ({ page, api }) => {
+  const created = batchOf({ ...batchDraft, batchCode: 'P-2612-02', title: 'Cua gạch Năm Căn vụ Tết đợt 2', costPlan: null, canSubmit: false })
+  api.post('/api/batches', () => reply(201, created))
+  api.get(`/api/operators/me/batches/${created.batchCode}`, created)
+  await page.goto(NEW_URL)
+  await expect(page.getByRole('heading', { name: 'Tạo Lô P', level: 1 })).toBeVisible()
+  const steps = page.getByRole('navigation', { name: 'Các bước soạn Lô' })
+  // Chưa lưu Lô thì chưa vào được bước chi phí và gửi duyệt.
+  await expect(steps.getByRole('button', { name: '3. Chi phí' })).toBeDisabled()
+  await expect(steps.getByRole('button', { name: '4. Gửi duyệt' })).toBeDisabled()
+
+  // Bước 1: mỗi lần chỉ nhắc một điều còn thiếu.
+  const next = page.getByRole('button', { name: 'Tiếp tục' })
+  await expect(page.getByText('Nhập tên Lô')).toBeVisible()
+  await expect(next).toBeDisabled()
+  await page.getByLabel('Tên Lô').fill(created.title)
+  await page.getByLabel('Loại cua').selectOption({ label: 'Cua gạch' })
+  await page.getByLabel('Số con').fill('600')
+  await expect(page.getByText('Khối lượng trung bình từ 50 g')).toBeVisible()
+  await page.getByLabel('Khối lượng trung bình').fill('420')
+  await expect(page.getByText('Ngày nhận cua phải sau hôm nay')).toBeVisible()
+  await page.getByLabel('Ngày nhận cua dự kiến').fill(dateFromNow(30))
+  await expect(page.getByLabel('Số ngày nuôi')).toHaveValue('30')
+  await next.click()
+
+  // Bước 2: chọn quy cách, giá sàn, bên thu mua, vốn tối thiểu và thù lao.
+  await expect(steps.getByRole('button', { name: '2. Giá và vốn' })).toHaveAttribute('aria-current', 'step')
+  const save = page.getByRole('button', { name: 'Tạo Lô nháp' })
+  await expect(page.getByText('Chọn ít nhất một quy cách và điền đủ ba ô')).toBeVisible()
+  await page.getByLabel(SPEC_L).check()
+  // Khối lượng quy đổi mỗi con lấy sẵn từ khối lượng trung bình của Lô.
+  await expect(page.getByLabel(`Khối lượng quy đổi mỗi con của ${SPEC_L}`)).toHaveValue('420')
+  await page.getByLabel(`Giá mỗi kg của ${SPEC_L}`).fill('520000')
+  await page.getByLabel(`Số con chào bán của ${SPEC_L}`).fill('360')
+  await expect(page.getByText('Tổng số con chào bán').locator('..')).toContainText('360 con')
+  await page.getByLabel('Giá sàn mỗi kg').fill('600000')
+  await expect(page.getByText(`Giá sàn không cao hơn ${vnd(520_000)}`)).toBeVisible()
+  await expect(save).toBeDisabled()
+  await page.getByLabel('Giá sàn mỗi kg').fill('380000')
+  await page.getByLabel('Bên cam kết thu mua').selectOption({ label: 'Công ty Hải sản Đất Mũi' })
+  await page.getByLabel('Vốn tối thiểu khả thi').fill('150000000')
+  await page.getByLabel('Căn cứ của vốn tối thiểu').fill('  Đủ nuôi 500 con  ')
+  await expect(page.getByText('Nhập ngưỡng tỷ lệ sống và thù lao')).toBeVisible()
+  await page.getByLabel('Thù lao khi đạt ngưỡng').fill('12')
+  // Bậc thù lao mặc định: dưới ngưỡng nhận một nửa.
+  await expect(more(page, 'Bậc thù lao: dưới ngưỡng 6%, đạt ngưỡng 12%')).toBeVisible()
+  // Quy cách chỉ được hỏi cho loại cua đã chọn.
+  expect(api.sent('GET', '/api/specs').map((c) => c.query)).toEqual([{ crabType: 'RoeCrab' }])
+  await save.click()
+
+  await expect(page.getByRole('status').filter({ hasText: 'Đã tạo Lô nháp.' })).toBeVisible()
+  const body: BatchRequest = {
+    title: created.title, crabType: 'RoeCrab', plannedQuantity: 600, hasHolding: true, holdingDays: 30, restockCutoffDays: 15, expectedAvgWeightG: 420, expectedGrade: null,
+    saleDays: 14, deliveryRadiusKm: 50, dispatchSiteId: null, expectedReceiptDate: dateFromNow(30), minViableCapital: 150_000_000, minViableBasis: 'Đủ nuôi 500 con',
+    survivalThresholdPct: 85, baseRemunerationPct: 12, remunerationTiers: [], floorPricePerKg: 380_000, offtakeBuyerPartyId: 33, settlementBasis: 'StandardCost',
+    offers: [{ specCode: 'RC-L-G1', pricePerKg: 520_000, conversionWeightG: 420, offeredQuantity: 360 }],
+  }
+  expect(api.sent('POST', '/api/batches').map((c) => c.body)).toEqual([body])
+
+  // Lưu xong chuyển sang bước chi phí của Lô vừa tạo, có sẵn ba khoản gợi ý.
+  await expect(page).toHaveURL(new RegExp(`/operator/batches/${created.batchCode}/edit\\?buoc=chi-phi$`))
+  await expect(page.getByRole('heading', { name: created.title, level: 1 })).toBeVisible()
+  await expect(panel(page, 'Các khoản chi').getByLabel('Mô tả')).toHaveCount(3)
+  await expect(page.getByText('Mỗi khoản cần mô tả, số lượng, đơn vị và đơn giá')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Lưu chi phí' })).toBeDisabled()
+})
+
+test('Lô không lưu nuôi thì không gửi số ngày nuôi và hạn thả bù', async ({ page, api }) => {
+  api.put(`/api/batches/${DRAFT}`, (call) => ({ ...batchDraft, ...(call.body as BatchRequest), hasHolding: false, holdingDays: null }) as BatchResponse)
+  await page.goto(EDIT_URL)
+  await expect(page.getByLabel('Tên Lô')).toHaveValue(batchDraft.title)
+  await page.getByText('Không lưu nuôi', { exact: true }).click()
+  await expect(page.getByLabel('Số ngày nuôi')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Tiếp tục' }).click()
+  await expect(page).toHaveURL(/\?buoc=gia$/)
+  // Điều khoản đã lưu được điền lại đủ nên lưu được ngay.
+  await expect(page.getByLabel(`Giá mỗi kg của ${SPEC_L}`)).toHaveValue('520.000')
+  await page.getByRole('button', { name: 'Lưu Lô' }).click()
+
+  await expect(page.getByRole('status').filter({ hasText: 'Đã lưu Lô.' })).toBeVisible()
+  const sent = api.sent('PUT', `/api/batches/${DRAFT}`)
+  expect(sent).toHaveLength(1)
+  expect(sent[0].body).toMatchObject({
+    title: batchDraft.title, hasHolding: false, holdingDays: null, restockCutoffDays: null, dispatchSiteId: 3, offtakeBuyerPartyId: 33, floorPricePerKg: 380_000,
+    offers: [
+      { specCode: 'RC-L-G1', pricePerKg: 520_000, conversionWeightG: 420, offeredQuantity: 360 },
+      { specCode: 'RC-XL-SP', pricePerKg: 680_000, conversionWeightG: 520, offeredQuantity: 180 },
+    ],
+  } satisfies Partial<BatchRequest>)
+  await expect(page).toHaveURL(/\?buoc=chi-phi$/)
+})
+
+test('bước chi phí: hệ thống tự tính Chi phí chuẩn mỗi con và vốn mục tiêu, lưu đủ các khoản', async ({ page, api }) => {
+  api.put(`/api/batches/${DRAFT}/cost-plan`, batchDraft)
+  await page.goto(`${EDIT_URL}?buoc=chi-phi`)
+  await expect(fact(page, 'Tổng Chi phí chuẩn')).toHaveText(vnd(180_000_000))
+  await expect(fact(page, 'Mỗi con')).toHaveText(vnd(300_000))
+  await expect(fact(page, 'Vốn mục tiêu')).toHaveText(vnd(180_000_000))
+
+  // Tăng đơn giá thức ăn từ 30.000 lên 35.000 đồng mỗi kg: 1.200 kg thêm 6 triệu, mỗi con 310.000 đồng.
+  const items = panel(page, 'Các khoản chi')
+  await expect(items.getByLabel('Mô tả').nth(1)).toHaveValue('Thức ăn')
+  await items.getByLabel('Đơn giá').nth(1).fill('35000')
+  await expect(fact(page, 'Tổng Chi phí chuẩn')).toHaveText(vnd(186_000_000))
+  await expect(fact(page, 'Mỗi con')).toHaveText(vnd(310_000))
+  await page.getByRole('button', { name: 'Lưu chi phí' }).click()
+
+  await expect(page.getByRole('status').filter({ hasText: 'Đã lưu kế hoạch chi phí.' })).toBeVisible()
+  const body: CostPlanRequest = {
+    items: [
+      { category: 'Seed', description: 'Cua đầu vào', quantity: 600, unit: 'con', unitPrice: 220_000, basis: null, costBearer: 'Batch' },
+      { category: 'Feed', description: 'Thức ăn', quantity: 1_200, unit: 'kg', unitPrice: 35_000, basis: null, costBearer: 'Batch' },
+      { category: 'MortalityReserve', description: 'Dự phòng hao hụt', quantity: 1, unit: 'gói', unitPrice: 12_000_000, basis: null, costBearer: 'Batch' },
+    ],
+    milestones: null,
+  }
+  expect(api.sent('PUT', `/api/batches/${DRAFT}/cost-plan`).map((c) => c.body)).toEqual([body])
+
+  // Bỏ khoản dự phòng hao hụt thì không lưu được.
+  await items.getByRole('button', { name: 'Xoá khoản 3' }).click()
+  await expect(page.getByText('Cần khoản dự phòng hao hụt do Lô chịu')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Lưu chi phí' })).toBeDisabled()
+})
+
+test('gửi Lô nháp cho Admin duyệt sau khi đủ bốn điều kiện', async ({ page, api }) => {
+  let current: BatchResponse = batchDraft
+  api.get(`/api/operators/me/batches/${DRAFT}`, () => current)
+  api.post(`/api/batches/${DRAFT}/submit`, () => {
+    current = { ...batchDraft, status: 'PendingApproval', canEdit: false, canSubmit: false, canCancel: false }
+    return current
   })
-  await page.route('**/api/batches/B-TEST', route => route.fulfill({ status: 404, json: { detail: 'Không tìm thấy lô đã công bố.' } }))
-  await page.goto('/operator/create-batch?code=B-TEST')
-  await expect(page.getByLabel('Tên lô (tiêu đề gọi vốn)')).toHaveValue('Lô thử')
-  await expect(page.getByRole('button', { name: 'Lưu nháp', exact: true })).toBeEnabled()
+  await page.goto(`${EDIT_URL}?buoc=gui-duyet`)
+  await expect(panel(page, 'Kiểm tra trước khi gửi').getByRole('listitem')).toHaveText([
+    /Thông tin Lô.*600 con · nuôi 30 ngày/,
+    /Giá bán và bên thu mua.*2 quy cách · Công ty Hải sản Đất Mũi/,
+    new RegExp(`Chi phí và mốc giải ngân.*3 khoản · 3 mốc · ${vnd(180_000_000)}`),
+    new RegExp(`Vốn tối thiểu không quá vốn mục tiêu.*${vnd(150_000_000)} / ${vnd(180_000_000)}`),
+  ])
+  await page.getByRole('button', { name: 'Gửi Admin duyệt' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Gửi Lô cho Admin duyệt' })
+  await expect(dialog.getByText('Trong lúc chờ duyệt Lô không sửa được.')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Gửi duyệt' }).click()
+
+  await expect(page.getByRole('status').filter({ hasText: 'Đã gửi Lô cho Admin duyệt.' })).toBeVisible()
+  expect(api.sent('POST', `/api/batches/${DRAFT}/submit`).map((c) => c.body)).toEqual([null])
+  // Gửi xong về trang làm việc của Lô, Lô chuyển sang chờ duyệt.
+  await expect(page).toHaveURL(new RegExp(`/operator/batches/${DRAFT}$`))
+  await expect(page.getByRole('heading', { name: 'Chờ Admin duyệt' })).toBeVisible()
+  await expect(page.locator('.op-heading').getByText('Chờ duyệt')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Sửa Lô' })).toHaveCount(0)
 })
 
-test('cost save failure keeps form and code; retry updates same batch before submit', async ({ page }) => {
-  await setup(page)
-  let creates = 0; let costs = 0
-  const sequence: string[] = []
-  await page.route('**/api/batches', async route => { creates++; sequence.push('create'); await route.fulfill({ status: 201, json: batch }) })
-  await page.route('**/api/batches/B-TEST', async route => { sequence.push('update'); await route.fulfill({ json: batch }) })
-  await page.route('**/api/batches/B-TEST/standard-cost', async route => {
-    costs++; sequence.push('cost')
-    expect(route.request().postDataJSON().items.some((i: { category: string }) => i.category === 'MortalityReserve')).toBeTruthy()
-    if (costs === 1) await route.fulfill({ status: 422, json: { detail: 'Lỗi lưu chi phí thử nghiệm', code: 'batch.test' } })
-    else await route.fulfill({ json: batch })
-  })
-  await page.route('**/api/batches/B-TEST/submit', async route => { sequence.push('submit'); await route.fulfill({ json: { ...batch, status: 'PendingApproval', canEdit: false, canSubmit: false } }) })
-  await page.goto('/operator/create-batch')
-  await page.getByLabel('Tên lô (tiêu đề gọi vốn)').fill('Lô giữ khi lỗi')
-  await fillOfftakePrice(page)
-  await fillSchedule(page)
-  await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click()
-  await expect(page.getByRole('alert')).toContainText('Lỗi lưu chi phí thử nghiệm')
-  await expect(page.getByLabel('Tên lô (tiêu đề gọi vốn)')).toHaveValue('Lô giữ khi lỗi')
-  await expect(page).toHaveURL(/code=B-TEST/)
-  expect(sequence).toEqual(['create', 'cost'])
-  await fillOfftakePrice(page)
-  await fillSchedule(page)
-  await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click()
-  await expect(page).toHaveURL(/\/operator\/batch$/)
-  await expect(page.getByText('Chờ duyệt', { exact: true }).last()).toBeVisible()
-  expect(creates).toBe(1)
-  expect(sequence).toEqual(['create', 'cost', 'update', 'cost', 'submit'])
+test('chưa lưu chi phí thì chưa gửi duyệt được', async ({ page, api }) => {
+  api.get(`/api/operators/me/batches/${DRAFT}`, batchOf({ ...batchDraft, costPlan: null }))
+  await page.goto(`${EDIT_URL}?buoc=gui-duyet`)
+  await expect(panel(page, 'Kiểm tra trước khi gửi').getByRole('listitem').nth(2)).toHaveText(/Chi phí và mốc giải ngân.*Chưa lưu/)
+  await expect(page.getByRole('button', { name: 'Gửi Admin duyệt' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Huỷ Lô' })).toBeEnabled()
+  expect(api.writes()).toEqual([])
 })
 
-test('capital field validation prevents API calls and mortality reserve is required', async ({ page }) => {
-  await setup(page)
-  let requests = 0
-  await page.route('**/api/batches', async route => { requests++; await route.fulfill({ json: batch }) })
-  await page.goto('/operator/create-batch')
-  await page.getByLabel('Vốn tối thiểu khả thi (đồng)').fill('80000000')
-  await page.getByRole('button', { name: 'Lưu nháp', exact: true }).click()
-  await expect(page.getByRole('alert')).toContainText('tối thiểu khả thi ≤ mục tiêu ≤ tối đa')
-  expect(requests).toBe(0)
+test('Lô đã mở hoặc Lô do Admin soạn thì không sửa được và form không tải', async ({ page, api }) => {
+  await page.goto(`/operator/batches/${CODE}/edit`)
+  await expect(page.getByText('Lô đang thu hoạch nên không sửa được.')).toBeVisible()
+  await expect(page.getByRole('main').getByRole('link', { name: 'Về trang của Lô' }).last()).toHaveAttribute('href', `/operator/batches/${CODE}`)
+  await expect(page.getByLabel('Tên Lô')).toHaveCount(0)
+
+  await page.goto(`/operator/batches/${batchRaising.batchCode}/edit`)
+  await expect(page.getByText('Lô T do Admin soạn.')).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Các bước soạn Lô' })).toHaveCount(0)
+  expect(api.sent('GET', '/api/me/sites')).toEqual([])
+  expect(api.writes()).toEqual([])
 })
 
-test('cost and tranche display decimal midpoint amounts exactly', async ({ page }) => {
-  await setup(page)
-  await page.goto('/operator/create-batch')
-  await page.getByLabel('Số lượng 1', { exact: true }).fill('1.005')
-  await page.getByLabel('Đơn giá 1', { exact: true }).fill('100')
-  await expect(page.getByRole('heading', { name: 'Đợt 1 — 101 đ', exact: true })).toBeVisible()
-  await expect(page.getByText('Tổng chi phí: 5.000.101 đ', { exact: true })).toBeVisible()
-})
-
-test('list shows API errors, retry, empty state and server status filter', async ({ page }) => {
-  await setup(page)
-  let failed = true
-  await page.route('**/api/operators/me/batches*', route => failed
-    ? route.fulfill({ status: 403, json: { detail: 'Bạn không còn quyền truy cập.' } })
-    : route.fulfill({ json: { items: [], page: 1, pageSize: 20, total: 0 } }))
-  await page.goto('/operator/batch')
-  await expect(page.getByRole('alert')).toContainText('Bạn không còn quyền truy cập.')
-  failed = false
-  await page.getByRole('button', { name: 'Thử lại', exact: true }).click()
-  await expect(page.getByText('Không có lô nào ở trạng thái này.')).toBeVisible()
-  const request = page.waitForRequest(r => r.url().includes('/api/operators/me/batches') && r.url().includes('status=Draft'))
-  await page.getByRole('button', { name: 'Nháp', exact: true }).click()
-  await request
-})
-
-test('back after submission shows current status and disables editing cached draft', async ({ page }) => {
-  await setup(page)
-  let current = { ...batch }
-  await page.route('**/api/batches/B-TEST', route => route.fulfill({ json: current }))
-  await page.route('**/api/operators/me/batches/B-TEST', route => route.fulfill({ json: current }))
-  await page.route('**/api/batches/B-TEST/standard-cost', route => route.fulfill({ json: current }))
-  await page.route('**/api/batches/B-TEST/submit', async route => {
-    current = { ...batch, status: 'PendingApproval', canEdit: false, canSubmit: false }
-    await route.fulfill({ json: current })
-  })
-  await page.goto('/operator/create-batch?code=B-TEST')
-  await fillOfftakePrice(page)
-  await fillSchedule(page)
-  await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click()
-  await expect(page).toHaveURL(/\/operator\/batch$/)
-  await page.goBack()
-  await expect(page.getByText('Trạng thái: Chờ duyệt')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Lưu nháp', exact: true })).toBeDisabled()
-})
-
-test('real API creates, saves, reloads and submits from the browser', async ({ page, request }, testInfo) => {
-  test.skip(!process.env.VI04_API_URL, 'Set VI04_API_URL to an isolated API with demo seed enabled.')
-  const apiUrl = process.env.VI04_API_URL!
-  const login = await request.post(`${apiUrl}/api/auth/login`, { data: { email: 'operator@crabshare.local', password: 'CrabShare@2026' } })
-  expect(login.ok()).toBeTruthy()
-  const auth = await login.json()
-  await page.addInitScript(session => localStorage.setItem('crabshare-auth', JSON.stringify({ state: {
-    token: session.accessToken, expiresAt: session.expiresAt, user: session.user,
-  }, version: 0 })), auth)
-  // Forward requests to the live isolated backend; no response or domain data is mocked.
-  await page.route(url => url.pathname.startsWith('/api/'), async route => {
-    const url = new URL(route.request().url())
-    const response = await route.fetch({ url: `${apiUrl}${url.pathname}${url.search}` })
-    await route.fulfill({ response })
-  })
-  await page.goto('/operator/create-batch')
-  await page.getByLabel('Tên lô (tiêu đề gọi vốn)').fill('VI04 kiểm thử trình duyệt API thật')
-  await page.getByRole('button', { name: 'Lưu nháp', exact: true }).click()
-  await expect(page.getByText(/Đã lưu nháp B-/)).toBeVisible()
-  const code = new URL(page.url()).searchParams.get('code')!
-  await page.reload()
-  await expect(page.getByLabel('Tên lô (tiêu đề gọi vốn)')).toHaveValue('VI04 kiểm thử trình duyệt API thật')
-  await expect(page.getByLabel('Hạng mục 2')).toHaveValue('MortalityReserve')
-  await page.screenshot({ path: testInfo.outputPath('batch-desktop.png'), fullPage: true })
-  await page.setViewportSize({ width: 390, height: 844 })
-  await expect(page.getByRole('button', { name: 'Gửi duyệt', exact: true })).toBeVisible()
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
-  await page.screenshot({ path: testInfo.outputPath('batch-mobile.png'), fullPage: true })
-  await fillOfftakePrice(page)
-  await fillSchedule(page)
-  await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click()
-  await expect(page).toHaveURL(/\/operator\/batch$/)
-  await expect(page.getByText(code, { exact: false })).toBeVisible()
-  const saved = await request.get(`${apiUrl}/api/batches/${code}`, { headers: { Authorization: `Bearer ${auth.accessToken}` } })
-  expect(saved.ok()).toBeTruthy()
-  const result = await saved.json()
-  expect(result.status).toBe('PendingApproval')
-  expect(result.standardCost.status).toBe('Submitted')
-  expect(result.standardCost.total).toBe(35000000)
-  await page.unrouteAll({ behavior: 'wait' })
+test('hồ sơ hộ nuôi chưa được duyệt thì trang tạo Lô nhắc ngay', async ({ page, api }) => {
+  const pending: OperatorResponse = { ...farm, status: 'Submitted' }
+  api.get('/api/operators/me', pending)
+  await page.goto(NEW_URL)
+  await expect(page.getByText('Hồ sơ hộ nuôi chưa được duyệt nên chưa tạo được Lô.')).toBeVisible()
+  await expect(page.getByRole('main').getByRole('link', { name: 'Xem hồ sơ' })).toHaveAttribute('href', '/operator/register')
 })

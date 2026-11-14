@@ -51,7 +51,7 @@
 .rd-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .rd-muted { color: var(--muted); }
 .rd-num { font-variant-numeric: tabular-nums; }
-.rd-big { font-size: clamp(44px, 7vw, 112px); line-height: 0.9; letter-spacing: -0.05em; font-variation-settings: 'wght' 700, 'wdth' 78, 'opsz' 96; font-variant-numeric: tabular-nums; }
+.rd-big { font-size: clamp(44px, 7vw, 112px); line-height: 0.9; letter-spacing: -0.012em; font-variation-settings: 'wght' 700, 'wdth' 78, 'opsz' 96; font-variant-numeric: tabular-nums; }
 
 /* nút */
 .rd-btn {
@@ -197,7 +197,7 @@
 .rd-done__icon { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--grad); color: var(--on-accent); }
 .rd-done h3 { font-size: 24px; letter-spacing: -0.02em; }
 .rd-done p { color: var(--muted); max-width: 32ch; }
-.rd-done__list { display: grid; gap: 6px; margin: 6px 0 10px; font: 600 14px ui-monospace, Consolas, monospace; }
+.rd-done__list { display: grid; gap: 6px; margin: 6px 0 10px; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .rd-toast {
   position: fixed; left: 50%; bottom: 76px; z-index: 95; transform: translate(-50%, 20px); display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px;
   border-radius: 999px; background: var(--fg); color: var(--bg); font-size: 14px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.3s, transform 0.45s var(--ease);
@@ -310,7 +310,7 @@
 .rd-modal__body { flex: 1; overflow-y: auto; padding: 22px; display: grid; gap: 16px; align-content: start; }
 .rd-modal__foot { display: flex; gap: 8px; justify-content: flex-end; padding: 0 22px 22px; }
 .rd-modal__foot .rd-btn--primary { flex: 1; }
-.rd-amount { text-align: center; font-size: clamp(40px, 9vw, 60px); line-height: 1; letter-spacing: -0.045em; font-variation-settings: 'wght' 700, 'wdth' 80, 'opsz' 96; font-variant-numeric: tabular-nums; }
+.rd-amount { text-align: center; font-size: clamp(40px, 9vw, 60px); line-height: 1; letter-spacing: -0.012em; font-variation-settings: 'wght' 700, 'wdth' 80, 'opsz' 96; font-variant-numeric: tabular-nums; }
 .rd-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .rd-facts div { display: grid; gap: 2px; padding: 14px; border-radius: 16px; background: var(--input); border: 1px solid var(--line); }
 .rd-facts small { font-size: 12px; color: var(--muted); }

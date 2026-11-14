@@ -225,12 +225,12 @@ function Nav() {
         <a href="#keo">Khám phá</a>
         <a href="#soi">Truy xuất</a>
         <a href="#chia">Quyết toán</a>
-        <a href="#mua">Món cua</a>
+        <a href="#mua">Đặt trước</a>
       </nav>
       <div className="cse-nav__right">
         <a className="cse-nav__login" href="/dang-nhap">Đăng nhập</a>
         <Magnetic strength={0.25}>
-          <a className="cse-btn cse-btn--primary cse-btn--sm" href="/investor"><Roll text="Góp vốn" /></a>
+          <a className="cse-btn cse-btn--primary cse-btn--sm" href="/lo"><Roll text="Góp vốn" /></a>
         </Magnetic>
       </div>
     </header>
@@ -340,7 +340,7 @@ function BatchCard() {
     el.style.setProperty('--rx', '0deg')
   }
   return (
-    <a ref={ref} className="cse-card" href="/investor" onPointerMove={onMove} onPointerLeave={onLeave}>
+    <a ref={ref} className="cse-card" href="/lo" onPointerMove={onMove} onPointerLeave={onLeave}>
       <Ring pct={84} />
       <span className="cse-card__text">
         <span className="cse-card__code">L2612-01 · Cua thịt</span>
@@ -368,10 +368,10 @@ function Hero({ onReady }: { onReady: () => void }) {
         <div className="cse-hero__row cse-fade" style={{ '--d': '950ms' } as CSSProperties}>
           <div className="cse-hero__ctas">
             <Magnetic>
-              <a className="cse-btn cse-btn--primary" href="/investor"><Roll text="Góp vốn" /><span className="cse-btn__icon"><Arrow /></span></a>
+              <a className="cse-btn cse-btn--primary" href="/lo"><Roll text="Góp vốn" /><span className="cse-btn__icon"><Arrow /></span></a>
             </Magnetic>
             <Magnetic>
-              <a className="cse-btn cse-btn--glass" href="#mua"><Roll text="Mua cua" /></a>
+              <a className="cse-btn cse-btn--glass" href="/lo"><Roll text="Đặt trước" /></a>
             </Magnetic>
           </div>
           <a className="cse-scroll" href="#keo"><span className="cse-scroll__line" aria-hidden="true" />Cuộn</a>
@@ -706,16 +706,16 @@ const LOTS: LotTile[] = [
   { kind: 'lot', code: 'L2611-02', crab: 'Cua lột · 300 ô', src: IMG.hop, stage: 'funding', pct: 63, meta: 'còn 12 ngày' },
   { kind: 'lot', code: 'L2612-02', crab: 'Cua gạch · 400 ô', src: IMG.com, stage: 'growing', pct: 57, meta: 'ngày 34 / 60' },
   { kind: 'lot', code: 'L2701-01', crab: 'Cua thịt · 500 ô', src: IMG.handPick, stage: 'harvest', pct: 82, meta: '412 / 500 con' },
-  { kind: 'lot', code: 'L2611-01', crab: 'Cua thịt · 500 ô', src: IMG.tied, stage: 'settle', pct: 100, meta: 'Pool +26 triệu' },
+  { kind: 'lot', code: 'L2611-01', crab: 'Cua thịt · 500 ô', src: IMG.tied, stage: 'settle', pct: 100, meta: 'đang quyết toán' },
   { kind: 'lot', code: 'L2612-03', crab: 'Cua cốm · 400 ô', src: IMG.mangroveWater, stage: 'soon', pct: 0, meta: 'mở sau 20 ngày' },
   { kind: 'lot', code: 'L2610-03', crab: 'Cua gạch · 300 ô', src: IMG.monoBox, stage: 'closed', pct: 100, meta: 'đã chia 100%' },
 ]
 const STATS: StatTile[] = [
   { kind: 'stat', big: '0đ', small: 'CrabShare không giữ tiền của bạn', tone: 'grad' },
-  { kind: 'stat', big: '7%', small: 'Người nuôi nhận, chỉ khi có lãi', tone: 'glass' },
-  { kind: 'stat', big: 'QR', small: 'Mỗi con cua một mã', tone: 'cream' },
+  { kind: 'stat', big: 'P·T·A', small: 'Ba phương thức Lô, cách chia tiền công bố trước', tone: 'glass' },
+  { kind: 'stat', big: 'QR', small: 'Mỗi đơn một mã, quét ra Lô và trại', tone: 'cream' },
   { kind: 'stat', big: '80%', small: 'Lô chỉ chạy khi đủ vốn tối thiểu', tone: 'teal' },
-  { kind: 'stat', big: '48h', small: 'Nộp bằng chứng trước đợt giải ngân sau', tone: 'glass' },
+  { kind: 'stat', big: '48h', small: 'Hạn người nuôi trả lời khiếu nại', tone: 'glass' },
   { kind: 'stat', big: '15ph', small: 'Giữ chỗ khi bạn bấm góp vốn', tone: 'grad' },
 ]
 const PICS: ImgTile[] = [
@@ -932,7 +932,7 @@ function Gallery() {
           }
           const st = STAGE[t.stage]
           return (
-            <a key={i} ref={setTile} className={`cse-tile cse-tile--lot is-${t.stage}`} href="/investor" draggable={false} style={{ '--tone': st.tone } as CSSProperties}>
+            <a key={i} ref={setTile} className={`cse-tile cse-tile--lot is-${t.stage}`} href="/lo" draggable={false} style={{ '--tone': st.tone } as CSSProperties}>
               <img ref={setImg} className="cse-tile__img" src={sm(t.src)} alt="" draggable={false} loading="lazy" decoding="async" />
               <span className="cse-tile__shade" aria-hidden="true" />
               <span className="cse-lot__chip"><i aria-hidden="true" />{st.label}</span>
@@ -1021,25 +1021,25 @@ function Soi() {
 
   return (
     <section id="soi" ref={secRef} className="cse-soi">
-      <div ref={stRef} className="cse-soi__sticky" data-cursor="scan" data-cursor-label="CS-L2611-01-0342">
+      <div ref={stRef} className="cse-soi__sticky" data-cursor="scan" data-cursor-label="Đơn PO-2611-0342">
         <img className="cse-soi__img" src={IMG.tied} alt="Cua buộc dây trong nồi hấp" loading="lazy" decoding="async" />
         <div className="cse-soi__glow" aria-hidden="true" />
-        <h2 className="cse-soi__title" aria-label="Soi từng con.">
-          <span className="cse-soi__outline" aria-hidden="true">Soi<br />từng con.</span>
-          <span className="cse-soi__fill" aria-hidden="true">Soi<br />từng con.</span>
+        <h2 className="cse-soi__title" aria-label="Soi từng đơn.">
+          <span className="cse-soi__outline" aria-hidden="true">Soi<br />từng đơn.</span>
+          <span className="cse-soi__fill" aria-hidden="true">Soi<br />từng đơn.</span>
         </h2>
         <p className="cse-soi__hint">{fine ? 'Rê chuột để soi · cuộn để mở' : 'Cuộn để mở'}</p>
         <div className="cse-soi__foot">
-          <p className="cse-soi__cap">Mỗi con cua một mã QR. Quét là thấy nó từ đâu.</p>
-          <button type="button" className={`cse-chip ${flip ? 'is-flipped' : ''}`} onClick={() => setFlip((f) => !f)} aria-pressed={flip} aria-label="Tra mã CS-L2611-01-0342">
+          <p className="cse-soi__cap">Mỗi đơn một mã QR. Quét là thấy Lô, trại và ngày thu.</p>
+          <button type="button" className={`cse-chip ${flip ? 'is-flipped' : ''}`} onClick={() => setFlip((f) => !f)} aria-pressed={flip} aria-label="Tra mã đơn PO-2611-0342">
             <span className="cse-chip__in">
               <span className="cse-chip__face">
                 <span className="cse-chip__qr"><QrIcon /></span>
-                <span><b>CS-L2611-01-0342</b><small>Chạm để tra</small></span>
+                <span><b>PO-2611-0342</b><small>Chạm để tra</small></span>
               </span>
               <span className="cse-chip__face cse-chip__back">
-                <b>Ô 342 · Lô L2611-01</b>
-                <small>Thu 28/01/2027 · 412 g</small>
+                <b>Lô L2611-01 · Cua thịt</b>
+                <small>Thu 28/01/2027 · Năm Căn</small>
                 <small>HTX Nuôi cua Cà Mau</small>
               </span>
             </span>
@@ -1092,10 +1092,10 @@ function Chia() {
           <span><span>Kéo để</span></span>
           <span><span style={{ '--i': 1 } as CSSProperties}><em>chia.</em></span></span>
         </h2>
-        <p className="cse-chia__note">Chi phí khoá trước: 100 triệu.<br />Phần dư chia theo vốn góp.</p>
+        <p className="cse-chia__note">Chi phí chuẩn khoá trước: 100 triệu.<br />Phần còn lại chia theo vốn góp.</p>
       </div>
       <div className={`cse-chia__pool is-${sign}`}>{signed(shown)}</div>
-      <p className="cse-chia__label">Revenue Pool</p>
+      <p className="cse-chia__label">Phần còn lại sau chi phí chuẩn</p>
       <div className="cse-range" style={{ '--p': (rev - 40) / 120 } as CSSProperties}>
         <span className="cse-range__bubble">Doanh thu {rev} triệu</span>
         <input
@@ -1112,20 +1112,20 @@ function Chia() {
         {res.lines.map((l, k) => (
           <Bubble key={l.id} name={`${l.name.replace('Nhà đầu tư ', '')} · ${formatPct(l.pctBps)}`} value={Number(l.payout)} loss={l.share < 0n} delay={k * 400} />
         ))}
-        <Bubble name="Người nuôi 7%" value={rem} op off={rem <= 0} delay={1200} />
+        <Bubble name="Thù lao người nuôi" value={rem} op off={rem <= 0} delay={1200} />
       </div>
-      <p className="cse-chia__foot">Ví dụ minh hoạ · lỗ tối đa bằng vốn đã góp</p>
+      <p className="cse-chia__foot">Ví dụ minh hoạ cách chia, chưa tính phí nền tảng · lỗ tối đa bằng vốn đã góp</p>
     </section>
   )
 }
 
 /* ---------- món cua: rê chuột hiện ảnh lớn, nền cả khối ngả theo màu món ---------- */
 const MENU = [
-  { name: 'Cua hấp', from: 'Cua gạch', price: '690.000 đ/kg', img: IMG.steamer },
-  { name: 'Cua sốt', from: 'Cua thịt', price: '520.000 đ/kg', img: IMG.sauce },
-  { name: 'Cua sốt ớt', from: 'Cua thịt', price: '520.000 đ/kg', img: IMG.chili },
-  { name: 'Càng cua', from: 'Cua thịt', price: '520.000 đ/kg', img: IMG.claws },
-  { name: 'Lẩu cua', from: 'Cua cốm', price: '610.000 đ/kg', img: IMG.pot },
+  { name: 'Cua hấp', from: 'Cua gạch', price: 'Size L, XL', img: IMG.steamer },
+  { name: 'Cua sốt', from: 'Cua thịt', price: 'Size M, L', img: IMG.sauce },
+  { name: 'Cua sốt ớt', from: 'Cua thịt', price: 'Size L', img: IMG.chili },
+  { name: 'Càng cua', from: 'Cua thịt', price: 'Size XL', img: IMG.claws },
+  { name: 'Lẩu cua', from: 'Cua cái non', price: 'Size M', img: IMG.pot },
 ]
 
 function Mua() {
@@ -1181,12 +1181,12 @@ function Mua() {
           <span><span>Từ hộp nuôi</span></span>
           <span><span style={{ '--i': 1 } as CSSProperties}>đến <em>bàn ăn.</em></span></span>
         </h2>
-        <a className="cse-textlink" href="/cua-hang"><Roll text="Cửa hàng" /><Arrow /></a>
+        <a className="cse-textlink" href="/lo"><Roll text="Lô nhận đặt trước" /><Arrow /></a>
       </div>
       <ul ref={listRef} className="cse-menu__list">
         {MENU.map((m, i) => (
           <li key={m.name} className="cse-row" onPointerEnter={() => setActive(i)}>
-            <a href="/cua-hang" data-cursor="Mua">
+            <a href="/lo" data-cursor="Đặt">
               <span className="cse-row__i">0{i + 1}</span>
               <span className="cse-row__name">{m.name}</span>
               <span className="cse-row__meta"><span>{m.from}</span><span>{m.price}</span></span>
@@ -1211,9 +1211,9 @@ function Cta() {
       <p className="cse-cta__small">Sẵn sàng?</p>
       <h2 ref={headRef} className="cse-h2 cse-rv cse-cta__h"><span><span>Chọn một lô.</span></span></h2>
       <Magnetic area strength={0.4}>
-        <a className="cse-orb" href="/investor"><span className="cse-orb__label" data-magnet-inner>Góp vốn <Arrow /></span></a>
+        <a className="cse-orb" href="/lo"><span className="cse-orb__label" data-magnet-inner>Góp vốn <Arrow /></span></a>
       </Magnetic>
-      <a className="cse-textlink" href="/cua-hang"><Roll text="Hoặc mua cua" /><Arrow /></a>
+      <a className="cse-textlink" href="/lo"><Roll text="Hoặc đặt trước cua" /><Arrow /></a>
     </section>
   )
 }
@@ -1227,6 +1227,8 @@ function Footer() {
       <div className="cse-foot__row">
         <span>© 2026 CrabShare · Đồ án FA26SE229 · Dữ liệu trên trang là mô phỏng · Ảnh món cua: Pexels</span>
         <nav className="cse-foot__links" aria-label="Liên kết">
+          <a href="/lo">Lô đang mở</a>
+          <a href="/chuan-phan-hang">Chuẩn phân hạng</a>
           <a href="/dang-nhap">Đăng nhập</a>
           <a href="/operator">Người nuôi</a>
           <a href="/admin">Quản trị</a>

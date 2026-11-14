@@ -53,6 +53,9 @@ final dioProvider = Provider<Dio>((ref) {
   return dio;
 });
 
+/// Bỏ phần dẫn số quy tắc như "(BR-164)" mà backend ghi trong câu báo lỗi: người dùng không cần thấy.
+String _plain(String text) => text.replaceAll(RegExp(r'\s*\((?:BR|UC|TL|TH|NH)-[^)]*\)'), '').trim();
+
 /// Lấy câu báo lỗi dễ đọc từ ProblemDetails mà backend trả về.
 String apiErrorMessage(Object error) {
   if (error is DioException) {
@@ -70,11 +73,11 @@ String apiErrorMessage(Object error) {
             )
             .where((value) => value.trim().isNotEmpty)
             .toList();
-        if (messages.isNotEmpty) return messages.join(' ');
+        if (messages.isNotEmpty) return _plain(messages.join(' '));
       }
       if (data['detail'] is String &&
           (data['detail'] as String).trim().isNotEmpty) {
-        return data['detail'] as String;
+        return _plain(data['detail'] as String);
       }
     }
     if (error.type == DioExceptionType.cancel) {

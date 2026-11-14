@@ -37,6 +37,16 @@ public sealed partial class TimelineService
             .Select(a => new { a.AlertId, a.RaisedAt, a.AlertType, a.Severity, a.Message, a.Status, a.AcknowledgedAt, a.EscalatedAt }).ToListAsync(ct);
         items.AddRange(alerts.Select(a => new TimelineItem($"Alert:{a.AlertId}", "Alert", Id(a.AlertId), BusinessDate(a.RaisedAt), a.RaisedAt, "Raised",
             Alert: new(a.AlertType, a.Severity, a.Message, a.Status, a.AcknowledgedAt, a.EscalatedAt))));
+
+        // BR v1.5: sự kiện từng con cua (BR-142); bỏ phân bổ và nhả phân bổ vì là việc nội bộ của đơn hàng.
+        var crabEvents = await (from e in db.InventoryEvents.AsNoTracking()
+                                join c in db.CrabUnits on e.CrabUnitId equals c.CrabUnitId
+                                where e.BatchId == batchId && e.OccurredAt >= fromAt && e.OccurredAt < to && e.EventType != "Allocated" && e.EventType != "Released"
+                                select new { e.InventoryEventId, e.OccurredAt, e.EventType, c.CrabCode, e.Source, e.Reason,
+                                    SlotCode = e.SlotId == null ? null : db.PhysicalSlots.Where(s => s.SlotId == e.SlotId).Select(s => s.SlotCode).FirstOrDefault() })
+            .ToListAsync(ct);
+        items.AddRange(crabEvents.Select(e => new TimelineItem($"CrabEvent:{e.InventoryEventId}", "CrabEvent", Id(e.InventoryEventId), BusinessDate(e.OccurredAt),
+            e.OccurredAt, "Occurred", CrabEvent: new(e.EventType, e.CrabCode, e.SlotCode, e.Source, e.Reason))));
         return items;
     }
 }

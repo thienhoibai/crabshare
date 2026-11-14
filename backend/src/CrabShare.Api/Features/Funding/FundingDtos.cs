@@ -19,11 +19,24 @@ public sealed class AcknowledgeRiskRequest
 
 public sealed record RiskAcknowledgementResponse(long RiskDisclosureId, string VersionCode, DateTimeOffset AcknowledgedAt);
 
-public sealed class ReserveContributionRequest
+/// <summary>BR-057: nhà đầu tư góp theo tỷ lệ % của vốn mục tiêu hoặc nhập số tiền; hệ thống quy đổi qua lại. Gửi đúng một trong hai.</summary>
+public sealed class ReserveContributionRequest : IValidatableObject
 {
     /// <summary>Số tiền góp, số nguyên đồng.</summary>
-    [Range(1, long.MaxValue, ErrorMessage = "Số tiền góp phải lớn hơn 0.")]
+    [Range(0, long.MaxValue)]
     public long Amount { get; set; }
+
+    /// <summary>Tỷ lệ % của vốn mục tiêu, tối đa 2 chữ số thập phân; số tiền = tỷ lệ × vốn mục tiêu, làm tròn tới đồng.</summary>
+    [Range(typeof(decimal), "0", "100")]
+    public decimal? Pct { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext context)
+    {
+        if ((Amount > 0) == (Pct is > 0))
+            yield return new("Nhập số tiền góp hoặc tỷ lệ % của vốn mục tiêu, không nhập cả hai.", [nameof(Amount), nameof(Pct)]);
+        if (Pct is { } pct && decimal.Round(pct, 2) != pct)
+            yield return new("Tỷ lệ có tối đa 2 chữ số thập phân.", [nameof(Pct)]);
+    }
 }
 
 public sealed record ContributionResponse(

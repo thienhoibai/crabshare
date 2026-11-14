@@ -1,118 +1,229 @@
-import { test, expect, type Page } from '@playwright/test'
+/* Ảnh bằng chứng cần giải trình của hộ nuôi: danh sách (/operator/evidence), chụp hộp theo yêu cầu và trang một ảnh với ô giải trình
+   (/operator/evidence/:id). Phần thẩm định của Người thẩm định nằm ở evidence-review.spec.ts. */
+import type { EvidenceExplanationRequest, EvidenceResponse, OperatorEvidenceItem } from '../src/shared/api/api.gen'
+import { TOKEN, daysFromNow, expect, paged, photo, reply, signIn, test, type Page, type Role } from './support/app'
+import { CODE, EVIDENCE_ID, captureRequests, evidenceItems, evidenceOf, evidencePage, mockOperator, more, noDevReload, panel } from './support/operator'
 
-const item = { id: 57, batchCode: 'CS57-TEST', slotCode: '0014', mediaType: 'Photo', reviewStatus: 'Flagged', riskScore: 100, capturedAt: '2026-10-14T07:59:00Z', receivedAt: '2026-10-14T08:00:00Z', latitude: 10.1, longitude: 106.1,
-  explanation: null as string | null, explainedAt: null as string | null, canExplain: true, latestReview: { verdict: 'NeedMoreEvidence', note: 'Giải thích ảnh chụp cùng hộp', reviewedAt: '2026-10-14T08:01:00Z' } }
-const paged = (items: unknown[], total = items.length, page = 1) => ({ items, total, page, pageSize: 10 })
-async function signIn(page: Page, role = 'OperatorMember') {
-  await page.addInitScript(role => {
-    if (!localStorage.getItem('crabshare-auth')) localStorage.setItem('crabshare-auth', JSON.stringify({ state: { token: 'explain-test-token', expiresAt: '2099-01-01T00:00:00Z', user: {
-      userId: 1, fullName: 'Hộ nuôi thử nghiệm', email: 'operator@test.local', roles: [role], status: 'Active', operatorId: role === 'OperatorMember' ? 1 : null,
-    } }, version: 0 }))
-  }, role)
-  await page.route('**/api/operators/me', route => route.fulfill({ json: { legalName: 'Hộ nuôi thử nghiệm', memberRole: 'Owner', status: 'Approved' } }))
-}
-async function image(page: Page) {
-  await page.route('**/api/operators/me/evidence/57/image', route => {
-    expect(route.request().headers().authorization).toBe('Bearer explain-test-token')
-    return route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGN8AAAAASUVORK5CYII=', 'base64') })
+const LIST_URL = '/operator/evidence'
+const LIST = '/api/operators/me/evidence'
+const DETAIL_URL = `/operator/evidence/${EVIDENCE_ID}`
+const DETAIL = `${LIST}/${EVIDENCE_ID}`
+const EXPLAIN = `/api/evidence/${EVIDENCE_ID}/explanation`
+
+/** Các dòng ảnh trong danh sách (menu bên trái cũng có liên kết "Hộp nuôi"). */
+const rows = (page: Page) => page.getByRole('main').getByRole('link').filter({ hasText: /^Hộp \d/ })
+
+test.beforeEach(async ({ api, page }) => {
+  mockOperator(api)
+  await noDevReload(page)
+})
+
+test.describe('danh sách bằng chứng', () => {
+  test.beforeEach(async ({ page }) => {
+    await signIn(page, 'OperatorMember')
   })
-}
-test('farm evidence list reads paged API and searches filters and opens detail', async ({ page }) => {
-  await signIn(page); const urls: URL[] = []
-  await page.route('**/api/operators/me/evidence?*', route => { const url = new URL(route.request().url()); urls.push(url); return route.fulfill({ json: paged([item], 12, Number(url.searchParams.get('page'))) }) })
-  await page.goto('/operator/evidence')
-  await expect(page.getByRole('link', { name: 'Xem và giải trình 57' })).toBeVisible()
-  expect(urls[0].searchParams.get('status')).toBe('Flagged')
-  await page.getByLabel('Tìm bằng chứng', { exact: true }).fill('0014')
-  await expect.poll(() => urls.at(-1)?.searchParams.get('q')).toBe('0014')
-  await page.getByLabel('Trạng thái', { exact: true }).selectOption('Rejected')
-  await page.getByRole('button', { name: 'Sau', exact: true }).click()
-  await expect.poll(() => urls.at(-1)?.searchParams.get('page')).toBe('2')
-  expect(urls.at(-1)?.searchParams.get('status')).toBe('Rejected')
-})
-test('operator sends trimmed text once and reviewer sees it while evidence stays Flagged', async ({ page }) => {
-  await signIn(page); await image(page)
-  let current = { ...item }; let writes = 0; let release!: () => void
-  const gate = new Promise<void>(resolve => { release = resolve })
-  await page.route('**/api/operators/me/evidence/57', route => route.fulfill({ json: current }))
-  await page.route('**/api/evidence/57/explanation', async route => {
-    writes++; expect(route.request().headers().authorization).toBe('Bearer explain-test-token')
-    expect(route.request().postDataJSON()).toEqual({ text: 'Ảnh chụp lại để kiểm tra hộp 0014' })
-    await gate
-    current = { ...item, explanation: 'Ảnh chụp lại để kiểm tra hộp 0014', explainedAt: '2026-10-14T09:00:00Z' }
-    await route.fulfill({ json: current })
+
+  test('mặc định là ảnh bị gắn cờ; đổi mục, tìm và chuyển trang đều gửi lên máy chủ', async ({ page, api }) => {
+    await page.goto(LIST_URL)
+    await expect(page.getByRole('heading', { name: 'Bằng chứng cần giải trình', level: 1 })).toBeVisible()
+    const row = (slot: string) => rows(page).filter({ hasText: `Hộp ${slot}` })
+    await expect(row('0101')).toContainText(`Lô ${CODE}`)
+    await expect(row('0101')).toContainText('Gắn cờ')
+    await expect(row('0101')).toContainText('Thẩm định: Cần bổ sung')
+    await expect(row('0101')).toContainText('Chờ giải trình')
+    await expect(row('0102')).toContainText('Đã giải trình')
+    await expect(row('0104')).toHaveCount(0)
+    expect(api.sent('GET', LIST).map((c) => c.query)).toEqual([{ status: 'Flagged', page: '1', pageSize: '20' }])
+
+    await page.getByRole('tab', { name: 'Chấp nhận', exact: true }).click()
+    await expect(row('0104')).toContainText('Thẩm định: Đạt')
+    await expect(row('0101')).toHaveCount(0)
+    await page.getByRole('tab', { name: 'Theo dõi' }).click()
+    await expect(page.getByText('Không có ảnh ở mục này')).toBeVisible()
+
+    // "Tất cả" phải gửi status rỗng, nếu bỏ hẳn tham số thì máy chủ lại lọc ảnh bị gắn cờ.
+    await page.getByRole('tab', { name: 'Tất cả' }).click()
+    await expect(rows(page)).toHaveCount(3)
+    expect(api.sent('GET', LIST).at(-1)!.query).toEqual({ status: '', page: '1', pageSize: '20' })
+
+    await page.getByLabel('Tìm ảnh bằng chứng').fill(' 0102 ')
+    await expect(row('0102')).toBeVisible()
+    await expect(row('0101')).toHaveCount(0)
+    expect(api.sent('GET', LIST).at(-1)!.query).toEqual({ status: '', q: '0102', page: '1', pageSize: '20' })
+
+    await row('0102').click()
+    await expect(page).toHaveURL(/\/operator\/evidence\/58$/)
   })
-  await page.goto('/operator/evidence/57')
-  await expect(page.getByText(item.latestReview.note, { exact: true })).toBeVisible()
-  const photo = page.getByRole('img', { name: 'Ảnh bằng chứng 57' })
-  await expect(photo).toHaveAttribute('src', /^blob:/)
-  await expect.poll(() => photo.evaluate(img => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
-  const field = page.getByLabel('Nội dung giải trình', { exact: true })
-  await field.fill('   ')
-  await expect(page.getByRole('button', { name: 'Gửi giải trình', exact: true })).toBeDisabled()
-  await field.fill('  Ảnh chụp lại để kiểm tra hộp 0014  ')
-  await page.getByRole('button', { name: 'Gửi giải trình', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Đang gửi…', exact: true })).toBeDisabled()
-  await page.locator('form').evaluate(form => (form as HTMLFormElement).requestSubmit())
-  expect(writes).toBe(1); release()
-  await expect(page.getByRole('status')).toContainText('Đã gửi giải trình')
-  await expect(page.getByRole('button', { name: 'Gửi giải trình', exact: true })).toBeDisabled()
-  await expect(page.getByText('Chờ thẩm định', { exact: true })).toBeVisible()
-  if (process.env.CAPTURE_EXPLANATION_SCREENSHOTS) {
-    await page.screenshot({ path: '../docs/validation/assets/cs57-operator-detail.png', fullPage: true })
-    await page.setViewportSize({ width: 390, height: 844 }); await page.locator('form').scrollIntoViewIfNeeded()
-    await page.screenshot({ path: '../docs/validation/assets/cs57-operator-small.png' })
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-  }
-  await page.route('**/api/review/evidence/57', route => route.fulfill({ json: { evidence: { id: 57, batchCode: item.batchCode, batchTitle: 'Test', farmName: 'Test', slotCode: item.slotCode, mediaType: 'Invoice', reviewStatus: 'Flagged', riskScore: 100, receivedAt: item.receivedAt }, source: 'InAppCapture', capturedAt: item.capturedAt, latitude: item.latitude, longitude: item.longitude, sha256: 'a'.repeat(64), perceptualHash: null, explanation: current.explanation, explainedAt: current.explainedAt, detections: [], reviews: [], canReview: true } }))
-  await page.evaluate(() => { const auth = JSON.parse(localStorage.getItem('crabshare-auth')!); auth.state.user = { ...auth.state.user, userId: 2, roles: ['EvidenceReviewer'], operatorId: null }; localStorage.setItem('crabshare-auth', JSON.stringify(auth)) })
-  await page.goto('/admin/evidence/57')
-  await expect(page.getByText(current.explanation!, { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Chấp nhận', exact: true })).toBeVisible()
+
+  test('danh sách dài thì chuyển trang ở máy chủ và giữ mục đang chọn', async ({ page, api }) => {
+    const many = Array.from({ length: 21 }, (_, i) => evidenceOf({ id: 200 + i, slotCode: String(201 + i).padStart(4, '0'), reviewStatus: 'Rejected', canExplain: false }))
+    api.get(LIST, evidencePage(many))
+    await page.goto(LIST_URL)
+    await expect(page.getByText('Không có ảnh nào cần giải trình')).toBeVisible()
+    await page.getByRole('tab', { name: 'Không chấp nhận' }).click()
+    await expect(page.getByText('1–20 trong 21 ảnh')).toBeVisible()
+    await page.getByRole('button', { name: 'Trang sau' }).click()
+    await expect(rows(page).filter({ hasText: 'Hộp 0221' })).toBeVisible()
+    expect(api.sent('GET', LIST).at(-1)!.query).toEqual({ status: 'Rejected', page: '2', pageSize: '20' })
+  })
+
+  test('không tải được thì báo lỗi của máy chủ; thử lại, không có ảnh thì không dựng dữ liệu mẫu', async ({ page, api }) => {
+    let failing = true
+    api.get(LIST, () => (failing ? reply(503, { status: 503, detail: 'Không tải được bằng chứng.' }) : paged([], 20)))
+    await page.goto(LIST_URL)
+    const error = page.getByRole('alert').filter({ hasText: 'Không tải được dữ liệu' })
+    await expect(error).toContainText('Không tải được bằng chứng.')
+    failing = false
+    await error.getByRole('button', { name: 'Thử lại' }).click()
+    await expect(page.getByText('Không có ảnh nào cần giải trình')).toBeVisible()
+    await expect(rows(page)).toHaveCount(0)
+  })
+
+  test('chụp hộp theo yêu cầu: ảnh gửi kèm mã yêu cầu, giờ chụp và vị trí', async ({ page, api, context }) => {
+    const sent: EvidenceResponse = {
+      id: 77, batchCode: CODE, slotCode: '0102', capturedAt: daysFromNow(0), receivedAt: daysFromNow(0), latitude: 8.7601, longitude: 104.9903, sha256: 'a'.repeat(64),
+      perceptualHash: 'f'.repeat(16), riskScore: 0, reviewStatus: 'Accepted', duplicateMatch: 'None', detection: { crabDetected: true, confidence: 0.97, modelVersion: 'box-0.2' },
+      captureRequestId: captureRequests[0].id, captureRequestStatus: 'Fulfilled',
+    }
+    let open = captureRequests
+    api.get('/api/operators/me/capture-requests', (call) => paged(call.query.status === 'Open' ? open : [], 50))
+    api.post('/api/evidence', () => {
+      open = []
+      return reply(201, sent)
+    })
+    await context.grantPermissions(['geolocation'])
+    await context.setGeolocation({ latitude: 8.7601, longitude: 104.9903 })
+    await page.goto(LIST_URL)
+
+    const requests = panel(page, 'Hộp cần chụp')
+    await expect(requests.getByRole('row').filter({ hasText: '0102' })).toContainText(`Lô ${CODE}`)
+    await requests.getByRole('button', { name: 'Chụp', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'Chụp hộp 0102' })
+    await expect(dialog.getByRole('button', { name: 'Gửi ảnh' })).toBeDisabled()
+    await dialog.getByLabel('Chụp ảnh hộp').setInputFiles(photo('hop-0102.png'))
+    await dialog.getByRole('button', { name: 'Gửi ảnh' }).click()
+
+    const done = page.getByRole('dialog', { name: 'Đã gửi ảnh' })
+    await expect(done.getByText('Chấp nhận')).toBeVisible()
+    const calls = api.sent('POST', '/api/evidence')
+    expect(calls).toHaveLength(1)
+    expect(calls[0].multipart).toBe(true)
+    expect(calls[0].body).toEqual({
+      BatchCode: CODE, SlotCode: '0102', CapturedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/), Latitude: '8.760100', Longitude: '104.990300',
+      CaptureRequestId: String(captureRequests[0].id), Image: 'file:hop-0102.png',
+    })
+    await done.getByRole('button', { name: 'Xong' }).click()
+    // Yêu cầu đã xong thì khối "Hộp cần chụp" không còn.
+    await expect(page.getByRole('heading', { name: /^Hộp cần chụp/ })).toHaveCount(0)
+  })
 })
-test('stale final verdict keeps the draft and disables further submissions after 409', async ({ page }) => {
-  await signIn(page); await image(page); let closed = false
-  await page.route('**/api/operators/me/evidence/57', route => route.fulfill({ json: { ...item, canExplain: !closed, reviewStatus: closed ? 'Accepted' : 'Flagged' } }))
-  await page.route('**/api/evidence/57/explanation', route => { closed = true; return route.fulfill({ status: 409, json: { detail: 'Bằng chứng không còn chờ thẩm định.' } }) })
-  await page.goto('/operator/evidence/57')
-  await page.getByLabel('Nội dung giải trình', { exact: true }).fill('Nội dung cần giữ')
-  await page.getByRole('button', { name: 'Gửi giải trình', exact: true }).click()
-  await expect(page.getByRole('alert')).toContainText('không còn chờ thẩm định')
-  await expect(page.getByLabel('Nội dung giải trình', { exact: true })).toHaveValue('Nội dung cần giữ')
-  await expect(page.getByRole('button', { name: 'Gửi giải trình', exact: true })).toBeDisabled()
+
+test.describe('một ảnh bằng chứng', () => {
+  test.beforeEach(async ({ page }) => {
+    await signIn(page, 'OperatorMember')
+  })
+
+  test('giải trình được cắt khoảng trắng, gửi một lần; ảnh vẫn bị gắn cờ cho tới khi có kết luận', async ({ page, api }) => {
+    let current: OperatorEvidenceItem = evidenceItems[0]
+    let finish!: () => void
+    const gate = new Promise<void>((resolve) => { finish = resolve })
+    api.get(DETAIL, () => current)
+    api.post(EXPLAIN, async (call) => {
+      await gate
+      current = { ...current, explanation: (call.body as EvidenceExplanationRequest).text, explainedAt: daysFromNow(0) }
+      return current
+    })
+    await page.goto(DETAIL_URL)
+    await expect(page.getByRole('heading', { name: `Hộp 0101 · Lô ${CODE}`, level: 1 })).toBeVisible()
+    await expect(page.locator('.op-heading').getByText('Gắn cờ')).toBeVisible()
+    await expect(page.getByText('Người thẩm định: Cần bổ sung')).toBeVisible()
+    await expect(page.getByText('Ảnh trùng với ảnh hộp 0102, cần giải thích.')).toBeVisible()
+
+    // Ảnh lấy qua API cần đăng nhập rồi hiện bằng blob.
+    const image = page.getByRole('img', { name: `Ảnh hộp 0101 của Lô ${CODE}` })
+    await expect(image).toHaveAttribute('src', /^blob:/)
+    await expect.poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
+    expect(api.sent('GET', `${DETAIL}/image`).map((c) => c.auth)).toEqual([`Bearer ${TOKEN}`])
+    await more(page, 'Thông tin ảnh').click()
+    await expect(page.getByText('8.7601, 104.9903')).toBeVisible()
+
+    const field = page.getByLabel('Giải trình của người nuôi')
+    const send = page.getByRole('button', { name: 'Gửi giải trình' })
+    await field.fill('   ')
+    await expect(send).toBeDisabled()
+    await field.fill('  Ảnh chụp lại để kiểm tra hộp 0101  ')
+    await send.click()
+    // Đang gửi thì nút khoá lại nên không bấm được lần hai.
+    await expect(page.getByRole('button', { name: 'Đang gửi…' })).toBeDisabled()
+    finish()
+
+    await expect(page.getByRole('status').filter({ hasText: 'Đã gửi giải trình.' })).toBeVisible()
+    const body: EvidenceExplanationRequest = { text: 'Ảnh chụp lại để kiểm tra hộp 0101' }
+    expect(api.sent('POST', EXPLAIN).map((c) => ({ body: c.body, auth: c.auth }))).toEqual([{ body, auth: `Bearer ${TOKEN}` }])
+    await expect(page.getByText(/^Đã gửi lúc /)).toBeVisible()
+    await expect(page.locator('.op-heading').getByText('Gắn cờ')).toBeVisible()
+    // Chưa sửa gì thì không gửi lại được.
+    await expect(page.getByRole('button', { name: 'Gửi lại' })).toBeDisabled()
+    await expect(field).toHaveValue('Ảnh chụp lại để kiểm tra hộp 0101')
+    await field.fill('Ảnh chụp lại để kiểm tra hộp 0101, kèm ảnh mới')
+    await expect(page.getByRole('button', { name: 'Gửi lại' })).toBeEnabled()
+  })
+
+  test('máy chủ từ chối giải trình: lỗi hiện cạnh ô nhập, bản nháp còn nguyên và gửi lại được', async ({ page, api }) => {
+    let refuse = true
+    api.post(EXPLAIN, () => (refuse ? reply(400, { status: 400, detail: 'Giải trình không hợp lệ.' }) : evidenceOf({ explanation: 'Nội dung cần giữ', explainedAt: daysFromNow(0) })))
+    await page.goto(DETAIL_URL)
+    const field = page.getByLabel('Giải trình của người nuôi')
+    await field.fill('Nội dung cần giữ')
+    await page.getByRole('button', { name: 'Gửi giải trình' }).click()
+    await expect(page.getByText('Giải trình không hợp lệ.')).toBeVisible()
+    await expect(field).toHaveValue('Nội dung cần giữ')
+    await expect(page.getByRole('button', { name: 'Gửi giải trình' })).toBeEnabled()
+
+    refuse = false
+    await page.getByRole('button', { name: 'Gửi giải trình' }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Đã gửi giải trình.' })).toBeVisible()
+    expect(api.sent('POST', EXPLAIN)).toHaveLength(2)
+  })
+
+  test('ảnh đã có kết luận cuối: máy chủ báo 409, bản nháp còn nguyên', async ({ page, api }) => {
+    api.post(EXPLAIN, () => reply(409, { status: 409, detail: 'Bằng chứng không còn chờ thẩm định.' }))
+    await page.goto(DETAIL_URL)
+    await page.getByLabel('Giải trình của người nuôi').fill('Nội dung cần giữ')
+    await page.getByRole('button', { name: 'Gửi giải trình' }).click()
+    await expect(page.getByText('Bằng chứng không còn chờ thẩm định.')).toBeVisible()
+    await expect(page.getByLabel('Giải trình của người nuôi')).toHaveValue('Nội dung cần giữ')
+  })
+
+  test('ảnh không cần giải trình thì không có ô nhập', async ({ page, api }) => {
+    api.get(DETAIL, evidenceOf({ reviewStatus: 'Accepted', canExplain: false, latestReview: { verdict: 'Pass', note: 'Ảnh rõ, đúng hộp.', reviewedAt: daysFromNow(-1) } }))
+    await page.goto(DETAIL_URL)
+    await expect(page.locator('.op-heading').getByText('Chấp nhận')).toBeVisible()
+    await expect(page.getByText('Người thẩm định: Đạt')).toBeVisible()
+    await expect(page.getByText('Ảnh này không cần giải trình.')).toBeVisible()
+    await expect(page.getByLabel('Giải trình của người nuôi')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /Gửi/ })).toHaveCount(0)
+  })
+
+  test('ảnh của hộ nuôi khác: báo không tìm thấy và không hỏi tệp ảnh', async ({ page, api }) => {
+    api.get(DETAIL, () => reply(404, { status: 404, detail: 'Không tìm thấy bằng chứng của hộ nuôi.' }))
+    await page.goto(DETAIL_URL)
+    await expect(page.getByRole('alert').filter({ hasText: 'Không tải được dữ liệu' })).toContainText('Không tìm thấy bằng chứng của hộ nuôi.')
+    expect(api.sent('GET', `${DETAIL}/image`)).toEqual([])
+  })
+
+  test('đường dẫn không phải số thì báo ngay, không gọi API bằng chứng', async ({ page, api }) => {
+    await page.goto('/operator/evidence/abc')
+    await expect(page.getByText('Đường dẫn không đúng.')).toBeVisible()
+    expect(api.sent('GET', /\/evidence\//)).toEqual([])
+  })
 })
-test('failed validation retains draft and allows retry', async ({ page }) => {
-  await signIn(page); await image(page)
-  await page.route('**/api/operators/me/evidence/57', route => route.fulfill({ json: item }))
-  await page.route('**/api/evidence/57/explanation', route => route.fulfill({ status: 400, json: { detail: 'Giải trình không hợp lệ.' } }))
-  await page.goto('/operator/evidence/57')
-  await page.getByLabel('Nội dung giải trình', { exact: true }).fill('Nội dung cần giữ')
-  await page.getByRole('button', { name: 'Gửi giải trình', exact: true }).click()
-  await expect(page.getByRole('alert')).toContainText('không hợp lệ')
-  await expect(page.getByLabel('Nội dung giải trình', { exact: true })).toHaveValue('Nội dung cần giữ')
-  await expect(page.getByRole('button', { name: 'Gửi giải trình', exact: true })).toBeEnabled()
-})
-test('foreign evidence is unavailable without private image requests', async ({ page }) => {
-  await signIn(page); let reads = 0
-  await page.route('**/api/operators/me/evidence/57', route => route.fulfill({ status: 404, json: { detail: 'Không tìm thấy bằng chứng của hộ nuôi.' } }))
-  await page.route('**/api/operators/me/evidence/57/image', route => { reads++; return route.fulfill({ status: 404 }) })
-  await page.goto('/operator/evidence/57')
-  await expect(page.getByRole('alert')).toContainText('Không tìm thấy bằng chứng')
-  expect(reads).toBe(0)
-})
-test('empty queue and retry errors use real server results', async ({ page }) => {
-  await signIn(page); let failed = true
-  await page.route('**/api/operators/me/evidence?*', route => failed ? route.fulfill({ status: 503, json: { detail: 'Không tải được bằng chứng.' } }) : route.fulfill({ json: paged([]) }))
-  await page.goto('/operator/evidence')
-  await expect(page.getByRole('alert')).toContainText('Không tải được bằng chứng')
-  failed = false; await page.getByRole('button', { name: 'Thử lại', exact: true }).click()
-  await expect(page.getByText('Không có bằng chứng phù hợp', { exact: true })).toBeVisible()
-})
-for (const role of ['Investor', 'Customer', 'PlatformAdmin', 'EvidenceReviewer']) {
-  test(`${role} cannot request farm evidence`, async ({ page }) => {
-    await signIn(page, role); let reads = 0
-    await page.route('**/api/operators/me/evidence**', route => { reads++; return route.fulfill({ json: item }) })
-    await page.goto('/operator/evidence/57')
-    await expect(page).toHaveURL('/'); expect(reads).toBe(0)
+
+for (const role of ['Investor', 'Customer', 'PlatformAdmin', 'EvidenceReviewer'] satisfies Role[]) {
+  test(`${role} không mở được bằng chứng của hộ nuôi và trang không gọi API`, async ({ page, api }) => {
+    await signIn(page, role)
+    await page.goto(DETAIL_URL)
+    await expect(page).not.toHaveURL(/\/operator\//)
+    expect(api.calls).toEqual([])
   })
 }

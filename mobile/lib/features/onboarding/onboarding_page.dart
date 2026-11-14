@@ -29,21 +29,21 @@ class _OnboardingPageState extends State<OnboardingPage> {
   static const _slides = [
     _Slide(
       AppImages.crabFattening,
-      'Góp vốn nuôi cua,\nthấy rõ từng lô',
-      'Theo dõi lô bạn góp vốn qua nhật ký hằng ngày và ảnh chụp trực tiếp từ trại.',
-      [(Icons.inventory_2_outlined, 'Lô CS-2610-01'), (Icons.photo_camera_outlined, 'Ảnh chụp trực tiếp'), (Icons.lock_outline_rounded, 'Chi phí chuẩn đã khoá')],
+      'Góp vốn nuôi cua,\nthấy rõ từng Lô',
+      'Theo dõi Lô bạn góp vốn qua nhật trình và ảnh chụp từ trại.',
+      [(Icons.inventory_2_outlined, 'Theo từng Lô'), (Icons.photo_camera_outlined, 'Ảnh chụp trong app'), (Icons.lock_outline_rounded, 'Chi phí chuẩn đã khoá')],
     ),
     _Slide(
       AppImages.farmer,
-      'Hộ nuôi ghi nhận\nngay trên điện thoại',
-      'Nhật ký, sự kiện từng hộp và ảnh bằng chứng — gửi trong vài chạm.',
-      [(Icons.science_outlined, 'pH 7,8'), (Icons.thermostat_outlined, '28,5°C'), (Icons.grid_view_rounded, 'Hộp 0014')],
+      'Làm việc tại hộp\nngay trên điện thoại',
+      'Thả cua, ghi nhật ký, đo và duyệt hạng trong vài chạm.',
+      [(Icons.grid_view_rounded, 'Lưới hộp'), (Icons.straighten_rounded, 'Đo tại trạm'), (Icons.local_shipping_outlined, 'Hai lần cân')],
     ),
     _Slide(
       AppImages.crabRoe,
-      'Quét tem,\nbiết cua từ đâu tới',
-      'Mỗi con cua có tem riêng từ lúc thu hoạch đến tay người mua.',
-      [(Icons.qr_code_2_rounded, 'Tem CSAB23CD45EF'), (Icons.route_outlined, 'Hộp → Đơn hàng')],
+      'Quét QR trên đơn,\nbiết cua từ đâu tới',
+      'Mỗi đơn một mã QR: Lô, trại, nguồn cua và quy cách đã duyệt.',
+      [(Icons.qr_code_2_rounded, 'QR theo đơn'), (Icons.route_outlined, 'Trại → Đơn hàng')],
     ),
   ];
 
@@ -111,7 +111,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         TextButton.icon(
                           onPressed: () => context.push(Routes.scan),
                           icon: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.ink),
-                          label: const Text('Quét tem', style: TextStyle(color: AppColors.ink, fontWeight: FontWeight.w600)),
+                          label: const Text('Quét QR đơn', style: TextStyle(color: AppColors.ink, fontWeight: FontWeight.w600)),
                         ),
                       ],
                     ),

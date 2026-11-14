@@ -61,6 +61,12 @@ if (app.Environment.IsDevelopment())
     await DevDataSeeder.SeedAsync(app.Services);
 }
 
+// Bổ sung dữ liệu demo lên một môi trường đã có tài khoản (thao tác của người quản hạ tầng, xem docs/deploy.md):
+// đặt Seed__DemoTopUp=true, khởi động lại, đợi tới khi có Lô rồi gỡ cấu hình. Chạy nền để không chặn lúc khởi động;
+// seeder tự ghi log khi xong hoặc khi lỗi và không để lại dữ liệu dở dang.
+if (builder.Configuration.GetValue<bool>("Seed:DemoTopUp"))
+    _ = Task.Run(() => DevDataSeeder.SeedAsync(app.Services, topUp: true));
+
 app.MapControllers();
 
 app.Run();

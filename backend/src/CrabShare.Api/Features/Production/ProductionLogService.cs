@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CrabShare.Api.Features.Production;
 
-public sealed partial class ProductionLogService(AppDbContext db, ICurrentUser me, TimeProvider clock, IAuditLog audit, AlertService alerts)
+public sealed partial class ProductionLogService(AppDbContext db, ICurrentUser me, TimeProvider clock, IAuditLog audit)
 {
     private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
     private DateOnly Today() => DateOnly.FromDateTime(clock.GetUtcNow().ToOffset(VietnamOffset).DateTime);
@@ -74,9 +74,10 @@ public sealed partial class ProductionLogService(AppDbContext db, ICurrentUser m
                 var day = DateOnly.FromDateTime(now.ToOffset(VietnamOffset).DateTime);
                 if (await db.ProductionLogs.AnyAsync(l => l.BatchId == batch.BatchId && l.LogDate == day && l.Source == "Manual", ct))
                     throw Duplicate();
-                var threshold = await CurrentThresholdAsync(batch.BatchId, ct)
-                    ?? throw new BusinessRuleException("production.thresholds_required", "Owner của Operator cần cấu hình ngưỡng cho lô trước khi ghi nhật ký.");
-                var violations = Violations(request, threshold);
+                // BR-115 (v1.5): chỉ số nước chỉ vẽ biểu đồ, chưa đặt ngưỡng và không cảnh báo theo ngưỡng.
+                // Ngưỡng cũ (nếu lô đã cấu hình) chỉ còn dùng để gắn cờ OutOfRange cho dễ đọc, không tạo cảnh báo.
+                var threshold = await CurrentThresholdAsync(batch.BatchId, ct);
+                var violations = threshold is null ? [] : Violations(request, threshold);
                 var log = new ProductionLog
                 {
                     Batch = batch,
@@ -90,7 +91,7 @@ public sealed partial class ProductionLogService(AppDbContext db, ICurrentUser m
                     Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(),
                     PlausibilityFlag = violations.Count == 0 ? "Ok" : "OutOfRange",
                     ThresholdVersion = threshold,
-                    ThresholdVersionId = threshold.ThresholdVersionId,
+                    ThresholdVersionId = threshold?.ThresholdVersionId,
                     RecordedBy = me.UserId,
                     ReceivedAt = now,
                     CreatedAt = now,
@@ -100,9 +101,6 @@ public sealed partial class ProductionLogService(AppDbContext db, ICurrentUser m
                 await db.SaveChangesAsync(ct);
                 var result = LogResponse(log);
                 await audit.WriteAsync("production_log", log.ProductionLogId, "record", null, result, now, ct);
-                if (violations.Count > 0)
-                    await alerts.RaiseAsync(batch.BatchId, AlertType.WaterQuality, AlertSeverity.Medium,
-                        "Ngoài ngưỡng Operator cấu hình: " + string.Join("; ", violations), TimeSpan.FromHours(24), ct);
                 return result;
             }, ct);
         }

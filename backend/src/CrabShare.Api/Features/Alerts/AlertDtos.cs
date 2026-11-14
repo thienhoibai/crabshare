@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CrabShare.Api.Features.Alerts;
 
-public enum AlertType { Mortality, WaterQuality, MilestoneDelay, LowStock, DataSilence, EvidenceFlag }
+public enum AlertType { Mortality, WaterQuality, MilestoneDelay, LowStock, DataSilence, EvidenceFlag, DeviceOffline, NoCrabDetected, MissingCareLog }
 public enum AlertSeverity { Low, Medium, High, Critical }
 
 public sealed record AlertResponse(long Id, string BatchCode, string FarmName, string Type, string Severity,

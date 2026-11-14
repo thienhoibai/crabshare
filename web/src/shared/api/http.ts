@@ -14,7 +14,14 @@ http.interceptors.request.use((config) => {
 })
 
 http.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // API chỉ trả JSON hoặc tệp. Nhận về một trang HTML nghĩa là địa chỉ API trỏ nhầm sang máy chủ web:
+    // coi là lỗi để trang hiện báo lỗi và nút thử lại, thay vì đọc trang HTML như dữ liệu rồi vỡ.
+    const type = String(res.headers['content-type'] ?? '')
+    if (type.includes('text/html') && res.config.responseType !== 'blob')
+      return Promise.reject(new AxiosError('Phản hồi không phải dữ liệu của API', AxiosError.ERR_BAD_RESPONSE, res.config, res.request, res))
+    return res
+  },
   (error: AxiosError) => {
     const token = useAuthStore.getState().token
     if (error.response?.status === 401 && token && error.config?.headers.Authorization === `Bearer ${token}`)
@@ -32,12 +39,15 @@ export interface ApiProblem {
   errors?: Record<string, string[]>
 }
 
+/** Bỏ phần dẫn số quy tắc như "(BR-164)" mà backend ghi trong câu báo lỗi: người dùng không cần thấy. */
+const plain = (text: string) => text.replace(/\s*\((?:BR|UC|TL|TH|NH)-[^)]*\)/g, '').trim()
+
 /** Lấy câu thông báo lỗi dễ đọc từ bất kỳ lỗi nào (dùng trong toast, dòng báo lỗi dưới form). */
 export function errorMessage(error: unknown): string {
   if (axios.isAxiosError<ApiProblem>(error)) {
     const p = error.response?.data
-    if (p?.errors) return Object.values(p.errors).flat().join(' ')
-    if (p?.detail) return p.detail
+    if (p?.errors) return plain(Object.values(p.errors).flat().join(' '))
+    if (p?.detail) return plain(p.detail)
     if (!error.response) return 'Không kết nối được máy chủ. Kiểm tra API đã chạy chưa.'
   }
   return 'Có lỗi xảy ra, thử lại sau.'

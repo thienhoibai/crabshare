@@ -1,84 +1,183 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
+
 import '../../../app/theme/app_theme.dart';
+import '../../../shared/status_labels.dart';
+import '../../../shared/widgets/app_parts.dart';
 import '../../../shared/widgets/app_ui.dart';
 import '../data/timeline_repository.dart';
-import 'timeline_media.dart';
+import '../widgets/investor_ui.dart';
 
-class TimelineEntry extends StatelessWidget {
-  const TimelineEntry({super.key, required this.code, required this.item, required this.onDenied});
+final _number = NumberFormat('#,##0.###', 'vi_VN');
+
+/// Một ghi nhận trong nhật trình: nhật ký chăm sóc, sự kiện của một con cua, bằng chứng đã chấp nhận,
+/// cảnh báo hoặc sự kiện hộp. Mỗi ghi nhận một dòng: biểu tượng, tên, một câu tóm tắt, giờ.
+class TimelineEntry extends ConsumerWidget {
+  const TimelineEntry({super.key, required this.code, required this.item});
   final String code;
   final TimelineItem item;
-  final VoidCallback onDenied;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
     final log = item.productionLog;
-    final slot = item.slotEvent;
+    final crab = item.crabEvent;
     final evidence = item.evidence;
     final alert = item.alert;
-    final (label, icon) = switch (item.type) {
-      'ProductionLog' => ('Nhật ký', Icons.menu_book_rounded),
-      'SlotEvent' => ('Sự kiện hộp', Icons.grid_view_rounded),
-      'Evidence' => ('Bằng chứng', Icons.photo_camera_outlined),
-      'Alert' => ('Cảnh báo', Icons.warning_amber_rounded),
-      _ => ('Ghi nhận', Icons.history_rounded),
-    };
-    String metric(double? value) => value == null ? '—' : NumberFormat('#,##0.###', 'vi_VN').format(value);
+    final slot = item.slotEvent;
+
+    var icon = Icons.history_rounded;
+    var color = AppColors.accentText;
+    var title = 'Ghi nhận';
+    String? summary;
+    Widget? extra;
+
+    if (log != null) {
+      icon = Icons.menu_book_rounded;
+      title = 'Nhật ký chăm sóc';
+      summary = [
+        if (log.ph != null) 'pH ${_number.format(log.ph)}',
+        if (log.waterTempC != null) '${_number.format(log.waterTempC)} °C',
+        if (log.salinityPpt != null) '${_number.format(log.salinityPpt)} ‰',
+        if (log.feedKg != null) '${_number.format(log.feedKg)} kg thức ăn',
+        if (log.note != null && log.note!.isNotEmpty) log.note!,
+      ].join(' · ');
+      if (log.plausibilityFlag != 'Ok') {
+        color = AppColors.warning;
+        extra = InfoChip(
+          label: log.plausibilityFlag == 'OutOfRange' ? 'Ngoài ngưỡng' : 'Cần đối chiếu',
+          background: AppColors.warning.withValues(alpha: 0.14),
+          foreground: AppColors.warning,
+        );
+      }
+    } else if (crab != null) {
+      icon = Icons.set_meal_outlined;
+      title = timelineCrabEventLabels[crab.eventType] ?? crab.eventType;
+      if (crab.eventType == 'Died' || crab.eventType == 'Destroyed') color = AppColors.danger;
+      summary = [
+        'Cua ${crab.crabCode}',
+        if (crab.slotCode != null) 'hộp ${crab.slotCode}',
+        if (crab.reason != null && crab.reason!.isNotEmpty) crab.reason!,
+      ].join(' · ');
+    } else if (evidence != null) {
+      icon = Icons.photo_camera_outlined;
+      color = AppColors.success;
+      title = timelineMediaLabels[evidence.mediaType] ?? evidence.mediaType;
+      summary = evidence.slotCode == null ? null : 'Hộp ${evidence.slotCode}';
+      final style = TextButton.styleFrom(
+        foregroundColor: AppColors.accentText,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        minimumSize: const Size(48, 44),
+      );
+      extra = evidence.isPhoto
+          ? TextButton.icon(
+              style: style,
+              onPressed: () => _showPhoto(context, timelineFilePath(code, item.sourceId)),
+              icon: const Icon(Icons.photo_outlined, size: 18),
+              label: const Text('Xem ảnh'),
+            )
+          : TextButton.icon(
+              style: style,
+              onPressed: () => openWeb(context, ref, '${WebPaths.portfolio(code)}?tab=nhat-trinh'),
+              icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              label: const Text('Mở trên web'),
+            );
+    } else if (alert != null) {
+      icon = Icons.warning_amber_rounded;
+      color = toneColor(statusTone('severity', alert.severity));
+      title = statusLabel('alertType', alert.type);
+      summary = alert.message;
+      extra = StatusPill(kind: 'alert', value: alert.status);
+    } else if (slot != null) {
+      icon = Icons.grid_view_rounded;
+      title = timelineSlotLabels[slot.eventType] ?? slot.eventType;
+      if (slot.eventType == 'Mortality') color = AppColors.danger;
+      summary = [
+        'Hộp ${slot.slotCode}${slot.destinationSlotCode == null ? '' : ' sang hộp ${slot.destinationSlotCode}'}',
+        '${slot.quantity} con',
+      ].join(' · ');
+    }
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          Icon(icon, size: 18, color: alert != null ? AppColors.danger : AppColors.ink),
-          Text(label, style: text.labelLarge),
-          Text(item.occurredAt == null ? 'Ghi nhận theo ngày' : '${timelineTime(item.occurredAt!)}${item.timeBasis == 'Received' ? ' · Tiếp nhận' : ''}', style: text.bodySmall),
-        ]),
-        const SizedBox(height: 14),
-        if (log != null) ...[
-          Text('Môi trường & chăm sóc', style: text.titleMedium),
-          const SizedBox(height: 12),
-          LayoutBuilder(builder: (context, constraints) => Wrap(spacing: 12, runSpacing: 16, children: [
-            for (final (name, value, unit) in [('pH', log.ph, ''), ('Nhiệt độ', log.waterTempC, '°C'), ('Độ mặn', log.salinityPpt, 'ppt'), ('Thức ăn', log.feedKg, 'kg')])
-              SizedBox(width: (constraints.maxWidth - 12) / 2, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(name, style: text.bodySmall),
-                Text('${metric(value)} $unit', style: text.titleLarge),
-              ])),
-          ])),
-          if (log.note != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(log.note!)),
-          const SizedBox(height: 12),
-          Text('${log.source == 'Manual' ? 'Nhật ký hộ nuôi' : 'Hệ thống trại'} · ${const {'Ok': 'Trong ngưỡng đã áp dụng', 'OutOfRange': 'Ngoài ngưỡng đã áp dụng', 'Inconsistent': 'Cần đối chiếu số liệu'}[log.plausibilityFlag] ?? log.plausibilityFlag}', style: text.bodySmall),
-        ],
-        if (slot != null) ...[
-          Text(timelineSlotLabels[slot.eventType] ?? slot.eventType, style: text.titleMedium),
-          const SizedBox(height: 8),
-          Text('Hộp ${slot.slotCode}${slot.destinationSlotCode == null ? '' : ' → ${slot.destinationSlotCode}'}', style: text.titleLarge),
-          Text('${slot.quantity} con', style: text.bodySmall),
-          if (slot.note != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(slot.note!)),
-        ],
-        if (evidence != null) ...[
-          Text(evidence.mediaType == 'Photo' ? 'Ảnh ghi nhận tại trại' : 'File bằng chứng sản xuất', style: text.titleMedium),
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, children: [
-            const InfoChip(icon: Icons.done_all_rounded, label: 'Đã chấp nhận'),
-            if (evidence.slotCode != null) Text('Hộp ${evidence.slotCode}', style: text.bodySmall),
-          ]),
-          const SizedBox(height: 12),
-          TimelineMedia(code: code, item: item, onDenied: onDenied),
-        ],
-        if (alert != null) ...[
-          Text(timelineAlertLabels[alert.type] ?? alert.type, style: text.titleMedium),
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            InfoChip(icon: Icons.flag_outlined, label: 'Mức độ ${timelineSeverityLabels[alert.severity] ?? alert.severity}'),
-            Text(timelineStatusLabels[alert.status] ?? alert.status, style: text.labelLarge),
-          ]),
-          const SizedBox(height: 12), Text(alert.message),
-          if (alert.acknowledgedAt != null) Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text('Hộ nuôi đã phản hồi · ${timelineTime(alert.acknowledgedAt!)} (UTC+7)', style: text.bodySmall),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IconTile(icon: icon, size: 38, background: color.withValues(alpha: 0.12), foreground: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600))),
+                    if (item.occurredAt != null) Text(timelineTime(item.occurredAt!), style: text.bodySmall),
+                  ],
+                ),
+                if (summary != null && summary.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(summary, style: text.bodySmall),
+                ],
+                if (extra != null) ...[
+                  const SizedBox(height: 4),
+                  Align(alignment: Alignment.centerLeft, child: extra),
+                ],
+              ],
+            ),
           ),
         ],
-      ])),
+      ),
+    );
+  }
+
+  void _showPhoto(BuildContext context, String path) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: AppColors.surface,
+        insetPadding: const EdgeInsets.all(16),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: IconButton(tooltip: 'Đóng ảnh', onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close_rounded)),
+              ),
+              Flexible(child: _EvidencePhoto(path: path)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Ảnh bằng chứng đầy đủ khung, tải qua API cần đăng nhập, phóng to được.
+class _EvidencePhoto extends ConsumerWidget {
+  const _EvidencePhoto({required this.path});
+  final String path;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ref.watch(authImageProvider(path)).when(
+      loading: () => const SectionLoading(),
+      error: (_, _) => const Padding(padding: EdgeInsets.all(20), child: Text('Ảnh tạm thời không xem được.')),
+      data: (bytes) => bytes.isEmpty
+          ? const Padding(padding: EdgeInsets.all(20), child: Text('Ảnh tạm thời không xem được.'))
+          : InteractiveViewer(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.memory(
+                  bytes,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Padding(padding: EdgeInsets.all(20), child: Text('Không đọc được ảnh.')),
+                ),
+              ),
+            ),
     );
   }
 }

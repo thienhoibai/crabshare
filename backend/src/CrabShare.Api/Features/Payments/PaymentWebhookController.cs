@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CrabShare.Api.Common;
 using CrabShare.Api.Common.Errors;
 using CrabShare.Api.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -50,19 +51,19 @@ public sealed class PaymentWebhookController(PaymentWebhookService webhook, IOpt
 }
 
 /// <summary>
-/// Giả lập "khách đã chuyển khoản" khi chạy Development (nút "Giả lập đã chuyển khoản" trên web): đi đúng luồng webhook,
-/// không đi tắt đổi trạng thái. Ngoài Development trả 404 như thể không có endpoint.
+/// Giả lập "khách đã chuyển khoản" (nút "Giả lập đã chuyển khoản" trên web): đi đúng luồng webhook, không đi tắt đổi trạng thái.
+/// Có ở Development và ở môi trường bật công cụ demo (<see cref="DemoTools"/>); còn lại trả 404 như thể không có endpoint.
 /// </summary>
 [ApiController]
 [Route("api/dev/payments")]
 [Authorize]
-public sealed class DevPaymentsController(PaymentWebhookService webhook, AppDbContext db, IHostEnvironment env, TimeProvider clock) : ControllerBase
+public sealed class DevPaymentsController(PaymentWebhookService webhook, AppDbContext db, IHostEnvironment env, IConfiguration config, TimeProvider clock) : ControllerBase
 {
     [HttpPost("simulate")]
-    [EndpointSummary("Chỉ Development — giả lập ngân hàng báo có cho một mã đối chiếu (để trống amount thì chuyển đúng số tiền yêu cầu)")]
+    [EndpointSummary("Công cụ demo — giả lập ngân hàng báo có cho một mã đối chiếu (để trống amount thì chuyển đúng số tiền yêu cầu)")]
     public async Task<ActionResult<WebhookResult>> Simulate(SimulatePaymentRequest req, CancellationToken ct)
     {
-        if (!env.IsDevelopment()) return NotFound();
+        if (!DemoTools.Enabled(env, config)) return NotFound();
         var code = req.ReferenceCode.Trim().ToUpperInvariant();
         var target = await db.PaymentRequests.AsNoTracking()
                          .Where(r => r.ReferenceCode == code)

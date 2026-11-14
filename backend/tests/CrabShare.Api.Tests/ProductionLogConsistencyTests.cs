@@ -47,7 +47,7 @@ public partial class ProductionLogTests
         var log = await logReply.Content.ReadFromJsonAsync<JsonElement>(); var version = log.GetProperty("thresholdVersion").GetInt32(); var applied = log.GetProperty("thresholdsApplied");
         Assert.Contains(version, new[] { 1, 2 }); Assert.Equal(version, applied.GetProperty("versionNo").GetInt32());
         Assert.Equal(version == 1 ? 7.0m : 8.5m, applied.GetProperty("phMin").GetDecimal()); Assert.Equal(version == 1 ? "Ok" : "OutOfRange", log.GetProperty("plausibilityFlag").GetString());
-        Assert.Equal(version == 2, await Db(db => db.Alerts.AnyAsync(a => a.BatchId == farm.BatchId)));
+        Assert.False(await Db(db => db.Alerts.AnyAsync(a => a.BatchId == farm.BatchId))); // BR-115 (v1.5): không cảnh báo theo ngưỡng
         var history = Assert.Single((await client.GetFromJsonAsync<JsonElement>(Path(farm))).GetProperty("items").EnumerateArray()); Assert.Equal(version, history.GetProperty("thresholdVersion").GetInt32()); await AssertChain();
     }
 

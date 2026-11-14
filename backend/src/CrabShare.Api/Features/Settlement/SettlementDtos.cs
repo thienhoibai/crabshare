@@ -35,7 +35,16 @@ public sealed record SettlementResponse(
     long ReconciliationDifference, long TotalCapital, long TotalNetPayout, int InvestorCount,
     DateTimeOffset? ProposedAt, DateTimeOffset? FeedbackDeadline, DateTimeOffset? ApprovedAt, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
     IReadOnlyList<SettlementLineResponse> Lines, IReadOnlyList<SettlementFeedbackResponse> Feedback, string TaxNotice,
-    IReadOnlyList<AuditAnchorResponse> AuditAnchors);
+    IReadOnlyList<AuditAnchorResponse> AuditAnchors, SettlementBreakdown Breakdown);
+
+/// <summary>
+/// Chi tiết quyết toán theo Business Rule v1.5: chế độ lô, cơ sở quyết toán, bốn loại dòng doanh thu (BR-185), phí nền tảng (BR-188),
+/// chi phí trừ (BR-187, BR-189), phần Chi phí chuẩn đã và chưa giải ngân (BR-207), tỷ lệ sống (BR-191), hoa hồng lô A (BR-201), thanh lý sớm.
+/// </summary>
+public sealed record SettlementBreakdown(string Mode, string Basis, long PreOrderRevenue, long InvoicedSaleRevenue, long ForfeitedDeposits,
+    long FinalOrderRevenue, decimal PlatformFeeRatePct, long PlatformFee, long StandardCostDeductible, long ActualCostTotal, long ExcludedFaultCost,
+    long DisbursedTotal, long UndisbursedCost, long CustomerRefunds, int ReceivedCount, int DeadCount, decimal? SurvivalRatePct,
+    decimal? CommissionPct, long CommissionAmount, long SupplierPayout, bool IsLiquidation);
 
 /// <summary>
 /// Mã neo nhật ký kiểm toán tại một mốc bắt buộc (TL-08 §6.4: chốt vốn, duyệt quyết toán, đóng lô): <c>row_hash</c> của dòng audit ghi mốc đó,

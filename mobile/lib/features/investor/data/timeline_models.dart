@@ -1,84 +1,124 @@
-Map<String, dynamic> _map(dynamic value) => Map<String, dynamic>.from(value as Map);
-DateTime? _date(dynamic value) => value == null ? null : DateTime.parse(value as String);
-double? _number(dynamic value) => (value as num?)?.toDouble();
+import '../../../core/api/json.dart';
 
+/// Nhật ký chăm sóc của một ngày.
 class TimelineLog {
-  TimelineLog(Map<String, dynamic> json)
-    : ph = _number(json['ph']), waterTempC = _number(json['waterTempC']),
-      salinityPpt = _number(json['salinityPpt']), feedKg = _number(json['feedKg']),
-      source = json['source'] as String, plausibilityFlag = json['plausibilityFlag'] as String,
-      note = json['note'] as String?;
+  TimelineLog(Json j)
+    : ph = doubleOrNull(j, 'ph'),
+      waterTempC = doubleOrNull(j, 'waterTempC'),
+      salinityPpt = doubleOrNull(j, 'salinityPpt'),
+      feedKg = doubleOrNull(j, 'feedKg'),
+      plausibilityFlag = str(j, 'plausibilityFlag', 'Ok'),
+      note = strOrNull(j, 'note');
   final double? ph, waterTempC, salinityPpt, feedKg;
-  final String source, plausibilityFlag;
+  final String plausibilityFlag;
   final String? note;
 }
 
+/// Sự kiện theo hộp nuôi (dữ liệu của các Lô trước v1.5).
 class TimelineSlot {
-  TimelineSlot(Map<String, dynamic> json)
-    : eventType = json['eventType'] as String, slotCode = json['slotCode'] as String,
-      destinationSlotCode = json['destinationSlotCode'] as String?,
-      quantity = (json['quantity'] as num).toInt(), note = json['note'] as String?;
+  TimelineSlot(Json j)
+    : eventType = str(j, 'eventType'),
+      slotCode = str(j, 'slotCode'),
+      destinationSlotCode = strOrNull(j, 'destinationSlotCode'),
+      quantity = intOf(j, 'quantity'),
+      note = strOrNull(j, 'note');
   final String eventType, slotCode;
   final String? destinationSlotCode, note;
   final int quantity;
 }
 
+/// Bằng chứng đã được chấp nhận.
 class TimelineEvidence {
-  TimelineEvidence(Map<String, dynamic> json)
-    : mediaType = json['mediaType'] as String, source = json['source'] as String,
-      reviewStatus = json['reviewStatus'] as String, fileUrl = json['fileUrl'] as String,
-      slotCode = json['slotCode'] as String?;
-  final String mediaType, source, reviewStatus, fileUrl;
+  TimelineEvidence(Json j)
+    : mediaType = str(j, 'mediaType'),
+      reviewStatus = str(j, 'reviewStatus'),
+      slotCode = strOrNull(j, 'slotCode');
+  final String mediaType, reviewStatus;
   final String? slotCode;
+
+  bool get isPhoto => mediaType == 'Photo';
 }
 
 class TimelineAlert {
-  TimelineAlert(Map<String, dynamic> json)
-    : type = json['type'] as String, severity = json['severity'] as String,
-      message = json['message'] as String, status = json['status'] as String,
-      acknowledgedAt = _date(json['acknowledgedAt']), escalatedAt = _date(json['escalatedAt']);
+  TimelineAlert(Json j)
+    : type = str(j, 'type'),
+      severity = str(j, 'severity'),
+      message = str(j, 'message'),
+      status = str(j, 'status');
   final String type, severity, message, status;
-  final DateTime? acknowledgedAt, escalatedAt;
+}
+
+/// Sự kiện của một con cua: nhận, xếp hộp, chết, lột, phân hạng, giao, bán.
+class TimelineCrabEvent {
+  TimelineCrabEvent(Json j)
+    : eventType = str(j, 'eventType'),
+      crabCode = str(j, 'crabCode'),
+      slotCode = strOrNull(j, 'slotCode'),
+      source = str(j, 'source'),
+      reason = strOrNull(j, 'reason');
+  final String eventType, crabCode, source;
+  final String? slotCode, reason;
 }
 
 class TimelineItem {
-  TimelineItem.fromJson(Map<String, dynamic> json)
-    : id = json['id'] as String, type = json['type'] as String,
-      sourceId = json['sourceId'] as String, businessDate = json['businessDate'] as String,
-      occurredAt = _date(json['occurredAt']), timeBasis = json['timeBasis'] as String,
-      productionLog = json['productionLog'] == null ? null : TimelineLog(_map(json['productionLog'])),
-      slotEvent = json['slotEvent'] == null ? null : TimelineSlot(_map(json['slotEvent'])),
-      evidence = json['evidence'] == null ? null : TimelineEvidence(_map(json['evidence'])),
-      alert = json['alert'] == null ? null : TimelineAlert(_map(json['alert']));
-  final String id, type, sourceId, businessDate, timeBasis;
+  TimelineItem.fromJson(Json j)
+    : id = str(j, 'id'),
+      type = str(j, 'type'),
+      sourceId = str(j, 'sourceId'),
+      occurredAt = dateOrNull(j, 'occurredAt'),
+      productionLog = _part(j, 'productionLog', TimelineLog.new),
+      slotEvent = _part(j, 'slotEvent', TimelineSlot.new),
+      evidence = _part(j, 'evidence', TimelineEvidence.new),
+      alert = _part(j, 'alert', TimelineAlert.new),
+      crabEvent = _part(j, 'crabEvent', TimelineCrabEvent.new);
+  final String id, type, sourceId;
   final DateTime? occurredAt;
   final TimelineLog? productionLog;
   final TimelineSlot? slotEvent;
   final TimelineEvidence? evidence;
   final TimelineAlert? alert;
+  final TimelineCrabEvent? crabEvent;
+
+  /// Loại ghi nhận để gom các ghi nhận giống nhau trong một ngày (ví dụ 288 lần thả cua vào hộp).
+  String get groupKey => switch (this) {
+    TimelineItem(:final crabEvent?) => 'CrabEvent:${crabEvent.eventType}',
+    TimelineItem(:final slotEvent?) => 'SlotEvent:${slotEvent.eventType}',
+    TimelineItem(:final evidence?) => 'Evidence:${evidence.mediaType}',
+    TimelineItem(:final alert?) => 'Alert:${alert.type}',
+    _ => type,
+  };
+
+  static T? _part<T>(Json j, String key, T Function(Json) build) {
+    final value = asJsonOrNull(j[key]);
+    return value == null ? null : build(value);
+  }
 }
 
 class TimelineDay {
   const TimelineDay(this.date, this.items);
-  factory TimelineDay.fromJson(Map<String, dynamic> json) => TimelineDay(
-    json['date'] as String,
-    (json['items'] as List).map((v) => TimelineItem.fromJson(_map(v))).toList(),
+  factory TimelineDay.fromJson(Json j) => TimelineDay(
+    str(j, 'date'),
+    [for (final item in asJsonList(j['items'])) TimelineItem.fromJson(item)],
   );
+
+  /// Ngày theo giờ Việt Nam, dạng yyyy-MM-dd.
   final String date;
   final List<TimelineItem> items;
 }
 
 class TimelinePage {
-  TimelinePage.fromJson(Map<String, dynamic> json)
-    : batchCode = json['batchCode'] as String, timeZone = json['timeZone'] as String,
-      groups = (json['groups'] as List).map((v) => TimelineDay.fromJson(_map(v))).toList(),
-      nextBefore = json['nextBefore'] as String?, hasMore = json['hasMore'] as bool;
-  final String batchCode, timeZone;
+  TimelinePage.fromJson(Json j)
+    : batchCode = str(j, 'batchCode'),
+      groups = [for (final g in asJsonList(j['groups'])) TimelineDay.fromJson(g)],
+      nextBefore = strOrNull(j, 'nextBefore'),
+      hasMore = boolOf(j, 'hasMore');
+  final String batchCode;
   final List<TimelineDay> groups;
   final String? nextBefore;
   final bool hasMore;
 }
 
+/// Gộp các trang đã tải thành nhóm ngày, ngày mới nhất ở trên, bỏ ghi nhận trùng.
 List<TimelineDay> mergeTimelineDays(List<TimelineDay> previous, List<TimelineDay> incoming) {
   final seen = <String>{};
   final byDate = <String, List<TimelineItem>>{};
@@ -91,12 +131,41 @@ List<TimelineDay> mergeTimelineDays(List<TimelineDay> previous, List<TimelineDay
   return [for (final date in dates) TimelineDay(date, byDate[date]!)];
 }
 
+/// Giờ Việt Nam (UTC+7) của một ghi nhận, không phụ thuộc múi giờ của máy.
 String timelineTime(DateTime value) {
   final vietnam = value.toUtc().add(const Duration(hours: 7));
   return '${vietnam.hour.toString().padLeft(2, '0')}:${vietnam.minute.toString().padLeft(2, '0')}';
 }
-String timelineDate(String date) => '${date.substring(8, 10)}/${date.substring(5, 7)}/${date.substring(0, 4)}';
-const timelineSlotLabels = {'Stocked': 'Thả giống', 'Molted': 'Lột xác', 'Mortality': 'Ghi nhận hao hụt', 'Restocked': 'Thả bù', 'Harvested': 'Thu hoạch', 'Relocated': 'Chuyển hộp'};
-const timelineAlertLabels = {'WaterQuality': 'Chất lượng nước', 'Mortality': 'Hao hụt', 'DataSilence': 'Thiếu nhật ký', 'MilestoneDelay': 'Chậm mốc sản xuất', 'LowStock': 'Tồn kho thấp', 'EvidenceFlag': 'Cần kiểm tra bằng chứng'};
-const timelineStatusLabels = {'Open': 'Chờ phản hồi', 'Acknowledged': 'Đã phản hồi', 'Escalated': 'Đã chuyển quản trị', 'Resolved': 'Đã xử lý'};
-const timelineSeverityLabels = {'Low': 'Thấp', 'Medium': 'Trung bình', 'High': 'Cao', 'Critical': 'Nghiêm trọng'};
+
+/// "2026-10-20" → "20/10/2026".
+String timelineDate(String date) =>
+    date.length < 10 ? date : '${date.substring(8, 10)}/${date.substring(5, 7)}/${date.substring(0, 4)}';
+
+/// Nhãn của các mã chỉ xuất hiện trong nhật trình (status_labels.dart chưa có nhóm tương ứng).
+const timelineSlotLabels = {
+  'Stocked': 'Thả cua vào hộp',
+  'Molted': 'Cua lột xác',
+  'Mortality': 'Ghi nhận cua chết',
+  'Restocked': 'Thả bù',
+  'Harvested': 'Thu hoạch',
+  'Relocated': 'Chuyển hộp',
+};
+
+const timelineCrabEventLabels = {
+  'Received': 'Nhận cua về trại',
+  'Boxed': 'Xếp vào hộp',
+  'Moved': 'Chuyển hộp',
+  'AbnormalFeeding': 'Ăn bất thường',
+  'Inspected': 'Kiểm tra',
+  'Died': 'Cua chết',
+  'Molted': 'Lột xác',
+  'Graded': 'Đã phân hạng',
+  'Downgraded': 'Hạ hạng',
+  'Shipped': 'Xuất hàng',
+  'Delivered': 'Đã giao',
+  'Sold': 'Đã bán',
+  'Destroyed': 'Loại bỏ',
+  'Returned': 'Trả về tồn',
+};
+
+const timelineMediaLabels = {'Photo': 'Ảnh bằng chứng', 'Video': 'Video bằng chứng', 'Invoice': 'Chứng từ'};

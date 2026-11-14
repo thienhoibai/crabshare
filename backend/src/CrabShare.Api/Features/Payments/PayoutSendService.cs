@@ -21,6 +21,9 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
     /// <summary>Đích của lệnh nộp thuế người nuôi khai thay (TL-14 §6.6): tài khoản thu ngân sách tại kho bạc (bản sandbox).</summary>
     private static readonly (string Bank, string Account, string Name) StateTreasury = ("KBNN", "THU-NGAN-SACH", "Kho bạc Nhà nước — thu ngân sách");
 
+    /// <summary>Đích của phí nền tảng (lô P, BR-188) và hoa hồng (lô A, BR-201): tài khoản của CrabShare (bản sandbox).</summary>
+    private static readonly (string Bank, string Account, string Name) PlatformAccount = ("CRABSHARE", "PHI-NEN-TANG", "CrabShare — phí nền tảng và hoa hồng");
+
     private Task<PayoutAccount?> ActivePayoutOfUserAsync(long userId, CancellationToken ct) => db.PayoutAccounts.AsNoTracking()
         .Where(p => p.OwnerUserId == userId && p.Status == "Active")
         .OrderByDescending(p => p.PayoutAccountId).FirstOrDefaultAsync(ct);
@@ -46,10 +49,11 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
         if (payout is null && instruction is { InstructionType: "Payout", SettlementLineId: { } lineId })
             payout = await ActivePayoutOfUserAsync(
                 await db.SettlementLines.Where(l => l.SettlementLineId == lineId).Select(l => l.InvestorId).SingleAsync(ct), ct);
-        if (payout is null && instruction.InstructionType is not ("Refund" or "TaxPayment"))
+        if (payout is null && instruction.InstructionType is not ("Refund" or "TaxPayment" or "PlatformFee" or "Commission"))
             throw new BusinessRuleException("payment.no_payout_account", "Người nhận chưa có tài khoản nhận tiền đang dùng.");
         var (bank, accountNo, name) = payout is not null ? (payout.BankCode, payout.AccountNo, payout.AccountHolderName)
-            : instruction.InstructionType == "TaxPayment" ? StateTreasury : OriginalSender;
+            : instruction.InstructionType == "TaxPayment" ? StateTreasury
+            : instruction.InstructionType is "PlatformFee" or "Commission" ? PlatformAccount : OriginalSender;
 
         var reference = $"CHI{instruction.InstructionId:D8}";
         var now = Now();
@@ -91,8 +95,8 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
                 new { status = contribution.Status, refundedAt = now, instruction.InstructionId }, now, ct);
         }
 
-        // Khoản chi cuối cùng của nhà đầu tư đã tới tay → bảng quyết toán PaidOut, lô Closed (TH-14, TL-14 Bước 6)
-        if (result.Accepted && instruction.SettlementLineId is not null)
+        // Lệnh chi quyết toán cuối cùng đã thành công → bảng quyết toán PaidOut, Lô Closed (BR-209)
+        if (result.Accepted && instruction.InstructionType is "Payout" or "PlatformFee" or "Commission" or "SupplierPayout")
             await Settlement.SettlementClosing.CloseIfPaidAsync(db, audit, instruction.BatchAccount.BatchId, now, ct);
 
         return await db.PaymentInstructions.AsNoTracking().Where(i => i.InstructionId == instructionId)

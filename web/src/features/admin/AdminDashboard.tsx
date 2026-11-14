@@ -1,52 +1,175 @@
+/* /admin — Bảng điều khiển của Quản trị. Việc chính: mở đúng hàng việc đang có việc chờ.
+   Số việc chờ lấy từ danh sách của từng trang; ba con số của kỳ lấy từ GET /api/admin/dashboard.
+   Bảng theo kỳ và báo cáo CSV (GET /api/admin/reports/{capital|batches|orders|payouts}.csv) nằm trong phần gấp lại. */
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Users, LayoutGrid, DollarSign, Wallet, Download, RefreshCw } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { errorMessage } from '../../shared/api/http'
-import { useAuthStore } from '../../shared/auth/authStore'
-import { formatVnd, formatDateTime } from '../../shared/lib/format'
-import { adminDashboard, downloadReport, initialPeriod, validPeriod, statusLabels, type StatusCount } from '../reports/dashboardApi'
-import AdminLayout from './AdminLayout'
-import { adminButton, adminField } from './adminAccountUi'
+import { useNavigate } from 'react-router'
+import { CheckCircle2, Download } from 'lucide-react'
+import type {
+  AdminDashboardResponse, AdminSettlementSummary, ClaimResponse, PagedResultOfAdminKycResponse, PagedResultOfAdminOperatorResponse,
+  PagedResultOfPartySummaryResponse,
+} from '../../shared/api/api.gen'
+import {
+  Input, Money, OpBtn, OpEmpty, OpFacts, OpHeading, OpLoading, OpMore, OpNote, OpPanel, OpStat, OpTable, OpTabs, OpTodo, QueryView, StatusBadge,
+  formatDate, formatVnd, openFile, useGet,
+} from '../../shared/ui/console'
+import { vnDate } from './adminPartA'
 
-function StatusList({ items }: { items: StatusCount[] }) {
-  return !items.length ? <p className="text-sm text-slate-500">Chưa có dữ liệu.</p> : <ul className="space-y-3">{items.map(item => <li key={item.status} className="flex justify-between gap-3 text-sm"><span className="text-slate-600">{statusLabels[item.status] ?? item.status}</span><b>{item.count.toLocaleString('vi-VN')}</b></li>)}</ul>
+interface Queue { title: string; href: string; n: number | undefined; unit: string; danger?: boolean; failed: boolean }
+
+const TABLES = [
+  { key: 'batches', label: 'Lô' },
+  { key: 'capital', label: 'Vốn theo ngày' },
+  { key: 'orders', label: 'Đơn' },
+  { key: 'payouts', label: 'Lệnh chi trả' },
+] as const
+type TableKey = (typeof TABLES)[number]['key']
+
+const validRange = (from: string, to: string) => {
+  const span = (Date.parse(to) - Date.parse(from)) / 86_400_000
+  return !!from && !!to && span >= 0 && span <= 365
 }
+
 export default function AdminDashboard() {
-  const [period, setPeriod] = useState(initialPeriod)
-  const [exporting, setExporting] = useState(false)
-  const [exportError, setExportError] = useState('')
-  const userId = useAuthStore(s => s.user?.userId)
-  const valid = validPeriod(period.from, period.to)
-  const query = useQuery({ queryKey: ['admin-dashboard', userId, period], queryFn: ({ signal }) => adminDashboard(period.from, period.to, signal), enabled: !!userId && valid })
-  const data = query.data
-  async function exportCsv(name: string) {
-    if (exporting || !valid) return
-    setExporting(true); setExportError('')
-    try { await downloadReport(name, period.from, period.to) } catch (error) { setExportError(errorMessage(error)) } finally { setExporting(false) }
-  }
-  return <AdminLayout activeTab="dashboard">
-    <header className="mb-6"><h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Tổng quan Nền tảng</h1><p className="mt-1 text-sm text-slate-500">Số liệu thực tế từ hệ thống · ngày báo cáo theo giờ Việt Nam.</p></header>
-    <div className="mb-6 flex flex-wrap items-end gap-3">
-      <label className="grid gap-1 text-xs font-bold text-slate-600">Từ ngày<input type="date" className={adminField} value={period.from} onChange={e => setPeriod({ ...period, from: e.target.value })} /></label>
-      <label className="grid gap-1 text-xs font-bold text-slate-600">Đến ngày<input type="date" className={adminField} value={period.to} onChange={e => setPeriod({ ...period, to: e.target.value })} /></label>
-      <button className={adminButton} disabled={!valid || query.isFetching} onClick={() => { void query.refetch() }}><RefreshCw size={16} />Làm mới</button>
-      {['capital', 'batches', 'orders', 'payouts'].map((name, index) => <button key={name} className={adminButton} disabled={!valid || exporting} onClick={() => { void exportCsv(name) }}><Download size={15} />CSV {['vốn góp', 'lô nuôi', 'đơn hàng', 'chi trả'][index]}</button>)}
-    </div>
-    {!valid && <p role="alert" className="mb-4 text-sm text-red-700">Chọn khoảng ngày hợp lệ, tối đa 366 ngày.</p>}
-    {exportError && <p role="alert" className="mb-4 text-sm text-red-700">{exportError}</p>}
-    {valid && (query.isPending ? <div role="status" aria-label="Đang tải dashboard" className="grid grid-cols-1 gap-6 md:grid-cols-4">{[1, 2, 3, 4].map(i => <div key={i} className="h-28 animate-pulse rounded-xl bg-slate-200" />)}</div> : query.isError ? <div role="alert" className="rounded-xl border border-red-200 bg-white p-6"><p>{errorMessage(query.error)}</p><button className={adminButton + ' mt-3'} onClick={() => { void query.refetch() }}>Thử lại</button></div> : data && <>
-      <p className="mb-4 text-xs text-slate-500">Cập nhật {formatDateTime(data.asOf)} · {data.confirmedContributions} khoản góp còn hiệu lực trong kỳ.</p>
-      <div className="mb-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {[{ label: 'Vốn xác nhận trong kỳ', value: formatVnd(data.confirmedCapital), Icon: DollarSign }, { label: 'Doanh thu đơn hoàn tất trong kỳ', value: formatVnd(data.completedOrderRevenue), Icon: Wallet }, { label: 'Lô nuôi hiện có', value: data.batchesByStatus.reduce((n, s) => n + s.count, 0).toLocaleString('vi-VN'), Icon: LayoutGrid }, { label: 'Tài khoản hiện có', value: data.totalUsers.toLocaleString('vi-VN'), Icon: Users }].map(({ label, value, Icon }) => <section key={label} className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><Icon className="mb-3 h-5 w-5 text-red-600" /><p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p><b className="break-words text-xl text-slate-900">{value}</b></section>)}
+  const [from, setFrom] = useState(() => vnDate(-29))
+  const [to, setTo] = useState(() => vnDate())
+  const valid = validRange(from, to)
+  const dash = useGet<AdminDashboardResponse>(valid ? '/api/admin/dashboard' : null, { from, to })
+
+  const parties = useGet<PagedResultOfPartySummaryResponse>('/api/admin/parties', { verificationStatus: 'Pending', pageSize: 1 })
+  const farms = useGet<PagedResultOfAdminOperatorResponse>('/api/admin/operators', { status: 'Submitted', pageSize: 1 })
+  const kyc = useGet<PagedResultOfAdminKycResponse>('/api/admin/kyc-checks', { pageSize: 1 })
+  const tranches = useGet<unknown[]>('/api/admin/tranches')
+  const settlements = useGet<AdminSettlementSummary[]>('/api/admin/settlements')
+  const claims = useGet<ClaimResponse[]>('/api/admin/claims', { status: 'Escalated' })
+
+  const pendingBatches = dash.data ? dash.data.batchesByStatus.find((s) => s.status === 'PendingApproval')?.count ?? 0 : undefined
+  const queues: Queue[] = [
+    { title: 'Cảnh báo đã chuyển cấp', href: '/admin/alerts', n: dash.data?.escalatedAlerts, unit: 'cảnh báo', danger: true, failed: dash.isError },
+    { title: 'Lô chờ duyệt', href: '/admin/batches?status=PendingApproval', n: pendingBatches, unit: 'Lô', failed: dash.isError },
+    { title: 'Mốc giải ngân chờ duyệt', href: '/admin/tranches', n: tranches.data?.length, unit: 'mốc', failed: tranches.isError },
+    { title: 'Khiếu nại chờ quyết định', href: '/admin/claims', n: claims.data?.length, unit: 'khiếu nại', failed: claims.isError },
+    { title: 'Quyết toán chưa xong', href: '/admin/settlements', n: settlements.data?.filter((s) => s.status !== 'PaidOut' && s.status !== 'Closed').length, unit: 'Lô', failed: settlements.isError },
+    { title: 'Hồ sơ hộ nuôi chờ duyệt', href: '/admin/operators', n: farms.data?.total, unit: 'hồ sơ', failed: farms.isError },
+    { title: 'Đối tác chờ xác minh', href: '/admin/parties?verificationStatus=Pending', n: parties.data?.total, unit: 'đối tác', failed: parties.isError },
+    { title: 'eKYC không đạt', href: '/admin/users?tab=kyc', n: kyc.data?.total, unit: 'lần kiểm tra', failed: kyc.isError },
+  ]
+  const active = queues.filter((q) => (q.n ?? 0) > 0)
+  const idle = queues.filter((q) => !q.n)
+  const counting = queues.some((q) => q.n === undefined && !q.failed)
+
+  return (
+    <>
+      <OpHeading eyebrow="Quản trị nền tảng" title="Bảng điều khiển" />
+
+      <div className="op-grid">
+        <OpPanel className="op-span-7" title="Việc đang chờ">
+          {active.length > 0
+            ? <OpTodo items={active.map((q) => ({ title: q.title, sub: `${q.n} ${q.unit}`, href: q.href, tone: q.danger ? 'danger' as const : 'warn' as const }))} />
+            : counting ? <OpLoading /> : <OpEmpty title="Không có việc nào đang chờ" icon={<CheckCircle2 size={30} />} />}
+          {idle.length > 0 && (
+            <OpMore label="Hàng việc khác">
+              <div className="op-inline">{idle.map((q) => <a key={q.title} className="op-link" href={q.href}>{q.title}</a>)}</div>
+            </OpMore>
+          )}
+        </OpPanel>
+
+        <div className="op-span-5 op-stack">
+          {valid && (
+            <QueryView query={dash}>
+              {(d) => (
+                <>
+                  <OpStat
+                    label={`Vốn góp đã xác nhận · ${formatDate(d.from)} – ${formatDate(d.to)}`}
+                    value={new Intl.NumberFormat('vi-VN').format(d.confirmedCapital)}
+                    unit="đ"
+                    sub={`${d.confirmedContributions} khoản góp`}
+                  />
+                  <OpPanel>
+                    <OpFacts items={[
+                      { label: 'Lô hiện có', value: d.batchesByStatus.reduce((n, s) => n + s.count, 0) },
+                      { label: 'Doanh thu đơn hoàn tất', value: formatVnd(d.completedOrderRevenue), tone: 'ok' },
+                      { label: 'Đã chi trả nhà đầu tư', value: formatVnd(d.succeededPayoutAmount), tone: 'info' },
+                    ]} />
+                  </OpPanel>
+                </>
+              )}
+            </QueryView>
+          )}
+        </div>
       </div>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2"><h2 className="mb-2 font-bold text-slate-900">Vốn góp xác nhận theo ngày</h2><p className="mb-4 text-xs text-slate-500">Đơn vị VND · không tính giữ chỗ hoặc khoản đã hoàn.</p>{data.confirmedContributions === 0 ? <p className="py-12 text-center text-sm text-slate-500">Chưa có khoản góp được xác nhận trong kỳ.</p> : <div className="h-72 w-full" role="img" aria-label={`Vốn xác nhận ${formatVnd(data.confirmedCapital)}`}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.capitalByDay} margin={{ left: 0, right: 8, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" tickFormatter={s => String(s).slice(5)} tick={{ fontSize: 11 }} /><YAxis width={65} tickFormatter={value => Number(value).toLocaleString('vi-VN', { notation: 'compact' })} tick={{ fontSize: 11 }} /><Tooltip formatter={value => [formatVnd(Number(value)), 'Vốn xác nhận']} /><Bar dataKey="amount" fill="#dc2626" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>}</section>
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-5 font-bold text-slate-900">Lô theo trạng thái hiện tại</h2><StatusList items={data.batchesByStatus} /></section>
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-5 font-bold text-slate-900">Đơn đặt trong kỳ</h2><StatusList items={data.ordersByStatus} /></section>
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-2 font-bold text-slate-900">Lệnh chi trả tạo trong kỳ</h2><p className="mb-5 text-xs text-slate-500">Chỉ lệnh Payout; chưa gửi không được tính là đã trả.</p><StatusList items={data.payoutsByStatus} /><p className="mt-5 text-sm text-emerald-700">Chi trả thành công trong kỳ: <b>{formatVnd(data.succeededPayoutAmount)}</b></p></section>
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-4 font-bold text-slate-900">Cảnh báo leo thang · {data.escalatedAlerts}</h2>{!data.latestEscalatedAlerts.length ? <p className="text-sm text-slate-500">Không có cảnh báo leo thang.</p> : <ul className="space-y-3">{data.latestEscalatedAlerts.map(a => <li key={a.id} className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm"><b>{a.batchCode} · {a.farmName}</b><p className="mt-1 break-words text-amber-900">{a.message}</p></li>)}</ul>}<a className="mt-4 inline-block text-sm font-bold text-red-600 hover:underline" href="/admin/alerts">Xử lý cảnh báo →</a></section>
+
+      <OpPanel title="Số liệu theo kỳ">
+        <OpMore label="Chọn kỳ, xem bảng, tải CSV">
+          <div className="op-toolbar">
+            <Input type="date" aria-label="Từ ngày" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
+            <Input type="date" aria-label="Đến ngày" value={to} min={from} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          {!valid && <OpNote tone="danger">Kỳ báo cáo tối đa 366 ngày, ngày bắt đầu không sau ngày kết thúc.</OpNote>}
+          {valid && dash.data && <PeriodTables d={dash.data} from={from} to={to} />}
+        </OpMore>
+      </OpPanel>
+    </>
+  )
+}
+
+function PeriodTables({ d, from, to }: { d: AdminDashboardResponse; from: string; to: string }) {
+  const navigate = useNavigate()
+  const [table, setTable] = useState<TableKey>('batches')
+  return (
+    <>
+      <div className="op-between">
+        <OpTabs items={TABLES} value={table} onChange={setTable} label="Chọn bảng" />
+        <OpBtn variant="ghost" sm onClick={() => void openFile(`/api/admin/reports/${table}.csv?from=${from}&to=${to}`, `crabshare-${table}-${from}-${to}.csv`)}>
+          <Download size={15} /> Tải CSV
+        </OpBtn>
       </div>
-    </>)}
-  </AdminLayout>
+      {table === 'batches' && (
+        <OpTable
+          rows={d.batchesByStatus}
+          rowKey={(r) => r.status}
+          empty="Chưa có Lô nào"
+          onRowClick={(r) => navigate(`/admin/batches?status=${encodeURIComponent(r.status)}`)}
+          columns={[
+            { key: 'status', header: 'Trạng thái hiện tại', cell: (r) => <StatusBadge kind="batch" value={r.status} /> },
+            { key: 'count', header: 'Số Lô', num: true, cell: (r) => r.count },
+          ]}
+        />
+      )}
+      {table === 'capital' && (
+        <OpTable
+          rows={d.capitalByDay.filter((day) => day.count > 0)}
+          rowKey={(r) => r.date}
+          empty="Chưa có khoản góp nào được xác nhận trong kỳ"
+          columns={[
+            { key: 'date', header: 'Ngày', cell: (r) => formatDate(r.date) },
+            { key: 'count', header: 'Khoản góp', num: true, cell: (r) => r.count },
+            { key: 'amount', header: 'Số tiền', num: true, cell: (r) => <Money value={r.amount} /> },
+          ]}
+        />
+      )}
+      {table === 'orders' && (
+        <OpTable
+          rows={d.ordersByStatus}
+          rowKey={(r) => r.status}
+          empty="Chưa có đơn nào đặt trong kỳ"
+          columns={[
+            { key: 'status', header: 'Trạng thái', cell: (r) => <StatusBadge kind="order" value={r.status} /> },
+            { key: 'count', header: 'Số đơn', num: true, cell: (r) => r.count },
+          ]}
+        />
+      )}
+      {table === 'payouts' && (
+        <OpTable
+          rows={d.payoutsByStatus}
+          rowKey={(r) => r.status}
+          empty="Chưa có lệnh chi trả nào trong kỳ"
+          columns={[
+            { key: 'status', header: 'Trạng thái', cell: (r) => <StatusBadge kind="instruction" value={r.status} /> },
+            { key: 'count', header: 'Số lệnh', num: true, cell: (r) => r.count },
+            { key: 'amount', header: 'Số tiền', num: true, cell: (r) => <Money value={r.amount} /> },
+          ]}
+        />
+      )}
+    </>
+  )
 }

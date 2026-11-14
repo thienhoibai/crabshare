@@ -14,6 +14,8 @@ abstract final class AppColors {
   static const nav = Color(0xFF1D1C1B); // thanh điều hướng dưới
   static const success = Color(0xFF3FA36B);
   static const danger = Color(0xFFD9534F);
+  static const warning = Color(0xFFE29A17); // cần chú ý, chờ xử lý
+  static const info = Color(0xFF3B8FD9); // thông tin, đang chạy
 }
 
 abstract final class AppRadius {
@@ -22,11 +24,42 @@ abstract final class AppRadius {
   static const pill = 30.0;
 }
 
-/// DM Sans được đóng gói trong assets, dùng cùng theme khi chạy app và test.
+/// Phông chữ của app: Bricolage Grotesque, cùng phông với web. Mọi màn lấy kiểu chữ ở đây,
+/// không ghi tên family rải rác.
+abstract final class AppFonts {
+  /// Chữ thường, nút, nhãn: các tệp tĩnh 400–800.
+  static const text = 'Bricolage Grotesque';
+
+  /// Tiêu đề trang và con số lớn: tệp biến thiên, chỉnh được độ hẹp và cỡ quang học.
+  static const display = 'Bricolage Grotesque Display';
+
+  /// Tiêu đề trang, cùng dáng với tiêu đề của web (hẹp vừa, đậm vừa, chữ khít).
+  static TextStyle heading(double size) => TextStyle(
+    fontFamily: display,
+    fontSize: size,
+    fontWeight: FontWeight.w600,
+    fontVariations: const [FontVariation('wght', 600), FontVariation('wdth', 88), FontVariation('opsz', 96)],
+    letterSpacing: -0.025 * size, // web dùng -0.035em; trên màn nhỏ nới ra một chút cho dễ đọc
+    height: 1.05,
+  );
+
+  /// Con số lớn (tiền, cân nặng, số đếm), cùng dáng với số lớn của web: hẹp, đậm, số thẳng cột.
+  static TextStyle figure(double size, {Color? color}) => TextStyle(
+    fontFamily: display,
+    fontSize: size,
+    fontWeight: FontWeight.w700,
+    fontVariations: const [FontVariation('wght', 700), FontVariation('wdth', 80), FontVariation('opsz', 96)],
+    fontFeatures: const [FontFeature.tabularFigures()],
+    letterSpacing: -0.012 * size, // các chữ số không được chạm nhau
+    color: color,
+  );
+}
+
+/// Bricolage Grotesque (đủ chữ tiếng Việt) được đóng gói trong assets, dùng cùng theme khi chạy app và test.
 ThemeData buildAppTheme() {
   final base = ThemeData(
     useMaterial3: true,
-    fontFamily: 'DM Sans',
+    fontFamily: AppFonts.text,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.accent,
       primary: AppColors.accent,
@@ -35,11 +68,12 @@ ThemeData buildAppTheme() {
     scaffoldBackgroundColor: AppColors.background,
   );
   final text = base.textTheme.apply(bodyColor: AppColors.ink, displayColor: AppColors.ink);
-  const buttonText = TextStyle(fontFamily: 'DM Sans', fontSize: 16, fontWeight: FontWeight.w600);
+  const buttonText = TextStyle(fontFamily: AppFonts.text, fontSize: 16, fontWeight: FontWeight.w600);
   return base.copyWith(
     textTheme: text.copyWith(
-      displaySmall: text.displaySmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -1.2, height: 1.05),
-      headlineMedium: text.headlineMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.6),
+      displaySmall: text.displaySmall?.merge(AppFonts.heading(36)),
+      headlineMedium: text.headlineMedium?.merge(AppFonts.heading(28)),
+      headlineSmall: text.headlineSmall?.merge(AppFonts.heading(24)),
       titleLarge: text.titleLarge?.copyWith(fontWeight: FontWeight.w700),
       titleMedium: text.titleMedium?.copyWith(fontWeight: FontWeight.w600),
       bodySmall: text.bodySmall?.copyWith(color: AppColors.inkMuted),

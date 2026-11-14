@@ -1,144 +1,69 @@
-import { useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+/* Nhật trình của một Lô (UC21): nhật ký chăm sóc, sự kiện hộp, sự kiện từng con cua, bằng chứng đã chấp nhận và cảnh báo, gom theo ngày.
+   Trả về các OpPanel theo ngày: đặt thẳng trong trang hoặc trong một tab, không bọc thêm OpPanel.
+   Mỗi ngày hiện sẵn vài ghi nhận đầu, phần còn lại gấp trong "Ghi nhận khác trong ngày". */
 import axios from 'axios'
-import { ArrowDown, BookOpen, Camera, CircleAlert, LockKeyhole, RefreshCw, Shell } from 'lucide-react'
+import { ArrowDown, LockKeyhole, RefreshCw } from 'lucide-react'
 import { useAuthStore } from '../../shared/auth/authStore'
-import { errorMessage } from '../../shared/api/http'
-import { dayLabel, mergeTimeline, useTimeline } from './timelineApi'
+import { OpBtn, OpEmpty, OpError, OpLoading, OpMore, OpPanel, errorMessage } from '../../shared/ui/console'
 import { TimelineEntry } from './TimelineEntry'
+import { dayLabel, mergeTimeline, useTimeline } from './timelineApi'
 import './timeline.css'
 
+/** Số ghi nhận hiện sẵn của mỗi ngày. */
+const FIRST = 5
+
 export default function BatchTimeline({ code }: { code: string }) {
-  const user = useAuthStore((s) => s.user)
-  const token = useAuthStore((s) => s.token)
-  return <TimelineBody key={`${user?.userId}:${token}:${code}`} code={code} />
-}
-function TimelineBody({ code }: { code: string }) {
   const userId = useAuthStore((s) => s.user?.userId)
+  return <TimelineBody key={`${userId}:${code}`} code={code} />
+}
+
+function TimelineBody({ code }: { code: string }) {
   const query = useTimeline(code)
-  const client = useQueryClient()
-  const [denied, setDenied] = useState(false)
   const groups = mergeTimeline(query.data?.pages ?? [])
-  const forbidden = denied || (axios.isAxiosError(query.error) && query.error.response?.status === 403)
-  const loading = query.isPending || query.isRefetching
-  async function refresh() {
-    setDenied(false)
-    await client.resetQueries({ queryKey: ['batch-timeline', userId, code], exact: true })
+
+  if (query.isPending) return <OpLoading label="Đang tải nhật trình…" />
+  if (query.isError) {
+    return axios.isAxiosError(query.error) && query.error.response?.status === 403
+      ? <OpEmpty icon={<LockKeyhole size={30} />} title="Nhật trình chỉ dành cho người tham gia Lô">{errorMessage(query.error)}</OpEmpty>
+      : <OpError error={query.error} onRetry={() => void query.refetch()} />
   }
-  function renderContent() {
-    if (forbidden)
-      return (
-        <div className="tl-state" role="alert">
-          <LockKeyhole size={30} />
-          <h3>Nhật trình dành cho người có quyền theo dõi lô</h3>
-          <p>Bạn cần khoản góp đã xác nhận hoặc quyền vận hành lô để xem nội dung này.</p>
-        </div>
-      )
-    if (query.isError)
-      return (
-        <div className="tl-state" role="alert">
-          <CircleAlert size={30} />
-          <h3>Chưa tải được nhật trình</h3>
-          <p>{errorMessage(query.error)}</p>
-          <button className="tl-button" onClick={() => void refresh()}>
-            Thử lại nhật trình
-          </button>
-        </div>
-      )
-    if (loading)
-      return (
-        <div className="tl-loading" role="status" aria-label="Đang tải nhật trình" aria-busy="true">
-          <div />
-          <div />
-          <div />
-        </div>
-      )
-    if (groups.length === 0)
-      return (
-        <div className="tl-state" role="status">
-          <BookOpen size={32} />
-          <h3>Nhật trình đang chờ những ghi nhận đầu tiên</h3>
-          <p>Nhật ký, sự kiện hộp, bằng chứng được chấp nhận và cảnh báo sẽ xuất hiện tại đây.</p>
-        </div>
-      )
-    return (
-      <div className="tl-body">
-        {groups.map((group, index) => (
-          <section key={group.date} className="tl-day" aria-label={dayLabel(group.date)}>
-            <div className="tl-date">
-              <span className="tl-date-number">{group.date.slice(-2)}</span>
-              <div>
-                <h3>{dayLabel(group.date)}</h3>
-                <span>
-                  {index === 0 ? 'Ngày ghi nhận gần nhất · ' : ''}
-                  {group.items.length} ghi nhận
-                </span>
-              </div>
-            </div>
-            <ol>
-              {group.items.map((item) => (
-                <TimelineEntry
-                  key={`${query.dataUpdatedAt}:${item.id}`}
-                  item={item}
-                  code={code}
-                  onDenied={() => setDenied(true)}
-                />
-              ))}
-            </ol>
-          </section>
-        ))}
-        <footer className="tl-footer">
-          {query.hasNextPage ? (
-            <button
-              className="tl-button tl-more"
-              disabled={query.isFetching}
-              onClick={() => {
-                if (!query.isFetching) void query.fetchNextPage()
-              }}
-            >
-              <ArrowDown size={17} />{' '}
-              {query.isFetchingNextPage ? 'Đang tải những ngày trước…' : 'Xem những ngày trước'}
-            </button>
-          ) : (
-            <p>Đã hiển thị toàn bộ nhật trình hiện có.</p>
-          )}
-        </footer>
-      </div>
-    )
-  }
+
   return (
-    <section id="nhat-trinh" className="tl" aria-label="Nhật trình sản xuất">
-      <header className="tl-header">
-        <div>
-          <span className="tl-eyebrow">THEO DÕI LÔ NUÔI · {code}</span>
-          <h2>Nhật trình sản xuất</h2>
-          <p>Từng ghi nhận từ hộ nuôi, cùng bằng chứng của quá trình sản xuất.</p>
+    <div className="op-stack">
+      {groups.length === 0 && <OpEmpty title="Lô chưa có ghi nhận nào" />}
+
+      {groups.map((group, index) => {
+        const head = group.items.slice(0, FIRST)
+        const rest = group.items.slice(FIRST)
+        return (
+          <OpPanel
+            key={group.date}
+            title={dayLabel(group.date)}
+            action={index === 0
+              ? <OpBtn variant="ghost" sm disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw size={15} /> Làm mới</OpBtn>
+              : undefined}
+          >
+            <ol className="tl-list">
+              {head.map((item) => <TimelineEntry key={item.id} item={item} code={code} />)}
+            </ol>
+            {rest.length > 0 && (
+              <OpMore label="Ghi nhận khác trong ngày" count={rest.length}>
+                <ol className="tl-list">
+                  {rest.map((item) => <TimelineEntry key={item.id} item={item} code={code} />)}
+                </ol>
+              </OpMore>
+            )}
+          </OpPanel>
+        )
+      })}
+
+      {query.hasNextPage && (
+        <div className="op-formfoot" style={{ justifyContent: 'center' }}>
+          <OpBtn variant="ghost" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
+            <ArrowDown size={16} /> {query.isFetchingNextPage ? 'Đang tải…' : 'Xem những ngày trước'}
+          </OpBtn>
         </div>
-        <button
-          className="tl-button"
-          onClick={() => void refresh()}
-          disabled={query.isFetching}
-          aria-label="Làm mới nhật trình"
-        >
-          <RefreshCw size={16} /> Làm mới
-        </button>
-      </header>
-      <div className="tl-legend">
-        <span>
-          <BookOpen size={15} /> Nhật ký
-        </span>
-        <span>
-          <Shell size={15} /> Sự kiện hộp
-        </span>
-        <span>
-          <Camera size={15} /> Bằng chứng
-        </span>
-        <span>
-          <CircleAlert size={15} /> Cảnh báo
-        </span>
-        <small>Giờ Việt Nam · UTC+7</small>
-      </div>
-      {renderContent()}
-    </section>
+      )}
+    </div>
   )
 }
