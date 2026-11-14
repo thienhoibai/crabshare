@@ -11,7 +11,7 @@
 <p>
   <a href="https://github.com/thienhoibai/crabshare/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-GitHub_Actions-334155?style=flat-square&amp;logo=githubactions&amp;logoColor=white" alt="CI bằng GitHub Actions — xem kết quả workflow"></a>
   <img src="https://img.shields.io/badge/Capstone-FA26SE229-F58D54?style=flat-square" alt="Đồ án FA26SE229">
-  <img src="https://img.shields.io/badge/Scope-v1.2-334155?style=flat-square" alt="Phạm vi theo phiếu v1.2">
+  <img src="https://img.shields.io/badge/Scope-BR1.5%20%2F%20v1.7-334155?style=flat-square" alt="Business Rule v1.5 và phiếu v1.7">
   <img src="https://img.shields.io/badge/Integrations-Simulated-D97706?style=flat-square" alt="Dịch vụ thanh toán, ký số và eKYC đang giả lập">
 </p>
 
@@ -56,7 +56,7 @@ Trong mô hình RAS (*Recirculating Aquaculture System*), nước được xử 
 | Doanh thu chỉ do hộ nuôi tự khai | Tổng hợp doanh thu thực thu từ đơn hàng hoàn tất trong hệ thống |
 | Đầu tư, bao tiêu và mua hàng rời rạc | Liên kết góp vốn, hợp đồng, tồn kho, đơn hàng, tem cua và bảng quyết toán |
 
-**Thông tin đề tài:** FA26SE229 · Chuyên ngành Kỹ thuật phần mềm · Thời gian 09–12/2026. Phạm vi nghiệp vụ tham chiếu **Phiếu đăng ký đề tài v1.2, sửa đổi ngày 11/10/2026**.
+**Thông tin đề tài:** FA26SE229 · Chuyên ngành Kỹ thuật phần mềm · Thời gian 09–12/2026. Phạm vi nghiệp vụ tham chiếu **Business Rule v1.5 và Phiếu đăng ký đề tài v1.7 ngày 09/11/2026**.
 
 <details>
 <summary><strong>Xem tên đề tài đầy đủ</strong></summary>
@@ -76,80 +76,116 @@ Trong mô hình RAS (*Recirculating Aquaculture System*), nước được xử 
 
 ## 🚀 Tính năng và phạm vi triển khai
 
-### Ai sử dụng CrabShare?
+### Phạm vi revise theo Review 2
 
-| Vai trò | Công việc chính |
+CrabShare tổ chức mạng lưới B2B theo Lô thương mại (CommercialBatch), kết nối nhà cung cấp, người nuôi, nhà đầu tư và người mua sỉ. Lô có thể có lưu nuôi trong RAS hoặc bán sau khi nhận và kiểm phẩm. Phiếu v1.7 ghi trạng thái sửa đổi **Chờ duyệt**. Các quy trình dưới đây là phạm vi của hồ sơ revise; mức hoàn thành cần đối chiếu mã nguồn và nghiệm thu.
+
+| Chế độ Lô | Bên tạo và thực hiện | Phạm vi |
+|---|---|---|
+| P — Hợp tác lô | Operator tạo, nhà đầu tư góp vốn và chia kết quả | Làm trọn vòng đời |
+| T — CrabShare mua bán | Admin tạo, CrabShare sở hữu hàng và chịu rủi ro | Dữ liệu, hợp đồng và quyết toán |
+| A — Kết nối đại lý | Admin tạo, nhà cung cấp bán trực tiếp, CrabShare nhận hoa hồng | Dữ liệu, hợp đồng và quyết toán |
+
+### Vai trò
+
+| Vai trò | Trách nhiệm |
 |---|---|
-| **Nhà đầu tư tài chính** | Xác minh danh tính, xem điều khoản và chi phí chuẩn, góp vốn, ký hợp đồng, theo dõi bằng chứng và xem sao kê quyết toán |
-| **Nhà đầu tư bao tiêu** | Có chức năng nhà đầu tư; thêm cam kết sản lượng, giá và quyền mua trong cửa sổ ưu tiên |
-| **Chủ hộ nuôi / nhân viên** | Quản lý hộp và lô, ghi nhật ký, chụp bằng chứng, xử lý cảnh báo, thu hoạch, gắn tem, đóng gói và cập nhật giao hàng |
-| **Khách hàng** | Xem sản phẩm, mua hàng hoặc đặt trước có cọc, theo dõi đơn, đổi trả, khiếu nại, đánh giá và quét tem truy xuất |
-| **Quản trị nền tảng** | Duyệt hộ nuôi và lô, giám sát dòng tiền, duyệt quyết toán, xử lý tranh chấp, xem báo cáo và nhật ký kiểm toán |
-| **Người thẩm định bằng chứng** | Xem ảnh bị gắn cờ và đưa ra kết luận trong phạm vi được cấp quyền; không thẩm định lô mình đã đầu tư |
+| Nhà đầu tư | eKYC hoặc xác minh tổ chức, góp vốn, ký, theo dõi Lô, phản hồi quyết toán, nhận chi trả và biểu quyết |
+| Operator | Hồ sơ người nuôi, trại/dàn/hộp, lô P, kế hoạch chi phí, mua nguồn hàng, chăm sóc, đo và giao hàng |
+| Khách B2B | Nhà hàng, vựa, đại lý, tiểu thương, bếp trung tâm; đặt theo quy cách, cọc, nghiệm thu và khiếu nại |
+| QC Inspector | Kiểm từng con, kiểm cảm quan, duyệt hạng, xác nhận ca giữ lại và thăm trại |
+| Admin | Duyệt đối tác, Lô, quy tắc phân hạng, giải ngân, quyết toán; quản lý thiết bị, đối soát và tranh chấp |
+| Người thẩm định | Kết luận bằng chứng bị gắn cờ theo quyền được cấp |
+| Nhà cung cấp, bên cam kết thu mua | Đối tác được Operator/Admin ghi nhận và xác minh |
 
-### Các phân hệ
+Người nuôi dùng tài khoản đại diện. QC được phân ngẫu nhiên từ pool, loại trừ quan hệ lợi ích với Lô. Quyền kiểm phẩm và thẩm định bằng chứng được cấp riêng.
 
-Bảng dưới mô tả mã nguồn hiện có. Các mục tiêu nghiên cứu và tiêu chí nghiệm thu được trình bày riêng ở phần [kiểm thử](#kiem-thu).
+### Vòng đời nghiệp vụ
 
-| Phân hệ | Chức năng trong repository |
+| Workflow | Nội dung |
 |---|---|
-| **Tài khoản và danh tính** | JWT, phân quyền theo vai trò và hộ nuôi/lô, quy trình KYC, tài khoản nhận tiền, địa chỉ khách hàng |
-| **Hộ nuôi, hộp và lô** | Đăng ký/duyệt hộ nuôi, đánh số và phân bổ hộp, tạo/duyệt lô, quản lý phiên bản chi phí chuẩn |
-| **Gọi vốn và hợp đồng** | Giữ chỗ góp vốn, yêu cầu VietQR, đối soát, hết hạn/hoàn tiền, hợp đồng từ mẫu và luồng ký theo thứ tự |
-| **Sản xuất và cảnh báo** | Thả giống, nhật ký môi trường/thức ăn, sự kiện lột xác/chết/thả bù, timeline, cảnh báo và leo thang |
-| **Bằng chứng và thẩm định** | Chụp ảnh trực tiếp trên app, vị trí và thời gian, SHA-256/dHash, yêu cầu chụp ngẫu nhiên, điểm rủi ro, giải trình và duyệt ảnh |
-| **Thu hoạch và truy xuất** | Cân/phân hạng từng con, sinh tem, xác nhận kích hoạt bằng ảnh, quét tem và truy xuất công khai |
-| **Cửa hàng và đơn hàng** | Niêm yết, giỏ hàng/checkout, giữ tồn, đặt trước có cọc, bao tiêu, đóng gói bằng quét tem, giao hàng, đổi trả, khiếu nại và đánh giá |
-| **Quyết toán và chi trả** | Tổng hợp doanh thu, tính Revenue Pool, phân bổ theo vốn, góp ý trong hạn, phê duyệt và tạo lệnh chi |
-| **Danh mục và quản trị** | Danh mục nhà đầu tư, thông báo, dashboard theo vai trò, báo cáo và audit log |
+| WF-01 | Xác minh đối tác; eKYC đạt trước giữ chỗ; khai ngân hàng, số tài khoản và tên chủ tài khoản trùng tên pháp lý trước khi nhận tiền |
+| WF-02 | Chọn chế độ, nguồn hàng, chi phí, hợp đồng, giá sàn, bậc thù lao và mốc giải ngân; Admin duyệt trước mở gọi vốn/bán |
+| WF-03 | Lô P góp theo số tiền hoặc %, giữ chỗ mặc định 30 phút, trả VietQR; ký tuần tự qua Viettel song song thanh toán; đủ tiền và chữ ký mới xác nhận |
+| WF-04 | Đặt trước theo số con/kg, quy cách và hạng tối thiểu; cọc và chia nhiều đợt giao |
+| WF-05 | Đơn mua nguồn, lô nguồn, nhận hàng, QC từng con, mã cua nội bộ, hộp, nhật ký, thiết bị, bằng chứng và giải ngân |
+| WF-06 | Trạm đo, AI đề xuất và QC duyệt; phân bổ cua, cân hai lần, nghiệm thu theo đợt, hóa đơn, thanh toán và khiếu nại |
+| WF-07 | Hoàn tiền khách, đối soát, công bố quyết toán, phản hồi 7 ngày, Admin duyệt và phát lệnh chi; đóng Lô khi mọi lệnh thành công |
 
-### Trạng thái tích hợp
+BR-071 lưu thứ tự ký của từng bên, chưa gán cố định người nuôi hay nhà đầu tư ký trước. Hết hạn gọi vốn, khoản thiếu tiền hoặc chữ ký được loại khỏi vốn xác nhận và hoàn phần đã trả. Mở Lô còn cần đạt vốn tối thiểu khả thi và tỷ lệ đặt trước.
 
-| Hạng mục | Trạng thái hiện tại |
-|---|---|
-| Web và mobile | Nhiều luồng đã gọi API thực, gồm danh mục, nhật ký, bằng chứng, thu hoạch và truy xuất; chưa coi toàn bộ giao diện là đã hoàn tất |
-| Thanh toán, ký số, eKYC | Đang đăng ký `FakePaymentGateway`, `FakeSigningService`, `FakeEkycProvider`; phục vụ phát triển và demo |
-| Lưu tệp | Có `LocalFileStorage` và `CloudinaryFileStorage`, chọn bằng cấu hình |
-| Nhận diện cua — TSK-13 | Đang dùng `NoopCrabDetector`, trả về **chưa có kết luận**; `ml/` mới có hướng dẫn, chưa có mô hình ONNX hay kết quả đánh giá |
-| Ingestion API | Thuộc phạm vi phiếu v1.2; chưa có endpoint nhập dữ liệu trại được triển khai trong checkout này |
-| Một số màn hình phụ | `/san-pham` vẫn dùng trang sản phẩm tĩnh; thao tác gửi hồ sơ pháp lý hộ nuôi và lưu cấu hình quản trị còn là giao diện minh họa; accessor danh sách hộp cũ trên mobile vẫn dùng mock |
+Nhà đầu tư thấy **đã góp, đã giải ngân, còn giữ** từ giao dịch đã đối soát. Mốc giải ngân giữa vụ cần biên bản thăm trại của QC được phân công, kèm ảnh vị trí, giờ máy chủ và số hộp trước khi Admin duyệt.
 
-**Giới hạn của đề tài:** tích hợp tài khoản production và chuyển tiền thật, vai trò trung gian tài chính được cấp phép, cảm biến/camera/phần cứng máy in, tích hợp riêng từng phần mềm trại, đơn vị vận chuyển, marketplace nhiều nhà bán, bán lại khoản góp vốn và nhận diện cua chết/lột xác/kích thước nằm ngoài phạm vi. Theo thiết kế nghiệp vụ, tiền do trung gian thanh toán giữ; CrabShare ghi nhận, đối soát và phát lệnh.
-
-## 🔄 Vòng đời lô và nguyên tắc quyết toán
-
-```mermaid
-stateDiagram-v2
-    [*] --> Draft
-    Draft --> PendingApproval: Gửi duyệt
-    PendingApproval --> Draft: Yêu cầu bổ sung
-    PendingApproval --> Rejected: Từ chối
-    PendingApproval --> Funding: Duyệt và khóa chi phí chuẩn
-    Funding --> Stocked: Chốt vốn và thả giống
-    Funding --> Cancelled: Không đạt vốn tối thiểu
-    Stocked --> InProduction
-    InProduction --> Harvesting
-    Harvesting --> Settlement
-    Settlement --> Closed: Duyệt quyết toán và chi trả
-    Rejected --> [*]
-    Cancelled --> [*]
-    Closed --> [*]
-```
-
-### Revenue Pool
+### Quyết toán lô P theo BR-188–BR-199
 
 ```text
-Revenue Pool = Doanh thu thực thu từ đơn hoàn tất − Chi phí chuẩn đã khóa
+Phí nền tảng = tỷ lệ phí đã chốt × doanh thu thực thu
+Revenue Pool = doanh thu thực thu − phí nền tảng − chi phí trừ
+Thù lao người nuôi = tỷ lệ theo bậc tỷ lệ sống × Pool, khi Pool > 0
+Khoản nhận nhà đầu tư = vốn góp + tỷ lệ vốn × (Pool − thù lao), khi Pool ≥ 0
 ```
 
-- **Pool dương:** tính thù lao người nuôi theo tỷ lệ của lô; phần còn lại chia cho nhà đầu tư theo vốn đã chốt.
-- **Pool bằng hoặc nhỏ hơn 0:** không có thù lao người nuôi; phân bổ lỗ theo vốn, mức lỗ mỗi nhà đầu tư tối đa bằng vốn đã góp. Phần lỗ vượt tổng vốn được ghi riêng là `UncoveredLoss`.
-- **Làm tròn:** dùng thuật toán *largest remainder*; hòa phần lẻ thì ưu tiên vốn lớn hơn, sau đó mã nhà đầu tư nhỏ hơn, để kết quả xác định và khớp tổng tới **1 VND** trong miền đầu vào được hỗ trợ.
-- **Biểu diễn tiền:** số nguyên đồng (`long` ở C#, `DECIMAL(18,0)` ở SQL); tỷ lệ và phép chia dùng `decimal`. Không dùng số thực dấu phẩy động cho tiền và không hiển thị lợi suất kỳ vọng.
+Chi phí trừ dùng Chi phí chuẩn hoặc chi phí thực tế hợp lệ có chứng từ theo cơ sở đã chọn trong hợp đồng. Pool âm chia lỗ theo vốn, tối đa bằng vốn góp của từng nhà đầu tư; người nuôi chịu phần lỗ còn lại nếu có và không nhận thù lao. Phí nền tảng vẫn tính trên doanh thu thực thu khi vụ lỗ.
 
-Ví dụ minh họa, **không phải cam kết lợi nhuận**: doanh thu 120.000.000đ, chi phí chuẩn 100.000.000đ → Pool 20.000.000đ. Nếu thù lao người nuôi là 10%, còn 18.000.000đ chia theo vốn; hai nhà đầu tư góp theo tỷ lệ 60/40 nhận phần chia 10.800.000đ và 7.200.000đ trước khoản thuế khấu trừ nếu có. Phần chia này được cộng với vốn khi tính số chi trả.
+Tiền lưu bằng số nguyên VND, tính bằng số thập phân cố định và phân bổ theo phần dư lớn nhất. Tài khoản riêng của Lô tại trung gian thanh toán giữ dòng tiền; CrabShare đối soát và phát lệnh. Lệnh chi lỗi gửi lại sau khi sửa thông tin nhận tiền, giữ nguyên khoản chi.
 
-Mã nguồn tính toán nằm trong [`CrabShare.SettlementEngine`](backend/src/CrabShare.SettlementEngine), độc lập với API và CSDL để kiểm thử các quy tắc tài chính.
+Ví dụ của BR v1.5, doanh thu 300 triệu, Chi phí chuẩn 100 triệu và phí minh họa 2% cho Pool 194 triệu. Bậc thù lao 10% cho người nuôi 19,4 triệu, còn 174,6 triệu chia theo vốn, cộng vốn khi tính khoản nhận. Tỷ lệ thực tế phải được chốt trong hợp đồng.
+
+## IoT trạm cân và đánh giá chất lượng GradeAI
+
+Thiết kế đầy đủ theo BR-223–BR-227 gồm hộp kín, camera trên nóc, khay mica có ArUco đặt trên load cell + HX711, LED trắng, hai LED đỏ dưới khay, công tắc cửa, nút bấm, đèn báo và Raspberry Pi có Wi-Fi.
+
+1. Operator mở lượt đo gắn mã cua và thiết bị.
+2. Trạm kiểm cửa, hiệu chuẩn và độ ổn định cân.
+3. Trạm cân, chụp ảnh trắng và ảnh soi đỏ, gửi bản tin kèm định danh và thời điểm.
+4. AI đo chiều dài, chiều rộng, diện tích mai và dải xuyên sáng viền mai; hệ thống đề xuất size và hạng.
+5. QC kiểm cảm quan và an toàn thực phẩm, rồi duyệt, giữ lại hoặc loại.
+
+### Nghiên cứu và công thức tham chiếu Trung Quốc
+
+Hồ sơ dự án viện dẫn **Huang và cộng sự (2026), Fishes 11:388** cho bố trí chụp và điểm mốc đo mai; **T/SCFA 0014-2024, bản sửa hiệu lực 01/08/2026** của Hiệp hội Thủy sản Trung Quốc cho quy tắc phân hạng. Thông tin thư mục và ngưỡng dưới đây được ghi theo phiếu v1.7 và BR v1.5.
+
+```text
+C = m / CL³
+m  = khối lượng nguyên con, gram, từ cân đã hiệu chuẩn
+CL = chiều dài mai, cm, từ chỗ lõm giữa trán tới mép sau mai
+```
+
+| Nhóm | C đặc cấp | C cấp 1 |
+|---|---|---|
+| Cua thịt | ≥ 0,66 | ≥ 0,62 và dưới 0,66 |
+| Cua cái non | ≥ 0,50 | ≥ 0,47 và dưới 0,50 |
+| Cua gạch/gạch dầu | Xếp size và cảm quan | Phân hạng phá hủy sau hấp ngoài phạm vi |
+
+C là chỉ số hình thái. Chiều rộng và diện tích là số đo bổ sung; chiều dài mai được dùng trong công thức C. Admin quản lý bộ quy tắc có phiên bản, Lô giữ bộ đã duyệt tới khi đóng. Nhãn bán ghi phân hạng nội bộ tham chiếu chuẩn. QC quyết định hạng cuối; ảnh lỗi hoặc độ tin cậy thấp chuyển sang đo đối chứng bằng thước kẹp. Độ trong toàn mai dưới đèn đỏ được khảo sát như nghiên cứu phụ, đối chiếu C và đánh giá chuyên gia.
+
+### Phần mềm trạm đang thực thi
+
+Gói GradeAI cung cấp Python trên Raspberry Pi, Picamera2, lgpio đọc HX711 và VL53L0X đo khoảng cách. Các chương trình thử riêng camera, lấy nét, khoảng cách, cân, cửa và đèn hỗ trợ kiểm tra từng linh kiện. Cấu hình nằm trong `cau_hinh.py`, đọc cân trong `hx711_doc.py`, điều phối trong `tram_toi_thieu.py`.
+
+Bản tối thiểu kiểm cửa và hạn hiệu chuẩn 30 ngày; lấy 10 mẫu cân, bỏ hai cực trị, kiểm độ lệch 0,2 g của tám mẫu còn lại; đo khoảng cách rồi chụp, lưu `ket_qua.json` và ảnh. Bản này dùng Enter, một đèn và lưu local. Phần cần hoàn thiện gồm hai chế độ chiếu sáng, nút/đèn trạng thái, lấy bì tự động, liên kết lượt đo và hàng đợi gửi API. Sai số cần được đo trên thiết bị và cua thật.
+
+## IoT tự động giám sát cua bằng camera chạy dàn
+
+Camera tự di chuyển theo cột và tầng hộp, đưa đầu chụp tới vị trí hộp, chiếu hồng ngoại và chụp theo lịch để theo dõi quá trình lưu nuôi.
+
+[Mở mô hình IoT và sơ đồ đi dây](https://crabshare-twin.vercel.app/?view=di-day).
+
+Thiết kế v0.2 gồm ray V-slot, đai GT2 trục X, vít me trục Z, trượt Y và xi lanh điện. Raspberry Pi 3 B+ đặt gần camera NoIR V2, kết hợp đầu đèn hồng ngoại, cảm biến khoảng cách, A4988, L298N, MOSFET, công tắc hành trình và dừng khẩn.
+
+Gói kỹ thuật có hai mô hình FreeCAD cho trạng thái rút đầu dò và đang chụp, script `camera_dan_in3d.py` dựng CAD, `to_mau_chup_anh.py` tạo ảnh, danh sách chi tiết in và báo cáo hình học. Hồ sơ v0.2 ghi **15/15 kiểm tra hình học đạt ở cả hai trạng thái**, đồng thời ghi **chưa in và chưa lắp thử**. Cần đo dàn/hộp thật, kiểm khe hở, hoàn thiện treo dây theo xe, nối ray và che nguồn. Phần mềm điều khiển và gửi ảnh cần được kiểm chứng trên mẫu thực. Phạm vi nghiệm thu là mẫu một dàn hoặc tool giả lập cùng API.
+
+### Dữ liệu thiết bị
+
+BR-114, BR-116 và BR-230 xác định bốn loại thiết bị gồm camera hộp, camera chạy dàn, cụm cảm biến nước và trạm đo. Admin đăng ký và gắn phạm vi. Bản tin có mã duy nhất để gửi lại chỉ ghi một lần; mất mạng lưu tạm, mất kết nối phát cảnh báo.
+
+Ảnh hộp/dàn lưu dưới `DeviceImage`; bằng chứng `EvidenceAsset` có nguồn, người chụp, giờ máy chủ, vị trí, mã hộp/cua và băm ảnh theo quy trình xác thực riêng. Ảnh trạm đo thuộc `MeasurementSession`.
+
+Phiếu v1.7 bổ sung cụm **ESP32 đo nhiệt độ, pH và độ mặn** làm thật để giám sát môi trường và cảnh báo. Tiến độ phần cứng cần cập nhật bằng biên bản thử nghiệm.
+
+### Tình trạng tích hợp
+
+Checkout đăng ký `FakePaymentGateway`, `FakeSigningService` và `FakeEkycProvider` phục vụ phát triển/demo. Các gói IoT được cung cấp ngoài repository. Tài liệu trạm xác nhận chương trình tối thiểu; tài liệu camera xác nhận mô hình CAD và kiểm tra hình học. Kết quả tích hợp phần cứng đầu cuối cần được nghiệm thu.
 
 <a name="kien-truc"></a>
 
@@ -173,14 +209,14 @@ flowchart LR
     DB[("SQL Server<br/>EF Core · DbUp")]
     FILES["Lưu ảnh và hợp đồng<br/>Local / Cloudinary"]
     EXT["Adapter giả lập<br/>Thanh toán · ký số · eKYC"]
-    AI["TSK-13 dự kiến<br/>YOLO → ONNX"]
+    AI["GradeAI và IoT<br/>Đo mai · cân · giám sát"]
 
     WEB -->|REST / JSON| API
     APP -->|REST / JSON| API
     API --> DB
     API --> FILES
     API --> EXT
-    AI -.->|Chưa tích hợp mô hình| API
+    AI -.->|Luồng tích hợp theo hồ sơ revise| API
 ```
 
 | Thành phần | Công nghệ chính | Tài liệu |
@@ -338,25 +374,6 @@ flutter run -d $deviceId --dart-define=API_URL=http://10.0.2.2:5233 --dart-defin
 
 Cấu hình Cloudinary và cách truy cập ảnh có phân quyền: [`docs/cloudinary.md`](docs/cloudinary.md). Giá trị bí mật đặt ngoài Git; `.env.example` là mẫu cấu hình.
 
-## 🔐 Tài khoản và kịch bản demo
-
-Các tài khoản sau do seed Development tạo. Mật khẩu dùng chung được định nghĩa tại hằng `DemoPassword` trong [`DevDataSeeder.cs`](backend/src/CrabShare.Api/Infrastructure/Persistence/DevDataSeeder.cs). Web Development và mobile debug có lựa chọn đăng nhập nhanh.
-
-App dành cho nhà đầu tư và hộ nuôi; khách hàng, quản trị và thẩm định dùng web. Quét tem/truy xuất công khai không cần đăng nhập.
-
-| Tài khoản | Vai trò demo |
-|---|---|
-| `admin@crabshare.local` | Quản trị nền tảng |
-| `reviewer@crabshare.local` | Thẩm định bằng chứng |
-| `operator@crabshare.local` | Chủ hộ nuôi |
-| `staff@crabshare.local` | Nhân viên hộ nuôi |
-| `investor1@crabshare.local` … `investor4@crabshare.local` | Nhà đầu tư |
-| `customer@crabshare.local` | Khách hàng |
-
-Một kịch bản trình diễn đầy đủ đi qua **duyệt lô → gọi vốn → ký hợp đồng → ghi nhận sản xuất/bằng chứng → thu hoạch và gắn tem → bán hàng → quyết toán và lệnh chi**. Các nhánh lỗi cần trình diễn gồm không đủ vốn và hoàn tiền, ảnh bị gắn cờ, checkout đồng thời và Revenue Pool âm.
-
-Seed bao gồm dữ liệu ở nhiều giai đoạn để thử từng phân hệ; xem [`database/README.md`](database/README.md). Tài khoản demo cần tồn tại trên đúng backend đang sử dụng; production không tự chạy seed Development.
-
 <a name="kiem-thu"></a>
 
 ## ✅ Kiểm thử và nghiên cứu
@@ -377,81 +394,17 @@ Chạy build trước lệnh backend có `--no-build`. Database tests hiện dù
 
 [Workflow CI](.github/workflows/ci.yml) kiểm tra container API/migrator, build và test backend không cần CSDL, build web/Playwright, cùng `flutter analyze` và `flutter test`. Badge CI đầu trang dẫn đến workflow; xem kết quả từng lần chạy và nhánh tương ứng trong tab Actions.
 
-### TSK-12 — Kiểm định đúng đắn quyết toán
+### Nghiên cứu và nghiệm thu revise
 
-Trọng tâm nghiên cứu là kiểm tra những sai lệch tài chính có thể cho ra kết quả nhìn hợp lý nhưng sai: mất phần dư, làm tròn sai, phụ thuộc thứ tự nhà đầu tư hoặc đếm doanh thu hai lần.
-
-- **Property-based testing:** sinh đầu vào để kiểm tra bảo toàn tổng, phân bổ và giới hạn lỗ.
-- **Metamorphic testing:** kiểm tra quan hệ giữa các lần chạy, chẳng hạn đổi thứ tự nhà đầu tư không đổi kết quả theo từng người.
-- **Model-based testing:** mục tiêu mở rộng kiểm định theo mô hình lô/đơn và đối chiếu kết quả; chưa coi phần này đã hoàn tất.
-- **Mutation testing:** cấy thay đổi vào phép tính để đo khả năng phát hiện lỗi của bộ test.
-
-Chạy mutation test từ gốc repository:
-
-```powershell
-Set-Location backend/tests/CrabShare.SettlementEngine.Tests
-dotnet tool restore --tool-manifest ../../dotnet-tools.json
-dotnet test -c Release
-dotnet tool run dotnet-stryker
-```
-
-**Bằng chứng đã lưu:** báo cáo đo ngày **24/10/2026** trên mã engine tại commit `4c8ecfc` ghi nhận mutation score từ **63,46% lên 81,73%**, với 37 test case ở lượt cuối. Đây là kết quả của lượt đo được lưu, không phải kết quả CI hiện tại hoặc bằng chứng hoàn tất toàn bộ TSK-12. Xem [báo cáo, mutant còn sống và giới hạn số lớn](docs/validation/CS-67-mutation-testing.md).
-
-### Tiêu chí nghiệm thu theo phiếu v1.2
-
-Các số dưới đây là **mục tiêu cần kiểm chứng**, không phải tuyên bố tất cả đã đạt:
-
-| Nhóm | Tiêu chí |
-|---|---|
-| Chính xác tiền | Phân bổ khớp tổng tới 1 VND, làm tròn xác định và xử lý Pool âm |
-| Nhất quán giao dịch | Không bán vượt tồn với 50 checkout đồng thời; webhook lặp không ghi nhận giao dịch hai lần |
-| Hiệu năng | 95% yêu cầu phổ biến dưới 1 giây với 100 người dùng đồng thời; quyết toán 100 nhà đầu tư/2.000 hộp dưới 10 giây |
-| Kiểm toán và bảo mật | Audit append-only; quyết toán đã duyệt không sửa; phân quyền theo lô, mật khẩu băm, dữ liệu KYC mã hóa khi lưu và HTTPS khi triển khai |
-| Bằng chứng và AI | Lưu hash/thời gian/vị trí/hộp; kết quả nhận diện có confidence và phiên bản mô hình; precision ≥ 0,85, recall ≥ 0,80 trên tập test giữ riêng, nếu không đạt chỉ dùng tín hiệu yếu |
-| Khả dụng | Giao diện Việt/Anh, tiền VND, góp vốn tối đa 5 màn hình; giao diện hiện tại chủ yếu là tiếng Việt |
-
-Kế hoạch, kết quả đo và nghiệm thu thực tế nằm trong [`docs/validation/`](docs/validation), đặc biệt [test plan](docs/validation/CS-83-test-plan.md), [test report](docs/validation/CS-91-test-report.md) và [acceptance checklist](docs/validation/CS-92-acceptance.md).
+Nghiên cứu quyết toán dùng kiểm thử dựa trên thuộc tính, biến hình, mô hình và đột biến cho bất biến tổng tiền, làm tròn, giới hạn lỗ và chuyển trạng thái. Nghiệm thu IoT cần ghi nhận hiệu chuẩn, độ lặp lại cân, sai số đo mai so với thước kẹp, chất lượng ảnh trắng/đỏ, gửi lặp/mất mạng và liên kết đúng hộp/lượt đo.
 
 <a name="tai-lieu"></a>
 
-## 📚 Tài liệu và sản phẩm bàn giao
+## Tài liệu của lần revise
 
-| Muốn tìm hiểu | Tài liệu |
-|---|---|
-| Toàn bộ tài liệu kỹ thuật | [`docs/README.md`](docs/README.md) |
-| Kiến trúc, luồng dữ liệu, vòng đời lô | [`docs/architecture.md`](docs/architecture.md) |
-| Lý do chọn công nghệ | [`docs/tech-stack.md`](docs/tech-stack.md) |
-| Module, use case và người phụ trách | [`docs/feature-map.md`](docs/feature-map.md) |
-| Quy ước triển khai và thay đổi CSDL | [`docs/conventions.md`](docs/conventions.md) |
-| Nhánh, commit và review PR | [`docs/git-workflow.md`](docs/git-workflow.md) |
-| Môi trường Vercel/Azure, deploy và phục hồi | [`docs/deploy.md`](docs/deploy.md) |
-| Lưu trữ ảnh | [`docs/cloudinary.md`](docs/cloudinary.md) |
-| Build, ký và nghiệm thu APK | [`docs/demo-app.md`](docs/demo-app.md) |
-| Nghiên cứu nhận diện cua | [`ml/README.md`](ml/README.md) |
+Các nguồn được cung cấp ngoài repository gồm Business Rule v1.5, Phiếu FA26SE229 v1.7, GradeAI README và `Di_day_tram_do.html`, hồ sơ camera dàn v0.2 DOCX/PDF, hai mô hình FreeCAD, danh sách chi tiết in và giải thích kích thước. Công thức và ngưỡng trong README được trích theo hồ sơ này; mục tiêu nghiệm thu được kiểm chứng qua kết quả thử thực tế.
 
-Phiếu xác định các sản phẩm bàn giao gồm **Reports 1–7/SRS/SDD và sơ đồ thiết kế**, web + API, ứng dụng Flutter, bộ dữ liệu ảnh có nhãn + mô hình ONNX + báo cáo đánh giá, cùng bộ kiểm thử và báo cáo nghiên cứu quyết toán. Danh sách này mô tả yêu cầu bàn giao; mô hình AI và tài liệu nghiệp vụ bên ngoài repo không được coi là đã có sẵn trong mã nguồn.
-
-<details>
-<summary><strong>Đối chiếu 14 nhóm công việc trong phiếu</strong></summary>
-
-| Mã | Nội dung |
-|---|---|
-| TSK-01 | Yêu cầu và thiết kế: SRS, SDD, mô hình dữ liệu, API contract |
-| TSK-02 | Nền tảng: đăng nhập, quyền theo lô, KYC/eKYC, audit log |
-| TSK-03 | Hộ nuôi, đánh số/phân bổ hộp, state machine của lô |
-| TSK-04 | Soạn, duyệt và khóa Standard Cost |
-| TSK-05 | Giữ chỗ góp vốn, VietQR, đối soát và hoàn tiền |
-| TSK-06 | Mẫu hợp đồng, ký tuần tự qua Viettel và lưu trữ |
-| TSK-07 | Nhật ký, sự kiện hộp, ingestion API, cảnh báo, giải ngân theo mốc |
-| TSK-08 | Thu hoạch, phân hạng, in/kích hoạt tem, cửa sổ bao tiêu |
-| TSK-09 | Cửa hàng, checkout, đặt trước, đóng gói quét tem, đổi trả/khiếu nại |
-| TSK-10 | Revenue Pool, phân bổ, duyệt quyết toán và lệnh chi |
-| TSK-11 | Dashboard, xuất báo cáo và ứng dụng Flutter |
-| TSK-12 | Nghiên cứu kiểm định tính đúng đắn của quyết toán |
-| TSK-13 | Hash ảnh, điểm rủi ro, thẩm định và mô hình nhận diện cua |
-| TSK-14 | Kiểm thử, triển khai và tài liệu |
-
-</details>
+Tài liệu trong repo gồm [backend](backend/README.md), [web](web/README.md), [mobile](mobile/README.md), [database](database/README.md), [triển khai](docs/deploy.md) và [quy ước](docs/conventions.md). Đọc kèm phiên bản nghiệp vụ tương ứng. Mô hình tương tác được công bố tại [CrabShare Twin](https://crabshare-twin.vercel.app/?view=di-day).
 
 <a name="doi-ngu"></a>
 
