@@ -27,7 +27,10 @@ namespace CrabShare.Api.Infrastructure.Persistence;
 /// được hệ thống phân ngẫu nhiên); tiền vào đi qua webhook ngân hàng như công cụ giả lập chuyển khoản. Chỉ dùng ba lối tắt thời gian mà test
 /// cũng dùng: dời hạn gọi vốn về quá khứ rồi chốt vốn, dời ngày bắt đầu bán (hết số ngày bán), dời hết hạn đổi trả của chuyến đã nghiệm thu.
 /// Dùng lại tài khoản mẫu (admin, operator, investor1..3, customer), hộ nuôi mẫu, nhà cung cấp và bên cam kết thu mua đã có; không xoá gì,
-/// không sửa dữ liệu khác. Lô nào đã có mã thì bỏ qua; cả lượt chạy là một giao dịch, lỗi thì hoàn tác hết.
+/// không sửa dữ liệu khác. Lô nào đã có mã thì bỏ qua; mỗi Lô là một giao dịch, lỗi thì hoàn tác Lô đó (Lô đã xong ở lượt trước vẫn giữ).
+/// Mỗi giao dịch khoá chuỗi nhật ký kiểm toán ngay từ đầu (cùng thứ tự khoá với các service: kiểm toán trước, dữ liệu sau) để không
+/// giành khoá chéo với job nền, và chờ lệnh SQL lâu hơn vì CSDL gói thấp trên Azure chạy chậm. Trong lúc dựng, job nền và thao tác ghi
+/// nhật ký kiểm toán khác phải chờ hoặc thử lại ở lượt sau.
 /// </summary>
 public static class DemoScenarioSeeder
 {
@@ -74,27 +77,34 @@ public static class DemoScenarioSeeder
                 return [];
             }
             var started = Stopwatch.GetTimestamp();
-            await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+            // CSDL gói thấp trên Azure chậm: một bước của seeder có thể quá 30 giây mặc định.
+            db.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
+            var created = new List<string>();
+            foreach (var code in missing)
             {
-                db.ChangeTracker.Clear();
-                // Một giao dịch cho cả lượt: các service bên trong chạy luôn trong giao dịch này (TransactionExtensions).
-                await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
-                var run = new Run(sp, db, accessor, ct);
-                await run.LoadPeopleAsync();
-                foreach (var code in missing)
+                await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
                 {
+                    db.ChangeTracker.Clear();
+                    // Một giao dịch cho mỗi Lô: các service bên trong chạy luôn trong giao dịch này (TransactionExtensions).
+                    await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+                    // Khoá chuỗi kiểm toán trước khi chạm dữ liệu khác, giống thứ tự khoá của các service.
+                    await AuditChain.LockAndReadTailAsync(db, ct);
+                    var run = new Run(sp, db, accessor, ct);
+                    await run.LoadPeopleAsync();
                     switch (code)
                     {
                         case PBatchCode: await run.PBatchAsync(code); break;
                         case TBatchCode: await run.TradeBatchAsync(code, "T"); break;
                         case ABatchCode: await run.TradeBatchAsync(code, "A"); break;
                     }
-                }
-                await transaction.CommitAsync(ct);
-            });
+                    await transaction.CommitAsync(ct);
+                });
+                created.Add(code);
+                logger.LogInformation("Kịch bản demo quyết toán: đã dựng {Code} sau {Seconds:N1} giây.", code, Stopwatch.GetElapsedTime(started).TotalSeconds);
+            }
             logger.LogInformation("Đã dựng kịch bản demo quyết toán sau {Seconds:N1} giây: {Codes} đang chờ quyết toán (AwaitingSettlement).",
-                Stopwatch.GetElapsedTime(started).TotalSeconds, string.Join(", ", missing));
-            return missing;
+                Stopwatch.GetElapsedTime(started).TotalSeconds, string.Join(", ", created));
+            return created;
         }
         finally
         {
