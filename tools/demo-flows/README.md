@@ -23,6 +23,8 @@ node tools/demo-flows/demo-flows.mjs https://<địa-chỉ-API> --yes      # má
 | `CS-2610-01` | biểu quyết thanh lý sớm đang mở (nhà đầu tư) |
 | `CS-2611-P1` | việc thăm trại giữa vụ của kiểm phẩm |
 | Đối tác | tài khoản tổ chức `demo-org-N@crabshare.local` (cùng mật khẩu mẫu) đã gửi giấy tờ, chờ Admin xác minh; nhà cung cấp do người nuôi ghi nhận chờ xác minh |
+| Lô P mới, tên có `[demo] lô P mẫu xin giải ngân` | đợt giải ngân 1 (nhận cua xong) chờ Admin duyệt ở `/admin/tranches`. Script đi hết vòng qua API: tạo Lô, Admin duyệt, ba nhà đầu tư góp đủ vốn có hợp đồng, khách đặt trước 10/30 con, chốt vốn, mua nguồn, kiểm đầu vào, xếp 30 con vào hộp trống mỗi hộp một ảnh chụp trong ứng dụng, rồi xin giải ngân. Lần đầu mất thêm khoảng 90 giây chờ hết hạn gọi vốn |
+| `QT-DEMO-P01`, `QT-DEMO-T01`, `QT-DEMO-A01` | không do script tạo: seeder phía máy chủ `Seed:DemoScenarios` (docs/deploy.md) dựng sẵn ba Lô chờ quyết toán; script chỉ in chúng đang ở bước nào (Admin làm ở `/admin/settlements`, nhà đầu tư xem ở `/nha-dau-tu/quyet-toan`) |
 
 Đơn của khách giao tới 8 nhà hàng mẫu ở TP.HCM; tên địa điểm có chữ `[demo]`. Ghi chú, mô tả khiếu nại, đơn mua nguồn... cũng có `[demo]` khi có ô ghi chú.
 
@@ -40,4 +42,6 @@ node tools/demo-flows/demo-flows.mjs https://<địa-chỉ-API> --yes      # má
 - Hợp đồng chưa đủ chữ ký ở `CS-2610-03` làm đợt giải ngân 1 của Lô này chưa xin được cho tới khi ký xong.
 - Mỗi lần tạo lại chuỗi giao hàng dùng thêm khoảng 20 con L Đặc cấp trong 75 con chào giá của `CS-2611-T1`; chạy lại nhiều lần sẽ hết số lượng chào.
 - Hộ nuôi đang bị tạm dừng thì vẫn chạy được, nhưng không tạo hay duyệt Lô mới, không gửi ảnh bằng chứng và nhật ký được. Script không tự mở lại; Admin mở lại ở trang Hộ nuôi (nút "Mở lại", `POST /api/admin/operators/{id}/reinstate`).
-- Chưa tạo được: mốc giải ngân chờ Admin duyệt (chưa đợt nào đủ điều kiện) và các bước quyết toán (chưa Lô nào ở giai đoạn quyết toán theo BR v1.5). Script in lý do cụ thể mỗi lần chạy.
+- Đợt 1 của `CS-2611-P1` không mở được qua API: cổng mốc nhận cua đòi mỗi con có lượt xếp hộp kèm ảnh chụp trong ứng dụng, mà ảnh chỉ gắn được lúc xếp một con vừa nhận; 40 con của P1 được seed sẵn trong hộp không có ảnh và API không gắn ảnh vào lượt xếp hộp đã có. Vì vậy script dựng lô P mới cho giai đoạn này.
+- Admin duyệt đợt giải ngân thì giai đoạn đó hết; lần chạy sau dựng thêm một lô P mẫu mới (mỗi lô dùng 30 hộp trống).
+- Quyết toán: bật `Seed__DemoScenarios=true` trên API (docs/deploy.md). Không bật thì script báo "Không tạo được" cho quyết toán nhưng vẫn thoát mã 0.

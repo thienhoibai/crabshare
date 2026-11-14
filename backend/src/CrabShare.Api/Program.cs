@@ -67,6 +67,11 @@ if (app.Environment.IsDevelopment())
 if (builder.Configuration.GetValue<bool>("Seed:DemoTopUp"))
     _ = Task.Run(() => DevDataSeeder.SeedAsync(app.Services, topUp: true));
 
+// Kịch bản demo chờ quyết toán (xem docs/deploy.md): Seed__DemoScenarios=true dựng các Lô QT-DEMO-* đang chờ quyết toán bằng tài khoản mẫu.
+// Chạy nền, bỏ qua Lô đã có mã, một giao dịch cho cả lượt; gỡ cấu hình khi không cần nữa.
+if (builder.Configuration.GetValue<bool>("Seed:DemoScenarios"))
+    _ = Task.Run(() => DemoScenarioSeeder.SeedAsync(app.Services));
+
 app.MapControllers();
 
 app.Run();

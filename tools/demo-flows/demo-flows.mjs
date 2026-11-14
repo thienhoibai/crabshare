@@ -8,6 +8,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { deflateSync } from 'node:zlib';
 
 const startedAt = Date.now();
 const argv = process.argv.slice(2);
@@ -117,13 +118,48 @@ function as(name) {
     form: (p, build) => call('POST', p, { form: build }),
   };
 }
+// files: { tênTrường: [khoá ảnh vẽ sẵn, tên file] } hoặc { tênTrường: { bytes, type, name } }
 function formOf(fields, files = {}) {
   return () => {
     const f = new FormData();
     for (const [k, v] of Object.entries(fields)) if (v !== undefined && v !== null) f.append(k, String(v));
-    for (const [k, [key, name]] of Object.entries(files)) f.append(k, new Blob([Buffer.from(demoImages()[key], 'base64')], { type: 'image/jpeg' }), name);
+    for (const [k, file] of Object.entries(files)) {
+      if (Array.isArray(file)) f.append(k, new Blob([Buffer.from(demoImages()[file[0]], 'base64')], { type: 'image/jpeg' }), file[1]);
+      else f.append(k, new Blob([file.bytes], { type: file.type }), file.name);
+    }
     return f;
   };
+}
+
+// Ảnh PNG nhỏ tự vẽ cho ảnh hộp chụp trong ứng dụng: nền 9 × 8 ô sáng tối ngẫu nhiên theo hạt giống nên mỗi ảnh khác dấu vân ảnh
+// (máy chủ gắn cờ ảnh trùng hoặc gần trùng), giữa ảnh là bóng con cua, viền là thành hộp.
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+const crc32 = (buf) => { let c = 0xffffffff; for (const b of buf) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+function pngChunk(type, data) {
+  const head = Buffer.alloc(4); head.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+  const tail = Buffer.alloc(4); tail.writeUInt32BE(crc32(body));
+  return Buffer.concat([head, body, tail]);
+}
+function boxPhoto(seed) {
+  const W = 180, H = 135;
+  let s = (seed >>> 0) || 1;
+  const rnd = () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
+  const grid = Array.from({ length: 72 }, () => 40 + rnd() * 180);
+  const raw = Buffer.alloc((W * 3 + 1) * H);
+  for (let y = 0; y < H; y++) {
+    raw[y * (W * 3 + 1)] = 0;
+    for (let x = 0; x < W; x++) {
+      const base = grid[Math.floor(y * 8 / H) * 9 + Math.floor(x * 9 / W)];
+      let [r, g, b] = [base * 0.5, base * 0.8, base * 0.9];
+      const dx = (x - W / 2) / 34, dy = (y - H / 2) / 22;
+      if (dx * dx + dy * dy < 1) [r, g, b] = [r * 0.6 + 28, g * 0.6 + 22, b * 0.6 + 14];
+      if (x < 5 || x >= W - 5 || y < 5 || y >= H - 5) [r, g, b] = [232, 232, 228];
+      raw.set([r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v)))), y * (W * 3 + 1) + 1 + x * 3);
+    }
+  }
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4); ihdr[8] = 8; ihdr[9] = 2;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), pngChunk('IHDR', ihdr), pngChunk('IDAT', deflateSync(raw)), pngChunk('IEND', Buffer.alloc(0))]);
 }
 async function device(method, path, { messageId, form } = {}) {
   const headers = { 'X-Device-Key': STATION.key };
@@ -666,15 +702,15 @@ async function contractsOf(inv) {
 }
 
 // reserve → (QR + trả tiền trước) → hợp đồng → (người nuôi ký) → (nhà đầu tư ký) → (QR, có thể trả)
-async function contribute(inv, amount, plan) {
+async function contribute(inv, amount, plan, batchCode = FUND) {
   const api = as(inv);
   let c;
   try {
-    c = await api.post(`/api/batches/${FUND}/contributions`, { amount });
-    log.made(`${inv} giữ chỗ góp ${vnd(amount)} vào ${FUND} (khoản ${c.contributionId}, giữ tới ${vnTime(c.expiresAt)})`);
+    c = await api.post(`/api/batches/${batchCode}/contributions`, { amount });
+    log.made(`${inv} giữ chỗ góp ${vnd(amount)} vào ${batchCode} (khoản ${c.contributionId}, giữ tới ${vnTime(c.expiresAt)})`);
   } catch (e) {
     if (e.code !== 'funding.reservation_exists') throw e;
-    c = (await api.get('/api/me/contributions')).find((x) => x.batchCode === FUND && x.status === 'Reserved');
+    c = (await api.get('/api/me/contributions')).find((x) => x.batchCode === batchCode && x.status === 'Reserved');
     log.keep(`${inv} đang giữ chỗ khoản ${c.contributionId} (${vnd(c.amount)}), dùng tiếp khoản này`);
   }
   const pay = async () => {
@@ -740,17 +776,31 @@ async function voteFlow() {
   row('Biểu quyết tập thể đang mở', 'Nhà đầu tư', 'investor1..4', '/nha-dau-tu/bieu-quyet', d.decisionNo, `${VOTE_BATCH}; quá nửa vốn "Đồng ý" là Lô vào thanh lý`);
 }
 
+// Quyết toán cần thời gian trôi (hết số ngày bán, hết hạn đổi trả) nên không dựng qua API được; các Lô QT-DEMO-* do seeder phía máy chủ
+// dựng sẵn (Seed:DemoScenarios, xem docs/deploy.md). Ở đây chỉ báo chúng đang ở bước nào.
 async function settlementCheck() {
+  const next = {
+    AwaitingSettlement: ['Lô chờ quyết toán: tính bảng nháp', 'Quản trị'],
+    Draft: ['Bảng quyết toán nháp, chờ công bố', 'Quản trị'],
+    Proposed: ['Bảng đã công bố, đang nhận góp ý (Admin có thể kết thúc hạn bằng công cụ demo)', 'Nhà đầu tư / Quản trị'],
+    Disputed: ['Có góp ý chờ Admin trả lời', 'Quản trị'],
+    Approved: ['Bảng đã duyệt, chờ gửi lệnh chi', 'Quản trị'],
+  };
+  const list = (await as('admin').get('/api/admin/settlements')).filter((x) => x.batchStatus !== 'Closed' && x.batchStatus !== 'Selling');
+  for (const s of list) {
+    const step = s.settlementId ? s.status : s.batchStatus;
+    const [stage, role] = next[step] ?? [`Quyết toán (${step})`, 'Quản trị'];
+    row(stage, role, 'admin', s.settlementId ? `/admin/settlements/${s.settlementId}` : '/admin/settlements', s.batchCode, plain(s.batchTitle ?? ''));
+  }
   const mine = await as('investor1').get('/api/me/settlements');
-  if (mine.length) row('Sao kê quyết toán đã công bố', 'Nhà đầu tư', 'investor1', '/nha-dau-tu/quyet-toan', mine[0].batchCode);
-  const admin = await as('admin').get('/api/admin/settlements');
-  if (admin.length) row('Lô chờ hoặc đang quyết toán', 'Quản trị', 'admin', '/admin/settlements', admin.map((x) => x.batchCode).join(', '));
-  if (!mine.length && !admin.length) {
-    log.warn('không có Lô nào ở giai đoạn quyết toán theo BR v1.5');
+  for (const s of mine.filter((x) => x.batchCode.startsWith('QT-DEMO') || x.status !== 'Closed').slice(0, 3))
+    row('Sao kê quyết toán đã công bố', 'Nhà đầu tư (xem, góp ý)', 'investor1', '/nha-dau-tu/quyet-toan', s.batchCode, s.status);
+  if (list.length) log.keep(`${list.length} Lô đang ở bước quyết toán: ${list.map((x) => `${x.batchCode} ${x.settlementId ? x.status : x.batchStatus}`).join(', ')}`);
+  else {
+    log.warn('không có Lô nào đang chờ quyết toán; bật Seed:DemoScenarios trên máy chủ để dựng các Lô QT-DEMO-* (docs/deploy.md)');
     notPossible('Quyết toán (Admin tính, công bố, duyệt; nhà đầu tư xem sao kê)',
-      'chỉ Lô ở AwaitingSettlement/Settling mới tính được, và Lô chỉ tới đó từ Selling hoặc Liquidating khi đủ sáu điều kiện. '
-      + 'CS-2605-01 (Settlement) và CS-2609-04 (Harvesting) là dữ liệu kiểu cũ nên job không chuyển; không có lô P nào đang Selling; '
-      + `hộ nuôi đang ${ctx.farmStatus ?? '?'} nên không tạo được lô P mới để đi hết vòng.`);
+      'cần thời gian trôi (hết số ngày bán, hết hạn đổi trả) nên không dựng qua API; bật Seed:DemoScenarios=true trên máy chủ rồi khởi động lại để dựng '
+      + 'QT-DEMO-P01, QT-DEMO-T01, QT-DEMO-A01 đang chờ quyết toán (docs/deploy.md).');
   }
 }
 
@@ -841,21 +891,167 @@ async function partnerFlow() {
 }
 
 // ================================================================= LUỒNG 6: giải ngân theo mốc
-async function trancheFlow() {
-  const list = await as('operator').get('/api/operator/tranches');
-  let waiting = list.find((t) => t.status === 'Requested');
-  if (waiting) log.keep(`đợt ${waiting.trancheNo} của ${waiting.batchCode} đang chờ Admin duyệt`);
-  else {
-    const can = list.find((t) => t.canRequest);
-    if (can) {
-      waiting = await as('operator').post(`/api/batches/${can.batchCode}/tranches/${can.trancheNo}/request`);
-      log.made(`người nuôi xin giải ngân đợt ${can.trancheNo} của ${can.batchCode}`);
+// CS-2611-P1 đợt 1 không mở được qua API: cổng mốc nhận cua (BR-145) đòi mỗi con có lượt xếp hộp "Stock" kèm ảnh chụp trong ứng dụng,
+// mà ảnh chỉ gắn được vào lượt xếp hộp lúc xếp một con vừa nhận. 40 con của P1 được seed sẵn trong hộp, không ảnh; API không có thao tác gắn ảnh
+// vào lượt xếp hộp đã có, và xếp thêm con bị chặn vì đã đủ 40 con được cấp vốn. Nên script dựng một lô P mới đi hết vòng qua API:
+// người nuôi tạo Lô → Admin duyệt (gọi vốn mở 90 giây) → ba nhà đầu tư góp đủ vốn có hợp đồng → khách đặt trước 10/30 con → chốt vốn
+// → mua nguồn, kiểm đầu vào → xếp 30 con vào hộp trống, mỗi hộp một ảnh chụp trong ứng dụng → xin giải ngân đợt 1.
+const MILESTONE_MARK = '[demo] lô P mẫu xin giải ngân';
+const MS = { crabs: 30, investors: [['investor1', 2_000_000], ['investor2', 1_500_000], ['investor3', 1_000_000]], windowSeconds: 90 };
+
+async function createMilestoneBatch() {
+  const op = as('operator');
+  const farm = (await op.get('/api/me/sites?siteType=Farm')).filter((s) => s.latitude != null).sort((a, b) => b.isDefault - a.isDefault)[0];
+  if (!farm) throw new Error('Trại chưa có toạ độ nên không tạo được lô P (luồng chuẩn bị khai toạ độ trại).');
+  const buyer = (await op.get('/api/parties/directory?roleType=OfftakeBuyer'))[0];
+  if (!buyer) throw new Error('Chưa có bên cam kết thu mua đã xác minh.');
+  const n = MS.crabs;
+  const batch = await op.post('/api/batches', {
+    title: `Cua thịt hộp RAS Năm Căn — đợt giữa tháng 11 ${MILESTONE_MARK}`, crabType: 'FatteningMudCrab', plannedQuantity: n, hasHolding: true,
+    holdingDays: 30, restockCutoffDays: 10, expectedAvgWeightG: 420, expectedGrade: 'Đặc cấp', saleDays: 14, deliveryRadiusKm: 400,
+    dispatchSiteId: farm.siteId, expectedReceiptDate: vnDate(10), minViableCapital: 3_000_000, minViableBasis: 'Tiền cua giống và thức ăn tối thiểu cho 20 con',
+    survivalThresholdPct: 85, baseRemunerationPct: 10,
+    remunerationTiers: [{ survivalFromPct: 0, survivalToPct: 85, ratePct: 5 }, { survivalFromPct: 85, survivalToPct: 100, ratePct: 10 }],
+    floorPricePerKg: 300_000, offtakeBuyerPartyId: buyer.partyId, settlementBasis: 'StandardCost',
+    offers: [
+      { specCode: 'FAT-XL-SPECIAL', pricePerKg: 520_000, conversionWeightG: 420, offeredQuantity: n },
+      { specCode: 'FAT-L-SPECIAL', pricePerKg: 460_000, conversionWeightG: 330, offeredQuantity: n },
+    ],
+  });
+  await op.put(`/api/batches/${batch.batchCode}/cost-plan`, {
+    items: [
+      { category: 'Seed', description: 'Cua thịt đầu vào 380–440 g/con', quantity: n, unit: 'con', unitPrice: 95_000 },
+      { category: 'Feed', description: 'Thức ăn 30 ngày (cá tạp, ốc)', quantity: 1, unit: 'gói', unitPrice: n * 22_000 },
+      { category: 'Utilities', description: 'Điện bơm, sục khí, lọc nước', quantity: 1, unit: 'gói', unitPrice: n * 10_000 },
+      { category: 'Labour', description: 'Nhân công chăm sóc', quantity: 1, unit: 'gói', unitPrice: n * 13_000 },
+      { category: 'MortalityReserve', description: 'Dự phòng hao hụt', quantity: 1, unit: 'gói', unitPrice: n * 10_000 },
+    ],
+  });
+  log.made(`người nuôi tạo lô P ${batch.batchCode} (${n} con, Chi phí chuẩn 150.000 đ mỗi con, có lưu nuôi trong hộp)`);
+  return batch;
+}
+
+async function fundMilestoneBatch(code, batch) {
+  if (new Date(batch.fundingDeadline).getTime() > Date.now() + 5000) {
+    for (const [inv, amount] of MS.investors) {
+      if ((await as(inv).get('/api/me/contributions')).some((c) => c.batchCode === code && c.status === 'Confirmed')) continue;
+      await readyInvestor(inv);
+      await contribute(inv, amount, { operatorSign: true, investorSign: true, qr: true, pay: true }, code);
+    }
+    const orders = await pages((p) => as('customer').get(`/api/preorders?Page=${p}&PageSize=100`));
+    if (!orders.some((o) => o.batchCode === code && ['Deposited', 'Confirmed'].includes(o.status))) {
+      const site = (await as('customer').get('/api/me/sites?siteType=DeliveryAddress')).filter((s) => s.latitude != null).sort((a, b) => b.isDefault - a.isDefault)[0];
+      const order = await as('customer').post('/api/preorders', { batchCode: code, deliverySiteId: site.siteId, lines: [{ specCode: 'FAT-XL-SPECIAL', mode: 'ByCount', qtyCrabs: 10 }] });
+      await as('customer').post('/api/dev/payments/simulate', { referenceCode: order.deposit.referenceCode });
+      log.made(`khách đặt trước ${order.orderNo} 10 con XL Đặc cấp của ${code} và trả cọc ${vnd(order.depositAmount)} (đủ tỷ lệ đặt trước tối thiểu để Lô mở)`);
     }
   }
-  if (waiting) { row('Mốc giải ngân chờ Admin duyệt', 'Quản trị', 'admin', '/admin/tranches', `${waiting.batchCode} đợt ${waiting.trancheNo}`); return; }
-  const reasons = list.filter((t) => t.status === 'Planned' && !/chưa được giải ngân/.test(t.blockedReason ?? '')).map((t) => `${t.batchCode} đợt ${t.trancheNo}: ${t.blockedReason}`);
-  log.warn('không có đợt giải ngân nào đủ điều kiện để người nuôi xin');
-  notPossible('Mốc giải ngân chờ Admin duyệt', `không đợt nào đủ điều kiện mốc lúc này — ${reasons.join(' · ')}`);
+  const wait = new Date(batch.fundingDeadline).getTime() - Date.now() + 2000;
+  if (wait > 0) { log.info(`chờ hết hạn gọi vốn của ${code} (${Math.ceil(wait / 1000)} giây)…`); await sleep(wait); }
+  const closed = await as('admin').post('/api/admin/funding/close-due');
+  const outcome = closed.batches?.find((b) => b.batchCode === code);
+  log.made(`Admin chạy chốt vốn: ${code} ${outcome ? outcome.outcome : 'đã được job chốt'}`);
+}
+
+async function stockMilestoneBatch(code) {
+  const op = as('operator');
+  let po = (await op.get(`/api/batches/${code}/procurement-orders`)).find((p) => p.status !== 'Cancelled');
+  if (!po) {
+    const sup = await supplier();
+    po = await op.post(`/api/batches/${code}/procurement-orders`, {
+      supplierPartyId: sup.partyId, orderedOn: vnDate(0), quantity: MS.crabs, unitPrice: 95_000,
+      agreedSpec: '[demo] Cua thịt Scylla paramamosain 380–440 g, còn sống, đủ càng, giao tại trại Năm Căn',
+    });
+    log.made(`đơn mua nguồn ${po.poNo} cho ${code}: ${po.quantity} con`);
+  }
+  let receipt = (await op.get(`/api/batches/${code}/goods-receipts`)).find((r) => r.status === 'Inspecting');
+  if (!receipt && (await op.get(`/api/batches/${code}/goods-receipts`)).length === 0) {
+    receipt = await op.post(`/api/procurement-orders/${po.poNo}/receipts`, {
+      originRegion: 'Tam Giang, Năm Căn, Cà Mau', harvestedOn: vnDate(-1), declaredSpecies: 'Scylla paramamosain', declaredCount: MS.crabs,
+      declaredWeightKg: round(MS.crabs * 0.42, 3), note: '[demo] Lô nguồn của lô P mẫu xin giải ngân',
+    });
+    log.made(`phiếu nhận ${receipt.receiptNo} (${MS.crabs} con) → phân ngẫu nhiên cho ${nameOf(receipt.qcUserId) ?? `kiểm phẩm #${receipt.qcUserId}`}`);
+  }
+  if (receipt) {
+    const qc = nameOf(receipt.qcUserId);
+    if (!qc) throw new Error(`Phiếu ${receipt.receiptNo} được phân cho Nhân viên kiểm phẩm #${receipt.qcUserId}, không phải qc1/qc2.`);
+    for (let i = receipt.acceptedCount + receipt.rejectedCount; i < receipt.declaredCount; i++)
+      await as(qc).post(`/api/goods-receipts/${receipt.receiptNo}/inspections`, {
+        species: 'Scylla paramamosain', sex: 'Male', maturity: 'Mature', speciesOk: true, alive: true, healthy: true, twoClaws: true, foodSafe: true,
+        weightG: 400 + (i * 7) % 41 + 0.5,
+      });
+    await as(qc).post(`/api/goods-receipts/${receipt.receiptNo}/complete`);
+    log.made(`${qc} kiểm đầu vào xong phiếu ${receipt.receiptNo}`);
+  }
+  // Xếp từng con vào một hộp trống, mỗi hộp một ảnh chụp trong ứng dụng ngay trước khi xếp (ảnh thả cua của mốc 1).
+  const crabs = await op.get(`/api/batches/${code}/crab-units?status=Received`);
+  if (!crabs.length) return;
+  const free = (await op.get('/api/boxes?Status=Available&PageSize=100')).items.map((b) => b.slotCode).sort();
+  const boxed = [];
+  for (const crab of crabs) {
+    let done = false;
+    while (!done && free.length) {
+      const slot = free.shift();
+      try {
+        const photo = await op.form('/api/evidence', formOf({
+          BatchCode: code, SlotCode: slot, SlotEventType: 'Boxed', CapturedAt: new Date().toISOString(),
+          Latitude: FARM_COORDS.latitude, Longitude: FARM_COORDS.longitude,
+        }, { Image: { bytes: boxPhoto(Date.now() ^ (parseInt(slot, 10) * 2654435761)), type: 'image/png', name: `hop-${slot}.png` } }));
+        await op.post(`/api/batches/${code}/box-assignments`, { crabCode: crab.crabCode, slotCode: slot, evidenceId: photo.id });
+        boxed.push(slot);
+        done = true;
+      } catch (e) {
+        if (!['evidence.box_not_free', 'holding.slot_occupied', 'holding.slot_other_batch', 'holding.slot_maintenance'].includes(e.code)) throw e;
+      }
+    }
+    if (!done) throw new Error(`Hết hộp trống để xếp cua của ${code}.`);
+  }
+  log.made(`người nuôi xếp ${boxed.length} con vào hộp ${boxed[0]}…${boxed.at(-1)}, mỗi hộp một ảnh chụp trong ứng dụng → Lô ${code} vào nuôi`);
+}
+
+async function milestoneFlow() {
+  const op = as('operator');
+  let tranches = await op.get('/api/operator/tranches');
+  const waiting = tranches.find((t) => t.status === 'Requested');
+  if (waiting) {
+    log.keep(`đợt ${waiting.trancheNo} của ${waiting.batchCode} đang chờ Admin duyệt`);
+    row('Mốc giải ngân chờ Admin duyệt', 'Quản trị', 'admin', '/admin/tranches', `${waiting.batchCode} đợt ${waiting.trancheNo}`, vnd(waiting.plannedAmount));
+    return;
+  }
+  const p1 = tranches.find((t) => t.batchCode === VISIT_BATCH && t.trancheNo === 1 && !t.canRequest);
+  if (p1) log.info(`${VISIT_BATCH} đợt 1 không xin được (${p1.blockedReason}); API không gắn được ảnh vào lượt xếp hộp đã có, nên dựng lô P mới`);
+  const consumed = (code) => tranches.some((t) => t.batchCode === code && t.trancheNo === 1 && !['Planned', 'NeedsExplanation'].includes(t.status));
+  const mine = await pages((p) => op.get(`/api/operators/me/batches?Page=${p}&PageSize=100`));
+  let batch = mine.find((b) => b.title.includes(MILESTONE_MARK) && !['Cancelled', 'Rejected', 'Closed'].includes(b.status) && !consumed(b.batchCode));
+  if (batch) log.keep(`lô P mẫu ${batch.batchCode} đang ${batch.status}, làm tiếp`);
+  else batch = await createMilestoneBatch();
+  let code = batch.batchCode;
+  for (let step = 0, restarted = false; step < 10; step++) {
+    batch = await op.get(`/api/operators/me/batches/${code}`);
+    if (batch.status === 'Draft' || batch.status === 'RevisionRequested') {
+      await op.post(`/api/batches/${code}/submit`);
+      log.made(`người nuôi gửi duyệt ${code}`);
+    } else if (batch.status === 'PendingApproval') {
+      const deadline = new Date(Date.now() + MS.windowSeconds * 1000);
+      await as('admin').post(`/api/admin/batches/${code}/approve`, { fundingOpenAt: new Date(Date.now() - 60_000).toISOString(), fundingDeadline: deadline.toISOString() });
+      log.made(`Admin duyệt ${code}: gọi vốn mở tới ${vnTime(deadline.toISOString())}`);
+    } else if (batch.status === 'Funding') {
+      await fundMilestoneBatch(code, batch);
+    } else if (batch.status === 'Sourcing' || batch.status === 'InProduction') {
+      await stockMilestoneBatch(code);
+      break;
+    } else if (batch.status === 'Cancelled' && !restarted) {
+      log.warn(`${code} bị huỷ khi chốt vốn (lần chạy trước dừng giữa chừng), dựng lô mới`);
+      code = (await createMilestoneBatch()).batchCode;
+      restarted = true;
+    } else throw new Error(`lô mẫu ${code} đang ${batch.status}, không đi tiếp được`);
+  }
+  tranches = await op.get('/api/operator/tranches');
+  const t1 = tranches.find((t) => t.batchCode === code && t.trancheNo === 1);
+  if (!t1?.canRequest) throw new Error(`đợt 1 của ${code} chưa xin được: ${t1?.blockedReason ?? 'không có đợt giải ngân'}`);
+  await op.post(`/api/batches/${code}/tranches/1/request`);
+  log.made(`người nuôi xin giải ngân đợt 1 (nhận cua xong) của ${code}: ${vnd(t1.plannedAmount)}`);
+  row('Mốc giải ngân chờ Admin duyệt', 'Quản trị', 'admin', '/admin/tranches', `${code} đợt 1`, `${vnd(t1.plannedAmount)}; người nuôi xem /operator/disbursements`);
 }
 
 // ================================================================= chạy
@@ -868,7 +1064,7 @@ await flow(`Nhà đầu tư: góp vốn và hợp đồng ở ${FUND}`, investor
 await flow(`Biểu quyết tập thể ở ${VOTE_BATCH}`, voteFlow);
 await flow(`Kiểm phẩm: thăm trại ${VISIT_BATCH}`, siteVisitFlow);
 await flow('Quản trị: đối tác và nhà cung cấp chờ xác minh', partnerFlow);
-await flow('Quản trị: mốc giải ngân', trancheFlow);
+await flow('Quản trị: mốc giải ngân (lô P mẫu đi hết vòng tới mốc 1)', milestoneFlow);
 await flow('Quyết toán', settlementCheck);
 
 const width = (s) => [...String(s).normalize('NFC')].length;
@@ -884,7 +1080,7 @@ if (missing.length) {
 }
 console.log('\nTài khoản: <tên>@crabshare.local và demo-org-*@crabshare.local, cùng mật khẩu mẫu của web.');
 console.log(`Xong sau ${((Date.now() - startedAt) / 1000).toFixed(1)} giây: tạo mới ${counters.created} bước, giữ nguyên ${counters.kept} bước, ${counters.warnings} cảnh báo/lỗi.`);
-process.exitCode = missing.some((m) => !/^Quyết toán|^Mốc giải ngân/.test(m.stage)) ? 1 : 0;
+process.exitCode = missing.some((m) => !/^Quyết toán/.test(m.stage)) ? 1 : 0;
 
 // Ảnh JPEG nhỏ vẽ sẵn (bản demo): ảnh khiếu nại, giấy tờ pháp lý mẫu, hai ảnh trạm đo (đèn trắng, đèn soi đỏ).
 function demoImages() {

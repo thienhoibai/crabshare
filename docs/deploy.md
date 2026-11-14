@@ -66,6 +66,22 @@ Dùng khi CSDL trên Azure đã có tài khoản nhưng chưa có Lô nào, và 
 
 Seeder dùng lại các tài khoản mẫu `...@crabshare.local` và hộ nuôi mẫu đang có (giữ nguyên mật khẩu và hồ sơ), tạo thêm phần còn thiếu, đổi mã hộp kiểu cũ 3 chữ số sang 4 chữ số và thêm hộp cho đủ 0001–1740. Tài khoản của người dùng khác không bị đụng tới. Toàn bộ nằm trong một giao dịch: lỗi ở đâu thì CSDL giữ nguyên như trước. Khi đã có Lô, seeder tự bỏ qua nên chạy lại không sinh trùng. Các tài khoản do seeder tạo mới dùng mật khẩu demo của nhóm.
 
+### Kịch bản demo chờ quyết toán (người quản hạ tầng làm, không xoá gì)
+
+Quyết toán cần thời gian trôi (hết số ngày bán 14 ngày, hết hạn đổi trả 72 giờ), nên không dựng được bằng API như `tools/demo-flows`. Công tắc `Seed:DemoScenarios` dựng sẵn ba Lô mã cố định đang chờ quyết toán (`AwaitingSettlement`, đủ sáu điều kiện BR-183, sổ tiền của Lô khớp) để Admin làm trọn quyết toán trên web:
+
+| Mã | Lô | Nội dung |
+|---|---|---|
+| `QT-DEMO-P01` | lô P, 30 con | investor1, investor2, investor3 góp đủ 4.500.000 đ có hợp đồng ký đủ; customer đặt trước 10 con đã giao, nghiệm thu, trả đủ, hết hạn đổi trả; 20 con bán cho bên cam kết thu mua |
+| `QT-DEMO-T01` | lô T, 12 con | bán hết cho bên cam kết; kết quả thương vụ nội bộ của CrabShare (BR-200) |
+| `QT-DEMO-A01` | lô A, 12 con | lô đại lý của nhà cung cấp Vựa cua Rạch Gốc, hoa hồng 8 % (BR-201) |
+
+1. Đặt `Seed__DemoScenarios=true` cho App Service rồi khởi động lại API (môi trường nào cũng được; cần sẵn tài khoản mẫu, hộ nuôi mẫu đang được duyệt có trại có toạ độ, nhà cung cấp và bên cam kết thu mua đã xác minh — chạy `tools/demo-flows` một lần là có toạ độ trại).
+2. Seeder chạy nền trong API, khoảng 5–10 giây. Log có dòng "Đã dựng kịch bản demo quyết toán" hoặc "thất bại … Đã hoàn tác". Xong thì gỡ cấu hình (để nguyên cũng được: Lô đã có mã thì bỏ qua).
+3. Mỗi bước đi qua service thật của API, đăng nhập thay đúng người làm bước đó (người nuôi, Admin, nhà đầu tư, khách, Nhân viên kiểm phẩm được phân ngẫu nhiên); tiền vào đi qua webhook ngân hàng như công cụ giả lập chuyển khoản. Chỉ có ba lối tắt thời gian giống test: dời hạn gọi vốn về quá khứ rồi chốt vốn, dời ngày bắt đầu bán, dời hết hạn đổi trả của chuyến vừa nghiệm thu. Không xoá gì, không sửa dữ liệu khác; cả lượt là một giao dịch. Hai bước nền mà seeder gọi sớm (hoàn tất đơn đã hết hạn đổi trả, chuyển Lô đủ điều kiện sang chờ quyết toán) là việc job vẫn tự làm vài phút một lần.
+
+Trên web: Admin vào `/admin/settlements` → chọn Lô → Tính bảng → Công bố (nhà đầu tư thấy sao kê ở `/nha-dau-tu/quyet-toan`, góp ý được) → Kết thúc hạn góp ý (công cụ demo, cần `Demo__Tools`) → Duyệt → Gửi lệnh chi → Lô đóng. Lô T duyệt là đóng; lô A duyệt rồi gửi lệnh chi. Muốn có lại các Lô này sau khi đã quyết toán thì không chạy lại được (mã đã có); đó là chủ ý để không sinh trùng.
+
 ### Công cụ demo trên môi trường kiểm thử (giả lập chuyển khoản, kết thúc hạn góp ý)
 
 Mã QR của hệ thống là mã thử nghiệm, không có ngân hàng thật báo có. Vì vậy ngoài Development, người kiểm thử không xác nhận được khoản cọc hay khoản góp vốn nếu không có công cụ demo. Hai công tắc phải bật cùng nhau:
