@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>CrabShare drawio viewer</title>
+<style>body{margin:0;font:13px Segoe UI,sans-serif;display:flex;flex-direction:column;height:100vh}header{padding:6px 10px;display:flex;gap:10px;align-items:center;border-bottom:1px solid #ddd}iframe{flex:1;border:0}</style></head>
+<body><header><label>File <select id="file"></select></label><label>Page <select id="page"></select></label><span id="info"></span></header>
+<iframe id="frame" src="https://embed.diagrams.net/?embed=1&ui=kennedy&spin=1&proto=json&libraries=0&saveAndExit=0&noSaveBtn=1&noExitBtn=1"></iframe>
+<script>
+const frame=document.getElementById('frame'),fileSel=document.getElementById('file'),pageSel=document.getElementById('page'),info=document.getElementById('info');
+let ready=false,xml='',diagrams=[];
+function parse(x){diagrams=[...x.matchAll(/<diagram[^>]*name="([^"]*)"[^>]*>[\s\S]*?<\/diagram>/g)].map(m=>({name:m[1].replace(/&amp;/g,'&'),xml:m[0]}));}
+function send(){if(!ready||!diagrams.length)return;const i=+pageSel.value||0;const one=`<mxfile>${diagrams[i].xml}</mxfile>`;frame.contentWindow.postMessage(JSON.stringify({action:'load',xml:one,autosave:0}),'*');}
+async function loadFile(){const f=fileSel.value;xml=await (await fetch('/'+encodeURIComponent(f))).text();parse(xml);pageSel.innerHTML=diagrams.map((p,i)=>`<option value="${i}">${p.name}</option>`).join('');const want=new URLSearchParams(location.search).get('p');if(want)pageSel.value=want;info.textContent=`${(xml.length/1024).toFixed(0)} KB · ${diagrams.length} page(s)`;send();}
+window.addEventListener('message',e=>{let m;try{m=JSON.parse(e.data)}catch{return}if(m.event==='init'){ready=true;send();}});
+fileSel.addEventListener('change',()=>{history.replaceState(null,'',`?f=${encodeURIComponent(fileSel.value)}`);loadFile();});
+pageSel.addEventListener('change',send);
+fetch('/list').then(r=>r.json()).then(fs=>{fileSel.innerHTML=fs.map(f=>`<option>${f}</option>`).join('');const want=new URLSearchParams(location.search).get('f');if(want&&fs.includes(want))fileSel.value=want;loadFile();});
+</script></body></html>
