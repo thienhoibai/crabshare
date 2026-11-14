@@ -35,6 +35,8 @@ public sealed class OperatorReviewService(AppDbContext db, ICurrentUser me, Time
             "approve" => ("Submitted", "Approved"),
             "reject" => ("Submitted", "Rejected"),
             "suspend" => ("Approved", "Suspended"),
+            // Mở lại hộ nuôi đã tạm dừng: giữ nguyên số hộp đã duyệt và mốc duyệt cũ, lý do bắt buộc và ghi vào nhật ký kiểm toán.
+            "reinstate" => ("Suspended", "Approved"),
             _ => throw new ArgumentOutOfRangeException(nameof(action)),
         };
         if (action == "approve" && (capacity is null || capacity < 0))

@@ -1,8 +1,8 @@
-/* /admin/operators — Hồ sơ hộ nuôi (UC05): duyệt kèm số hộp tối đa, từ chối hoặc tạm dừng kèm lý do.
-   GET /api/admin/operators?status=; POST /api/admin/operators/{id}/approve | reject | suspend.
-   Hồ sơ bị từ chối chưa có luồng gửi lại; hộ nuôi đã tạm dừng chưa có thao tác mở lại. */
+/* /admin/operators — Hồ sơ hộ nuôi (UC05): duyệt kèm số hộp tối đa, từ chối, tạm dừng hoặc mở lại kèm lý do.
+   GET /api/admin/operators?status=; POST /api/admin/operators/{id}/approve | reject | suspend | reinstate.
+   Hồ sơ bị từ chối chưa có luồng gửi lại. */
 import { useState } from 'react'
-import { Check, Pause, X } from 'lucide-react'
+import { Check, Pause, Play, X } from 'lucide-react'
 import type { AdminOperatorResponse, ApproveOperatorRequest, OperatorDecisionRequest, PagedResultOfAdminOperatorResponse } from '../../shared/api/api.gen'
 import {
   Field, NumberInput, OpBtn, OpConfirm, OpHeading, OpNote, OpPanel, OpTable, OpTabs, QueryView, StatusBadge, formatDate, useGet, useSend,
@@ -18,12 +18,13 @@ const TABS = [
   { key: 'all', label: 'Tất cả' },
 ] as const
 type TabKey = (typeof TABS)[number]['key']
-type Action = 'approve' | 'reject' | 'suspend'
+type Action = 'approve' | 'reject' | 'suspend' | 'reinstate'
 
 const ACTION_TEXT: Record<Action, { title: string; confirm: string; done: string }> = {
   approve: { title: 'Duyệt hồ sơ hộ nuôi', confirm: 'Duyệt', done: 'Đã duyệt hồ sơ hộ nuôi.' },
   reject: { title: 'Từ chối hồ sơ hộ nuôi', confirm: 'Từ chối', done: 'Đã từ chối hồ sơ hộ nuôi.' },
   suspend: { title: 'Tạm dừng hộ nuôi', confirm: 'Tạm dừng', done: 'Đã tạm dừng hộ nuôi.' },
+  reinstate: { title: 'Mở lại hộ nuôi', confirm: 'Mở lại', done: 'Đã mở lại hộ nuôi.' },
 }
 
 export default function AdminOperators() {
@@ -83,6 +84,7 @@ export default function AdminOperators() {
                         {f.status === 'Submitted' && <OpBtn sm variant="ink" onClick={() => open(f, 'approve')}><Check size={15} /> Duyệt</OpBtn>}
                         {f.status === 'Submitted' && <OpBtn sm variant="danger" onClick={() => open(f, 'reject')}><X size={15} /> Từ chối</OpBtn>}
                         {f.status === 'Approved' && <OpBtn sm variant="danger" onClick={() => open(f, 'suspend')}><Pause size={15} /> Tạm dừng</OpBtn>}
+                        {f.status === 'Suspended' && <OpBtn sm variant="ink" onClick={() => open(f, 'reinstate')}><Play size={15} /> Mở lại</OpBtn>}
                       </span>
                     ),
                   },
@@ -99,7 +101,7 @@ export default function AdminOperators() {
           title={ACTION_TEXT[target.action].title}
           sub={target.farm.legalName}
           confirmLabel={ACTION_TEXT[target.action].confirm}
-          variant={target.action === 'approve' ? 'primary' : 'danger'}
+          variant={target.action === 'approve' || target.action === 'reinstate' ? 'primary' : 'danger'}
           pending={send.isPending}
           error={send.error}
           disabled={target.action === 'approve' ? capacity === null : !reason.trim()}
@@ -113,7 +115,8 @@ export default function AdminOperators() {
           ) : (
             <ReasonField value={reason} onChange={setReason} />
           )}
-          {target.action === 'suspend' && <OpNote tone="danger">Hộ nuôi tạm dừng không tạo được Lô mới và chưa mở lại được.</OpNote>}
+          {target.action === 'suspend' && <OpNote tone="danger">Hộ nuôi tạm dừng không tạo được Lô mới, không ghi nhật ký và không gửi ảnh bằng chứng cho tới khi được mở lại.</OpNote>}
+          {target.action === 'reinstate' && <OpNote>Hộ nuôi hoạt động lại với số hộp đã duyệt trước đó.</OpNote>}
         </OpConfirm>
       )}
     </>

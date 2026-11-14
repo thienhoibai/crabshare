@@ -51,6 +51,7 @@ Kiểu dữ liệu ở `api.gen.ts`. `[form]` là multipart/form-data.
 |---|---|---|---|---|---|
 | GET | `/api/admin/operators` | Status, Page, PageSize |  | PagedResultOfAdminOperatorResponse |  |
 | POST | `/api/admin/operators/{id}/approve` |  | ApproveOperatorRequest | AdminOperatorResponse |  |
+| POST | `/api/admin/operators/{id}/reinstate` |  | OperatorDecisionRequest | AdminOperatorResponse | Mở lại hộ nuôi đang tạm dừng, kèm lý do; vai trò người nuôi của đối tác hoạt động lại |
 | POST | `/api/admin/operators/{id}/reject` |  | OperatorDecisionRequest | AdminOperatorResponse |  |
 | POST | `/api/admin/operators/{id}/suspend` |  | OperatorDecisionRequest | AdminOperatorResponse |  |
 

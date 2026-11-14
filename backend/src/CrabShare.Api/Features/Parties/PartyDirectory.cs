@@ -143,6 +143,9 @@ public sealed class PartyDirectory(AppDbContext db, TimeProvider clock)
             case "suspend":
                 await SetRoleAsync(partyId, PartnerRoleTypes.Farmer, "Suspended", ct, reason?.Trim());
                 break;
+            case "reinstate":
+                await SetRoleAsync(partyId, PartnerRoleTypes.Farmer, "Active", ct, reason?.Trim());
+                break;
         }
         party.UpdatedAt = now;
         await db.SaveChangesAsync(ct);

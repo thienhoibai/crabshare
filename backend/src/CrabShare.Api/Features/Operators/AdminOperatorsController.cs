@@ -26,4 +26,9 @@ public sealed class AdminOperatorsController(OperatorReviewService operators) : 
     [HttpPost("{id:long}/suspend")]
     public async Task<ActionResult<AdminOperatorResponse>> Suspend(long id, OperatorDecisionRequest req, CancellationToken ct)
         => Ok(await operators.DecideAsync(id, "suspend", null, req.Reason, ct));
+
+    [HttpPost("{id:long}/reinstate")]
+    [EndpointSummary("Mở lại hộ nuôi đang tạm dừng, kèm lý do; vai trò người nuôi của đối tác hoạt động lại")]
+    public async Task<ActionResult<AdminOperatorResponse>> Reinstate(long id, OperatorDecisionRequest req, CancellationToken ct)
+        => Ok(await operators.DecideAsync(id, "reinstate", null, req.Reason, ct));
 }

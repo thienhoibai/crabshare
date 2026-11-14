@@ -116,6 +116,31 @@ public class OperatorReviewTests(OperatorDatabaseFixture fixture) : IClassFixtur
         Assert.Equal(source, JsonDocument.Parse(audit.OldValue!).RootElement.GetProperty("status").GetString());
     }
 
+    [Fact]
+    public async Task Suspended_farm_can_be_reinstated_with_a_reason_and_keeps_its_capacity()
+    {
+        var (owner, _) = await UserAsync();
+        var id = await OperatorAsync(owner);
+        var (admin, _) = await UserAsync(Roles.PlatformAdmin);
+        (await admin.PostAsJsonAsync($"/api/admin/operators/{id}/approve", new { approvedSlotCapacity = 30 })).EnsureSuccessStatusCode();
+        (await admin.PostAsJsonAsync($"/api/admin/operators/{id}/suspend", new { reason = "Kiểm tra lại trại" })).EnsureSuccessStatusCode();
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync($"/api/admin/operators/{id}/reinstate", new { reason = " " })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync($"/api/admin/operators/{id}/reinstate", new { reason = "Đã kiểm tra, đủ điều kiện" })).StatusCode);
+
+        await using var db = fixture.OpenDb();
+        var farm = (await db.Operators.FindAsync(id))!;
+        Assert.Equal("Approved", farm.Status);
+        Assert.Equal(30, farm.ApprovedSlotCapacity);
+        var audit = await db.AuditLogs.SingleAsync(a => a.EntityId == id && a.EntityType == "operator" && a.ActionType == "reinstate");
+        Assert.Equal("Suspended", JsonDocument.Parse(audit.OldValue!).RootElement.GetProperty("status").GetString());
+        Assert.Equal("Đã kiểm tra, đủ điều kiện", JsonDocument.Parse(audit.NewValue!).RootElement.GetProperty("reason").GetString());
+        // Vai trò người nuôi của đối tác hoạt động lại
+        var partyId = farm.PartyId;
+        if (partyId is not null)
+            Assert.Equal("Active", await db.PartnerRoles.Where(r => r.PartyId == partyId && r.RoleType == "Farmer" && r.ValidTo == null).Select(r => r.Status).SingleAsync());
+    }
+
     [Theory]
     [InlineData("approve", "Draft")]
     [InlineData("approve", "Rejected")]
@@ -123,6 +148,9 @@ public class OperatorReviewTests(OperatorDatabaseFixture fixture) : IClassFixtur
     [InlineData("reject", "Suspended")]
     [InlineData("suspend", "Submitted")]
     [InlineData("suspend", "Suspended")]
+    [InlineData("reinstate", "Approved")]
+    [InlineData("reinstate", "Submitted")]
+    [InlineData("reinstate", "Rejected")]
     public async Task Invalid_transitions_do_not_write_audit(string action, string status)
     {
         var (owner, _) = await UserAsync();
