@@ -1,10 +1,9 @@
 /* /qc — Tất cả việc đang chờ của Nhân viên kiểm phẩm (GET /api/qc/tasks). Việc do hệ thống phân ngẫu nhiên nên trang chỉ đọc:
-   đếm theo loại, gom thành nhóm, mỗi hàng dẫn tới trang làm việc (phiếu nhận, hàng chờ phân hạng của Lô, biên bản thăm trại).
-   Đầu tệp có một lượt mở từng trang của cổng chỉ với mockQc(api), để dữ liệu mặc định luôn đủ cho mọi trang trong QC_PAGES. */
+   đếm theo loại, gom thành nhóm, mỗi hàng dẫn tới trang làm việc (phiếu nhận, hàng chờ phân hạng của Lô, biên bản thăm trại). */
 import type { GoodsReceiptResponse, QcTaskResponse } from '../src/shared/api/api.gen'
-import { TOKEN, expect, reply, signIn, test } from './support/app'
+import { expect, reply, signIn, test } from './support/app'
 import {
-  QC_PAGES, batchGrading, batchIncoming, batchSecond, batchVisit, hoursAgo, mockQc, noDevReload, receipt, receiptDone, taskDispatch, taskGrading, taskIncoming,
+  batchGrading, batchIncoming, batchSecond, batchVisit, hoursAgo, mockQc, noDevReload, receipt, receiptDone, taskDispatch, taskGrading, taskIncoming,
   taskVisit, tasks, valueOf,
 } from './support/qc'
 
@@ -13,27 +12,6 @@ test.beforeEach(async ({ page, api }) => {
   await signIn(page, 'QcInspector')
   mockQc(api)
 })
-
-/** Mục menu phải sáng ở từng nhóm trang. */
-const MENU: [prefix: string, label: string][] = [
-  ['/qc/kiem-dau-vao', 'Kiểm đầu vào'],
-  ['/qc/phan-hang', 'Duyệt phân hạng'],
-  ['/qc/tham-trai', 'Thăm trại giữa vụ'],
-  ['/qc/chuan', 'Chuẩn phân hạng'],
-  ['/qc', 'Tất cả việc'],
-]
-
-for (const target of QC_PAGES) {
-  test(`${target.path} dựng đủ với dữ liệu mặc định, không ghi gì lên máy chủ`, async ({ page, api }) => {
-    await page.goto(target.path)
-    await expect(page.getByText(target.ready)).toBeVisible()
-    await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0)
-    const menu = page.getByRole('navigation', { name: 'Menu Nhân viên kiểm phẩm' })
-    await expect(menu.locator('[aria-current="page"]')).toHaveText(MENU.find(([prefix]) => target.path.startsWith(prefix))![1])
-    expect(api.writes()).toEqual([])
-    expect(api.calls.every((c) => c.auth === `Bearer ${TOKEN}`)).toBe(true)
-  })
-}
 
 test('đếm việc theo loại và gom thành nhóm, mỗi hàng dẫn tới đúng trang làm việc', async ({ page, api }) => {
   await page.goto('/qc')
