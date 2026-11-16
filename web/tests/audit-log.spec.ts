@@ -139,8 +139,12 @@ test.describe('Quản trị', () => {
     expect(downloads).toBe(0)
 
     // Ngày bắt đầu sau ngày kết thúc: báo ngay, ẩn bảng, khoá nút xuất, không gửi khoảng ngày sai lên máy chủ.
-    await page.getByLabel('Từ ngày').fill(dateFromNow(-1))
+    const from = dateFromNow(-1)
+    await page.getByLabel('Từ ngày').fill(from)
     await expect(page).toHaveURL(/from=/)
+    // Chờ bộ lọc chỉ có ngày bắt đầu tải xong trước khi đếm request.
+    await expect.poll(() => api.sent('GET', LOG).at(-1)?.query).toEqual({ from, page: '1', pageSize: '50' })
+    await expect(page.getByText('Không có dòng nhật ký nào khớp')).toBeVisible()
     const before = api.sent('GET', LOG).length
     await page.getByLabel('Đến ngày').fill(dateFromNow(-5))
     await expect(page.getByText('Ngày bắt đầu không được sau ngày kết thúc.')).toBeVisible()
