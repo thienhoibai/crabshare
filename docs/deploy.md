@@ -24,6 +24,23 @@ Vercel gói Hobby chỉ deploy commit do chủ tài khoản Vercel tạo; commit
 
 Thiết lập một lần, chỉ chủ project Vercel làm được (Settings → Secrets and variables → Actions → *Secrets*): `VERCEL_TOKEN` (tạo ở vercel.com/account/tokens, không dán vào đâu khác), `VERCEL_ORG_ID` ("Your ID" trong Account Settings với tài khoản cá nhân), `VERCEL_PROJECT_ID` (Project Settings → General). Thiếu secret thì workflow dừng ngay ở bước *Check secrets* với thông báo rõ. Chạy lại tay: tab **Actions** → *Deploy web* → **Run workflow**.
 
+## CircleCI Free cho web
+
+Pipeline bổ sung dùng [`.circleci/config.yml`](../.circleci/config.yml). `web-check` dùng Node 22 để build và chạy Playwright trên Chromium. Kết quả được gửi về commit trên GitHub. Sau khi kiểm thử đạt, push lên `develop` tạo preview, còn push lên `main` deploy production trên project Vercel `crabshare`. URL được in trong log `web-deploy`.
+
+1. Chủ repo cài [CircleCI GitHub App](https://circleci.com/docs/guides/getting-started/create-project/) cho riêng `thienhoibai/crabshare`. Tạo project Free, chọn `.circleci/config.yml` và đặt trigger GitHub App **All pushes**.
+2. Trong **Organization Settings → Contexts**, tạo context `crabshare-vercel` cho riêng project này và đặt `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` của project Vercel hiện có. Các giá trị nằm trong CircleCI Context. `VITE_API_URL` tiếp tục lấy từ biến môi trường của Vercel cho từng môi trường.
+3. Thêm [Expression Restriction](https://circleci.com/docs/guides/security/contexts/#expression-restrictions) sau vào context để chỉ job deploy từ push lên hai nhánh phát hành nhận được token.
+
+   ```text
+   pipeline.event.name == "push"
+   and (pipeline.git.branch == "main" or pipeline.git.branch == "develop")
+   and not job.ssh.enabled
+   and not (pipeline.config_source starts-with "api")
+   ```
+
+4. Chạy thử pipeline từ nhánh có cấu hình CircleCI và kiểm tra `web-check` trên GitHub. Sau khi merge vào `develop`, mở URL preview trong log `web-deploy` và thử `/dang-ky`.
+
 ## Quy tắc
 - **Không bao giờ chạy DbMigrator `--reset` vào Azure.** `--reset` xoá CSDL rồi DbUp tạo lại theo gói mặc định của Azure (General Purpose, vài trăm USD/tháng).
 - Migration mới phải chạy được trên CSDL đang có dữ liệu (đã có V006 làm mẫu: thêm cột cho phép NULL → điền dữ liệu → mới đặt NOT NULL).
