@@ -190,8 +190,10 @@ test.describe('Quản trị', () => {
     expect(last()).toEqual({ result: 'Failed', page: '1', pageSize: '20' })
 
     await page.getByLabel('Loại kiểm tra').selectOption({ label: 'Giấy tờ và khuôn mặt' })
+    await expect.poll(last).toEqual({ result: 'Failed', checkType: 'EkycIdFace', page: '1', pageSize: '20' })
+    // Bảng tạm ẩn khi tải. Chờ hàng còn lại xuất hiện trước khi kiểm tra hàng bị lọc.
+    await expect(eligible).toBeVisible()
     await expect(bank).toHaveCount(0)
-    expect(last()).toEqual({ result: 'Failed', checkType: 'EkycIdFace', page: '1', pageSize: '20' })
 
     // "Mọi kết quả" gửi result rỗng; bỏ trống thì máy chủ chỉ trả các lần không đạt.
     await page.getByLabel('Kết quả').selectOption({ label: 'Mọi kết quả' })
