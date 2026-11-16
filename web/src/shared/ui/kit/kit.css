@@ -98,6 +98,10 @@
 .rd-top__right { display: flex; align-items: center; gap: 6px; }
 .rd-avatar { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: var(--grad); color: var(--on-accent); }
 @media (max-width: 720px) { .rd-top__nav a, .rd-top__nav button { padding: 8px 10px; font-size: 13px; } .rd-logo { font-size: 0; gap: 0; } }
+@media (max-width: 520px) {
+  .rd-top { flex-wrap: wrap; border-radius: 24px; padding-left: 12px; }
+  .rd-top__nav { order: 1; flex-basis: 100%; justify-content: center; }
+}
 
 /* chuyển bản */
 .rd-switch {

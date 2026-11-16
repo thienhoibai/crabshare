@@ -58,39 +58,43 @@ export default function RegisterPage() {
 
   return (
     <SiteShell bare>
-      <main className="op-auth">
+      <main className="op-auth op-auth--register">
         <AuthPitch
-          title={<>Một tài khoản, <em>một hồ sơ.</em></>}
-          points={['Khách hàng đặt trước ngay', 'Nhà đầu tư xác minh danh tính trước khi góp', 'Người nuôi nộp hồ sơ hộ nuôi sau khi đăng ký']}
+          imageSrc="/minhbach/crab-ras.webp"
+          title="Nuôi cua trong hộp với hệ thống RAS"
+          points={['Đặt trước cua theo quy cách', 'Xác minh danh tính trước khi góp vốn', 'Nộp hồ sơ hộ nuôi sau khi đăng ký']}
         />
         <section className="op-auth__card" aria-labelledby="register-title">
           <h1 id="register-title" className="rd-h2">Đăng ký</h1>
 
           <form className="op-form" onSubmit={submit} noValidate>
-            <RadioCards<RoleChoice>
-              value={role}
-              onChange={setRole}
-              options={[
-                { value: 'Customer', label: 'Khách hàng', hint: 'Đặt trước cua' },
-                { value: 'Investor', label: 'Nhà đầu tư', hint: 'Góp vốn vào Lô' },
-              ]}
-            />
+            <fieldset>
+              <legend className="op-label">Loại tài khoản</legend>
+              <RadioCards<RoleChoice>
+                value={role}
+                onChange={setRole}
+                options={[
+                  { value: 'Customer', label: 'Khách hàng', hint: 'Đặt trước cua' },
+                  { value: 'Investor', label: 'Nhà đầu tư', hint: 'Góp vốn vào Lô' },
+                ]}
+              />
+            </fieldset>
 
             <div className="op-form__row">
-              <Field label="Họ và tên">
-                <Input autoComplete="name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+              <Field label="Họ và tên" required>
+                <Input autoComplete="name" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
               </Field>
-              <Field label="Số điện thoại">
+              <Field label="Số điện thoại (không bắt buộc)">
                 <Input type="tel" autoComplete="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </Field>
             </div>
 
             <div className="op-form__row">
-              <Field label="Email">
-                <Input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Field label="Email" required>
+                <Input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
               </Field>
-              <Field label="Mật khẩu" hint="Từ 8 ký tự">
-                <Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <Field label="Mật khẩu" hint="Từ 8 ký tự" required>
+                <Input type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
               </Field>
             </div>
 
@@ -113,15 +117,15 @@ export default function RegisterPage() {
                 <Field label="Mã số thuế">
                   <Input value={registrationNo} onChange={(e) => setRegistrationNo(e.target.value)} inputMode="numeric" />
                 </Field>
-                <Field label="Tên pháp lý" className="is-wide" hint="Sau khi đăng ký, gửi ảnh giấy tờ ở trang Hồ sơ để được xác minh.">
-                  <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} />
+                <Field label="Tên pháp lý" className="is-wide" hint="Sau khi đăng ký, gửi ảnh giấy tờ ở trang Hồ sơ để được xác minh." required>
+                  <Input required value={legalName} onChange={(e) => setLegalName(e.target.value)} />
                 </Field>
               </div>
             )}
 
             <Checkbox checked={terms} onChange={setTerms}>Tôi đồng ý điều khoản sử dụng</Checkbox>
 
-            {message && <OpNote tone="danger">{message}</OpNote>}
+            {message && <div role="alert"><OpNote tone="danger">{message}</OpNote></div>}
             <OpBtn type="submit" full disabled={register.isPending}>{register.isPending ? 'Đang tạo tài khoản…' : 'Tạo tài khoản'}</OpBtn>
           </form>
 

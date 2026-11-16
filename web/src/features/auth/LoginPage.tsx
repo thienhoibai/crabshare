@@ -9,10 +9,14 @@ import { useLogin } from './authApi'
 import { DEMO_ACCOUNTS } from './demoAccounts'
 
 /** Phần giới thiệu bên trái trang đăng nhập và đăng ký. */
-export function AuthPitch({ title, points }: { title: React.ReactNode; points: string[] }) {
+export function AuthPitch({ title, points, imageSrc = '/minhbach/farmer.png' }: {
+  title: React.ReactNode
+  points: string[]
+  imageSrc?: string
+}) {
   return (
     <aside className="op-auth__pitch">
-      <img src="/minhbach/farmer.png" alt="" />
+      <img src={imageSrc} alt="" />
       <p className="rd-eyebrow" style={{ color: 'rgba(243,239,231,0.7)' }}>CrabShare</p>
       <h2 className="rd-h2">{title}</h2>
       <ul>
