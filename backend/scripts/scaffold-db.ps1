@@ -63,6 +63,7 @@ $objects = @(
   'settlement_line'
   'settlement_feedback'
   'audit_log'
+  'price_check'
   'v_batch_funding_progress'
   'v_batch_actual_revenue'
   'v_investor_portfolio'

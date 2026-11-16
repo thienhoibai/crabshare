@@ -1,7 +1,26 @@
-# Mobile — Flutter
+# Mobile — Flutter (BR v1.5)
 
-App cho **nhà đầu tư** (theo dõi lô, eKYC, thông báo, quét tem) và **hộ nuôi** (nhật ký, chụp bằng chứng, cảnh báo, thu hoạch & in tem).
-Giao diện theo mẫu *AI calorie tracker*: nền be ấm, nhấn cam, thẻ trắng bo lớn, đồng hồ bán nguyệt chia vạch, thanh điều hướng tối có nút tròn cam ở giữa.
+App di động của CrabShare theo mô hình BR v1.5. App làm những việc cần điện thoại tại chỗ: chụp ảnh bằng camera trong ứng dụng
+(kèm giờ chụp và vị trí), làm việc tại hộp nuôi và trạm đo, nghiệm thu khi nhận hàng, quét QR trên đơn. Các luồng cần VietQR hoặc
+form dài (đặt trước, góp vốn, ký hợp đồng, tạo Lô) mở sang web tại `WEB_URL`.
+
+| Khu | Đường dẫn | Việc chính | Tệp route |
+|---|---|---|---|
+| Người nuôi | `/o/…` | Hôm nay, lưới hộp của Lô (thả cua, thả bù, báo chết kèm ảnh, chuyển hộp), nhật ký chăm sóc, cảnh báo, chụp bằng chứng, giải trình, đo cua tại trạm, chuyến giao với hai lần cân | `features/operator/operator_routes.dart`, `operator_core_routes.dart`, `operator_work_routes.dart` |
+| Nhân viên kiểm phẩm | `/q/…` | Việc được giao, kiểm đầu vào từng con, duyệt phân hạng, thăm trại giữa vụ | `features/qc/qc_routes.dart` |
+| Nhà đầu tư | `/i/…` | Tổng quan ba con số tiền, Lô đang mở, Lô đã góp (nhật trình, ảnh thiết bị, biểu quyết, điều kiện quyết toán), sao kê, thông báo, eKYC | `features/investor/investor_routes.dart` |
+| Khách hàng | `/c/…` | Đơn của tôi, xác nhận hoặc từ chối nghiệm thu, báo vấn đề kèm ảnh, đánh giá | `features/customer/customer_routes.dart` |
+| Công khai | `/scan`, `/trace/:code`, `/batches/:code` | Quét QR trên đơn, trang truy xuất, trang một Lô | `features/trace/trace_routes.dart` |
+
+Người có nhiều vai đổi khu ở tab Tài khoản. QR gắn theo đơn và theo Lô; không có tem hay QR cho từng con cua.
+
+Giao diện giữ mẫu sẵn có của app: nền be ấm, nhấn cam, thẻ trắng bo lớn, thanh điều hướng tối có nút tròn cam ở giữa
+(`shared/widgets/app_ui.dart`, `nav_shell.dart`). Thành phần bổ sung cho v1.5 ở `shared/widgets/app_parts.dart`
+(`StatusPill`, `FactGrid`, `KeyValueList`, `MoreSection`, `showConfirmSheet`, `PhotoField`, `AuthImage`). Quy tắc gọn: mỗi màn một việc,
+tối đa bốn con số, một nút chính, ít chữ, chi tiết phụ gấp trong `MoreSection`, không ghi số quy tắc trên màn hình.
+
+Mã dùng chung: `core/api/json.dart` (đọc JSON, `dio.getJson/postJson`), `core/capture/` (camera trong ứng dụng kèm GPS),
+`shared/status_labels.dart` (nhãn trạng thái tiếng Việt, sinh từ bảng của web bằng `node tool/gen_status_labels.mjs`).
 
 ## Chạy
 
@@ -15,11 +34,128 @@ flutter run --dart-define=API_URL=http://192.168.1.10:5233                   # �
 
 - API phải đang chạy (`backend/README.md`). Cổng web của Flutter phải nằm trong `Cors:Origins` của API (mặc định có `http://localhost:8080`).
 - Bản debug có nút **đăng nhập nhanh** tài khoản demo. Bản build demo muốn có nút này: thêm `--dart-define=DEMO_ACCOUNTS=true`.
+- Luồng làm trên web (góp vốn) mở bằng trình duyệt tại `WEB_URL` (mặc định `http://localhost:5173`). Máy ảo Android: thêm `--dart-define=WEB_URL=http://10.0.2.2:5173`; điện thoại thật: IP LAN của máy chạy web.
+
+## Android: chuẩn bị và kết nối API
+
+Dùng Flutter **3.47.7** (Dart **3.13.5**, cùng phiên bản CI), Android Studio với plugin
+Flutter/Dart và Android SDK. Trong SDK Manager, cài **Android SDK Command-line Tools
+(latest)**, Platform-Tools và Build-Tools. Chạy `flutter doctor` để kiểm tra; nếu báo
+thiếu giấy phép Android, đọc và xác nhận bằng `flutter doctor --android-licenses`.
+
+Mở thư mục **`mobile/`** trong Android Studio. Flutter SDK path là thư mục chứa
+`bin/flutter`, Dart SDK đi kèm tại `<flutter-sdk>/bin/cache/dart-sdk`.
+
+### Điện thoại thật qua USB
+
+1. Bật Developer options → USB debugging, nối USB, chấp nhận hộp thoại cho phép
+   máy tính gỡ lỗi trên điện thoại.
+2. Chạy API từ gốc repo (lần đầu phải chạy DbMigrator như hướng dẫn backend):
+   ```powershell
+   dotnet run --project backend/src/CrabShare.Api --launch-profile http
+   ```
+3. Trong terminal khác, kiểm tra thiết bị và chuyển tiếp cổng API:
+   ```powershell
+   adb devices
+   adb -s <device-id> reverse tcp:5233 tcp:5233
+   ```
+4. Chạy app từ `mobile/`:
+   ```powershell
+   flutter pub get
+   flutter run -d <device-id> --dart-define=API_URL=http://localhost:5233
+   ```
+
+Nếu `adb` chưa có trong PATH, dùng đường dẫn đầy đủ trên Windows:
+`& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" devices`.
+Chạy lại `adb reverse` sau khi nối lại USB hoặc khởi động lại điện thoại.
+
+### Điện thoại thật qua mạng LAN
+
+Máy tính và điện thoại cần cùng mạng LAN. Xem IPv4 của máy tính bằng `ipconfig`.
+Chạy API để nhận kết nối từ điện thoại:
+
+```powershell
+dotnet run --project backend/src/CrabShare.Api --launch-profile http --urls http://0.0.0.0:5233
+```
+
+Trên trình duyệt điện thoại, mở `http://<IP-LAN>:5233/api/health/live`; cần nhận
+`{"status":"ok"}` trước khi thử đăng nhập. Nếu không mở được, kiểm tra mạng và cho
+phép cổng TCP 5233 của API qua Windows Firewall trên mạng riêng.
+
+```powershell
+flutter run -d <device-id> --dart-define=API_URL=http://<IP-LAN>:5233
+```
+
+### Cấu hình chạy trong Android Studio
+
+**Run → Edit Configurations → + → Flutter**:
+
+| Trường | Giá trị |
+|---|---|
+| Name | CrabShare Android |
+| Dart entrypoint | `lib/main.dart` |
+| Additional run args — USB | `--dart-define=API_URL=http://localhost:5233` |
+| Additional run args — LAN | `--dart-define=API_URL=http://<IP-LAN>:5233` |
+| Additional run args — máy ảo Android | `--dart-define=API_URL=http://10.0.2.2:5233` |
+| Build flavor | Để trống |
+
+Chọn thiết bị trên thanh công cụ và Run. Đổi `API_URL` cần **Stop rồi Run lại**;
+hot reload không đổi hằng compile-time. `10.0.2.2` chỉ dùng cho máy ảo Android;
+điện thoại thật dùng USB forwarding hoặc IP LAN.
+
+### Build và cài APK debug
+
+Từ `mobile/`, cho kết nối USB:
+
+```powershell
+flutter analyze
+flutter test
+flutter build apk --debug --dart-define=API_URL=http://localhost:5233
+adb -s <device-id> reverse tcp:5233 tcp:5233
+adb -s <device-id> install -r build/app/outputs/flutter-apk/app-debug.apk
+```
+
+Bản LAN dùng `--dart-define=API_URL=http://<IP-LAN>:5233` lúc build. Bản debug
+cho phép HTTP tới API dev; bản release cần API HTTPS, ngoại trừ địa chỉ
+loopback `localhost`, `127.0.0.1`, `10.0.2.2` để thử qua USB/máy ảo. `INTERNET` được khai báo
+trong manifest chính để bản release cũng kết nối mạng được.
+
+### Build APK release để thử qua USB
+
+```powershell
+$env:CRABSHARE_ALLOW_LOCAL_RELEASE='true' # explicit local USB test only; unset before demo release
+flutter build apk --release --dart-define=API_URL=http://localhost:5233 --dart-define=WEB_URL=http://localhost:5173
+adb -s <device-id> reverse tcp:5233 tcp:5233
+adb -s <device-id> reverse tcp:5173 tcp:5173
+adb -s <device-id> install -r build/app/outputs/flutter-apk/app-release.apk
+```
+
+Bản này chạy chế độ release và dùng khoá debug hiện có để cài thử. Khi phát hành
+cần khoá ký riêng và API/web HTTPS; bản HTTP LAN chỉ dùng trong debug.
+
+## Font, icon và quyền thiết bị
+
+- **Bricolage Grotesque**, cùng phông với web (đủ chữ tiếng Việt), nằm trong `assets/fonts/`, có giấy phép OFL đi kèm.
+  Chữ thường dùng các tệp tĩnh 400–800; tiêu đề trang và con số lớn dùng tệp biến thiên với dáng hẹp như web.
+  Lấy kiểu chữ qua `AppFonts` trong `lib/app/theme/app_theme.dart` (`AppFonts.heading`, `AppFonts.figure`);
+  không ghi tên family trong các màn. Theme dùng font asset trực tiếp; không tải font khi mở app hoặc khi chạy test.
+- Tên hiển thị Android/iOS là **CrabShare**. Icon cua có bản Android thường,
+  adaptive, monochrome và bộ icon iOS. Nguồn ở `assets/icon/`; để tạo lại trên
+  Windows: `powershell -File tools/generate-launcher-icons.ps1`. Script vẽ lại
+  asset, sinh icon và giữ nguyên cấu hình Xcode (công cụ 0.14.4 đổi nhầm một
+  setting `ASSETCATALOG` khác khi sinh icon iOS).
+- Android khai báo camera và vị trí gần đúng/chính xác. Camera là tính năng tùy
+  chọn, không chặn cài app trên thiết bị không có camera. iOS có mô tả quyền
+  camera, thư viện ảnh và vị trí khi sử dụng.
+- `image_picker` xin quyền camera khi người dùng bấm **Chụp**; ảnh bằng chứng dùng
+  `ImageSource.camera`. Không xin quyền khi khởi động app.
+- Chụp bằng chứng đã dùng GPS và upload thật. Camera quét tem đóng gói đã dùng
+  `mobile_scanner`; riêng khung quét truy xuất công khai vẫn là minh hoạ và nhập mã thủ công.
 
 | Lệnh | Việc |
 |---|---|
 | `flutter analyze` | kiểm tra code (CI chạy) |
-| `flutter test` | unit test + dựng thử **mọi màn** ở khổ 360×780 (CI chạy) |
+| `flutter test` | unit test và widget test của từng khu (CI chạy) |
 | `flutter build apk` | ra file APK để cài thử |
 | `flutter build web --pwa-strategy=none` | bản web để xem trên trình duyệt |
 
@@ -48,37 +184,51 @@ lib/
 | Màn | File | Người làm (đổi sang API) |
 |---|---|---|
 | Chào, Đăng nhập | `onboarding/`, `auth/` | xong (đăng nhập đã gọi API thật) |
-| NĐT · Tổng quan, Thông báo | `investor/home/`, `investor/notifications/` | Khôi |
-| NĐT · Khám phá lô, Chi tiết lô | `investor/batches/` | Viên (dữ liệu lô), Thiện (nút Góp vốn) |
-| NĐT · eKYC | `investor/kyc/` | Khôi |
-| Hộ nuôi · Hôm nay, Nhật ký | `operator/today/`, `operator/logs/` | Viên |
-| Hộ nuôi · Chụp bằng chứng | `operator/evidence/` | Khôi |
-| Hộ nuôi · Cảnh báo | `operator/alerts/` | Khôi |
-| Hộ nuôi · Thu hoạch & in tem | `operator/harvest/` | Viên |
-| Quét tem, Truy xuất | `trace/` | Viên |
-| Hộ nuôi · Đóng gói đơn (quét tem) | *chưa có — tạo mới* | Nhân |
+| NĐT · Tổng quan, Thông báo | `investor/home/`, `investor/notifications/` | Khôi — API thật (CS-61/65) |
+| NĐT · Khám phá lô, Chi tiết lô | `investor/batches/` | API thật; Góp vốn mở web |
+| NĐT · eKYC | `investor/kyc/` | Khôi — đã nối API (CS-27) |
+| Hộ nuôi · Hôm nay, Nhật ký | `operator/today/`, `operator/logs/` | Gauge/lô/nhật ký còn mock; yêu cầu chụp dùng API |
+| Hộ nuôi · Chụp bằng chứng | `operator/evidence/` | Khôi — đã nối API (CS-44) |
+| Hộ nuôi · Cảnh báo | `operator/alerts/` | Khôi — API thật (CS-54/57) |
+| Hộ nuôi · Thu hoạch & in tem | `operator/harvest/` | Minh hoạ; chưa in hoặc kích hoạt tem thật |
+| Quét tem, Truy xuất | `trace/` | Minh hoạ; chưa nối QR/API truy xuất |
+| Hộ nuôi · Đóng gói / giao hàng | `operator/packing/` | API thật và camera quét QR |
 | Tài khoản | `account/` | Khôi |
 
 ## Đổi dữ liệu mẫu sang API (việc chính của từng task)
 
-Mỗi tính năng có **interface repository** + **bản Mock**. Ví dụ nhật ký nuôi:
+Chụp bằng chứng đã dùng `ApiEvidenceRepository`: tải hộp từ `GET /api/boxes`,
+chụp trực tiếp bằng camera, lấy GPS thật và gửi `POST /api/evidence`. Cần cấp
+quyền camera/vị trí và bật GPS. Kết quả Accepted/Watch/Flagged lấy từ máy chủ;
+chưa có mô hình nhận diện thì app không hiển thị kết luận về cua. Lỗi mạng giữ
+ảnh để thử lại. Xem [CS-44](../docs/validation/CS-44-production-evidence.md).
 
-```dart
-// features/operator/data/operator_repository.dart
-class ApiOperatorRepository extends MockOperatorRepository {
-  ApiOperatorRepository(this._dio);
-  final Dio _dio;
+CS-50: mục Yêu cầu chụp ở Hôm nay lấy danh sách từ API, hiển thị hạn chụp,
+mở đúng hộp/lô và gửi `captureRequestId` cùng ảnh. Khi hoàn thành, yêu cầu
+được tải lại và biến mất khỏi danh sách đang chờ. Xem
+[CS-50](../docs/validation/CS-50-random-capture-requests.md).
 
-  @override
-  Future<void> submitLog(DailyLogInput input) =>
-      _dio.post('/api/batches/${input.batchCode}/production-logs', data: input.toJson());
-}
+CS-57: tab Cảnh báo → **Bằng chứng bị gắn cờ** → xem ảnh và phản hồi thẩm định,
+nhập giải trình tối đa 1.000 ký tự và gửi qua API. Ảnh tải bằng JWT theo hộ nuôi;
+khi gửi lỗi giữ nội dung để thử lại. Giải trình đã gửi vẫn chờ kiểm định viên
+thẩm định. Xem [CS-57](../docs/validation/CS-57-evidence-explanation.md).
 
-// đổi đúng một dòng:
-final operatorRepositoryProvider = Provider<OperatorRepository>((ref) => ApiOperatorRepository(ref.watch(dioProvider)));
-```
+eKYC đã dùng `ApiKycRepository` riêng: GET `/api/me/kyc`, POST multipart
+`/api/kyc/ekyc`. Màn Tài khoản → Xác minh danh tính yêu cầu đồng ý điều khoản,
+chụp CCCD trước/sau bằng camera sau, selfie bằng camera trước, rồi gửi cả 3 ảnh.
+Ảnh được giữ trong bộ nhớ cho form; bản tạm từ camera được dọn và không lưu vào
+session. Sau phản hồi, form bỏ ảnh và Tổng quan cập nhật trạng thái từ API.
+KYC được tải lại khi đổi tài khoản; kéo làm mới Tổng quan cũng tải lại KYC.
 
-`extends MockOperatorRepository` để các hàm **chưa có API** vẫn chạy bằng dữ liệu mẫu; làm xong hàm nào thì `override` hàm đó.
+Tài khoản demo được seed Verified. Để thử luồng gửi mới, đăng ký Investor mới
+trên web rồi dùng tài khoản đó trên app. Provider backend hiện là sandbox giả lập.
+Test `test/kyc_test.dart` kiểm tra multipart, consent, camera từ chối quyền,
+đổi tài khoản và kết quả Verified; camera trong widget test được thay bằng ảnh mẫu.
+
+Các tính năng chưa nối API giữ repository minh hoạ và nhãn rõ trên màn hình.
+Khi tích hợp tiếp, thay repository bằng API và bỏ nhãn khi toàn bộ thao tác đã
+lưu/đọc thật. API lỗi phải hiện lỗi và thử lại; không thay bằng dữ liệu mock.
+Mock đơn hàng chỉ dùng trong test. Chi tiết các phần còn lại nằm trong bảng CS-69.
 
 ## Quy tắc
 - Import Material bằng `package:material_ui/material_ui.dart` (Flutter 3.44+ đã tách Material khỏi SDK). **Không** dùng `package:flutter/material.dart` — trộn hai cái sẽ lỗi kiểu `ThemeData`/`TextTheme`.
@@ -87,10 +237,13 @@ final operatorRepositoryProvider = Provider<OperatorRepository>((ref) => ApiOper
 - Tiền là `int` (đồng), hiển thị bằng `formatVnd()`. **Không** hiển thị lợi suất kỳ vọng.
 - Ảnh bằng chứng chỉ chụp bằng camera (`ImageSource.camera`).
 
-## Package sẽ thêm khi làm task
+## Package đã chuẩn bị (KH-01 / CS-24)
 
 | Package | Task |
 |---|---|
 | `mobile_scanner` | Quét QR trên tem (truy xuất, đóng gói đơn) |
 | `geolocator` | Lấy vị trí khi chụp bằng chứng |
-| Font DM Sans trong `assets/` | Bản phát hành không cần tải font qua mạng |
+| Font Bricolage Grotesque trong `assets/fonts/` | Font offline cho app và test, cùng phông với web |
+| `flutter_launcher_icons` (dev) | Sinh icon Android/iOS từ `assets/icon/` |
+
+Demo HTTPS release, private signing, GitHub draft and installation: [docs/demo-app.md](../docs/demo-app.md).

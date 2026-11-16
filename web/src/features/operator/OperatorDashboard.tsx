@@ -1,142 +1,120 @@
-import { useState } from 'react'
-import { PlusCircle, Activity, Droplets, AlertCircle, ChevronRight, Filter } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import OperatorLayout from './OperatorLayout'
-import { OpBadge, OpBtn, OpHeading, OpPanel } from './operatorUi'
+/* /operator — Hôm nay làm gì: ba con số, danh sách việc cần làm, các Lô đang chạy.
+   GET /api/operators/me/dashboard (nhật ký còn thiếu, yêu cầu chụp, biểu đồ), /api/operators/me/batches, /api/operators/me/alerts,
+   /api/operators/me/evidence, /api/operator/tranches, /api/batches/{code}/goods-receipts (phiếu chờ kiểm đầu vào). */
+import { useQueries } from '@tanstack/react-query'
+import { NotebookPen, Plus } from 'lucide-react'
+import type {
+  AlertResponse, GoodsReceiptResponse, OperatorDashboardResponse, PagedResultOfBatchResponse, PagedResultOfOperatorEvidenceItem,
+} from '../../shared/api/api.gen'
+import {
+  OpBadge, OpEmpty, OpFacts, OpHeading, OpMore, OpNote, OpPanel, OpRow, OpTodo, QueryView, StatusBadge, crabImg, http, label, tone, useGet, type Todo,
+} from '../../shared/ui/console'
+import { dayMonth, isEnded, num, type OperatorTrancheBrief } from './opA'
+import TrendChart from './TrendChart'
 
-const mockChartData = [
-  { time: '08:00', ph: 7.2, temp: 28 },
-  { time: '10:00', ph: 7.3, temp: 28.5 },
-  { time: '12:00', ph: 7.4, temp: 29 },
-  { time: '14:00', ph: 7.3, temp: 29.2 },
-  { time: '16:00', ph: 7.2, temp: 28.8 },
-  { time: '18:00', ph: 7.1, temp: 28.2 },
-]
-
-const recentLogs = [
-  { id: 1, time: '10:30', action: 'Cho ăn (cám viên)', user: 'Nguyễn Văn A' },
-  { id: 2, time: '09:15', action: 'Kiểm tra độ mặn (15ppt)', user: 'Trần Thị B' },
-  { id: 3, time: '08:00', action: 'Xả cặn hồ sinh học', user: 'Nguyễn Văn A' },
-]
+const round = (value: number | null) => (value === null ? null : Math.round(value * 100) / 100)
 
 export default function OperatorDashboard() {
-  const [selectedBatch, setSelectedBatch] = useState('ALL')
+  const dash = useGet<OperatorDashboardResponse>('/api/operators/me/dashboard', undefined, { retry: false })
+  const batches = useGet<PagedResultOfBatchResponse>('/api/operators/me/batches', { pageSize: 100 })
+  const alerts = useGet<AlertResponse[]>('/api/operators/me/alerts', undefined, { retry: false })
+  const flagged = useGet<PagedResultOfOperatorEvidenceItem>('/api/operators/me/evidence', { status: 'Flagged', pageSize: 50 }, { retry: false })
+  const tranches = useGet<OperatorTrancheBrief[]>('/api/operator/tranches', undefined, { retry: false })
 
-  const metrics =
-    selectedBatch === 'BATCH-2026-11A'
-      ? { crabs: 1240, alerts: 2, harvest: 450 }
-      : selectedBatch === 'BATCH-2026-10B'
-        ? { crabs: 2260, alerts: 0, harvest: 750 }
-        : { crabs: 3500, alerts: 2, harvest: 1200 }
+  const active = (batches.data?.items ?? []).filter((b) => !isEnded(b.status))
+  // Phiếu nhận hàng đang chờ Nhân viên kiểm phẩm: hỏi từng Lô đang mua nguồn hoặc đang lưu nuôi.
+  const receiving = active.filter((b) => b.status === 'Sourcing' || b.status === 'InProduction').slice(0, 8)
+  const receipts = useQueries({
+    queries: receiving.map((b) => {
+      const url = `/api/batches/${encodeURIComponent(b.batchCode)}/goods-receipts`
+      return { queryKey: [url, undefined], queryFn: async () => (await http.get<GoodsReceiptResponse[]>(url)).data, retry: false }
+    }),
+  })
+
+  const d = dash.data
+  const openAlerts = (alerts.data ?? []).filter((a) => a.status === 'Open' || a.status === 'Escalated')
+  const toExplain = (flagged.data?.items ?? []).filter((e) => e.canExplain && !e.explanation).length
+  const reachable = (tranches.data ?? []).filter((t) => t.canRequest)
+  const logsDue = d?.logsDueToday ?? 0
+
+  const todos: Todo[] = []
+  if (openAlerts.length) todos.push({ title: `${openAlerts.length} cảnh báo cần phản hồi`, sub: openAlerts[0].message, href: '/operator/alerts', tone: 'danger' })
+  if (logsDue) todos.push({ title: `${logsDue} Lô chưa ghi nhật ký hôm nay`, sub: 'Ghi lượng thức ăn và chỉ số nước', href: '/operator/log' })
+  if (d?.pendingCaptureRequests) todos.push({ title: `${d.pendingCaptureRequests} hộp cần chụp ảnh`, sub: 'Chụp tại hộp trước hạn', href: '/operator/evidence' })
+  if (toExplain) todos.push({ title: `${toExplain} ảnh cần giải trình`, sub: 'Ảnh bị gắn cờ', href: '/operator/evidence', tone: 'warn' })
+  receiving.forEach((b, i) => {
+    const waiting = (receipts[i]?.data ?? []).filter((r) => r.status === 'Inspecting').length
+    if (waiting) todos.push({ title: `${b.batchCode}: ${waiting} phiếu nhận chờ kiểm đầu vào`, sub: 'Xem kết quả kiểm', href: `/operator/batches/${encodeURIComponent(b.batchCode)}/nguon-cua`, tone: 'info' })
+  })
+  if (reachable.length) todos.push({ title: `${reachable.length} mốc giải ngân xin được`, sub: reachable.map((t) => `${t.batchCode} mốc ${t.trancheNo}`).join(', '), href: '/operator/disbursements', tone: 'ok' })
 
   return (
-    <OperatorLayout activeTab="dashboard">
+    <>
       <OpHeading
-        eyebrow="Operator · Trại Cần Giờ 01"
-        title="Tổng quan trại"
-        description="Theo dõi cua sống, cảnh báo và tiến độ nuôi trong ngày."
-        crumb={
-          <div className="op-crumb">
-            <span>Operator</span>
-            <ChevronRight className="w-4 h-4" />
-            <strong>Trại Cần Giờ 01</strong>
-          </div>
-        }
+        eyebrow="Hôm nay"
+        title={d ? `Chào ${d.farmName}` : 'Tổng quan hộ nuôi'}
         action={
           <>
-            <label className="op-field" style={{ minWidth: 220 }}>
-              <div className="flex items-center gap-2 op-input" style={{ padding: '8px 10px' }}>
-                <Filter className="w-4 h-4 text-[#9c815f]" />
-                <select
-                  value={selectedBatch}
-                  onChange={(e) => setSelectedBatch(e.target.value)}
-                  className="bg-transparent border-none outline-none font-bold text-[#7d4b1a] text-sm w-full"
-                >
-                  <option value="ALL">Tất cả lô đang nuôi</option>
-                  <option value="BATCH-2026-11A">Lô cua lột · BATCH-2026-11A</option>
-                  <option value="BATCH-2026-10B">Lô cua gạch · BATCH-2026-10B</option>
-                </select>
-              </div>
-            </label>
-            <OpBtn variant="ink" onClick={() => { window.location.href = '/operator/log' }}>
-              <PlusCircle className="w-4 h-4" /> Ghi nhật ký
-            </OpBtn>
+            <a className="rd-btn rd-btn--ghost" href="/operator/batches/new"><Plus size={16} /> Tạo Lô P</a>
+            <a className="rd-btn rd-btn--primary" href="/operator/log"><NotebookPen size={16} /> Ghi nhật ký</a>
           </>
         }
       />
 
-      <div className="op-stats cols-3">
-        <div className="op-stat">
-          <div>
-            <span>Cua đang nuôi</span>
-            <strong>{metrics.crabs.toLocaleString('vi-VN')} <em>con</em></strong>
-          </div>
-          <div className="op-icon-pill"><Activity className="w-5 h-5" /></div>
-        </div>
-        <div className={`op-stat ${metrics.alerts > 0 ? 'danger' : ''}`}>
-          <div>
-            <span style={metrics.alerts > 0 ? { color: '#b42318' } : undefined}>Cảnh báo hệ thống</span>
-            <strong>{metrics.alerts} <em>cần xử lý</em></strong>
-          </div>
-          <div className="op-icon-pill" style={metrics.alerts > 0 ? { background: '#fef2f2', color: '#b42318', borderColor: '#fca5a5' } : undefined}>
-            <AlertCircle className="w-5 h-5" />
-          </div>
-        </div>
-        <div className="op-stat">
-          <div>
-            <span>Dự kiến thu hoạch</span>
-            <strong>{metrics.harvest.toLocaleString('vi-VN')} <em>kg</em></strong>
-          </div>
-          <div className="op-icon-pill" style={{ background: '#f0f9ff', color: '#0369a1', borderColor: '#bae6fd' }}>
-            <Droplets className="w-5 h-5" />
-          </div>
-        </div>
-      </div>
+      {dash.isError && <OpNote tone="danger">Hồ sơ hộ nuôi chưa được duyệt. <a className="op-link" href="/operator/register">Xem hồ sơ</a></OpNote>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <OpPanel
-          className="lg:col-span-2"
-          title="Chỉ số môi trường (hôm nay)"
-          action={
-            <div className="flex gap-4 text-xs font-semibold text-[#6f675e]">
-              <span className="flex items-center gap-1.5"><i className="w-2.5 h-2.5 rounded-full bg-[#0369a1]" /> pH</span>
-              <span className="flex items-center gap-1.5"><i className="w-2.5 h-2.5 rounded-full bg-[#7d4b1a]" /> Nhiệt độ</span>
-            </div>
-          }
-        >
-          <div className="h-[280px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={mockChartData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e8dccb" />
-                <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#6f675e', fontSize: 11 }} dy={10} />
-                <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fill: '#6f675e', fontSize: 11 }} domain={[6, 9]} />
-                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fill: '#6f675e', fontSize: 11 }} domain={[25, 35]} />
-                <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e8dccb', fontSize: 12 }} />
-                <Line yAxisId="left" type="monotone" dataKey="ph" stroke="#0369a1" strokeWidth={2.5} dot={{ r: 3 }} />
-                <Line yAxisId="right" type="monotone" dataKey="temp" stroke="#7d4b1a" strokeWidth={2.5} dot={{ r: 3 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </OpPanel>
+      <OpFacts items={[
+        { label: 'Lô đang chạy', value: batches.isPending ? '…' : active.length },
+        { label: 'Cảnh báo đang mở', value: openAlerts.length, tone: openAlerts.length ? 'danger' : 'ok' },
+        { label: 'Chưa ghi nhật ký hôm nay', value: d ? `${logsDue} Lô` : '—', tone: logsDue ? 'warn' : 'ok' },
+      ]} />
 
-        <OpPanel title="Nhật ký gần nhất" action={<OpBadge tone="gold">3 mục</OpBadge>}>
-          <div className="space-y-5">
-            {recentLogs.map((log, i) => (
-              <div key={log.id} className="relative flex gap-4">
-                {i !== recentLogs.length - 1 && <div className="absolute left-2 top-6 w-px h-12 bg-[#e8dccb]" />}
-                <div className="relative z-10 w-4 h-4 rounded-full bg-[#fff8ef] border-2 border-[#7d4b1a] flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold">{log.action}</p>
-                  <p className="text-xs text-[#6f675e] mt-1">{log.time} · {log.user}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <OpBtn variant="ghost" full className="mt-6" onClick={() => { window.location.href = '/operator/log' }}>
-            Ghi log mới
-          </OpBtn>
+      <OpPanel title="Việc hôm nay">
+        {todos.length ? <OpTodo items={todos} /> : <p className="rd-muted">Không có việc đang chờ.</p>}
+      </OpPanel>
+
+      <QueryView query={batches}>
+        {() => active.length === 0 ? (
+          <OpEmpty title="Chưa có Lô nào đang chạy"><a className="op-link" href="/operator/batches/new">Tạo Lô P đầu tiên</a></OpEmpty>
+        ) : (
+          <OpPanel className="op-list" title="Lô đang chạy" action={<a className="op-link" href="/operator/batches">Tất cả Lô</a>}>
+            {active.slice(0, 8).map((b) => {
+              const inFarm = d?.batches.find((x) => x.batchCode === b.batchCode)
+              return (
+                <OpRow
+                  key={b.batchCode}
+                  href={`/operator/batches/${encodeURIComponent(b.batchCode)}`}
+                  media={crabImg(b.crabType)}
+                  title={b.title}
+                  sub={`${b.batchCode} · ${label('crabType', b.crabType)} · ${num(b.fundedQuantity ?? b.plannedQuantity, ' con')}`}
+                  mid={
+                    <span className="op-inline">
+                      <OpBadge tone={tone('batchMode', b.batchMode)}>Lô {b.batchMode}</OpBadge>
+                      {inFarm && inFarm.openAlerts > 0 && <OpBadge tone="danger">{inFarm.openAlerts} cảnh báo</OpBadge>}
+                      {inFarm && b.status === 'InProduction' && !inFarm.loggedToday && <OpBadge tone="warn">Chưa ghi nhật ký</OpBadge>}
+                    </span>
+                  }
+                  end={<StatusBadge kind="batch" value={b.status} />}
+                />
+              )
+            })}
+          </OpPanel>
+        )}
+      </QueryView>
+
+      {d && d.environmentByDay.length > 0 && (
+        <OpPanel>
+          <OpMore label="Chỉ số nước 30 ngày qua">
+            <TrendChart
+              data={d.environmentByDay.map((e) => ({ date: e.date, ph: round(e.ph), waterTempC: round(e.waterTempC) }))}
+              xKey="date"
+              formatX={dayMonth}
+              label="Biểu đồ pH và nhiệt độ nước theo ngày, lấy trung bình từ nhật ký chăm sóc"
+              series={[{ key: 'ph', name: 'pH', color: 'var(--info)' }, { key: 'waterTempC', name: 'Nhiệt độ (°C)', color: 'var(--accent)', right: true }]}
+            />
+          </OpMore>
         </OpPanel>
-      </div>
-    </OperatorLayout>
+      )}
+    </>
   )
 }

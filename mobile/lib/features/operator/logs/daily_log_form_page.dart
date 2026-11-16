@@ -1,18 +1,20 @@
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:material_ui/material_ui.dart';
 
+import '../../../app/routes.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/format/dates.dart';
+import '../../../shared/widgets/app_parts.dart';
 import '../../../shared/widgets/app_ui.dart';
-import '../data/operator_models.dart';
-import '../data/operator_repository.dart';
-import 'log_thresholds.dart';
+import '../data/care_log_repository.dart';
+import 'log_numbers.dart';
 
-/// Form nhật ký ngày: người nuôi tự điền pH, nhiệt độ nước, độ mặn, thức ăn, ghi chú.
-/// Mỗi trại một cách làm nên mình cung cấp chỗ nhập chung; trại có phần mềm riêng thì đẩy qua ingestion API.
+/// Ghi nhật ký chăm sóc hôm nay cho một Lô: lượng thức ăn và ba chỉ số nước.
+/// Ba chỉ số nước được điền sẵn từ số đo cảm biến gần nhất của Lô; người nuôi vẫn sửa tay được.
 class DailyLogFormPage extends ConsumerStatefulWidget {
   const DailyLogFormPage({super.key, this.initialBatchCode});
-
   final String? initialBatchCode;
 
   @override
@@ -20,184 +22,229 @@ class DailyLogFormPage extends ConsumerStatefulWidget {
 }
 
 class _DailyLogFormPageState extends ConsumerState<DailyLogFormPage> {
-  final _ph = TextEditingController();
-  final _temp = TextEditingController();
-  final _salinity = TextEditingController();
-  final _feed = TextEditingController();
-  final _note = TextEditingController();
-  String? _batchCode;
+  final _form = GlobalKey<FormState>();
+
+  /// Lô người dùng tự chọn; null thì lấy Lô mở sẵn, rồi tới Lô đầu tiên chưa ghi hôm nay.
+  String? _picked;
+
+  /// Chữ người dùng đã gõ ở từng ô; ô chưa gõ thì lấy số của cảm biến.
+  final _typed = <String, String>{};
+  String _note = '';
   bool _saving = false;
+  String? _error;
 
-  @override
-  void initState() {
-    super.initState();
-    _batchCode = widget.initialBatchCode;
+  String? _fromSensor(String field, WaterReading? r) {
+    final value = switch (field) {
+      'ph' => r?.ph,
+      'waterTempC' => r?.temperatureC,
+      'salinityPpt' => r?.salinityPpt,
+      _ => null,
+    };
+    return value == null ? null : prefillNumber(value);
   }
 
-  @override
-  void dispose() {
-    for (final c in [_ph, _temp, _salinity, _feed, _note]) {
-      c.dispose();
-    }
-    super.dispose();
-  }
+  String _text(String field, WaterReading? r) => _typed[field] ?? _fromSensor(field, r) ?? '';
 
-  Future<void> _save() async {
-    final batch = _batchCode;
-    if (batch == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chọn lô trước khi lưu.')));
-      return;
-    }
-    setState(() => _saving = true);
+  Future<void> _save(String batchCode, WaterReading? reading) async {
+    if (_saving || !(_form.currentState?.validate() ?? false)) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     try {
-      await ref.read(operatorRepositoryProvider).submitLog(DailyLogInput(
-            batchCode: batch,
-            ph: parseDecimal(_ph.text),
-            waterTempC: parseDecimal(_temp.text),
-            salinityPpt: parseDecimal(_salinity.text),
-            feedKg: parseDecimal(_feed.text),
-            note: _note.text.trim().isEmpty ? null : _note.text.trim(),
-          ));
-      ref.invalidate(dailyLogsProvider);
-      ref.invalidate(activeBatchesProvider);
-      ref.invalidate(todaySummaryProvider);
+      await ref
+          .read(careLogActionsProvider)
+          .submit(
+            DailyLogInput(
+              batchCode: batchCode,
+              feedKg: parseDecimal(_text('feedKg', reading))!,
+              ph: parseDecimal(_text('ph', reading))!,
+              waterTempC: parseDecimal(_text('waterTempC', reading))!,
+              salinityPpt: parseDecimal(_text('salinityPpt', reading))!,
+              note: _note.trim().isEmpty ? null : _note.trim(),
+            ),
+          );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã lưu nhật ký lô $batch')));
-      Navigator.of(context).pop();
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
-    } finally {
-      if (mounted) setState(() => _saving = false);
+      showAppToast(context, 'Đã ghi nhật ký Lô $batchCode.');
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) {
+        navigator.pop();
+      } else {
+        context.go(Routes.operatorToday);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = apiErrorMessage(error);
+        });
+        // Lô có thể vừa được người khác ghi: tải lại tình trạng hôm nay.
+        ref.invalidate(careBatchesProvider);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final batches = ref.watch(activeBatchesProvider).value ?? const <OperatorBatch>[];
-    _batchCode ??= batches.isEmpty ? null : batches.first.code;
+    final batchesState = ref.watch(careBatchesProvider);
+    final batches = [...?batchesState.value].where((b) => b.recordable).toList();
+    CareBatch? byCode(String? code) => batches.where((b) => b.code == code).firstOrNull;
+    final selected = byCode(_picked) ?? byCode(widget.initialBatchCode) ?? batches.where((b) => !b.loggedToday).firstOrNull ?? batches.firstOrNull;
+    final reading = selected == null ? null : ref.watch(latestWaterProvider(selected.code)).value;
+    final sensorUsed = reading != null && ['ph', 'waterTempC', 'salinityPpt'].every((f) => !_typed.containsKey(f) && _fromSensor(f, reading) != null);
+
+    Widget number(String field, String label, String unit, {double min = 0, required double max, int digits = 1, bool autofocus = false}) =>
+        KeyedSubtree(
+          // Số của cảm biến về sau khi ô đã dựng thì dựng lại ô để nhận số điền sẵn; ô thức ăn không phụ thuộc cảm biến.
+          key: ValueKey('$field-${selected?.code}-${field == 'feedKg' ? '' : reading?.measuredAt.millisecondsSinceEpoch}'),
+          child: TextFormField(
+            key: ValueKey('log-$field'),
+            initialValue: _text(field, reading),
+            enabled: !_saving,
+            autofocus: autofocus,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (value) => setState(() => _typed[field] = value),
+            validator: (text) => validateLogNumber(text, min: min, max: max, digits: digits),
+            decoration: InputDecoration(labelText: label, suffixText: unit.isEmpty ? null : unit, errorMaxLines: 3),
+          ),
+        );
 
     return Scaffold(
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-          children: [
-            const SubPageHeader(title: 'Nhật ký hôm nay'),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final b in batches)
-                  ChoiceChip(
-                    label: Text(b.code),
-                    selected: _batchCode == b.code,
-                    onSelected: (_) => setState(() => _batchCode = b.code),
-                    showCheckmark: false,
-                    backgroundColor: AppColors.surface,
-                    selectedColor: AppColors.ink,
-                    labelStyle: TextStyle(color: _batchCode == b.code ? Colors.white : AppColors.ink, fontWeight: FontWeight.w600),
-                    side: BorderSide.none,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.pill)),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            GridView(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                mainAxisExtent: 168,
+        child: Form(
+          key: _form,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            children: [
+              SubPageHeader(
+                title: 'Nhật ký hôm nay',
+                trailing: Semantics(
+                  label: 'Các bản đã ghi',
+                  child: CircleIconButton(icon: Icons.history_rounded, onTap: () => context.push(Routes.operatorLogs)),
+                ),
               ),
-              children: [
-                _MetricInput(controller: _ph, label: 'pH', unit: '', icon: Icons.science_outlined, range: LogThresholds.ph),
-                _MetricInput(controller: _temp, label: 'Nhiệt độ nước', unit: '°C', icon: Icons.thermostat_outlined, range: LogThresholds.waterTempC),
-                _MetricInput(controller: _salinity, label: 'Độ mặn', unit: '‰', icon: Icons.water_drop_outlined, range: LogThresholds.salinityPpt),
-                _MetricInput(controller: _feed, label: 'Thức ăn', unit: 'kg', icon: Icons.set_meal_outlined, range: LogThresholds.feedKg),
+              const SizedBox(height: 16),
+              if (batchesState.isLoading && !batchesState.hasValue) const LoadingSkeleton(rows: 1),
+              if (batchesState.hasError && !batchesState.isLoading)
+                ErrorView(message: apiErrorMessage(batchesState.error!), onRetry: () => ref.invalidate(careBatchesProvider)),
+              if (batchesState.hasValue && batches.isEmpty) const EmptyState(icon: Icons.edit_note_rounded, title: 'Chưa có Lô nào đang lưu nuôi'),
+              if (batches.length > 1) ...[
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final b in batches)
+                      ChoiceChip(
+                        label: Text(b.code),
+                        avatar: b.loggedToday ? const Icon(Icons.check_rounded, size: 16, color: AppColors.success) : null,
+                        selected: b.code == selected?.code,
+                        showCheckmark: false,
+                        onSelected: _saving
+                            ? null
+                            : (_) => setState(() {
+                                _picked = b.code;
+                                _typed.clear();
+                                _error = null;
+                              }),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
               ],
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _note,
-              maxLines: 3,
-              maxLength: 500,
-              decoration: const InputDecoration(hintText: 'Ghi chú (thay nước, thời tiết, cua bỏ ăn…)'),
-            ),
-            const SizedBox(height: 8),
-            FilledButton(
-              onPressed: _saving ? null : _save,
-              child: _saving
-                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                  : const Text('Lưu nhật ký'),
-            ),
-          ],
+              if (selected != null) ...[
+                Text(
+                  [selected.title, if (selected.dayOfCycle != null) 'ngày nuôi ${selected.dayOfCycle}/${selected.cycleDays}'].join(' · '),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                // Nhãn của ô nhập nổi lên mép trên của ô nên cần chừa chỗ phía trên.
+                const SizedBox(height: 22),
+                if (selected.loggedToday)
+                  _LoggedToday(log: selected.latestLog)
+                else ...[
+                  number('feedKg', 'Thức ăn đã cho', 'kg', max: 999999999.999, digits: 3, autofocus: true),
+                  const SizedBox(height: 22),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: number('ph', 'pH', '', max: 14)),
+                      const SizedBox(width: 8),
+                      Expanded(child: number('waterTempC', 'Nhiệt độ', '°C', max: 999.9)),
+                      const SizedBox(width: 8),
+                      Expanded(child: number('salinityPpt', 'Độ mặn', '‰', max: 999.9)),
+                    ],
+                  ),
+                  if (sensorUsed) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Chỉ số nước lấy từ cảm biến lúc ${formatTime(reading.measuredAt)} ${formatDayMonth(reading.measuredAt)}.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                  MoreSection(
+                    label: 'Ghi chú',
+                    children: [
+                      TextFormField(
+                        key: const ValueKey('log-note'),
+                        initialValue: _note,
+                        enabled: !_saving,
+                        maxLines: 3,
+                        maxLength: 500,
+                        onChanged: (value) => _note = value,
+                        decoration: const InputDecoration(hintText: 'Thay nước, vệ sinh hộp, cua bỏ ăn…'),
+                      ),
+                    ],
+                  ),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(_error!, style: const TextStyle(color: AppColors.danger)),
+                    ),
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    key: const ValueKey('save-log'),
+                    onPressed: _saving ? null : () => _save(selected.code, reading),
+                    child: Text(_saving ? 'Đang lưu…' : 'Lưu nhật ký'),
+                  ),
+                ],
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Ô nhập một chỉ số: số lớn ở giữa, báo cam khi ngoài khoảng thường gặp.
-class _MetricInput extends StatefulWidget {
-  const _MetricInput({required this.controller, required this.label, required this.unit, required this.icon, required this.range});
-
-  final TextEditingController controller;
-  final String label;
-  final String unit;
-  final IconData icon;
-  final ValueRange range;
+/// Lô đã có nhật ký hôm nay: hiện lại bốn số vừa ghi thay cho form.
+class _LoggedToday extends StatelessWidget {
+  const _LoggedToday({required this.log});
+  final DailyLog? log;
 
   @override
-  State<_MetricInput> createState() => _MetricInputState();
-}
-
-class _MetricInputState extends State<_MetricInput> {
-  @override
-  Widget build(BuildContext context) {
-    final value = parseDecimal(widget.controller.text);
-    final outOfRange = value != null && !widget.range.contains(value);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: outOfRange ? AppColors.accent : Colors.transparent, width: 2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(widget.icon, size: 20, color: AppColors.accentText),
-              const SizedBox(width: 6),
-              Expanded(child: Text(widget.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
+  Widget build(BuildContext context) => AppCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.check_circle_outline_rounded, color: AppColors.success),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Hôm nay đã ghi nhật ký', style: Theme.of(context).textTheme.titleMedium)),
+          ],
+        ),
+        if (log != null) ...[
+          const SizedBox(height: 10),
+          MetricRow(
+            metrics: [
+              Metric('kg thức ăn', formatLogNumber(log!.feedKg, digits: 3), color: AppColors.success),
+              Metric('pH', formatLogNumber(log!.ph)),
+              Metric('°C', formatLogNumber(log!.waterTempC), color: AppColors.danger),
+              Metric('‰', formatLogNumber(log!.salinityPpt), color: AppColors.info),
             ],
           ),
-          const Spacer(),
-          TextField(
-            controller: widget.controller,
-            onChanged: (_) => setState(() {}),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w700),
-            decoration: InputDecoration(
-              hintText: '—',
-              suffixText: widget.unit,
-              filled: false,
-              isDense: true,
-              contentPadding: EdgeInsets.zero,
-              border: InputBorder.none,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            outOfRange ? 'Ngoài khoảng ${widget.range.format()}' : 'Thường gặp ${widget.range.format()}',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12, color: outOfRange ? AppColors.accentText : AppColors.inkMuted, fontWeight: outOfRange ? FontWeight.w700 : FontWeight.w400),
-          ),
         ],
-      ),
-    );
-  }
+      ],
+    ),
+  );
 }

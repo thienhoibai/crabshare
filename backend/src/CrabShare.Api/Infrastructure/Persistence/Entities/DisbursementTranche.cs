@@ -16,7 +16,7 @@ public partial class DisbursementTranche
 
     public decimal PlannedAmount { get; set; }
 
-    public DateOnly PlannedDate { get; set; }
+    public DateOnly? PlannedDate { get; set; }
 
     public string UnlockCondition { get; set; } = null!;
 
@@ -34,6 +34,10 @@ public partial class DisbursementTranche
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
+
+    public string? AnchorCode { get; set; }
+
+    public short? OffsetDays { get; set; }
 
     public virtual Batch Batch { get; set; } = null!;
 

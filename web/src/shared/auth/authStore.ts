@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 /** Vai trò — trùng tên với backend (Common/Auth/Roles.cs). */
-export type Role = 'Investor' | 'Customer' | 'OperatorMember' | 'PlatformAdmin' | 'EvidenceReviewer'
+export type Role = 'Investor' | 'Customer' | 'OperatorMember' | 'PlatformAdmin' | 'EvidenceReviewer' | 'QcInspector'
 
 export interface Me {
   userId: number
@@ -41,8 +41,10 @@ export const useAuthStore = create<AuthState>()(
 /** Trang mặc định sau khi đăng nhập, theo vai trò quan trọng nhất của người dùng. */
 export function homePathFor(user: Me): string {
   if (user.roles.includes('PlatformAdmin')) return '/admin'
-  if (user.roles.includes('EvidenceReviewer')) return '/admin'
+  if (user.roles.includes('EvidenceReviewer')) return '/admin/evidence'
+  if (user.roles.includes('QcInspector')) return '/qc'
   if (user.roles.includes('OperatorMember')) return '/operator'
   if (user.roles.includes('Investor')) return '/nha-dau-tu'
-  return '/cua-hang'
+  if (user.roles.includes('Customer')) return '/khach'
+  return '/lo'
 }

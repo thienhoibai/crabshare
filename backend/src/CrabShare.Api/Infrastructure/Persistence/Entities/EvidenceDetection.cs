@@ -17,12 +17,12 @@ public partial class EvidenceDetection
     /// </summary>
     public string ModelVersion { get; set; } = null!;
 
-    public bool CrabDetected { get; set; }
+    public bool? CrabDetected { get; set; }
 
     /// <summary>
     /// Độ tin cậy từ 0 tới 1
     /// </summary>
-    public decimal Confidence { get; set; }
+    public decimal? Confidence { get; set; }
 
     public string? BboxJson { get; set; }
 

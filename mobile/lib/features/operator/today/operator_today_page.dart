@@ -1,105 +1,189 @@
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../app/routes.dart';
 import '../../../app/theme/app_theme.dart';
+import '../../../core/api/api_client.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/format/dates.dart';
-import '../../../core/format/money.dart';
-import '../../../shared/models/batch_enums.dart';
 import '../../../shared/widgets/app_ui.dart';
 import '../../../shared/widgets/nav_shell.dart';
-import '../../../shared/widgets/segmented_gauge.dart';
-import '../data/operator_models.dart';
+import '../data/alert_repository.dart';
 import '../data/operator_repository.dart';
+import '../evidence/capture_requests_repository.dart';
+import '../evidence/evidence_explanation_repository.dart';
 
-/// Tab "Hôm nay" của hộ nuôi — bố cục theo dashboard của mẫu:
-/// đồng hồ việc trong ngày, thanh "+" ghi nhật ký, yêu cầu chụp, thẻ từng lô.
-class OperatorTodayPage extends ConsumerWidget {
+/// Tab "Hôm nay" của người nuôi: ba con số, danh sách việc đang chờ (bấm vào là tới màn xử lý), hai lối tắt.
+class OperatorTodayPage extends ConsumerStatefulWidget {
   const OperatorTodayPage({super.key});
 
-  Future<void> _refresh(WidgetRef ref) {
-    ref.invalidate(todaySummaryProvider);
-    ref.invalidate(captureRequestsProvider);
-    return ref.refresh(activeBatchesProvider.future);
+  @override
+  ConsumerState<OperatorTodayPage> createState() => _OperatorTodayPageState();
+}
+
+class _Todo {
+  const _Todo({required this.icon, required this.title, required this.sub, required this.route, this.color = AppColors.accentText});
+  final IconData icon;
+  final String title;
+  final String sub;
+  final String route;
+  final Color color;
+}
+
+class _OperatorTodayPageState extends ConsumerState<OperatorTodayPage> with WidgetsBindingObserver {
+  /// Số yêu cầu chụp hiện thành từng dòng; phần còn lại gộp thành một câu.
+  static const _maxCaptureRows = 4;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Mở lại ứng dụng thì việc đang chờ có thể đã đổi (yêu cầu chụp quá hạn, cảnh báo mới).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) _invalidate();
+  }
+
+  void _invalidate() {
+    ref.invalidate(operatorDashboardProvider);
+    ref.invalidate(operatorBatchesProvider);
+    ref.invalidate(alertsProvider);
+    ref.invalidate(captureRequestsProvider);
+    ref.invalidate(flaggedEvidenceProvider);
+  }
+
+  Future<void> _refresh() async {
+    _invalidate();
+    await Future.wait([
+      ref.read(operatorDashboardProvider.future),
+      ref.read(operatorBatchesProvider.future),
+      ref.read(alertsProvider.future),
+      ref.read(captureRequestsProvider.future),
+      ref.read(flaggedEvidenceProvider.future),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(sessionProvider).user;
-    final summary = ref.watch(todaySummaryProvider).value;
-    final requests = ref.watch(captureRequestsProvider).value ?? const <CaptureRequest>[];
-    final batches = ref.watch(activeBatchesProvider);
-    final text = Theme.of(context).textTheme;
+    final dash = ref.watch(operatorDashboardProvider);
+    final batches = ref.watch(operatorBatchesProvider);
+    final alerts = ref.watch(alertsProvider);
+    final requests = ref.watch(captureRequestsProvider);
+    final flagged = ref.watch(flaggedEvidenceProvider);
+    final sources = <AsyncValue<Object?>>[dash, alerts, requests, flagged];
+    final loading = sources.any((s) => s.isLoading && !s.hasValue);
+    final failed = sources.where((s) => s.hasError && !s.isLoading).firstOrNull;
+
+    final now = DateTime.now();
+    final openAlerts = [...?alerts.value].where((a) => a.isOpen).toList();
+    final logsDue = dash.value?.logsDue ?? const [];
+    final waiting = [...?requests.value].where((r) => r.status == 'Open' && r.dueAt.isAfter(now)).toList();
+    final toExplain = [...?flagged.value].where((e) => e.needsExplanation).toList();
+
+    final todos = <_Todo>[
+      if (openAlerts.isNotEmpty)
+        _Todo(
+          icon: Icons.warning_amber_rounded,
+          title: '${openAlerts.length} cảnh báo cần phản hồi',
+          sub: openAlerts.first.message,
+          route: Routes.operatorAlerts,
+          color: AppColors.danger,
+        ),
+      for (final r in waiting.take(_maxCaptureRows))
+        _Todo(
+          icon: Icons.photo_camera_outlined,
+          title: 'Chụp ảnh hộp ${r.slotCode}',
+          sub: '${r.batchCode} · ${formatDueIn(r.dueAt, now: now)}',
+          route: Routes.captureRequest(id: r.id, slotCode: r.slotCode, batchCode: r.batchCode, dueAt: r.dueAt),
+        ),
+      for (final b in logsDue)
+        _Todo(icon: Icons.edit_note_rounded, title: 'Ghi nhật ký hôm nay', sub: '${b.code} · ${b.title}', route: Routes.dailyLogFor(b.code)),
+      if (toExplain.isNotEmpty)
+        _Todo(
+          icon: Icons.flag_outlined,
+          title: '${toExplain.length} ảnh cần giải trình',
+          sub: toExplain.length == 1 ? 'Hộp ${toExplain.first.slotCode ?? '—'} · ${toExplain.first.batchCode}' : 'Ảnh chụp tại hộp bị gắn cờ',
+          route: toExplain.length == 1 ? Routes.evidenceExplanation(toExplain.first.id) : Routes.flaggedEvidence,
+          color: AppColors.warning,
+        ),
+    ];
+    final moreCaptures = waiting.length - _maxCaptureRows;
 
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: RefreshIndicator(
-          onRefresh: () => _refresh(ref),
+        child: AppRefreshIndicator(
+          onRefresh: _refresh,
           child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 12, 20, kNavBarClearance),
             children: [
               GreetingHeader(
                 name: user?.fullName ?? '',
-                subtitle: formatWeekday(DateTime.now()),
-                onBell: () => context.go(Routes.operatorAlerts),
+                subtitle: dash.value?.farmName ?? '',
+                notificationCount: openAlerts.length,
+                onBell: () => context.push(Routes.operatorAlerts),
               ),
               const SizedBox(height: 18),
-              AppCard(
-                padding: const EdgeInsets.fromLTRB(16, 22, 16, 18),
-                child: Column(
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SegmentedGauge(
-                      value: summary == null || summary.total == 0 ? 0 : summary.done / summary.total,
-                      center: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text('${summary?.done ?? '—'}', style: text.displaySmall),
-                              const SizedBox(width: 4),
-                              Text('/ ${summary?.total ?? '—'} việc', style: text.titleMedium),
-                            ],
-                          ),
-                          Text('Việc cần làm hôm nay', style: text.bodySmall),
-                        ],
+                    Expanded(
+                      child: _Number(label: 'Lô đang chạy', value: batches.hasValue ? '${batches.value!.where((b) => b.onFarm).length}' : '—'),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _Number(
+                        label: 'Cảnh báo mở',
+                        value: alerts.hasValue ? '${openAlerts.length}' : '—',
+                        color: openAlerts.isEmpty ? null : AppColors.danger,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      summary == null
-                          ? ''
-                          : summary.done >= summary.total
-                              ? 'Xong hết việc hôm nay 🎉'
-                              : 'Còn ${summary.total - summary.done} việc: nhật ký, yêu cầu chụp, cảnh báo',
-                      style: text.bodySmall,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _Number(
+                        label: 'Chưa ghi nhật ký',
+                        value: dash.hasValue ? '${logsDue.length}' : '—',
+                        color: logsDue.isEmpty ? null : AppColors.warning,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
-              AddBar(label: 'Ghi nhật ký hôm nay', onTap: () => context.push(Routes.dailyLogNew)),
-              if (requests.isNotEmpty) ...[
-                SectionHeader(title: 'Yêu cầu chụp', actionLabel: 'Mở camera', onAction: () => context.push(Routes.capture)),
-                for (final r in requests) ...[
-                  _CaptureRequestTile(request: r, onTap: () => context.push(Routes.captureBox(r.slotCode))),
-                  const SizedBox(height: 10),
-                ],
-              ],
-              const SectionHeader(title: 'Lô đang nuôi'),
-              ...batches.when(
-                loading: () => [const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))],
-                error: (e, _) => [Text('$e')],
-                data: (list) => [
-                  for (final b in list) ...[
-                    _BatchCard(batch: b),
-                    const SizedBox(height: 12),
-                  ],
+              const SectionHeader(title: 'Việc hôm nay'),
+              for (final todo in todos) ...[_TodoCard(todo: todo), const SizedBox(height: 10)],
+              if (moreCaptures > 0)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text('Còn $moreCaptures hộp khác cần chụp.', style: Theme.of(context).textTheme.bodySmall),
+                ),
+              if (loading)
+                const LoadingSkeleton(rows: 2)
+              else if (failed != null)
+                ErrorView(message: apiErrorMessage(failed.error!), onRetry: _invalidate)
+              else if (todos.isEmpty)
+                const EmptyState(icon: Icons.check_circle_outline_rounded, title: 'Hôm nay không còn việc đang chờ'),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _QuickAction(icon: Icons.edit_note_rounded, label: 'Ghi nhật ký', onTap: () => context.push(Routes.dailyLogNew)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _QuickAction(icon: Icons.notifications_none_rounded, label: 'Cảnh báo', onTap: () => context.push(Routes.operatorAlerts)),
+                  ),
                 ],
               ),
             ],
@@ -110,118 +194,77 @@ class OperatorTodayPage extends ConsumerWidget {
   }
 }
 
-class _CaptureRequestTile extends StatelessWidget {
-  const _CaptureRequestTile({required this.request, required this.onTap});
+/// Ô số liệu nhỏ; ba ô đứng một hàng (FactGrid của bộ khối chỉ có hai cột).
+class _Number extends StatelessWidget {
+  const _Number({required this.label, required this.value, this.color});
+  final String label;
+  final String value;
+  final Color? color;
 
-  final CaptureRequest request;
+  @override
+  Widget build(BuildContext context) => AppCard(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: AppFonts.figure(28, color: color ?? AppColors.ink),
+        ),
+        const SizedBox(height: 2),
+        Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    ),
+  );
+}
+
+class _TodoCard extends StatelessWidget {
+  const _TodoCard({required this.todo});
+  final _Todo todo;
+
+  @override
+  Widget build(BuildContext context) => AppCard(
+    padding: const EdgeInsets.all(12),
+    onTap: () => context.push(todo.route),
+    child: Row(
+      children: [
+        IconTile(icon: todo.icon, foreground: todo.color, background: todo.color.withValues(alpha: 0.12)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(todo.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+              Text(todo.sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+        ),
+        const Icon(Icons.chevron_right_rounded, color: AppColors.inkMuted),
+      ],
+    ),
+  );
+}
+
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      onTap: onTap,
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          const IconTile(icon: Icons.photo_camera_outlined),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Hộp ${request.slotCode}', style: Theme.of(context).textTheme.titleMedium),
-                Text('${request.batchCode} · hạn ${formatTime(request.dueAt)}', style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
-          ),
-          Text(formatDueIn(request.dueAt), style: const TextStyle(color: AppColors.accentText, fontWeight: FontWeight.w700)),
-        ],
-      ),
-    );
-  }
-}
-
-/// Thẻ lô — theo thẻ bữa ăn của mẫu: ảnh, tên, ngày nuôi, số lớn, % cam, hàng chỉ số, nút sửa.
-class _BatchCard extends StatelessWidget {
-  const _BatchCard({required this.batch});
-
-  final OperatorBatch batch;
-
-  String _num(double? v, {int digits = 1}) => v == null ? '—' : v.toStringAsFixed(digits).replaceAll('.', ',');
-
-  @override
-  Widget build(BuildContext context) {
-    final b = batch;
-    final log = b.latestLog;
-    final harvesting = b.status == BatchStatus.harvesting;
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              RoundedImage(b.crabType.image, width: 58, height: 58, radius: 14),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('${b.code} · ${b.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${b.status.label} · ngày ${b.dayOfCycle ?? '—'}/${b.cycleDays}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              CircleIconButton(
-                icon: Icons.edit_outlined,
-                size: 40,
-                background: AppColors.background,
-                onTap: () => context.push(Routes.dailyLogFor(b.code)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Text.rich(
-                  TextSpan(children: [
-                    TextSpan(text: formatCount(b.aliveCount), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
-                    const TextSpan(text: '  con', style: TextStyle(color: AppColors.inkMuted)),
-                  ]),
-                ),
-              ),
-              Text(
-                '${(b.survivalRate * 100).toStringAsFixed(1).replaceAll('.', ',')}% còn nuôi',
-                style: const TextStyle(color: AppColors.accentText, fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          MetricRow(metrics: [
-            Metric('pH', _num(log?.ph)),
-            Metric('°C', _num(log?.waterTempC), color: AppColors.danger),
-            Metric('‰', _num(log?.salinityPpt, digits: 0), color: const Color(0xFF4C8DD6)),
-            Metric('kg ăn', _num(log?.feedKg), color: AppColors.success),
-          ]),
-          if (!b.loggedToday) ...[
-            const SizedBox(height: 10),
-            const InfoChip(icon: Icons.error_outline_rounded, label: 'Chưa ghi nhật ký hôm nay', background: AppColors.accentSoft, foreground: AppColors.accentText),
-          ],
-          if (harvesting) ...[
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: () => context.push(Routes.harvest(b.code)),
-              icon: const Icon(Icons.scale_outlined),
-              label: const Text('Thu hoạch: cân & in tem'),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => AppCard(
+    color: AppColors.surfaceMuted,
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+    onTap: onTap,
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: 22),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+        ),
+      ],
+    ),
+  );
 }

@@ -1,0 +1,4 @@
+/* Xem hợp đồng góp vốn (ContractViewer): phần còn lại dùng thành phần op-* của bộ kit. */
+.ct-pdf { width: 100%; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+.ct-hash { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.ct-hash code { font-size: 12px; }

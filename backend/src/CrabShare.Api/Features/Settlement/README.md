@@ -13,20 +13,51 @@ Pool > 0 → trích thù lao người nuôi (`operator_share_pct`), phần còn 
 | `settlement_line` | mỗi nhà đầu tư một dòng: `capital_return`, `profit_share`, `tax_withheld`, `net_payout` (CHECK = capital + profit − tax), `in_kind_qty_kg` |
 | `settlement_feedback` | ý kiến của nhà đầu tư trong hạn: `Open`, `Answered`, `Withdrawn`, `Unresolved` |
 
-## Endpoint dự kiến
+## Đã làm (TH-12) — tính quyết toán
 | Method | Path | Ai gọi | Ghi chú |
 |---|---|---|---|
-| POST | `/api/admin/batches/{code}/settlements` | PlatformAdmin | UC38 tính bản nháp: doanh thu từ đơn `Completed`, chi phí khoá, pool, thù lao, chia theo `capital_share` bằng `LargestRemainderAllocator`, thuế (TL-07) |
-| POST | `/api/admin/settlements/{id}/propose` | PlatformAdmin | UC37 công bố, đặt `feedback_deadline` |
-| GET | `/api/settlements/{id}` | Investor của lô, Operator, Admin | UC35 sao kê: tổng + dòng của chính mình |
-| POST | `/api/settlements/{id}/feedback` | Investor của lô | UC36, chỉ trong hạn |
-| POST | `/api/admin/settlement-feedback/{id}/answer` | PlatformAdmin | |
-| POST | `/api/admin/settlements/{id}/approve` | PlatformAdmin | UC39 → tạo `payment_instruction` loại `Payout` cho từng dòng; quyết toán đã duyệt **không sửa được** |
+| GET | `/api/admin/settlements` | PlatformAdmin | Lô `Harvesting` / `Settlement` / `Closed` kèm bảng quyết toán nếu đã tính (tab Quyết toán của AdminFinance) |
+| POST | `/api/admin/batches/{code}/settlements` | PlatformAdmin | UC38 tính bản nháp, body `{ taxWithholdingPct }` (tỷ lệ người nuôi khai, 0–35, 0 = chưa khai). Lần đầu → 201, lô `Harvesting` → `Settlement` (audit `batch/start_settlement`); tính lại khi còn `Draft`/`Proposed`/`Disputed` → 200, `revision_no` + 1, thay toàn bộ dòng, về `Draft` (phải công bố lại). Đã duyệt → 409 `settlement.locked`. Lỗi 422: `settlement.batch_not_ready`, `settlement.no_capital_shares`, `settlement.no_locked_cost`. Audit `settlement/calculate`·`recalculate` (đủ số liệu, nguồn doanh thu, từng dòng) |
+| GET | `/api/admin/settlements/{id}` | PlatformAdmin | Bảng đầy đủ: nguồn doanh thu, chi phí khoá, Pool, thù lao, phần chia, khấu hao, từng dòng, góp ý |
+
+Cách tính (`CrabShare.SettlementEngine/SettlementCalculator`, lõi thuần, có test FsCheck):
+- Doanh thu thực thu = `v_batch_actual_revenue.actual_revenue` (đơn `Completed` + cọc bị mất − hoàn tiền khiếu nại), âm thì lấy 0. Chi phí = tổng các dòng của bảng chi phí chuẩn `Locked`, làm tròn từng dòng như `Batches/BatchService`. `depreciation_amount` = phần khấu hao trong đó.
+- Pool = doanh thu − chi phí (CHECK `ck_settlement_pool`). Thù lao = `operator_share_pct` × Pool, **làm tròn xuống**, chỉ khi Pool > 0.
+- Phần chia = Pool − thù lao (Pool dương) hoặc Pool (âm), chia theo `capital_share` bằng `LargestRemainderAllocator` → tổng dòng = phần chia đúng tới đồng (`v_settlement_reconciliation.difference = 0`).
+- Pool âm: lỗ chia theo vốn, mỗi người tối đa bằng vốn góp; phần vượt trần của người đã chạm trần chia lại cho người còn dư địa (lặp). Lỗ vượt tổng vốn của mọi nhà đầu tư (`uncoveredLoss`) không chia cho nhà đầu tư — chỉ xảy ra khi doanh thu + tổng vốn < chi phí.
+- Khấu trừ thuế = tỷ lệ người nuôi khai × phần chia dương, làm tròn xuống (TL-07: nền tảng không tự khấu trừ, bảng hiển thị số trước thuế / khấu trừ / sau thuế và ghi chú ai có nghĩa vụ).
+- Mỗi lô **một** bảng (`uq_settlement_batch_id`): "bản sửa" là tính lại trên cùng dòng, tăng `revision_no`, chỉ trước khi duyệt; sau duyệt trigger `trg_settlement_locked` / `trg_settlement_line_locked` khoá số liệu (BR-30).
+- Test: `SettlementCalculatorTests` (ví dụ + bất biến) và `SettlementDatabaseTests` (Pool dương khớp đồng, Pool âm có trần, lỗ vượt vốn, 100 nhà đầu tư < 10 giây, quyền admin, lô chưa thu hoạch).
+
+## Đã làm (TH-13) — công bố, sao kê, góp ý trong hạn
+| Method | Path | Ai gọi | Ghi chú |
+|---|---|---|---|
+| POST | `/api/admin/settlements/{id}/propose` | PlatformAdmin | UC37: `Draft` → `Proposed`, `proposed_at`, `feedback_deadline` = + `feedbackDays` (7–14, mặc định 7; CHECK CSDL ≥ 7 ngày). Không phải nháp → 422 `settlement.not_draft`. Audit `settlement/propose` |
+| GET | `/api/settlements/{id}` | Nhà đầu tư của lô, người nuôi của lô, admin | UC35 sao kê. Nhà đầu tư thấy tổng + **đúng dòng và góp ý của mình**; người nuôi, admin thấy đủ. Bản nháp và người ngoài → 404 |
+| POST | `/api/settlements/{id}/feedback` | Nhà đầu tư của lô | UC36: `{ content }` 10–1.000 ký tự, kèm căn cứ. Chỉ khi `Proposed`/`Disputed` và chưa quá `feedback_deadline`, ngược lại 422 `settlement.feedback_closed`. Bảng → `Disputed`. Audit `settlement_feedback/create` |
+| POST | `/api/admin/settlement-feedback/{id}/answer` | PlatformAdmin | `{ response, unresolved }` → `Answered` hoặc `Unresolved` (hai bên chưa thống nhất: vẫn chốt được, kèm ghi chú công khai — TL-14 Bước 4). Hết góp ý `Open` → bảng về `Proposed`. Audit `settlement_feedback/answer` |
+| GET | `/api/me/settlements` | Investor | Bảng đã công bố của các lô tôi góp vốn, kèm số thực nhận của tôi |
+| GET | `/api/operator/settlements` | OperatorMember | Bảng đã công bố của các lô thuộc hộ nuôi tôi |
+
+Điều chỉnh số liệu sau góp ý: admin **tính lại** (lần tính mới, về `Draft`) rồi công bố lại → cửa sổ mới. Test `SettlementReviewDatabaseTests`.
+
+## Đã làm (TH-14) — duyệt, chi trả, đóng lô
+| Method | Path | Ai gọi | Ghi chú |
+|---|---|---|---|
+| POST | `/api/admin/settlements/{id}/approve` | PlatformAdmin | UC39. Điều kiện: đã công bố (`settlement.not_proposed`), đã quá `feedback_deadline` (`settlement.window_open`), không còn góp ý `Open` (`settlement.open_feedback`; `Unresolved` thì vẫn chốt được), tài khoản lô `Open`. → `Approved`, `approved_by`/`approved_at` (trigger khoá số liệu, BR-30). Lập lệnh chi `Created` theo thứ tự TL-14 §6.6: **TaxPayment** = `tax_total` (người nuôi khai thay, đi thẳng kho bạc); **Payout người nuôi** = thù lao + khấu hao, tới tài khoản nhận tiền `Active` của hộ nuôi; **Payout từng nhà đầu tư** = `net_payout`, gắn `settlement_line_id`. Audit `settlement/approve` + từng `payment_instruction/create` |
+| POST | `/api/admin/settlements/{id}/send-payouts` | PlatformAdmin | Gửi mọi lệnh `Payout`/`TaxPayment` còn `Created`/`Failed` của lô qua `PayoutSendService` (mỗi lệnh một transaction, ghi giao dịch Out). Nhà đầu tư thêm tài khoản nhận tiền sau lúc duyệt thì lấy tài khoản đang dùng lúc gửi |
+| POST | `/api/dev/settlements/{id}/end-feedback-window` | PlatformAdmin, **chỉ Development** | Kết thúc hạn góp ý ngay (dời `proposed_at` và `feedback_deadline` về quá khứ, giữ CHECK ≥ 7 ngày) để demo đầu-cuối; ngoài Development trả 404. Audit `settlement/dev_end_feedback_window` |
+
+Đóng lô (`SettlementClosing.CloseIfPaidAsync`, TL-14 Bước 6 + §6.6): mỗi lần một lệnh chi gắn dòng quyết toán thành công, nếu mọi dòng có `net_payout` > 0 đã có lệnh `Succeeded` → bảng `PaidOut` → lô `Closed` (+ `closed_at`) → bảng `Closed`. Dòng thuế và khoản của người nuôi **không** chặn việc đóng lô. Lô lỗ hết vốn (không ai nhận gì) đóng ngay khi duyệt.
+
+Còn mở: dự phòng hao hụt (`MortalityReserve`) chưa giải ngân vẫn nằm trong tài khoản lô sau quyết toán — chờ chốt cách xử lý theo TL-11/TL-21; đợt giải ngân bị dừng chi (`Blocked`) chưa có luồng hoàn vốn chưa chi (thanh lý sớm, TL-03 §6.4).
+
+Test `SettlementPayoutDatabaseTests`: chưa hết hạn → 422; duyệt → 4 lệnh chi đúng thứ tự và số tiền; tính lại sau duyệt → 409; sửa số liệu bằng SQL bị trigger chặn; gửi → mọi dòng `Succeeded`, bảng và lô `Closed`, đủ audit; góp ý mở chặn duyệt.
 
 ## Quy tắc phải giữ
 - Tổng các khoản chia = Revenue Pool **đúng tới 1 đồng** (NFR Accuracy) — dùng `CrabShare.SettlementEngine`, không tự làm tròn trong service.
 - Lô 100 nhà đầu tư, 2.000 hộp tính xong trong 10 giây (NFR Performance) — viết test hiệu năng.
-- Mọi thay đổi ghi `audit_log`; muốn sửa sau khi duyệt thì tạo `revision_no` mới.
+- Mọi thay đổi ghi `audit_log`. Mỗi lô một bảng: sửa trước khi duyệt = tính lại (tăng `revision_no`); sau khi duyệt không sửa được.
 
 ## View có sẵn trong CSDL
 | View | Dùng cho |
@@ -37,7 +68,7 @@ Pool > 0 → trích thù lao người nuôi (`operator_share_pct`), phần còn 
 Đã có entity tương ứng trong `Infrastructure/Persistence/Entities` (chỉ đọc).
 
 ## Màn hình
-- Web: `admin/AdminFinance.tsx`, `admin/AdminSettlementDetail.tsx`, `operator/OperatorSettlement.tsx`, tab Sao kê trong `investor/`.
+- Web: tab Quyết toán của `admin/AdminFinance.tsx` (`AdminSettlementsPanel`), `admin/AdminSettlementDetail.tsx` (tính / tính lại, công bố, trả lời góp ý), `operator/OperatorSettlement.tsx` (xem bảng + góp ý, chỉ đọc), tab Quyết toán của cổng nhà đầu tư (`investor/settlement/InvestorSettlements.tsx`: sao kê + form góp ý). Dùng chung `shared/settlement/` (`SettlementStatement`, `SettlementFeedbackList`, `settlementApi`).
 - Mobile (nếu kịp): xem sao kê trong chi tiết lô của nhà đầu tư.
 
 ## Tài liệu

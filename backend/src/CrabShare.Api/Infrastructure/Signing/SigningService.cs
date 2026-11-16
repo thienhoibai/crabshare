@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 
 namespace CrabShare.Api.Infrastructure.Signing;
 
@@ -14,12 +15,20 @@ public interface IDigitalSigningService
 
 public sealed record SignedDocument(byte[] Pdf, string Sha256, DateTimeOffset SignedAt, string ProviderReference);
 
-/// <summary>Bản giả lập: không ký thật, chỉ trả lại file kèm mã băm và thời điểm. Thay bằng ViettelSigningService khi có sandbox.</summary>
+/// <summary>
+/// Bản giả lập: không ký thật. Giống dịch vụ thật ở chỗ chữ ký được NỐI vào cuối file (ở đây là một dòng chú thích PDF, trình đọc
+/// bỏ qua), nên mỗi lần ký ra một file mới có mã băm mới mà phần đã ký trước vẫn nguyên (TL-19: H1 → H2).
+/// Thay bằng ViettelSigningService khi có sandbox.
+/// </summary>
 public sealed class FakeSigningService(TimeProvider clock) : IDigitalSigningService
 {
     public Task<SignedDocument> SignAsync(byte[] pdf, string signerName, string signerRole, CancellationToken ct)
     {
-        var hash = Convert.ToHexStringLower(SHA256.HashData(pdf));
-        return Task.FromResult(new SignedDocument(pdf, hash, clock.GetUtcNow(), $"FAKE-SIGN-{signerRole}-{hash[..8]}"));
+        var signedAt = clock.GetUtcNow();
+        var signer = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(signerName)))[..12];
+        var stamp = Encoding.ASCII.GetBytes($"\n%CrabShare-FakeSign role={signerRole} signer={signer} at={signedAt:yyyy-MM-ddTHH:mm:ss.fffZ}\n");
+        byte[] signed = [.. pdf, .. stamp];
+        var hash = Convert.ToHexStringLower(SHA256.HashData(signed));
+        return Task.FromResult(new SignedDocument(signed, hash, signedAt, $"FAKE-SIGN-{signerRole}-{hash[..8]}"));
     }
 }

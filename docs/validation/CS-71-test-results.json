@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-21",
+  "branch": "feature/CS-71-thu-hoach-can-hang",
+  "baseCommit": "ca447bb06b3cc977cc1eec6cf1fb9c310ffdf3ae",
+  "backendApi": {
+    "failed": 23,
+    "passed": 1011,
+    "total": 1034,
+    "harvestPassed": 66
+  },
+  "settlementEngine": {
+    "passed": 4,
+    "failed": 0
+  },
+  "baseline": {
+    "failed": 23,
+    "passed": 31,
+    "failedTests": [
+      "CrabShare.Api.Tests.BatchesTests.Create_save_replace_submit_and_state_guards",
+      "CrabShare.Api.Tests.BatchesTests.Definitively_rejected_batch_preserves_history_and_cannot_be_edited",
+      "CrabShare.Api.Tests.BatchesTests.Failure_after_save_rolls_back_new_and_replaced_costs_and_submit",
+      "CrabShare.Api.Tests.BatchesTests.Submit_rechecks_reserve_and_approval_and_concurrent_submit_only_succeeds_once",
+      "CrabShare.Api.Tests.BatchReviewTests.Admin_can_configure_fee_amount_but_not_overlapping_ranges_and_existing_snapshot_does_not_change",
+      "CrabShare.Api.Tests.BatchReviewTests.Approval_locks_submitted_version_and_uses_user_schedule_excluding_reserve_and_depreciation",
+      "CrabShare.Api.Tests.BatchReviewTests.Approval_racing_revision_returns_only_one_success_and_one_audit_transition",
+      "CrabShare.Api.Tests.BatchReviewTests.Concurrent_approval_succeeds_once_and_failure_after_save_rolls_everything_back",
+      "CrabShare.Api.Tests.BatchReviewTests.Definitive_rejection_is_terminal_for_operator_edits_and_resubmission",
+      "CrabShare.Api.Tests.BatchReviewTests.Fee_boundaries_follow_configured_inclusivity(target: 199999999, expected: 1000000)",
+      "CrabShare.Api.Tests.BatchReviewTests.Fee_boundaries_follow_configured_inclusivity(target: 200000000, expected: 1000000)",
+      "CrabShare.Api.Tests.BatchReviewTests.Fee_boundaries_follow_configured_inclusivity(target: 200000001, expected: 2000000)",
+      "CrabShare.Api.Tests.BatchReviewTests.Fee_boundaries_follow_configured_inclusivity(target: 49999999, expected: 500000)",
+      "CrabShare.Api.Tests.BatchReviewTests.Fee_boundaries_follow_configured_inclusivity(target: 50000000, expected: 1000000)",
+      "CrabShare.Api.Tests.BatchReviewTests.Invalid_time_state_reserve_and_missing_schedule_never_partially_approve",
+      "CrabShare.Api.Tests.BatchReviewTests.Missing_expired_or_overlapping_tier_is_an_atomic_business_error_and_configured_amount_is_used",
+      "CrabShare.Api.Tests.BatchReviewTests.Newly_approved_batch_accepts_reservation_and_sandbox_payment_request",
+      "CrabShare.Api.Tests.BatchReviewTests.Operator_schedule_is_persisted_replaced_and_checked_for_missing_duplicate_and_zero_tranches",
+      "CrabShare.Api.Tests.BatchReviewTests.Reject_records_reason_and_audit_without_locking_or_generating_tranches",
+      "CrabShare.Api.Tests.BatchReviewTests.Relative_schedule_waits_for_real_capital_contract_and_stocking_events_and_resolves_once",
+      "CrabShare.Api.Tests.BatchReviewTests.Request_revision_returns_draft_then_new_version_can_be_submitted_without_losing_review_history",
+      "CrabShare.Api.Tests.BatchReviewTests.Sql_triggers_block_all_locked_writes_and_mixed_multirow_statements_but_allow_drafts",
+      "CrabShare.Api.Tests.BatchReviewTests.Unauthorized_and_revoked_admin_cannot_review"
+    ],
+    "failureNamesMatch": true
+  },
+  "fullRunCleanupWarning": "DashboardDatabaseTests fixture cleanup SqlException; standalone rerun 4/4 passed with successful cleanup",
+  "web": {
+    "failed": 0,
+    "harvestPlaywrightPassed": 11,
+    "skipped": 2,
+    "build": "passed",
+    "fullPlaywrightPassed": 149
+  },
+  "mobile": {
+    "failed": 0,
+    "passed": 207,
+    "analyze": "No issues found"
+  },
+  "migration": {
+    "script": "V016__harvest_recording.sql",
+    "appliedTo": "LocalDB CrabShareDev",
+    "reset": false
+  },
+  "review": "Independent backend and client review complete, both P2 fixes re-reviewed, no remaining verified P1/P2",
+  "limits": [
+    "No farm-provider API contract or adapter yet",
+    "NH-15 priority-window deadline/claim not implemented",
+    "Tag activation and printer hardware outside CS-71",
+    "No end-to-end test on physical mobile or production load test"
+  ]
+}

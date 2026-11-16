@@ -1,56 +1,90 @@
-import { AlertTriangle, Clock, CheckCircle2, Droplets, ArrowRight } from 'lucide-react'
-import OperatorLayout from './OperatorLayout'
-import { OpBadge, OpBtn, OpHeading } from './operatorUi'
+/* /operator/alerts — Cảnh báo của trại (GET /api/operators/me/alerts) và ghi cách xử lý trước hạn phản hồi
+   (POST /api/alerts/{id}/acknowledge). Phản hồi trễ hạn thì cảnh báo vẫn chuyển cho Admin theo dõi. */
+import { useState } from 'react'
+import { AlertTriangle, BellRing } from 'lucide-react'
+import type { AcknowledgeAlertRequest, AlertResponse } from '../../shared/api/api.gen'
+import {
+  Field, OpBtn, OpConfirm, OpEmpty, OpHeading, OpIcon, OpPanel, OpTabs, QueryView, StatusBadge, TextArea, formatDateTime, label, tone, useGet, useSend,
+} from '../../shared/ui/console'
+
+type Filter = 'todo' | 'Acknowledged' | 'Resolved' | 'all'
+const isOpen = (a: AlertResponse) => a.status === 'Open' || a.status === 'Escalated'
+const needsReply = (a: AlertResponse) => isOpen(a) && !a.acknowledgedAt
+const isLate = (a: AlertResponse) => new Date(a.ackDeadline).getTime() < Date.now()
+
+function AcknowledgeDialog({ alert, onClose }: { alert: AlertResponse; onClose: () => void }) {
+  const [note, setNote] = useState('')
+  const acknowledge = useSend<AlertResponse, AcknowledgeAlertRequest>('post', `/api/alerts/${alert.id}/acknowledge`, { success: 'Đã ghi cách xử lý.', onSuccess: onClose, quietError: true })
+  return (
+    <OpConfirm
+      title={label('alertType', alert.type)}
+      sub={alert.message}
+      confirmLabel="Gửi"
+      pending={acknowledge.isPending}
+      error={acknowledge.error}
+      disabled={!note.trim()}
+      onClose={onClose}
+      onConfirm={() => acknowledge.mutate({ responseNote: note.trim() })}
+    >
+      <Field label="Đã xử lý thế nào" required>
+        <TextArea rows={3} value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} autoFocus />
+      </Field>
+      {isLate(alert) && <p className="rd-muted">Đã quá hạn phản hồi nên Admin vẫn theo dõi cảnh báo này.</p>}
+    </OpConfirm>
+  )
+}
 
 export default function OperatorAlerts() {
-  const alerts = [
-    { id: 1, batch: 'BATCH-2026-11A', box: 'S-54', title: 'Độ pH tăng đột biến', time: '10 phút trước', severity: 'high', desc: 'pH đạt 8.5 (ngưỡng an toàn 7.5–8.0).' },
-    { id: 2, batch: 'BATCH-2026-11A', box: 'S-102', title: 'Thiếu nhật ký hằng ngày', time: '1 giờ trước', severity: 'medium', desc: 'Chưa nhập nhật ký hôm nay (nhiệt độ nước, pH, thức ăn).' },
-  ]
+  const [filter, setFilter] = useState<Filter>('todo')
+  const [selected, setSelected] = useState<AlertResponse | null>(null)
+  const alerts = useGet<AlertResponse[]>('/api/operators/me/alerts', undefined, { refetchInterval: 30_000 })
+  const all = alerts.data ?? []
+  const shown = all.filter((a) => (filter === 'all' ? true : filter === 'todo' ? isOpen(a) : a.status === filter))
+  // Chỉ cảnh báo đầu tiên cần phản hồi có nút chính, để màn hình có một việc nổi bật.
+  const firstToReply = shown.find(needsReply)?.id
 
   return (
-    <OperatorLayout activeTab="alerts">
-      <OpHeading
-        eyebrow="UC-06 · Cảnh báo"
-        title="Trung tâm cảnh báo"
-        description="Sinh từ chỉ số người nuôi nhập trong nhật ký hằng ngày (nhiệt độ nước, độ mặn, pH) và khi thiếu nhật ký."
+    <>
+      <OpHeading eyebrow="Vận hành" title="Cảnh báo" />
+      <OpTabs<Filter>
+        value={filter}
+        onChange={setFilter}
+        items={[
+          { key: 'todo', label: 'Đang mở', count: all.filter(isOpen).length },
+          { key: 'Acknowledged', label: 'Đã ghi nhận' },
+          { key: 'Resolved', label: 'Đã xử lý' },
+          { key: 'all', label: 'Tất cả' },
+        ]}
       />
 
-      <div className="space-y-4 max-w-4xl">
-        {alerts.map((a) => (
-          <article key={a.id} className="op-panel flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:border-[#b42318] transition-colors">
-            <div className="flex gap-4 items-start">
-              <div className={`p-3 rounded-full ${a.severity === 'high' ? 'bg-[#fef2f2] text-[#b42318]' : 'bg-[#fffbeb] text-[#b45309]'}`}>
-                {a.severity === 'high' ? <AlertTriangle className="w-6 h-6" /> : <Droplets className="w-6 h-6" />}
-              </div>
-              <div>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  <OpBadge tone="mute">{a.batch}</OpBadge>
-                  <OpBadge tone="gold">Ô {a.box}</OpBadge>
-                  <OpBadge tone={a.severity === 'high' ? 'danger' : 'warn'}>{a.severity === 'high' ? 'Nghiêm trọng' : 'Trung bình'}</OpBadge>
-                </div>
-                <h3 className="font-extrabold text-lg">{a.title}</h3>
-                <p className="text-sm text-[#6f675e] mt-1">{a.desc}</p>
-                <p className="flex items-center gap-1 text-xs text-[#9a8f84] mt-2"><Clock className="w-3 h-3" /> {a.time}</p>
-              </div>
-            </div>
-            <div className="w-full sm:w-auto flex flex-col gap-2 shrink-0">
-              <OpBtn variant="ink" onClick={() => { window.location.href = `/operator/log?action=resolve&batch=${a.batch}&box=${a.box}` }}>
-                Ghi log xử lý <ArrowRight className="w-4 h-4" />
-              </OpBtn>
-              <button type="button" className="text-xs font-bold text-[#9a8f84] hover:text-[#171717] py-1">Bỏ qua (báo cáo sai)</button>
-            </div>
-          </article>
-        ))}
-
-        {alerts.length === 0 && (
-          <div className="op-panel text-center py-16">
-            <CheckCircle2 className="w-12 h-12 text-[#15803d] mx-auto mb-3 opacity-50" />
-            <h3 className="font-bold text-lg">Mọi thứ đều ổn</h3>
-            <p className="text-sm text-[#6f675e] mt-1">Không có cảnh báo lúc này.</p>
-          </div>
+      <QueryView query={alerts}>
+        {() => shown.length === 0 ? <OpEmpty title={filter === 'todo' ? 'Không có cảnh báo đang mở' : 'Không có cảnh báo nào ở mục này'} icon={<BellRing size={30} />} /> : (
+          <OpPanel className="op-list">
+            {shown.map((a) => (
+              <article key={a.id} className="op-row op-row--alert">
+                <OpIcon tone={tone('severity', a.severity)} round><AlertTriangle size={20} /></OpIcon>
+                <span className="op-stack" style={{ gap: 6 }}>
+                  <span className="op-inline">
+                    <b>{label('alertType', a.type)}</b>
+                    <StatusBadge kind="severity" value={a.severity} />
+                    {a.status !== 'Open' && <StatusBadge kind="alert" value={a.status} />}
+                  </span>
+                  <span className="rd-muted">{a.message}</span>
+                  <small className={needsReply(a) && isLate(a) ? 'op-danger' : 'rd-muted'}>
+                    <a className="op-link" href={`/operator/batches/${encodeURIComponent(a.batchCode)}`}>{a.batchCode}</a>
+                    {' · '}{needsReply(a) ? `hạn phản hồi ${formatDateTime(a.ackDeadline)}` : formatDateTime(a.raisedAt)}
+                  </small>
+                  {a.responseNote && <span>Đã xử lý: {a.responseNote}</span>}
+                  {a.resolutionNote && <span>Admin: {a.resolutionNote}</span>}
+                </span>
+                <span>{needsReply(a) && <OpBtn sm variant={a.id === firstToReply ? 'primary' : 'ghost'} onClick={() => setSelected(a)}>Ghi cách xử lý</OpBtn>}</span>
+              </article>
+            ))}
+          </OpPanel>
         )}
-      </div>
-    </OperatorLayout>
+      </QueryView>
+
+      {selected && <AcknowledgeDialog alert={selected} onClose={() => setSelected(null)} />}
+    </>
   )
 }

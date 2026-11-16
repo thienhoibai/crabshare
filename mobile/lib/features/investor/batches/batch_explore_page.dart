@@ -1,19 +1,20 @@
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../app/routes.dart';
-import '../../../app/theme/app_theme.dart';
-import '../../../core/api/api_client.dart';
 import '../../../core/format/dates.dart';
 import '../../../core/format/money.dart';
-import '../../../shared/models/batch_enums.dart';
+import '../../../shared/status_labels.dart';
+import '../../../shared/widgets/app_parts.dart';
 import '../../../shared/widgets/app_ui.dart';
 import '../../../shared/widgets/nav_shell.dart';
-import '../data/investor_models.dart';
-import '../data/investor_repository.dart';
+import '../data/batch_repository.dart';
+import '../widgets/investor_ui.dart';
 
-/// Tab "Lô" — bố cục theo màn Explore của mẫu: ô tìm kiếm, chip danh mục, thẻ lớn có ảnh.
+enum _Filter { all, funding, preorder }
+
+/// Tab "Lô": các Lô đang gọi vốn hoặc nhận đặt trước. Hai hàng chip lọc: việc muốn làm và loại cua.
 class BatchExplorePage extends ConsumerStatefulWidget {
   const BatchExplorePage({super.key});
 
@@ -22,98 +23,105 @@ class BatchExplorePage extends ConsumerStatefulWidget {
 }
 
 class _BatchExplorePageState extends ConsumerState<BatchExplorePage> {
-  CrabType? _type;
-  String _query = '';
-
-  static const _categories = <(CrabType?, IconData, String)>[
-    (null, Icons.apps_rounded, 'Tất cả'),
-    (CrabType.fattening, Icons.set_meal_outlined, 'Cua thịt'),
-    (CrabType.roe, Icons.egg_alt_outlined, 'Cua gạch'),
-    (CrabType.softShell, Icons.water_drop_outlined, 'Cua lột'),
-  ];
-
-  bool _matches(BatchSummary b) {
-    final q = _query.trim().toLowerCase();
-    return (_type == null || b.crabType == _type) &&
-        (q.isEmpty || b.title.toLowerCase().contains(q) || b.code.toLowerCase().contains(q) || b.operatorName.toLowerCase().contains(q));
-  }
+  _Filter _filter = _Filter.all;
+  String? _crabType;
 
   @override
   Widget build(BuildContext context) {
-    final batches = ref.watch(batchesProvider);
+    final batches = ref.watch(openBatchesProvider);
+    final all = batches.value ?? const <ExploreBatch>[];
+    // Chỉ đưa ra các loại cua đang có Lô mở, để không có lựa chọn nào cho ra danh sách rỗng.
+    final types = {for (final b in all) b.crabType}.toList();
+    final crabType = types.contains(_crabType) ? _crabType : null;
+
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: batches.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => ErrorView(message: apiErrorMessage(e), onRetry: () => ref.invalidate(batchesProvider)),
-          data: (all) {
-            final visible = all.where(_matches).toList();
-            final funding = visible.where((b) => b.status == BatchStatus.funding).toList();
-            final running = visible.where((b) => b.status != BatchStatus.funding).toList();
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, kNavBarClearance),
-              children: [
-                Text('Khám phá lô nuôi', style: Theme.of(context).textTheme.headlineMedium),
-                const SizedBox(height: 14),
-                TextField(
-                  onChanged: (v) => setState(() => _query = v),
-                  decoration: const InputDecoration(
-                    hintText: 'Tìm lô, mã lô, hộ nuôi…',
-                    prefixIcon: Icon(Icons.search_rounded),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Lô đang mở', style: Theme.of(context).textTheme.headlineMedium),
+                  const SizedBox(height: 12),
+                  PillTabs<_Filter>(
+                    items: const [(_Filter.all, 'Tất cả'), (_Filter.funding, 'Gọi vốn'), (_Filter.preorder, 'Đặt trước')],
+                    value: _filter,
+                    onChanged: (value) => setState(() => _filter = value),
                   ),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    for (final (type, icon, label) in _categories)
-                      Expanded(
-                        child: CategoryChip(icon: icon, label: label, selected: _type == type, onTap: () => setState(() => _type = type)),
-                      ),
-                  ],
-                ),
-                SectionHeader(title: 'Đang gọi vốn', actionLabel: '${funding.length} lô'),
-                if (funding.isEmpty)
-                  const EmptyState(icon: Icons.search_off_rounded, title: 'Không có lô phù hợp')
-                else
-                  for (final b in funding) ...[
-                    _FundingBatchCard(batch: b, onTap: () => context.push(Routes.batch(b.code))),
-                    const SizedBox(height: 14),
-                  ],
-                if (running.isNotEmpty) ...[
-                  const SectionHeader(title: 'Đang nuôi & thu hoạch'),
-                  SizedBox(
-                    height: 210,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: running.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 12),
-                      itemBuilder: (context, i) => _SmallBatchCard(batch: running[i], onTap: () => context.push(Routes.batch(running[i].code))),
+                  if (types.length > 1) ...[
+                    const SizedBox(height: 8),
+                    PillTabs<String?>(
+                      items: [(null, 'Mọi loại cua'), for (final t in types) (t, statusLabel('crabType', t))],
+                      value: crabType,
+                      onChanged: (value) => setState(() => _crabType = value),
                     ),
-                  ),
+                  ],
                 ],
-              ],
-            );
-          },
+              ),
+            ),
+            Expanded(
+              child: AsyncContent(
+                value: batches,
+                onRefresh: () => ref.refresh(openBatchesProvider.future),
+                data: (items) {
+                  final rows = [
+                    for (final b in items)
+                      if ((crabType == null || b.crabType == crabType) &&
+                          switch (_filter) {
+                            _Filter.all => true,
+                            _Filter.funding => b.isFunding,
+                            _Filter.preorder => b.takesPreorders(),
+                          })
+                        b,
+                  ];
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, kNavBarClearance),
+                    children: [
+                      if (rows.isEmpty)
+                        EmptyState(
+                          icon: Icons.search_off_rounded,
+                          title: items.isEmpty ? 'Chưa có Lô nào đang mở' : 'Không có Lô nào khớp bộ lọc',
+                        ),
+                      for (final b in rows) ...[
+                        BatchCard(batch: b, onTap: () => context.push(Routes.batch(b.code))),
+                        const SizedBox(height: 14),
+                      ],
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Thẻ lớn có ảnh — theo thẻ "Trending Recipes" của mẫu.
-/// Thanh tiến độ thể hiện số vốn đã gọi (không phải lợi suất).
-class _FundingBatchCard extends StatelessWidget {
-  const _FundingBatchCard({required this.batch, required this.onTap});
-
-  final BatchSummary batch;
+/// Thẻ một Lô đang mở: ảnh, hạn, tên, hai chip phương thức và trạng thái, rồi tiến độ gọi vốn hoặc khoảng giá.
+class BatchCard extends StatelessWidget {
+  const BatchCard({super.key, required this.batch, required this.onTap});
+  final ExploreBatch batch;
   final VoidCallback onTap;
+
+  String? get _deadline {
+    final b = batch;
+    if (b.isFunding && b.fundingDeadline != null) return 'Góp vốn ${formatDueIn(b.fundingDeadline!)}';
+    if (b.preorderDeadline != null) return 'Đặt trước ${formatDueIn(b.preorderDeadline!)}';
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final b = batch;
-    final percent = (b.fundingProgress * 100).round();
+    final text = Theme.of(context).textTheme;
+    final deadline = _deadline;
+    final priceRange = b.priceRange;
     return AppCard(
       onTap: onTap,
       padding: const EdgeInsets.all(10),
@@ -122,16 +130,9 @@ class _FundingBatchCard extends StatelessWidget {
         children: [
           Stack(
             children: [
-              RoundedImage(b.crabType.image, height: 190, width: double.infinity, radius: 18),
-              Positioned(
-                left: 10,
-                top: 10,
-                child: InfoChip(
-                  icon: Icons.schedule_rounded,
-                  label: b.fundingDeadline == null ? 'Đang mở' : formatDueIn(b.fundingDeadline!),
-                ),
-              ),
-              const Positioned(right: 10, top: 10, child: InfoChip(icon: Icons.verified_rounded, label: 'Đã duyệt')),
+              RoundedImage(crabImage(b.crabType), height: 140, width: double.infinity, radius: 18),
+              if (deadline != null)
+                Positioned(left: 10, top: 10, child: InfoChip(icon: Icons.schedule_rounded, label: deadline)),
             ],
           ),
           Padding(
@@ -139,75 +140,44 @@ class _FundingBatchCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Text(b.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: text.titleMedium),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
-                    Expanded(child: Text(b.title, style: Theme.of(context).textTheme.titleLarge)),
-                    Text(b.code, style: Theme.of(context).textTheme.bodySmall),
+                    StatusPill(kind: 'batchMode', value: b.mode),
+                    StatusPill(kind: 'batch', value: b.status),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(b.operatorName, style: Theme.of(context).textTheme.bodySmall),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: SoftProgressBar(value: b.fundingProgress)),
-                    const SizedBox(width: 10),
-                    Text('$percent%', style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.accentText)),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                MetricRow(metrics: [
-                  Metric('mục tiêu', formatMillions(b.targetCapital)),
-                  Metric('tối thiểu', formatMillions(b.minContribution), color: AppColors.ink),
-                  Metric('ngày nuôi', '${b.cycleDays}', color: AppColors.success),
-                ]),
+                if (b.isFunding) ...[
+                  const SizedBox(height: 12),
+                  SoftProgressBar(value: b.fundingProgress),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${formatMillions(b.confirmedCapital)} / ${formatMillions(b.targetCapital)}',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      Text('Góp từ ${formatMillions(b.minContribution)}', style: text.bodySmall),
+                    ],
+                  ),
+                ] else if (priceRange != null) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: Text(priceRange, style: const TextStyle(fontWeight: FontWeight.w700))),
+                      Text('theo quy cách', style: text.bodySmall),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SmallBatchCard extends StatelessWidget {
-  const _SmallBatchCard({required this.batch, required this.onTap});
-
-  final BatchSummary batch;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 200,
-      child: AppCard(
-        onTap: onTap,
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Stack(
-              children: [
-                RoundedImage(batch.crabType.image, height: 110, width: double.infinity, radius: 14),
-                Positioned(left: 8, top: 8, child: InfoChip(label: batch.status.label)),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(batch.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 6),
-                  SoftProgressBar(value: batch.cycleProgress, height: 6, color: AppColors.ink),
-                  const SizedBox(height: 4),
-                  Text('Ngày ${batch.dayOfCycle ?? '—'}/${batch.cycleDays}', style: Theme.of(context).textTheme.bodySmall),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

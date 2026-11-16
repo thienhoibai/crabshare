@@ -1,69 +1,82 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { errorMessage } from '../../shared/api/http'
 import { homePathFor } from '../../shared/auth/authStore'
-import { SiteFooter, SiteHeader } from '../../shared/layout/SiteChrome'
+import { Checkbox, Field, Input, OpBtn, OpNote, RadioCards, Select, options } from '../../shared/ui/console'
+import AuthLayout from './AuthLayout'
+import PasswordInput from './PasswordInput'
 import { useRegister } from './authApi'
 
-const asset = (name: string) => `/assets/${name}`
+type RoleChoice = 'Customer' | 'Investor'
 
-type FormState = {
-  email: string
-  firstName: string
-  lastName: string
-  phone: string
-  investorType: 'Customer' | 'Investor'
-  password: string
-  confirmPassword: string
-  terms: boolean
-}
-
-const initialForm: FormState = {
-  email: '',
-  firstName: '',
-  lastName: '',
-  phone: '',
-  investorType: 'Investor',
-  password: '',
-  confirmPassword: '',
-  terms: false,
-}
-
-/** UC01 — Đăng ký qua POST /api/auth/register. Đăng ký xong tự đăng nhập. */
-function RegisterPage() {
+/**
+ * UC01 — Đăng ký tài khoản khách hàng hoặc nhà đầu tư (POST /api/auth/register). Đăng ký xong tự đăng nhập.
+ * Mỗi tài khoản gắn một hồ sơ đối tác (BR-001): cá nhân lấy họ tên, tổ chức khai tên pháp lý và mã số đăng ký.
+ * Người nuôi đăng ký tài khoản trước rồi nộp hồ sơ hộ nuôi ở cổng người nuôi.
+ * Phần tổ chức mở ra khi người dùng chọn đăng ký cho tổ chức.
+ */
+export default function RegisterPage() {
   const navigate = useNavigate()
   const register = useRegister()
-  const [form, setForm] = useState<FormState>(initialForm)
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [role, setRole] = useState<RoleChoice>('Customer')
+  const [organisation, setOrganisation] = useState(false)
+  const [partyType, setPartyType] = useState('Company')
+  const [customerType, setCustomerType] = useState('Restaurant')
+  const [fullName, setFullName] = useState('')
+  const [legalName, setLegalName] = useState('')
+  const [registrationNo, setRegistrationNo] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [password, setPassword] = useState('')
+  const [terms, setTerms] = useState(false)
   const [message, setMessage] = useState('')
+  const [attempted, setAttempted] = useState(false)
 
-  const update = <Key extends keyof FormState>(key: Key, value: FormState[Key]) => {
-    setForm((current) => ({ ...current, [key]: value }))
-    setMessage('')
+  const errors = {
+    fullName: fullName.trim() ? '' : 'Nhập họ và tên của bạn.',
+    email: /^[^\s@]+@[^\s@]+$/.test(email.trim()) ? '' : 'Nhập địa chỉ email hợp lệ.',
+    password: password.length >= 8 ? '' : 'Mật khẩu cần ít nhất 8 ký tự.',
+    legalName: organisation && !legalName.trim() ? 'Nhập tên pháp lý của tổ chức.' : '',
+    terms: terms ? '' : 'Bạn cần đồng ý điều khoản sử dụng.',
   }
 
-  const canSubmit = Boolean(
-    form.email && form.firstName && form.lastName && form.password && form.confirmPassword && form.terms,
-  ) && !register.isPending
+  const fieldDetails = (name: keyof typeof errors, hint?: string) => {
+    const id = `register-${name}`
+    const error = attempted ? errors[name] : ''
+    const descriptionId = error || hint ? `${id}-description` : undefined
+    return {
+      field: { htmlFor: id, descriptionId, error, hint },
+      input: { id, name, 'aria-invalid': error ? true : undefined, 'aria-describedby': descriptionId },
+    }
+  }
+  const nameInput = fieldDetails('fullName')
+  const emailInput = fieldDetails('email')
+  const passwordInput = fieldDetails('password', 'Từ 8 ký tự')
+  const legalNameInput = fieldDetails('legalName', 'Sau khi đăng ký, gửi ảnh giấy tờ ở trang Hồ sơ để được xác minh.')
+  const termsError = attempted ? errors.terms : ''
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (form.password !== form.confirmPassword) {
-      setMessage('Mật khẩu xác nhận chưa khớp.')
+    setMessage('')
+    const firstError = Object.entries(errors).find(([, error]) => error)
+    if (firstError) {
+      setAttempted(true)
+      const field = event.currentTarget.elements.namedItem(firstError[0])
+      if (field instanceof HTMLElement) requestAnimationFrame(() => field.focus())
       return
     }
-    if (!canSubmit) {
-      setMessage('Vui lòng điền đủ thông tin và đồng ý điều khoản.')
-      return
-    }
+
     register.mutate(
       {
-        email: form.email,
-        password: form.password,
-        fullName: `${form.lastName} ${form.firstName}`.trim(),
-        phone: form.phone || undefined,
-        role: form.investorType,
+        email: email.trim(),
+        password,
+        fullName: fullName.trim(),
+        phone: phone.trim() || undefined,
+        role,
+        partyType: organisation ? partyType : 'Individual',
+        legalName: organisation ? legalName.trim() : undefined,
+        registrationNo: organisation ? registrationNo.trim() || undefined : undefined,
+        customerType: role === 'Customer' ? customerType : undefined,
       },
       {
         onSuccess: (res) => navigate(homePathFor(res.user), { replace: true }),
@@ -73,78 +86,78 @@ function RegisterPage() {
   }
 
   return (
-    <>
-      <SiteHeader />
-      <main className="register-page">
-      <section className="register-card" aria-labelledby="register-title" data-node-id="67:2097">
-        <header className="register-brand">
-          <a href="/" className="register-logo" aria-label="CrabShare, về trang chủ">
-            <span className="register-wordmark"><strong>CRAB</strong><span>SHARE</span></span>
-            <span className="register-logo-icon"><img src={asset('registerCrabIcon.svg')} alt="" /></span>
-          </a>
-          <span className="register-tagline">BATCH . GROW . SHARE</span>
-          <h1 id="register-title">Create an account to start investing in CrabShare Batches</h1>
-        </header>
+    <AuthLayout title="Đăng ký" alternate={<>Đã có tài khoản? <Link to="/dang-nhap">Đăng nhập</Link></>}>
+      <form className="op-form" onSubmit={submit} onChange={() => setMessage('')} noValidate>
+        <fieldset className="auth-roles">
+          <legend className="op-label">Loại tài khoản</legend>
+          <RadioCards<RoleChoice>
+            value={role}
+            onChange={setRole}
+            options={[
+              { value: 'Customer', label: 'Khách hàng' },
+              { value: 'Investor', label: 'Nhà đầu tư' },
+            ]}
+          />
+          <p className="auth-role-hint" aria-live="polite">
+            {role === 'Customer' ? 'Đặt trước cua và tra cứu nguồn gốc.' : 'Xác minh danh tính sau khi tạo tài khoản.'}
+          </p>
+        </fieldset>
 
-        <form className="register-form" onSubmit={submit} noValidate>
-          <label className="register-field">
-            <span className="sr-only">Email Address</span>
-            <input type="email" autoComplete="email" value={form.email} onChange={(event) => update('email', event.target.value)} placeholder="Email Address" required />
-          </label>
-          <label className="register-field">
-            <span className="sr-only">First Name</span>
-            <input autoComplete="given-name" value={form.firstName} onChange={(event) => update('firstName', event.target.value)} placeholder="First Name" required />
-          </label>
-          <label className="register-field">
-            <span className="sr-only">Last Name</span>
-            <input autoComplete="family-name" value={form.lastName} onChange={(event) => update('lastName', event.target.value)} placeholder="Last Name" required />
-          </label>
+        <div className="op-form__row">
+          <Field {...nameInput.field} label="Họ và tên" required>
+            <Input {...nameInput.input} autoComplete="name" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          </Field>
+          <Field label="Số điện thoại (không bắt buộc)">
+            <Input name="phone" type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </Field>
+        </div>
 
-          <div className="register-composite-field">
-            <label className="register-small-label" htmlFor="phone">Cell Number</label>
-            <div className="register-phone-line">
-              <span className="register-country"><img src={asset('registerVietnamFlag.svg')} alt="Cờ Việt Nam" /><span>+84</span><img src={asset('registerChevron.svg')} alt="" /></span>
-              <input id="phone" type="tel" autoComplete="tel" inputMode="tel" value={form.phone} onChange={(event) => update('phone', event.target.value)} aria-label="Cell Number" required />
-            </div>
+        <div className="op-form__row">
+          <Field {...emailInput.field} label="Email" required>
+            <Input {...emailInput.input} type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          </Field>
+          <Field {...passwordInput.field} label="Mật khẩu" required>
+            <PasswordInput {...passwordInput.input} autoComplete="new-password" required minLength={8} value={password}
+              onChange={(e) => setPassword(e.target.value)} />
+          </Field>
+        </div>
+
+        {role === 'Customer' && (
+          <Field label="Bạn mua cho">
+            <Select value={customerType} onChange={(e) => setCustomerType(e.target.value)}>
+              {options('customerType').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
+          </Field>
+        )}
+
+        <Checkbox checked={organisation} onChange={setOrganisation}>Đăng ký cho doanh nghiệp, hộ kinh doanh hoặc hợp tác xã</Checkbox>
+        {organisation && (
+          <div className="op-subform">
+            <Field label="Loại hình">
+              <Select value={partyType} onChange={(e) => setPartyType(e.target.value)}>
+                {options('partyType').filter((o) => o.value !== 'Individual').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </Select>
+            </Field>
+            <Field label="Mã số thuế">
+              <Input value={registrationNo} onChange={(e) => setRegistrationNo(e.target.value)} inputMode="numeric" />
+            </Field>
+            <Field {...legalNameInput.field} label="Tên pháp lý" className="is-wide" required>
+              <Input {...legalNameInput.input} autoComplete="organization" required value={legalName} onChange={(e) => setLegalName(e.target.value)} />
+            </Field>
           </div>
+        )}
 
-          <div className="register-composite-field">
-            <label className="register-small-label" htmlFor="investor-type">Investor Type</label>
-            <span className="register-select-wrap">
-              <select id="investor-type" value={form.investorType} onChange={(event) => update('investorType', event.target.value as FormState['investorType'])}>
-                <option value="Investor">Nhà đầu tư (góp vốn và mua cua)</option>
-                <option value="Customer">Khách hàng (chỉ mua cua)</option>
-              </select>
-              <img className="register-select-base" src={asset('registerSelect.svg')} alt="" />
-              <img src={asset('registerChevronDown.svg')} alt="" />
-            </span>
-          </div>
+        <div className="auth-consent">
+          <Checkbox name="terms" checked={terms} onChange={setTerms} required
+            aria-invalid={termsError ? true : undefined} aria-describedby={termsError ? 'register-terms-description' : undefined}>
+            Tôi đồng ý điều khoản sử dụng
+          </Checkbox>
+          {termsError && <p id="register-terms-description" className="op-field__error">{termsError}</p>}
+        </div>
 
-          <label className="register-field register-password-field">
-            <span className="sr-only">Password</span>
-            <input type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={form.password} onChange={(event) => update('password', event.target.value)} placeholder="Password" required />
-            <button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Hide password' : 'Show password'}><img src={asset('registerEye.svg')} alt="" /></button>
-          </label>
-          <label className="register-field register-password-field">
-            <span className="sr-only">Confirm Password</span>
-            <input type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" value={form.confirmPassword} onChange={(event) => update('confirmPassword', event.target.value)} placeholder="Confirm Password" required />
-            <button type="button" onClick={() => setShowConfirmPassword((current) => !current)} aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}><img src={asset('registerEye.svg')} alt="" /></button>
-          </label>
-
-          <label className="register-check">
-            <input type="checkbox" checked={form.terms} onChange={(event) => update('terms', event.target.checked)} />
-            <span>I agree to the <button type="button" className="register-inline-link">terms and conditions.</button></span>
-          </label>
-          <button className="register-submit" type="submit" disabled={!canSubmit}>{register.isPending ? 'ĐANG TẠO…' : 'TẠO TÀI KHOẢN'}</button>
-          {message && <p className="register-error" role="alert">{message}</p>}
-        </form>
-
-        <p className="register-signin">Do you have an existing account? <a href="/dang-nhap">Sign in</a></p>
-      </section>
-      </main>
-      <SiteFooter />
-    </>
+        {message && <div role="alert"><OpNote tone="danger">{message}</OpNote></div>}
+        <OpBtn className="auth-submit" type="submit" full disabled={register.isPending}>{register.isPending ? 'Đang tạo tài khoản…' : 'Tạo tài khoản'}</OpBtn>
+      </form>
+    </AuthLayout>
   )
 }
-
-export default RegisterPage

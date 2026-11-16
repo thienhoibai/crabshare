@@ -10,7 +10,21 @@ export interface AuthResponse {
 }
 
 export interface LoginInput { email: string; password: string }
-export interface RegisterInput { email: string; password: string; fullName: string; phone?: string; role: 'Customer' | 'Investor' }
+export interface RegisterInput {
+  email: string
+  password: string
+  fullName: string
+  phone?: string
+  role: 'Customer' | 'Investor'
+  /** Individual, Household, Company, Cooperative. */
+  partyType?: string
+  /** Tên pháp lý của tổ chức; cá nhân để trống thì lấy họ tên. */
+  legalName?: string
+  /** Mã số thuế hoặc số đăng ký kinh doanh. */
+  registrationNo?: string
+  /** Loại khách: Restaurant, Trader, Wholesaler, Agent, CentralKitchen, Other. */
+  customerType?: string
+}
 
 export const authApi = {
   login: (body: LoginInput) => http.post<AuthResponse>('/api/auth/login', body).then((r) => r.data),

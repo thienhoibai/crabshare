@@ -1,0 +1,47 @@
+/* Kiểu riêng của cổng Nhân viên kiểm phẩm. Cổng này dùng ở trại trên điện thoại: một cột, vùng bấm cao từ 52px.
+   Chỉ dùng biến màu của bộ kit .rd. */
+
+/* mã cua, số phiếu cỡ lớn */
+.qc-code { font-family: inherit; font-variant-numeric: tabular-nums; font-size: clamp(24px, 6.4vw, 34px); line-height: 1.05; font-weight: 700; letter-spacing: 0.01em; overflow-wrap: anywhere; }
+
+/* danh sách dòng: nội dung trái, số liệu phải */
+.qc-lines { display: grid; margin: 0; padding: 0; list-style: none; }
+.qc-lines > li, .qc-lines > button { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; min-height: 56px; padding: 10px 4px; text-align: left; color: inherit; border-radius: 12px; }
+.qc-lines > * + * { border-top: 1px solid var(--line); border-top-left-radius: 0; border-top-right-radius: 0; }
+.qc-lines > button { width: 100%; cursor: pointer; transition: background-color 0.2s; }
+.qc-lines > button:hover { background: var(--input); }
+.qc-lines small { display: block; font-size: 13px; font-weight: 400; color: var(--muted); }
+.qc-lines__end { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; font-variant-numeric: tabular-nums; }
+
+/* hai ảnh của trạm đặt cạnh nhau, kể cả trên điện thoại */
+.qc-shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.qc-shots figure { display: grid; gap: 6px; margin: 0; min-width: 0; }
+.qc-shots figcaption { font-size: 12px; color: var(--muted); }
+
+/* hàng nút thao tác */
+.qc-acts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.qc-acts > .rd-btn { width: 100%; height: 54px; padding: 0 12px; gap: 8px; white-space: normal; text-align: center; line-height: 1.15; }
+.qc-acts > .rd-btn > svg { flex: none; }
+
+/* ô điều kiện của kiểm đầu vào: mặc định đạt (xanh, dấu tích); bấm thì thành không đạt (đỏ, dấu gạch) và đổi chữ */
+.qc-toggles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.qc-toggle { position: relative; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 10px 14px; border-radius: 16px; cursor: pointer; font-size: 15px; font-weight: 600; color: var(--danger-ink); border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); background: color-mix(in srgb, var(--danger) 8%, var(--surface)); transition: border-color 0.2s, background-color 0.2s, color 0.2s; user-select: none; }
+.qc-toggle:has(input:checked) { color: var(--fg); border-color: color-mix(in srgb, var(--ok) 45%, transparent); background: color-mix(in srgb, var(--ok) 10%, var(--surface)); }
+.qc-toggle:has(input:checked) > svg { color: var(--ok-ink); }
+.qc-toggle:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; }
+.qc-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.qc-toggle > svg { flex: none; }
+
+/* chuyển con trước, con sau */
+.qc-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.qc-pager > span { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: center; }
+.qc-pager > .rd-btn { height: 48px; }
+
+/* một phiên bản trong lịch sử quyết định của con cua */
+.qc-version { display: grid; gap: 12px; padding: 16px; border-radius: 18px; background: var(--input); border: 1px solid var(--line); }
+
+/* đầu thẻ quyết định: mã cua bên trái, trạng thái bên phải */
+.qc-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 16px; }
+.qc-head > div { display: grid; gap: 4px; min-width: 0; }
+.qc-proposal { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.qc-proposal .op-badge { padding: 8px 14px 8px 12px; font-size: 15px; }

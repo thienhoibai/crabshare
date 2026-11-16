@@ -34,13 +34,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_busy || !_formKey.currentState!.validate()) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final (token, user) = await ref.read(authRepositoryProvider).login(_email.text.trim(), _password.text);
+      final (token, user) = await ref
+          .read(authRepositoryProvider)
+          .login(_email.text.trim(), _password.text);
+      if (!mounted) return;
       await ref.read(sessionProvider.notifier).signIn(token, user);
     } catch (e) {
       if (mounted) setState(() => _error = apiErrorMessage(e));
@@ -57,28 +60,45 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         child: Form(
           key: _formKey,
           child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
             children: [
               Align(
                 alignment: Alignment.centerLeft,
-                child: CircleIconButton(icon: Icons.arrow_back_rounded, onTap: () => context.go(Routes.onboarding)),
+                child: CircleIconButton(
+                  icon: Icons.arrow_back_rounded,
+                  onTap: () => context.go(Routes.onboarding),
+                ),
               ),
               const SizedBox(height: 28),
               const Align(
                 alignment: Alignment.centerLeft,
-                child: IconTile(icon: Icons.set_meal_rounded, background: AppColors.accent, foreground: AppColors.ink, size: 64),
+                child: IconTile(
+                  icon: Icons.set_meal_rounded,
+                  background: AppColors.accent,
+                  foreground: AppColors.ink,
+                  size: 64,
+                ),
               ),
               const SizedBox(height: 20),
               Text('Chào mừng\ntrở lại', style: text.displaySmall),
               const SizedBox(height: 8),
-              Text('Đăng nhập bằng tài khoản CrabShare của bạn.', style: text.bodyLarge?.copyWith(color: AppColors.inkMuted)),
+              Text(
+                'Đăng nhập bằng tài khoản CrabShare của bạn.',
+                style: text.bodyLarge?.copyWith(color: AppColors.inkMuted),
+              ),
               const SizedBox(height: 28),
               TextFormField(
                 controller: _email,
                 keyboardType: TextInputType.emailAddress,
                 autofillHints: const [AutofillHints.email],
-                decoration: const InputDecoration(hintText: 'Email', prefixIcon: Icon(Icons.mail_outline_rounded)),
-                validator: (v) => (v == null || !v.contains('@')) ? 'Nhập email hợp lệ' : null,
+                decoration: const InputDecoration(
+                  hintText: 'Email',
+                  prefixIcon: Icon(Icons.mail_outline_rounded),
+                ),
+                validator: (v) => (v == null || !v.contains('@'))
+                    ? 'Nhập email hợp lệ'
+                    : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -90,30 +110,55 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   hintText: 'Mật khẩu',
                   prefixIcon: const Icon(Icons.lock_outline_rounded),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                    icon: Icon(
+                      _obscure
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
                     onPressed: () => setState(() => _obscure = !_obscure),
                   ),
                 ),
-                validator: (v) => (v == null || v.length < 8) ? 'Mật khẩu tối thiểu 8 ký tự' : null,
+                validator: (v) => (v == null || v.length < 8)
+                    ? 'Mật khẩu tối thiểu 8 ký tự'
+                    : null,
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
-                Text(_error!, style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600)),
+                Text(
+                  _error!,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
               const SizedBox(height: 22),
               FilledButton(
                 onPressed: _busy ? null : _submit,
                 child: _busy
-                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
                     : const Text('Đăng nhập'),
               ),
               const SizedBox(height: 14),
               Center(
-                child: Text('Chưa có tài khoản? Đăng ký trên web CrabShare.', style: text.bodySmall),
+                child: Text(
+                  'Chưa có tài khoản? Đăng ký trên web CrabShare.',
+                  style: text.bodySmall,
+                ),
               ),
               if (showDemoAccounts) ...[
                 const SizedBox(height: 28),
-                Text('Tài khoản demo (chỉ dùng với dữ liệu seed)', style: text.bodySmall),
+                Text(
+                  'Tài khoản demo (chỉ dùng với dữ liệu seed)',
+                  style: text.bodySmall,
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,

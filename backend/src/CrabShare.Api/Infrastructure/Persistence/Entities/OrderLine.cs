@@ -23,6 +23,11 @@ public partial class OrderLine
     /// </summary>
     public decimal UnitPrice { get; set; }
 
+    /// <summary>
+    /// Phiên bản giá đang hiệu lực lúc đặt (TL-27 §6.1); unit_price bằng giá của bản ghi này
+    /// </summary>
+    public long PriceHistoryId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public virtual Batch Batch { get; set; } = null!;

@@ -1,6 +1,7 @@
 using DbUp;
 using DbUp.Engine;
 using DbUp.ScriptProviders;
+using Microsoft.Data.SqlClient;
 
 // Áp các file database/migrations/V*.sql theo thứ tự tên, mỗi file chỉ chạy một lần
 // (đã chạy thì ghi vào bảng dbo.SchemaVersions). Cách dùng: xem database/README.md
@@ -19,13 +20,21 @@ var connection = args.FirstOrDefault(a => !a.StartsWith("--"))
 var scriptsFolder = FindMigrationsFolder();
 Console.WriteLine($"Thư mục migration: {scriptsFolder}");
 
+var localDb = new SqlConnectionStringBuilder(connection).DataSource.StartsWith("(localdb)\\", StringComparison.OrdinalIgnoreCase);
+if (reset && !localDb)
+{
+    Console.Error.WriteLine("Refusing --reset outside LocalDB. Production migrations must never delete or recreate the database.");
+    return 2;
+}
+
 if (reset)
 {
     Console.WriteLine("--reset: xoá CSDL hiện có...");
     DropDatabase.For.SqlDatabase(connection);
 }
 
-EnsureDatabase.For.SqlDatabase(connection);
+// Remote/production databases must already exist with an explicitly chosen service tier.
+if (localDb) EnsureDatabase.For.SqlDatabase(connection);
 
 var upgrader = DeployChanges.To
     .SqlDatabase(connection)

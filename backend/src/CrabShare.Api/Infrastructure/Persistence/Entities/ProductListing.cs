@@ -40,9 +40,21 @@ public partial class ProductListing
 
     public DateTimeOffset UpdatedAt { get; set; }
 
+    public string? ImageUri { get; set; }
+
+    public string? ImageSha256 { get; set; }
+
+    public DateTimeOffset? HiddenAt { get; set; }
+
+    public long? HiddenBy { get; set; }
+
+    public string? HiddenReason { get; set; }
+
     public virtual Batch Batch { get; set; } = null!;
 
     public virtual ProductGrade Grade { get; set; } = null!;
+
+    public virtual AppUser? HiddenByNavigation { get; set; }
 
     public virtual ICollection<OrderLine> OrderLines { get; set; } = new List<OrderLine>();
 

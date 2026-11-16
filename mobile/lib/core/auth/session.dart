@@ -10,10 +10,17 @@ abstract final class Roles {
   static const operatorMember = 'OperatorMember';
   static const platformAdmin = 'PlatformAdmin';
   static const evidenceReviewer = 'EvidenceReviewer';
+  static const qcInspector = 'QcInspector';
 }
 
 class AppUser {
-  const AppUser({required this.userId, required this.email, required this.fullName, required this.roles, this.operatorId});
+  const AppUser({
+    required this.userId,
+    required this.email,
+    required this.fullName,
+    required this.roles,
+    this.operatorId,
+  });
 
   final int userId;
   final String email;
@@ -23,16 +30,24 @@ class AppUser {
 
   bool get isOperator => roles.contains(Roles.operatorMember);
   bool get isInvestor => roles.contains(Roles.investor);
+  bool get isQc => roles.contains(Roles.qcInspector);
+  bool get isCustomer => roles.contains(Roles.customer);
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
-        userId: json['userId'] as int,
-        email: json['email'] as String,
-        fullName: json['fullName'] as String,
-        roles: (json['roles'] as List).cast<String>(),
-        operatorId: json['operatorId'] as int?,
-      );
+    userId: json['userId'] as int,
+    email: json['email'] as String,
+    fullName: json['fullName'] as String,
+    roles: (json['roles'] as List).cast<String>(),
+    operatorId: json['operatorId'] as int?,
+  );
 
-  Map<String, dynamic> toJson() => {'userId': userId, 'email': email, 'fullName': fullName, 'roles': roles, 'operatorId': operatorId};
+  Map<String, dynamic> toJson() => {
+    'userId': userId,
+    'email': email,
+    'fullName': fullName,
+    'roles': roles,
+    'operatorId': operatorId,
+  };
 }
 
 class SessionState {
@@ -59,7 +74,10 @@ class SessionController extends Notifier<SessionState> {
       final raw = await _storage.read(key: _key);
       if (raw == null) return const SessionState();
       final json = jsonDecode(raw) as Map<String, dynamic>;
-      return SessionState(token: json['token'] as String?, user: AppUser.fromJson(json['user'] as Map<String, dynamic>));
+      return SessionState(
+        token: json['token'] as String?,
+        user: AppUser.fromJson(json['user'] as Map<String, dynamic>),
+      );
     } catch (_) {
       // Dữ liệu hỏng hoặc máy không đọc được kho bảo mật → coi như chưa đăng nhập.
       return const SessionState();
@@ -67,8 +85,11 @@ class SessionController extends Notifier<SessionState> {
   }
 
   Future<void> signIn(String token, AppUser user) async {
-    state = SessionState(token: token, user: user);
-    await _storage.write(key: _key, value: jsonEncode({'token': token, 'user': user.toJson()}));
+    await _storage.write(
+      key: _key,
+      value: jsonEncode({'token': token, 'user': user.toJson()}),
+    );
+    if (ref.mounted) state = SessionState(token: token, user: user);
   }
 
   Future<void> signOut() async {
@@ -77,4 +98,6 @@ class SessionController extends Notifier<SessionState> {
   }
 }
 
-final sessionProvider = NotifierProvider<SessionController, SessionState>(SessionController.new);
+final sessionProvider = NotifierProvider<SessionController, SessionState>(
+  SessionController.new,
+);

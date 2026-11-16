@@ -1,75 +1,111 @@
-import 'dart:typed_data';
+import 'dart:async';
 
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/capture/captured_photo.dart';
+import '../../../core/format/dates.dart';
+import '../../../core/format/money.dart';
+import '../../../shared/widgets/app_parts.dart';
 import '../../../shared/widgets/app_ui.dart';
 import '../data/operator_models.dart';
 import '../data/operator_repository.dart';
+import 'capture_requests_repository.dart';
+import 'evidence_explanation_repository.dart';
+import 'evidence_repository.dart';
 
-/// Chụp bằng chứng: chọn số hộp → chụp TRỰC TIẾP bằng camera (không lấy ảnh có sẵn) → gửi.
-/// Server ghi giờ nhận, vị trí, số hộp, băm ảnh và chạy nhận diện cua (TSK-13).
+/// Chụp ảnh tại một hộp đang có cua: chọn hộp, chụp bằng camera trong ứng dụng, gửi.
+/// Mở từ một yêu cầu chụp ([captureRequestId]) thì hộp đã chọn sẵn và chỉ gửi được trước hạn.
 class CapturePage extends ConsumerStatefulWidget {
-  const CapturePage({super.key, this.initialSlot});
-
+  const CapturePage({super.key, this.initialSlot, this.captureRequestId, this.requestBatchCode, this.requestDueAt});
   final String? initialSlot;
+  final int? captureRequestId;
+  final String? requestBatchCode;
+  final DateTime? requestDueAt;
 
   @override
   ConsumerState<CapturePage> createState() => _CapturePageState();
 }
 
 class _CapturePageState extends ConsumerState<CapturePage> {
-  final _search = TextEditingController();
-  String? _slot;
-  Uint8List? _photo;
-  DateTime? _capturedAt;
+  late final _search = TextEditingController(text: widget.initialSlot ?? '');
+  late String _query = widget.initialSlot ?? '';
+  Timer? _debounce;
+  Timer? _clock;
+
+  /// Hộp người dùng tự chọn. Chưa chọn thì lấy hộp mở sẵn theo [CapturePage.initialSlot], trừ khi đã bấm đổi hộp.
+  BoxSlot? _picked;
+  bool _preselect = true;
+  CapturedPhoto? _photo;
+  EvidenceResult? _result;
+  String? _error;
   bool _sending = false;
-  bool _onlyRequested = false;
+
+  bool get _forRequest => widget.captureRequestId != null;
+  bool get _expired => widget.requestDueAt != null && DateTime.now().isAfter(widget.requestDueAt!);
+  bool get _fulfilled => _forRequest && _result?.captureRequestStatus == 'Fulfilled';
 
   @override
   void initState() {
     super.initState();
-    _slot = widget.initialSlot;
+    // Yêu cầu chụp có hạn: đếm lùi và khoá nút khi quá hạn.
+    if (_forRequest) {
+      _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _clock?.cancel();
     _search.dispose();
     super.dispose();
   }
 
-  Future<void> _takePhoto() async {
-    // Chỉ dùng camera; vị trí GPS và dấu thời gian sẽ thêm ở task bằng chứng (geolocator).
-    final file = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 1600, imageQuality: 85);
-    if (file == null) return;
-    final bytes = await file.readAsBytes();
-    setState(() {
-      _photo = bytes;
-      _capturedAt = DateTime.now();
+  void _onSearch(String text) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) setState(() => _query = text.trim());
     });
   }
 
+  void _reset() => setState(() {
+    _picked = null;
+    _preselect = false;
+    _photo = null;
+    _result = null;
+    _error = null;
+    _sending = false;
+  });
+
   Future<void> _send(BoxSlot box) async {
-    setState(() => _sending = true);
+    final photo = _photo;
+    if (_sending || photo == null || _expired || _fulfilled) return;
+    final account = ref.read(farmAccountProvider);
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
     try {
-      await ref.read(operatorRepositoryProvider).uploadEvidence(
-            batchCode: box.batchCode!,
-            slotCode: box.slotCode,
-            bytes: _photo!,
-            capturedAt: _capturedAt!,
-          );
-      ref.invalidate(captureRequestsProvider);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã gửi ảnh hộp ${box.slotCode}')));
+      final result = await ref
+          .read(evidenceRepositoryProvider)
+          .upload(batchCode: box.batchCode ?? '', slotCode: box.slotCode, photo: photo, captureRequestId: widget.captureRequestId);
+      if (!mounted || ref.read(farmAccountProvider) != account) return;
       setState(() {
+        _result = result;
         _photo = null;
-        _slot = null;
       });
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      if (_fulfilled) _clock?.cancel();
+      ref.invalidate(captureBoxesProvider);
+      ref.invalidate(captureRequestsProvider);
+      ref.invalidate(operatorDashboardProvider);
+      if (result.reviewStatus == 'Flagged') ref.invalidate(flaggedEvidenceProvider);
+    } catch (error) {
+      if (mounted && ref.read(farmAccountProvider) == account) setState(() => _error = apiErrorMessage(error));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -77,140 +113,205 @@ class _CapturePageState extends ConsumerState<CapturePage> {
 
   @override
   Widget build(BuildContext context) {
-    final boxes = ref.watch(boxesProvider).value ?? const <BoxSlot>[];
-    final requested = {for (final r in ref.watch(captureRequestsProvider).value ?? const <CaptureRequest>[]) r.slotCode};
-    final query = _search.text.trim();
-    final visible = boxes
-        .where((b) => b.status == SlotStatus.occupied)
-        .where((b) => query.isEmpty || b.slotCode.contains(query))
-        .where((b) => !_onlyRequested || requested.contains(b.slotCode))
-        .toList();
-    final selected = boxes.where((b) => b.slotCode == _slot).firstOrNull;
+    // Đổi tài khoản giữa chừng thì bỏ ảnh và hộp đang chọn.
+    ref.listen(farmAccountProvider, (previous, next) {
+      if (previous != next) _reset();
+    });
+    final boxes = ref.watch(captureBoxesProvider(_query));
+    final page = boxes.value;
+    final list = [
+      for (final b in page?.items ?? const <BoxSlot>[])
+        if (!_forRequest || (b.slotCode == widget.initialSlot && b.batchCode == widget.requestBatchCode)) b,
+    ];
+    final selected = _picked ?? (_preselect && widget.initialSlot != null ? list.where((b) => b.slotCode == widget.initialSlot).firstOrNull : null);
+    final closed = _expired || _fulfilled;
 
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SubPageHeader(title: 'Chụp bằng chứng'),
-              const SizedBox(height: 14),
-              AppCard(
-                color: AppColors.ink,
-                padding: const EdgeInsets.all(14),
-                child: const Row(
-                  children: [
-                    IconTile(icon: Icons.verified_outlined, background: AppColors.accent, foreground: AppColors.ink, size: 40),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Ảnh chụp trực tiếp trong app. Hệ thống ghi giờ máy chủ, vị trí và số hộp vào bằng chứng.',
-                        style: TextStyle(color: Colors.white, fontSize: 13),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _search,
-                      onChanged: (_) => setState(() {}),
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(hintText: 'Tìm số hộp', prefixIcon: Icon(Icons.search_rounded)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  FilterChip(
-                    label: Text('Yêu cầu (${requested.length})'),
-                    selected: _onlyRequested,
-                    onSelected: (v) => setState(() => _onlyRequested = v),
-                    selectedColor: AppColors.accent,
-                    backgroundColor: AppColors.surface,
-                    side: BorderSide.none,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: GridView.builder(
-                  itemCount: visible.length,
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 76, mainAxisSpacing: 8, crossAxisSpacing: 8),
-                  itemBuilder: (context, i) {
-                    final box = visible[i];
-                    final isSelected = box.slotCode == _slot;
-                    final isRequested = requested.contains(box.slotCode);
-                    return Material(
-                      color: isSelected ? AppColors.ink : (isRequested ? AppColors.accent : AppColors.surface),
-                      borderRadius: BorderRadius.circular(16),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () => setState(() {
-                          _slot = box.slotCode;
-                          _photo = null;
-                        }),
-                        child: Center(
-                          child: Text(
-                            box.slotCode,
-                            style: TextStyle(fontWeight: FontWeight.w700, color: isSelected ? Colors.white : AppColors.ink),
+        child: AppRefreshIndicator(
+          onRefresh: () => ref.refresh(captureBoxesProvider(_query).future),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                sliver: SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SubPageHeader(title: 'Chụp ảnh tại hộp'),
+                      const SizedBox(height: 14),
+                      if (_forRequest) ...[_requestBanner(), const SizedBox(height: 12)],
+                      if (_result != null) ...[
+                        _ResultCard(result: _result!),
+                        // Ảnh trả lời yêu cầu chụp mà bị gắn cờ thì yêu cầu vẫn mở: cho chụp lại đúng hộp đó.
+                        if (!_forRequest || !closed) ...[
+                          const SizedBox(height: 12),
+                          OutlinedButton(
+                            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                            onPressed: _forRequest ? () => setState(() => _result = null) : _reset,
+                            child: Text(_forRequest ? 'Chụp lại' : 'Chụp hộp khác'),
                           ),
-                        ),
-                      ),
-                    );
-                  },
+                        ],
+                      ] else if (selected != null && !closed)
+                        ..._shoot(selected)
+                      else if (selected == null) ...[
+                        if (!_forRequest)
+                          TextField(
+                            controller: _search,
+                            keyboardType: TextInputType.number,
+                            onChanged: _onSearch,
+                            decoration: const InputDecoration(prefixIcon: Icon(Icons.search_rounded), hintText: 'Tìm số hộp'),
+                          ),
+                        if (boxes.isLoading && !boxes.hasValue) const LoadingSkeleton(rows: 1),
+                        if (boxes.hasError && !boxes.isLoading)
+                          ErrorView(message: apiErrorMessage(boxes.error!), onRetry: () => ref.invalidate(captureBoxesProvider(_query))),
+                        if (boxes.hasValue && list.isEmpty)
+                          EmptyState(
+                            icon: Icons.inventory_2_outlined,
+                            title: _forRequest ? 'Hộp ${widget.initialSlot} không còn cua của Lô này' : 'Không có hộp đang có cua khớp số này',
+                          ),
+                        if (!_forRequest && page != null && page.hasMore)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: Text('Gõ số hộp để tìm trong ${formatCount(page.total)} hộp.', style: Theme.of(context).textTheme.bodySmall),
+                          ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
-              if (selected != null) _CaptureSheet(box: selected, photo: _photo, sending: _sending, onShoot: _takePhoto, onSend: () => _send(selected)),
+              if (selected == null && _result == null && !_forRequest)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: 1.25,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) => _BoxChoice(box: list[i], onTap: () => setState(() => _picked = list[i])),
+                      childCount: list.length,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
       ),
     );
   }
+
+  Widget _requestBanner() {
+    final (text, color) = _fulfilled
+        ? ('Yêu cầu chụp đã hoàn thành', AppColors.success)
+        : _expired
+        ? ('Yêu cầu chụp đã quá hạn', AppColors.danger)
+        : ('Chụp hộp ${widget.initialSlot} · ${widget.requestDueAt == null ? '' : formatDueIn(widget.requestDueAt!)}', AppColors.accentText);
+    return Text(
+      text,
+      style: TextStyle(color: color, fontWeight: FontWeight.w700),
+    );
+  }
+
+  List<Widget> _shoot(BoxSlot box) => [
+    Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Hộp ${box.slotCode}', style: Theme.of(context).textTheme.titleLarge),
+              Text(box.batchCode ?? '', style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+        ),
+        if (!_forRequest) TextButton(onPressed: _sending ? null : _reset, child: const Text('Đổi hộp')),
+      ],
+    ),
+    const SizedBox(height: 12),
+    IgnorePointer(
+      ignoring: _sending,
+      child: PhotoField(
+        photo: _photo,
+        label: 'Chụp rõ số hộp',
+        onChanged: (photo) => setState(() {
+          _photo = photo;
+          _error = null;
+        }),
+      ),
+    ),
+    if (_error != null) ...[const SizedBox(height: 10), Text(_error!, style: const TextStyle(color: AppColors.danger))],
+    const SizedBox(height: 16),
+    FilledButton(onPressed: _sending || _photo == null ? null : () => _send(box), child: Text(_sending ? 'Đang gửi…' : 'Gửi ảnh')),
+  ];
 }
 
-class _CaptureSheet extends StatelessWidget {
-  const _CaptureSheet({required this.box, required this.photo, required this.sending, required this.onShoot, required this.onSend});
-
+/// Một hộp trong lưới chọn hộp cần chụp. Ảnh gần nhất bị gắn cờ hoặc bị loại thì nhắc chụp lại.
+class _BoxChoice extends StatelessWidget {
+  const _BoxChoice({required this.box, required this.onTap});
   final BoxSlot box;
-  final Uint8List? photo;
-  final bool sending;
-  final VoidCallback onShoot;
-  final VoidCallback onSend;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 10, bottom: 16),
-      child: AppCard(
-        child: Row(
+    final status = box.latestEvidence?.reviewStatus;
+    final retake = status == 'Flagged' || status == 'Rejected';
+    return Material(
+      color: retake ? AppColors.danger.withValues(alpha: 0.14) : AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: photo == null
-                  ? Container(width: 64, height: 64, color: AppColors.surfaceMuted, child: const Icon(Icons.photo_camera_outlined))
-                  : Image.memory(photo!, width: 64, height: 64, fit: BoxFit.cover),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Hộp ${box.slotCode}', style: Theme.of(context).textTheme.titleMedium),
-                  Text(box.batchCode ?? '', style: Theme.of(context).textTheme.bodySmall),
-                ],
+            Text(box.slotCode, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            if (retake)
+              const Text(
+                'Chụp lại',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.danger),
               ),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(minimumSize: const Size(110, 48)),
-              onPressed: sending ? null : (photo == null ? onShoot : onSend),
-              child: Text(photo == null ? 'Chụp' : (sending ? 'Đang gửi…' : 'Gửi ảnh')),
-            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ResultCard extends StatelessWidget {
+  const _ResultCard({required this.result});
+  final EvidenceResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final flagged = result.reviewStatus == 'Flagged';
+    final title = flagged
+        ? 'Ảnh cần thẩm định'
+        : result.reviewStatus == 'Watch'
+        ? 'Đã lưu ảnh, cần theo dõi'
+        : 'Đã lưu ảnh';
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(flagged ? Icons.flag_outlined : Icons.check_circle_outline_rounded, color: flagged ? AppColors.danger : AppColors.success),
+              const SizedBox(width: 8),
+              Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium)),
+            ],
+          ),
+          if (result.duplicateMatch != 'None') ...[
+            const SizedBox(height: 6),
+            Text(
+              result.duplicateMatch == 'Exact' ? 'Ảnh trùng với ảnh đã gửi trước đó.' : 'Ảnh giống một ảnh đã gửi, sẽ được kiểm tra lại.',
+              style: const TextStyle(color: AppColors.danger),
+            ),
+          ],
+        ],
       ),
     );
   }

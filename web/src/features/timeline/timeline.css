@@ -1,0 +1,11 @@
+/* Nhật trình của Lô: danh sách ghi nhận trong một ngày. Dùng biến màu của bộ kit. */
+.tl-list { display: grid; }
+.tl-item { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; padding: 16px 0; border-top: 1px solid var(--line); }
+.tl-item:first-child { padding-top: 0; border-top: 0; }
+.tl-item:last-child { padding-bottom: 0; }
+.tl-item__body { display: grid; gap: 10px; min-width: 0; }
+.tl-item__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.tl-item__head b { font-size: 16px; font-weight: 600; }
+.tl-item__head small { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tl-item__note { font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tl-item__photo { width: min(100%, 320px); }

@@ -1,0 +1,10 @@
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icon/crabshare.png
+  adaptive_icon_background: "#F4925C"
+  adaptive_icon_foreground: assets/icon/crabshare-foreground.png
+  adaptive_icon_foreground_inset: 16
+  adaptive_icon_monochrome: assets/icon/crabshare-foreground.png
+  remove_alpha_ios: true
+  background_color_ios: "#F4925C"

@@ -23,4 +23,8 @@
     <ProjectReference Include="..\..\src\CrabShare.Api\CrabShare.Api.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\..\database\migrations\V*.sql" Link="Migrations\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

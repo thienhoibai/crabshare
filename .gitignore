@@ -12,7 +12,11 @@ StrykerOutput/
 # ===== Node / web =====
 node_modules/
 web/dist/
+web/test-results/
+test-results/
+web/playwright-report/
 *.tsbuildinfo
+**/__pycache__/
 .env
 .env.local
 .env.*.local
@@ -35,3 +39,7 @@ ml/runs/
 *.swp
 .DS_Store
 Thumbs.db
+.superpowers/
+
+# Vercel CLI (deploy-web.yml tạo lúc chạy, không commit)
+.vercel

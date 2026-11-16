@@ -1,137 +1,119 @@
-import '../../../shared/models/batch_enums.dart';
+import '../../../core/api/json.dart';
 
-/// Lô đang chạy của hộ nuôi (màn "Hôm nay").
-class OperatorBatch {
-  const OperatorBatch({
+/// Mô hình dữ liệu khu người nuôi (BR v1.5). Mã trạng thái giữ nguyên chuỗi backend trả về;
+/// nhãn tiếng Việt lấy từ shared/status_labels.dart.
+
+/// Lô của hộ nuôi: GET /api/operators/me/batches.
+class FarmBatch {
+  const FarmBatch({
     required this.code,
     required this.title,
-    required this.crabType,
     required this.status,
-    required this.cycleDays,
-    required this.seedQuantity,
-    required this.aliveCount,
-    required this.loggedToday,
-    this.dayOfCycle,
-    this.latestLog,
+    this.mode = 'P',
+    this.crabType = '',
+    this.plannedQuantity = 0,
+    this.fundedQuantity,
+    this.hasHolding = true,
+    this.holdingDays,
+    this.restockCutoffDays = 0,
   });
 
   final String code;
   final String title;
-  final CrabType crabType;
-  final BatchStatus status;
-  final int cycleDays;
-  final int seedQuantity;
-  final int aliveCount;
+  final String status;
+
+  /// P, T hoặc A.
+  final String mode;
+  final String crabType;
+  final int plannedQuantity;
+  final int? fundedQuantity;
+
+  /// Lô có lưu nuôi trong hộp. Lô không lưu nuôi thì không có sơ đồ hộp.
+  final bool hasHolding;
+  final int? holdingDays;
+  final int restockCutoffDays;
+
+  int get quantity => fundedQuantity ?? plannedQuantity;
+
+  /// Lô đang có việc tại trại: nhận cua, lưu nuôi, thu hoạch, bán và giao.
+  bool get onFarm => const {'Sourcing', 'Stocked', 'InProduction', 'Harvesting', 'Selling', 'Liquidating'}.contains(status);
+
+  /// Xếp cua vào hộp và thả bù chỉ làm được khi Lô đang nhận cua hoặc đang lưu nuôi.
+  bool get canBox => hasHolding && (status == 'Sourcing' || status == 'InProduction');
+  bool get isHarvesting => status == 'Harvesting';
+  bool get canLog => status == 'InProduction' || status == 'Harvesting';
+
+  factory FarmBatch.fromJson(Json j) => FarmBatch(
+    code: str(j, 'batchCode'),
+    title: str(j, 'title'),
+    status: str(j, 'status'),
+    mode: str(j, 'batchMode', 'P'),
+    crabType: str(j, 'crabType'),
+    plannedQuantity: intOf(j, 'plannedQuantity'),
+    fundedQuantity: intOrNull(j, 'fundedQuantity'),
+    hasHolding: boolOf(j, 'hasHolding'),
+    holdingDays: intOrNull(j, 'holdingDays'),
+    restockCutoffDays: intOf(j, 'restockCutoffDays'),
+  );
+}
+
+/// Một Lô trong trang tổng quan: đã ghi nhật ký hôm nay chưa, còn mấy cảnh báo mở.
+class DashboardBatch {
+  const DashboardBatch({required this.code, required this.title, required this.status, this.openAlerts = 0, this.loggedToday = false});
+  final String code;
+  final String title;
+  final String status;
+  final int openAlerts;
   final bool loggedToday;
-  final int? dayOfCycle;
-  final DailyLog? latestLog;
 
-  double get survivalRate => seedQuantity == 0 ? 0 : aliveCount / seedQuantity;
+  factory DashboardBatch.fromJson(Json j) => DashboardBatch(
+    code: str(j, 'batchCode'),
+    title: str(j, 'title'),
+    status: str(j, 'status'),
+    openAlerts: intOf(j, 'openAlerts'),
+    loggedToday: boolOf(j, 'loggedToday'),
+  );
 }
 
-/// Khớp CHECK ck_production_log_plausibility_flag.
-enum PlausibilityFlag {
-  ok('Ok', 'Bình thường'),
-  outOfRange('OutOfRange', 'Ngoài ngưỡng'),
-  inconsistent('Inconsistent', 'Không nhất quán');
+/// GET /api/operators/me/dashboard: phần màn "Hôm nay" cần.
+class FarmDashboard {
+  const FarmDashboard({required this.farmName, this.asOf, this.batches = const []});
+  final String farmName;
+  final DateTime? asOf;
+  final List<DashboardBatch> batches;
 
-  const PlausibilityFlag(this.apiValue, this.label);
-  final String apiValue;
-  final String label;
+  /// Lô đang lưu nuôi chưa có nhật ký hôm nay.
+  List<DashboardBatch> get logsDue => [
+    for (final b in batches)
+      if (b.status == 'InProduction' && !b.loggedToday) b,
+  ];
+
+  factory FarmDashboard.fromJson(Json j) => FarmDashboard(
+    farmName: str(j, 'farmName'),
+    asOf: dateOrNull(j, 'asOf'),
+    batches: [for (final b in asJsonList(j['batches'])) DashboardBatch.fromJson(b)],
+  );
 }
 
-/// Nhật ký ngày của một lô — bảng production_log (người nuôi tự nhập, không có hệ thống nước).
-class DailyLog {
-  const DailyLog({
-    required this.batchCode,
-    required this.logDate,
-    this.waterTempC,
-    this.salinityPpt,
-    this.ph,
-    this.feedKg,
-    this.note,
-    this.flag = PlausibilityFlag.ok,
-    this.recordedAt,
-  });
-
-  final String batchCode;
-  final DateTime logDate;
-  final double? waterTempC;
-  final double? salinityPpt;
-  final double? ph;
-  final double? feedKg;
-  final String? note;
-  final PlausibilityFlag flag;
-  final DateTime? recordedAt;
-}
-
-/// Dữ liệu gửi lên khi lưu nhật ký (POST /api/production-logs — xem backend Features/Production).
-class DailyLogInput {
-  const DailyLogInput({required this.batchCode, this.waterTempC, this.salinityPpt, this.ph, this.feedKg, this.note});
-
-  final String batchCode;
-  final double? waterTempC;
-  final double? salinityPpt;
-  final double? ph;
-  final double? feedKg;
-  final String? note;
-
-  Map<String, dynamic> toJson() => {
-        'batchCode': batchCode,
-        'waterTempC': waterTempC,
-        'salinityPpt': salinityPpt,
-        'ph': ph,
-        'feedKg': feedKg,
-        'note': note,
-      };
-}
-
-/// Yêu cầu chụp ngẫu nhiên — bảng capture_request.
+/// Yêu cầu chụp ngẫu nhiên một hộp trước hạn.
 class CaptureRequest {
-  const CaptureRequest({required this.id, required this.batchCode, required this.slotCode, required this.dueAt});
-
+  const CaptureRequest({required this.id, required this.batchCode, required this.slotCode, required this.dueAt, this.status = 'Open'});
   final int id;
   final String batchCode;
   final String slotCode;
   final DateTime dueAt;
+  final String status;
+
+  factory CaptureRequest.fromJson(Json j) => CaptureRequest(
+    id: intOf(j, 'id'),
+    batchCode: str(j, 'batchCode'),
+    slotCode: str(j, 'slotCode'),
+    dueAt: dateOf(j, 'dueAt'),
+    status: str(j, 'status', 'Open'),
+  );
 }
 
-/// Khớp CHECK ck_alert_alert_type.
-enum AlertType {
-  mortality('Mortality', 'Hao hụt'),
-  waterQuality('WaterQuality', 'Chất lượng nước'),
-  milestoneDelay('MilestoneDelay', 'Trễ mốc'),
-  lowStock('LowStock', 'Sắp hết hàng'),
-  dataSilence('DataSilence', 'Thiếu dữ liệu'),
-  evidenceFlag('EvidenceFlag', 'Bằng chứng bị gắn cờ');
-
-  const AlertType(this.apiValue, this.label);
-  final String apiValue;
-  final String label;
-}
-
-enum AlertSeverity {
-  low('Low', 'Thấp'),
-  medium('Medium', 'Trung bình'),
-  high('High', 'Cao'),
-  critical('Critical', 'Nghiêm trọng');
-
-  const AlertSeverity(this.apiValue, this.label);
-  final String apiValue;
-  final String label;
-}
-
-enum AlertStatus {
-  open('Open', 'Chờ phản hồi'),
-  acknowledged('Acknowledged', 'Đã xác nhận'),
-  escalated('Escalated', 'Đã leo thang'),
-  resolved('Resolved', 'Đã xử lý');
-
-  const AlertStatus(this.apiValue, this.label);
-  final String apiValue;
-  final String label;
-}
-
+/// Cảnh báo vận hành của hộ nuôi. Loại, mức và trạng thái là mã backend (nhãn: alertType, severity, alert).
 class AlertItem {
   const AlertItem({
     required this.id,
@@ -143,57 +125,63 @@ class AlertItem {
     required this.ackDeadline,
     required this.status,
     this.responseNote,
+    this.acknowledgedAt,
   });
 
   final int id;
   final String batchCode;
-  final AlertType type;
-  final AlertSeverity severity;
+  final String type;
+  final String severity;
   final String message;
   final DateTime raisedAt;
   final DateTime ackDeadline;
-  final AlertStatus status;
+  final String status;
   final String? responseNote;
+  final DateTime? acknowledgedAt;
 
-  AlertItem copyWith({AlertStatus? status, String? responseNote}) => AlertItem(
-        id: id,
-        batchCode: batchCode,
-        type: type,
-        severity: severity,
-        message: message,
-        raisedAt: raisedAt,
-        ackDeadline: ackDeadline,
-        status: status ?? this.status,
-        responseNote: responseNote ?? this.responseNote,
-      );
+  bool get isOpen => status == 'Open' || status == 'Escalated';
+  bool get canAcknowledge => isOpen && acknowledgedAt == null;
+
+  factory AlertItem.fromJson(Json j) => AlertItem(
+    id: intOf(j, 'id'),
+    batchCode: str(j, 'batchCode'),
+    type: str(j, 'type'),
+    severity: str(j, 'severity'),
+    message: str(j, 'message'),
+    raisedAt: dateOf(j, 'raisedAt'),
+    ackDeadline: dateOf(j, 'ackDeadline'),
+    status: str(j, 'status'),
+    responseNote: strOrNull(j, 'responseNote'),
+    acknowledgedAt: dateOrNull(j, 'acknowledgedAt'),
+  );
 }
 
-/// Khớp CHECK ck_physical_slot_status.
-enum SlotStatus { available, occupied, maintenance }
+/// Ảnh bằng chứng gần nhất của một hộp.
+class BoxEvidenceSummary {
+  const BoxEvidenceSummary({required this.id, required this.receivedAt, required this.reviewStatus});
+  final int id;
+  final DateTime receivedAt;
+  final String reviewStatus;
 
-/// Một hộp nuôi đã đánh số (bảng physical_slot). Không cần sơ đồ trại — chỉ cần số hộp.
+  factory BoxEvidenceSummary.fromJson(Json j) =>
+      BoxEvidenceSummary(id: intOf(j, 'id'), receivedAt: dateOf(j, 'receivedAt'), reviewStatus: str(j, 'reviewStatus'));
+}
+
+/// Một hộp của trại trong danh sách chọn hộp (GET /api/boxes).
 class BoxSlot {
-  const BoxSlot({required this.slotCode, required this.status, this.batchCode});
-
+  const BoxSlot({required this.slotCode, this.status = 'Occupied', this.batchCode, this.latestEvidence});
   final String slotCode;
-  final SlotStatus status;
+  final String status;
   final String? batchCode;
-}
+  final BoxEvidenceSummary? latestEvidence;
 
-class TodaySummary {
-  const TodaySummary({required this.done, required this.total});
-  final int done;
-  final int total;
-}
-
-/// Một con cua đã cân lúc thu hoạch, kèm tem đã in.
-class HarvestedCrab {
-  const HarvestedCrab({required this.tagCode, required this.weightG, required this.gradeCode, this.activated = false});
-
-  final String tagCode;
-  final int weightG;
-  final String gradeCode;
-  final bool activated;
-
-  HarvestedCrab activate() => HarvestedCrab(tagCode: tagCode, weightG: weightG, gradeCode: gradeCode, activated: true);
+  factory BoxSlot.fromJson(Json j) {
+    final evidence = asJsonOrNull(j['latestEvidence']);
+    return BoxSlot(
+      slotCode: str(j, 'slotCode'),
+      status: str(j, 'status'),
+      batchCode: strOrNull(j, 'batchCode'),
+      latestEvidence: evidence == null ? null : BoxEvidenceSummary.fromJson(evidence),
+    );
+  }
 }

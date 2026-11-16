@@ -1,67 +1,92 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../shared/models/batch_enums.dart';
+import '../../core/api/api_client.dart';
+import '../../core/api/json.dart';
 
-/// Kết quả tra cứu một tem: cua thuộc lô nào, nuôi ở hộp số mấy, cân bao nhiêu, đi tới đơn nào.
-/// Không trả ảnh nuôi — người mua chỉ cần biết nguồn gốc (quyết định của nhóm về trang truy xuất).
-class TraceResult {
-  const TraceResult({
-    required this.tagCode,
-    required this.crabType,
-    required this.gradeCode,
-    required this.weightG,
-    required this.operatorName,
+/// Lô nguồn của cua trong đơn: vùng xuất xứ và ngày thu.
+class TraceSourceLot {
+  const TraceSourceLot({required this.originRegion, required this.harvestedOn, required this.species});
+  final String? originRegion;
+  final DateTime? harvestedOn;
+  final String species;
+
+  factory TraceSourceLot.fromJson(Json j) => TraceSourceLot(
+    originRegion: strOrNull(j, 'originRegion'),
+    harvestedOn: dateOrNull(j, 'harvestedOn'),
+    species: str(j, 'species'),
+  );
+}
+
+/// Một quy cách đã duyệt trong đơn và số con của quy cách đó.
+class TraceLine {
+  const TraceLine({required this.specCode, required this.specName, required this.crabs});
+  final String specCode;
+  final String specName;
+  final int crabs;
+
+  factory TraceLine.fromJson(Json j) =>
+      TraceLine(specCode: str(j, 'specCode'), specName: str(j, 'specName'), crabs: intOf(j, 'crabs'));
+}
+
+/// Trang truy xuất của mã QR đơn: Lô, trại, lô nguồn, quy cách đã duyệt, các lần đã giao.
+/// Không có thông tin cá nhân và không có mã từng con cua.
+class OrderTrace {
+  const OrderTrace({
+    required this.traceCode,
     required this.batchCode,
-    required this.slotCode,
-    required this.events,
+    required this.batchTitle,
+    required this.crabType,
+    required this.farmName,
+    required this.sourceLots,
+    required this.lines,
+    required this.deliveries,
+    required this.standardNote,
   });
-
-  final String tagCode;
-  final CrabType crabType;
-  final String gradeCode;
-  final int weightG;
-  final String operatorName;
+  final String traceCode;
   final String batchCode;
-  final String slotCode;
-  final List<TraceEvent> events;
+  final String batchTitle;
+  final String crabType;
+  final String farmName;
+  final List<TraceSourceLot> sourceLots;
+  final List<TraceLine> lines;
+  final List<DateTime> deliveries;
+  final String standardNote;
+
+  int get totalCrabs => lines.fold(0, (sum, l) => sum + l.crabs);
+
+  factory OrderTrace.fromJson(Json j) => OrderTrace(
+    traceCode: str(j, 'traceCode'),
+    batchCode: str(j, 'batchCode'),
+    batchTitle: str(j, 'batchTitle'),
+    crabType: str(j, 'crabType'),
+    farmName: str(j, 'farmName'),
+    sourceLots: [for (final s in asJsonList(j['sourceLots'])) TraceSourceLot.fromJson(s)],
+    lines: [for (final l in asJsonList(j['lines'])) TraceLine.fromJson(l)],
+    deliveries: [
+      for (final d in (j['deliveries'] as List?) ?? const [])
+        if (d is String && DateTime.tryParse(d) != null) DateTime.parse(d),
+    ],
+    standardNote: str(j, 'standardNote'),
+  );
 }
 
-class TraceEvent {
-  const TraceEvent(this.at, this.title, this.detail);
-  final DateTime at;
-  final String title;
-  final String detail;
-}
-
-/// Endpoint công khai: GET /api/trace/{tagCode} (backend Features/Harvest). Hiện dùng dữ liệu mẫu.
 abstract interface class TraceRepository {
-  Future<TraceResult> lookup(String tagCode);
+  Future<OrderTrace> lookup(String traceCode);
 }
 
-final traceRepositoryProvider = Provider<TraceRepository>((ref) => MockTraceRepository());
-final traceProvider = FutureProvider.family<TraceResult, String>((ref, tag) => ref.watch(traceRepositoryProvider).lookup(tag));
+class ApiTraceRepository implements TraceRepository {
+  ApiTraceRepository(this.dio);
+  final Dio dio;
 
-class MockTraceRepository implements TraceRepository {
   @override
-  Future<TraceResult> lookup(String tagCode) async {
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    if (tagCode.length != 12) throw ArgumentError('Mã tem gồm 12 ký tự.');
-    final now = DateTime.now();
-    return TraceResult(
-      tagCode: tagCode.toUpperCase(),
-      crabType: CrabType.fattening,
-      gradeCode: 'L2',
-      weightG: 420,
-      operatorName: 'HTX Nuôi cua Năm Căn',
-      batchCode: 'CS-2609-04',
-      slotCode: '1214',
-      events: [
-        TraceEvent(now.subtract(const Duration(days: 92)), 'Thả giống', 'Vào hộp 1214, lô CS-2609-04'),
-        TraceEvent(now.subtract(const Duration(days: 60)), 'Lột xác', 'Ghi nhận tại hộp 1214'),
-        TraceEvent(now.subtract(const Duration(days: 2)), 'Thu hoạch', 'Cân 420 g, hạng L2'),
-        TraceEvent(now.subtract(const Duration(days: 2)), 'Gắn tem', 'Tem in tại trại, kích hoạt bằng ảnh xác nhận'),
-        TraceEvent(now.subtract(const Duration(days: 1)), 'Đóng gói', 'Quét tem khi đóng gói đơn hàng'),
-      ],
-    );
-  }
+  Future<OrderTrace> lookup(String traceCode) async =>
+      OrderTrace.fromJson(await dio.getJson('/api/trace/orders/${Uri.encodeComponent(traceCode)}'));
 }
+
+final traceRepositoryProvider = Provider.autoDispose<TraceRepository>((ref) => ApiTraceRepository(ref.watch(dioProvider)));
+
+final traceProvider = FutureProvider.autoDispose.family<OrderTrace, String>(
+  (ref, traceCode) => ref.watch(traceRepositoryProvider).lookup(traceCode),
+  retry: (_, _) => null,
+);

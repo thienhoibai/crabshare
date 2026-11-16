@@ -1,0 +1,42 @@
+/* Kiểu riêng của nhóm trang bán, giao và tiền trong cổng người nuôi (tiền tố os-). Chỉ dùng biến của kit. */
+
+/* Lưới chọn mã cua (đơn có hoá đơn, cua bị từ chối khi nhận). */
+.os-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; max-height: 264px; overflow-y: auto; padding: 12px; border-radius: 18px; background: var(--input); border: 1px solid var(--line); }
+.os-pick .op-check { font-size: 13px; }
+.os-pick small { color: var(--muted); }
+
+/* Khung mã QR của đơn. */
+.os-qr { display: grid; justify-items: center; gap: 10px; padding: 18px; border-radius: 20px; background: var(--input); border: 1px solid var(--line); text-align: center; }
+.os-qr svg { border-radius: 10px; }
+.os-qr small { font-size: 12px; color: var(--muted); }
+.os-qr b { font-size: 13px; letter-spacing: 0.04em; }
+
+/* Xem trước tệp PDF hợp đồng. */
+.os-pdf { width: 100%; height: 560px; border: 1px solid var(--line); border-radius: 18px; background: var(--input); }
+.os-hash { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* Dòng chữ nhỏ dưới một ô bảng. */
+.os-sub { display: block; font-size: 12px; color: var(--muted); }
+.os-lines { display: grid; gap: 4px; font-size: 13px; }
+.os-cellbtns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+
+/* Thẻ biểu quyết, góp ý. */
+.os-item { display: grid; gap: 10px; padding: 16px; border-radius: 20px; background: var(--input); border: 1px solid var(--line); }
+.os-item p { margin: 0; font-size: 14px; }
+
+/* In phiếu giao hàng: chỉ còn nội dung trang, bỏ menu và các form. */
+@media print {
+  body:has(.os-sheet) .o2 { display: block; }
+  body:has(.os-sheet) .o2-side,
+  body:has(.os-sheet) .o2-mhead,
+  body:has(.os-sheet) .o2-top,
+  body:has(.os-sheet) .o2-tabbar,
+  body:has(.os-sheet) .op-toasts,
+  body:has(.os-sheet) .op-back,
+  body:has(.os-sheet) .os-noprint { display: none !important; }
+  body:has(.os-sheet) .o2-main { max-width: none; padding: 0; }
+  body:has(.os-sheet) .op-split { grid-template-columns: minmax(0, 1fr) 240px; }
+  body:has(.os-sheet) .op-aside { position: static; box-shadow: none; }
+  body:has(.os-sheet) .op-panel,
+  body:has(.os-sheet) .op-aside { break-inside: avoid; }
+}

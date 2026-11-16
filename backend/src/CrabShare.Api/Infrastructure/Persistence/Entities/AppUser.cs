@@ -65,6 +65,8 @@ public partial class AppUser
 
     public virtual ICollection<PriceHistory> PriceHistories { get; set; } = new List<PriceHistory>();
 
+    public virtual ICollection<ProductListing> ProductListings { get; set; } = new List<ProductListing>();
+
     public virtual ICollection<ProductionLog> ProductionLogs { get; set; } = new List<ProductionLog>();
 
     public virtual ICollection<SalesOrder> SalesOrders { get; set; } = new List<SalesOrder>();

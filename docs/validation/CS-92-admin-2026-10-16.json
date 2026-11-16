@@ -1,0 +1,37 @@
+{
+  "checkedAt": "2026-10-16T09:13:49.302Z",
+  "web": "https://crabshare.vercel.app",
+  "api": "https://crabshare-api.azurewebsites.net",
+  "results": [
+    {
+      "check": "actual-web-admin-login",
+      "status": "PASS"
+    },
+    {
+      "check": "dashboard-actual-api-request",
+      "status": "BLOCKED_DEPLOYMENT",
+      "reason": "No expected API request; screen may be stale or a placeholder"
+    },
+    {
+      "check": "users-actual-api-request",
+      "status": "PASS",
+      "http": 200
+    },
+    {
+      "check": "alerts-actual-api-request",
+      "status": "PASS",
+      "http": 200
+    },
+    {
+      "check": "audit-log-actual-api-request",
+      "status": "BLOCKED_DEPLOYMENT",
+      "reason": "No expected API request; screen may be stale or a placeholder"
+    },
+    {
+      "check": "no-unhandled-browser-errors",
+      "status": "PASS",
+      "count": 0
+    }
+  ],
+  "passed": false
+}

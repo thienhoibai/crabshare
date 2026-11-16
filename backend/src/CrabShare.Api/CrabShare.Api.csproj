@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>CrabShare.Api.Local</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,10 +16,21 @@
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.17.14" />
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="CrabShare.Api.Tests" />
     <ProjectReference Include="..\CrabShare.SettlementEngine\CrabShare.SettlementEngine.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Toàn văn bản công bố rủi ro / mẫu hợp đồng; API đọc và so SHA-256 với content_hash trong CSDL (V002) -->
+    <Content Include="..\..\..\database\reference\*.md" Link="Reference\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Font dựng PDF hợp đồng (Plus Jakarta Sans, OFL, có dấu tiếng Việt): bản sao font của web đặt trong project vì ảnh Docker chỉ copy backend/ -->
+    <Content Include="Reference\Fonts\*.ttf;Reference\Fonts\OFL-Plus-Jakarta-Sans.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -2,6 +2,8 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using CrabShare.Api.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace CrabShare.Api.Common.Auth;
 
@@ -25,6 +27,25 @@ public static class AuthSetup
             .AddJwtBearer(o =>
             {
                 o.MapInboundClaims = false;
+                // Khoá tài khoản có hiệu lực cả với JWT đã cấp, không chờ token hết hạn.
+                o.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        if (!long.TryParse(context.Principal?.FindFirstValue("sub"), out var userId)) { context.Fail("Invalid subject."); return; }
+                        var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                        var status = await db.AppUsers.AsNoTracking().Where(u => u.UserId == userId).Select(u => u.Status)
+                            .SingleOrDefaultAsync(context.HttpContext.RequestAborted);
+                        if (status != "Active") { context.Fail("Account unavailable."); return; }
+                        // Authorize against current database roles, including revoked grants on unexpired JWTs.
+                        var identity = (ClaimsIdentity)context.Principal!.Identity!;
+                        foreach (var claim in identity.FindAll(RoleClaim).ToArray()) identity.RemoveClaim(claim);
+                        foreach (var role in await db.AppUserRoles.AsNoTracking().Where(r => r.UserId == userId)
+                            .Select(r => r.RoleCode).ToListAsync(context.HttpContext.RequestAborted)) identity.AddClaim(new(RoleClaim, role));
+                        // Keep the signed operator_id. Existing ownership checks reject a token for a previous farm;
+                        // rebinding that claim to a new membership would silently grant the old token access there.
+                    },
+                };
                 o.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidIssuer = jwt.Issuer,
@@ -41,7 +62,8 @@ public static class AuthSetup
             .AddPolicy(Policies.Operator, p => p.RequireRole(Roles.OperatorMember))
             .AddPolicy(Policies.Investor, p => p.RequireRole(Roles.Investor))
             .AddPolicy(Policies.Customer, p => p.RequireRole(Roles.Customer, Roles.Investor))
-            .AddPolicy(Policies.Reviewer, p => p.RequireRole(Roles.EvidenceReviewer));
+            .AddPolicy(Policies.Reviewer, p => p.RequireRole(Roles.EvidenceReviewer))
+            .AddPolicy(Policies.Qc, p => p.RequireRole(Roles.QcInspector));
 
         return services;
     }
