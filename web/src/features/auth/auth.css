@@ -1,0 +1,125 @@
+.auth-shell {
+  --auth-width: 1120px;
+  min-height: 100dvh;
+  padding-bottom: 32px;
+}
+
+.auth-top,
+.auth-layout,
+.auth-shell .op-foot {
+  width: min(calc(100% - 40px), var(--auth-width));
+  margin-inline: auto;
+}
+
+.auth-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 60px;
+  border-bottom: 1px solid var(--line);
+}
+
+.auth-top .rd-logo { font-size: 17px; gap: 8px; }
+.auth-home { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: 14px; color: var(--muted); }
+.auth-home:hover { color: var(--fg); }
+.auth-shell :focus-visible { outline-color: color-mix(in srgb, var(--accent) 80%, var(--fg)); }
+
+.auth-layout {
+  display: grid;
+  width: min(calc(100% - 40px), 520px);
+  gap: 28px;
+  padding-block: 20px 36px;
+}
+
+.auth-content { min-width: 0; }
+.auth-heading { display: grid; gap: 8px; margin-bottom: 16px; }
+.auth-heading .rd-h2 { font-size: clamp(36px, 5vw, 60px); line-height: 1.06; }
+.auth-heading p { color: var(--muted); font-size: 14px; }
+.auth-heading a { color: var(--fg); font-weight: 650; text-decoration: underline; text-underline-offset: 4px; }
+
+.auth-layout .op-form { gap: 12px; }
+.auth-layout .op-form__row { gap: 10px; }
+.auth-layout .op-field { gap: 4px; }
+.auth-layout .op-input,
+.auth-layout .op-select {
+  min-height: 44px;
+  border-radius: 10px;
+  border-color: color-mix(in srgb, var(--fg) 46%, var(--bg));
+  background-color: var(--surface);
+  font-size: 16px;
+}
+.auth-layout .op-input:focus,
+.auth-layout .op-select:focus { border-color: var(--accent); }
+.auth-layout .op-input[aria-invalid="true"] { border-color: var(--danger); }
+.auth-layout .op-field__hint { color: var(--muted); }
+.auth-layout .op-check input { flex: 0 0 18px; }
+.auth-layout .op-subform { grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); align-items: start; }
+.auth-layout .auth-submit { min-height: 48px; border-radius: 10px; background: var(--accent); box-shadow: none; }
+.auth-demo { margin-top: 24px; }
+
+.auth-password-toggle {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 2px;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--muted);
+}
+.auth-password-toggle:hover { color: var(--fg); }
+
+.auth-roles { min-width: 0; }
+.auth-roles legend { margin-bottom: 6px; }
+.auth-roles .op-radio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.auth-roles .op-radio > label { display: flex; align-items: center; border-radius: 10px; gap: 8px; padding: 10px 12px; min-height: 44px; }
+.auth-roles .op-radio > label::before {
+  content: '';
+  flex: 0 0 14px;
+  height: 14px;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+}
+.auth-roles .op-radio > label:has(input:checked)::before { border: 4px solid var(--accent); }
+.auth-role-hint { margin-top: 4px; font-size: 13px; color: var(--muted); }
+.auth-consent .op-field__error { display: block; margin: 4px 0 0 28px; }
+
+.auth-photo {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  align-items: end;
+  min-height: 152px;
+  padding: 16px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #182420;
+  color: #fff;
+}
+.auth-photo img,
+.auth-photo::after { position: absolute; inset: 0; width: 100%; height: 100%; }
+.auth-photo img { z-index: -2; object-fit: cover; object-position: center 30%; }
+.auth-photo::after { content: ''; z-index: -1; background: linear-gradient(to top, rgb(10 20 18 / 94%), rgb(10 20 18 / 62%) 24%, transparent 58%); }
+.auth-photo figcaption { display: grid; gap: 2px; font-size: 13px; line-height: 1.4; }
+.auth-photo strong { font-size: 17px; }
+
+@media (min-width: 1024px) {
+  .auth-top { min-height: 72px; }
+  .auth-layout {
+    width: min(calc(100% - 64px), var(--auth-width));
+    grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+    align-items: center;
+    gap: clamp(40px, 6vw, 88px);
+    padding-block: 36px 48px;
+  }
+  .auth-heading { margin-bottom: 24px; }
+  .auth-layout .op-form, .auth-layout .op-form__row { gap: 14px; }
+  .auth-layout .op-field { gap: 6px; }
+  .auth-layout .op-input, .auth-layout .op-select { min-height: 48px; }
+  .auth-photo { align-self: start; min-height: clamp(560px, calc(100dvh - 174px), 700px); padding: 32px; border-radius: 24px; }
+  .auth-photo img { object-position: center 42%; }
+  .auth-photo figcaption { font-size: 16px; }
+  .auth-photo strong { font-size: 28px; }
+}

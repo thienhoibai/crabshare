@@ -13,20 +13,24 @@ import { OpBadge, OpBtn, OpModal, OpNote } from './ui'
 /* ---------- form ---------- */
 
 /** Nhãn + ô nhập + gợi ý hoặc lỗi. Bọc quanh Input, Select, TextArea, MoneyInput, OpPhoto. */
-export function Field({ label, hint, error, required, children, className = '' }: {
+export function Field({ label, hint, error, required, children, htmlFor, descriptionId, className = '' }: {
   label: ReactNode
   hint?: ReactNode
   error?: ReactNode
   required?: boolean
   children: ReactNode
+  htmlFor?: string
+  descriptionId?: string
   className?: string
 }) {
+  const Wrapper = htmlFor ? 'div' : 'label'
+  const title = <>{label}{required && <b className="op-danger" aria-hidden="true">*</b>}</>
   return (
-    <label className={`op-field ${error ? 'is-error' : ''} ${className}`}>
-      <span className="op-label">{label}{required && <b className="op-danger" aria-hidden="true">*</b>}</span>
+    <Wrapper className={`op-field ${error ? 'is-error' : ''} ${className}`}>
+      {htmlFor ? <label className="op-label" htmlFor={htmlFor}>{title}</label> : <span className="op-label">{title}</span>}
       {children}
-      {error ? <span className="op-field__error">{error}</span> : hint ? <span className="op-field__hint">{hint}</span> : null}
-    </label>
+      {error ? <span id={descriptionId} className="op-field__error">{error}</span> : hint ? <span id={descriptionId} className="op-field__hint">{hint}</span> : null}
+    </Wrapper>
   )
 }
 
@@ -128,10 +132,12 @@ export function RadioCards<T extends string>({ name, value, onChange, options }:
 }
 
 /** Ô đánh dấu có nhãn. */
-export function Checkbox({ checked, onChange, children, disabled }: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode; disabled?: boolean }) {
+export function Checkbox({ checked, onChange, children, ...props }: {
+  checked: boolean; onChange: (v: boolean) => void; children: ReactNode
+} & Pick<InputHTMLAttributes<HTMLInputElement>, 'name' | 'disabled' | 'required' | 'aria-describedby' | 'aria-invalid'>) {
   return (
     <label className="op-check">
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <input {...props} type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span>{children}</span>
     </label>
   )
