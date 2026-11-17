@@ -7,6 +7,20 @@ const session = (role: Role): AuthResponse => ({ accessToken: `token-${role}`, e
 /** Trang đích sau đăng nhập gọi nhiều API riêng; ở đây chỉ kiểm tra chuyển hướng và khung cổng nên cho mọi GET trả 404. */
 const noData = (api: Api) => api.get(/^\/api\//, () => reply(404, { status: 404, detail: 'Không có dữ liệu.' }))
 
+test('chuyển qua lại giữa đăng ký và đăng nhập trên màn hình nhỏ bằng bàn phím', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 })
+  await page.goto('/dang-ky')
+  const modes = page.getByRole('navigation', { name: 'Đăng ký và đăng nhập' })
+  await expect(modes.locator('[aria-current="page"]')).toHaveText('Đăng ký')
+  await modes.getByRole('link', { name: 'Đăng nhập' }).press('Enter')
+  await expect(page).toHaveURL(/\/dang-nhap$/)
+  await expect(modes.locator('[aria-current="page"]')).toHaveText('Đăng nhập')
+  await modes.getByRole('link', { name: 'Đăng ký' }).press('Enter')
+  await expect(page).toHaveURL(/\/dang-ky$/)
+  await expect(page.getByRole('heading', { name: 'Đăng ký', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+})
+
 test('các ô đăng ký thẳng hàng và cùng chiều cao khi có gợi ý mật khẩu', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/dang-ky')
