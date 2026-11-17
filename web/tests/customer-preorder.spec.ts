@@ -107,12 +107,9 @@ test('đặt theo số con và theo kg, chọn nơi nhận, gửi đơn, quét Q
   await expect(aside(page)).toContainText(`Tiền cọc 30%${vnd(2_685_600)}`)
   await expect(aside(page)).toContainText('Đơn được giữ 30 phút để bạn chuyển cọc.')
 
-  // Nơi nhận: mặc định là địa chỉ mặc định; địa chỉ thiếu toạ độ không chọn được.
+  // Địa chỉ mặc định được chọn trước, địa chỉ nhập tay vẫn chọn được.
   await expect(page.getByRole('radio', { name: /Nhà hàng Biển Xanh/ })).toBeChecked()
-  await expect(page.getByRole('radio', { name: /Kho Thủ Đức/ })).toBeDisabled()
-  await expect(page.getByText('Thiếu toạ độ', { exact: true })).toBeVisible()
-  // Có thể bổ sung vị trí của địa chỉ ngay trong form đặt trước.
-  await expect(page.getByRole('button', { name: 'Bổ sung vị trí cho Kho Thủ Đức' })).toBeVisible()
+  await expect(page.getByRole('radio', { name: /Kho Thủ Đức/ })).toBeEnabled()
   // Mỗi địa chỉ là một thẻ bấm: ô radio nằm ẩn dưới nhãn, người dùng bấm vào thẻ.
   await page.getByText('Bếp trung tâm Quận 7', { exact: true }).click()
   await expect(page.getByRole('radio', { name: /Bếp trung tâm Quận 7/ })).toBeChecked()
@@ -173,16 +170,34 @@ test('đơn dưới mức tối thiểu hoặc vượt số còn đặt được
   expect(api.writes()).toEqual([])
 })
 
-test('chưa có nơi nhận hàng thì phải thêm địa chỉ trước khi đặt', async ({ page, api }) => {
+test('thêm địa chỉ nhập tay ngay trong lúc đặt trước và tiếp tục tới bước cọc', async ({ page, api }) => {
   mockCustomer(api)
-  api.get('/api/me/sites', [])
+  const address = sites[2]
+  let saved = false
+  api.get('/api/me/sites', () => saved ? [sites[0], address] : [])
+  api.post('/api/me/sites', () => {
+    saved = true
+    return reply(201, address)
+  })
+  api.post('/api/preorders', () => reply(201, { ...orderPending, deliveryAddress: address.addressLine, deliveryDistanceKm: null }))
   await signIn(page, 'Customer')
   await page.goto(URL)
-  await page.getByLabel('Số con Cua gạch L hạng A', { exact: true }).fill('30')
+  const count = page.getByLabel('Số con Cua gạch L hạng A', { exact: true })
+  await count.fill('30')
   await expect(aside(page)).toContainText('Chọn hoặc thêm nơi nhận hàng.')
   await expect(submit(page)).toBeDisabled()
   await page.getByRole('button', { name: 'Thêm địa chỉ' }).click()
-  await expect(page.getByRole('dialog', { name: 'Thêm địa điểm nhận hàng' })).toBeVisible()
+  const dialog = page.getByRole('dialog', { name: 'Thêm địa điểm nhận hàng' })
+  await dialog.getByLabel('Tên địa điểm').fill(address.name)
+  await dialog.getByLabel(/^Địa chỉ/).fill(address.addressLine)
+  await dialog.getByRole('button', { name: 'Thêm địa điểm' }).click()
+  await expect(dialog).toBeHidden()
+  expect(api.sent('POST', '/api/me/sites')[0].body).toMatchObject({ latitude: null, longitude: null })
+  await expect(page.getByRole('radio', { name: /Kho Thủ Đức/ })).toBeChecked()
+  await expect(count).toHaveValue('30')
+  await submit(page).click()
+  await expect(page.getByRole('heading', { name: 'Chuyển cọc để giữ đơn' })).toBeVisible()
+  expect(api.sent('POST', '/api/preorders')[0].body).toMatchObject({ deliverySiteId: address.siteId })
 })
 
 test('bổ sung vị trí nhận hàng trong form đặt trước và giữ số lượng đã nhập', async ({ page, api }) => {
@@ -197,11 +212,14 @@ test('bổ sung vị trí nhận hàng trong form đặt trước và giữ số
   await page.goto(URL)
   const count = page.getByLabel('Số con Cua gạch L hạng A', { exact: true })
   await count.fill('30')
-  await expect(submit(page)).toBeDisabled()
+  await expect(submit(page)).toBeEnabled()
   await page.getByRole('button', { name: 'Bổ sung vị trí cho Kho Thủ Đức' }).click()
   const dialog = page.getByRole('dialog', { name: 'Sửa Kho Thủ Đức' })
+  await dialog.getByText('Vị trí trên bản đồ (không bắt buộc)', { exact: true }).click()
   await dialog.getByLabel('Toạ độ').fill('10.7993, 106.6802')
   await dialog.getByRole('button', { name: 'Lưu địa điểm' }).click()
+  await expect(dialog).toBeHidden()
+  expect(api.sent('PUT', '/api/me/sites/13')[0].body).toMatchObject({ latitude: 10.7993, longitude: 106.6802 })
   await expect(page.getByRole('radio', { name: /Kho Thủ Đức/ })).toBeChecked()
   await expect(count).toHaveValue('30')
   await expect(submit(page)).toBeEnabled()

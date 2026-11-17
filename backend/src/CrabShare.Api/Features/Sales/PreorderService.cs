@@ -59,14 +59,14 @@ public sealed class PreorderService(AppDbContext db, ICurrentUser me, TimeProvid
             var site = await db.PartySites.SingleOrDefaultAsync(s => s.SiteId == req.DeliverySiteId && s.PartyId == partyId &&
                            s.SiteType == "DeliveryAddress" && s.Status == "Active", ct)
                        ?? throw new NotFoundException("preorder.site_not_found", "Không tìm thấy địa chỉ giao của bạn.");
-            if (site.Latitude is null || site.Longitude is null)
-                throw new BusinessRuleException("preorder.site_coordinates", "Địa chỉ giao phải có toạ độ (chọn trên bản đồ) để tính khoảng cách (BR-084).");
             var dispatch = await db.PartySites.AsNoTracking().SingleOrDefaultAsync(s => s.SiteId == batch.DispatchSiteId, ct);
             if (dispatch?.Latitude is null || dispatch.Longitude is null)
                 throw new BusinessRuleException("preorder.no_dispatch_site", "Lô chưa khai điểm xuất hàng có toạ độ nên chưa nhận đặt trước (BR-084).");
-            var distance = decimal.Round(BatchExploreService.DistanceKm(site.Latitude.Value, site.Longitude.Value, dispatch.Latitude.Value, dispatch.Longitude.Value), 1);
-            if (batch.DeliveryRadiusKm is { } radius && distance > radius)
-                throw new BusinessRuleException("preorder.out_of_radius", $"Địa chỉ cách điểm xuất hàng {distance} km, ngoài bán kính giao {radius} km (BR-085).");
+            decimal? distance = site.Latitude is { } lat && site.Longitude is { } lng
+                ? decimal.Round(BatchExploreService.DistanceKm(lat, lng, dispatch.Latitude.Value, dispatch.Longitude.Value), 1)
+                : null;
+            if (batch.DeliveryRadiusKm is { } radius && distance is { } km && km > radius)
+                throw new BusinessRuleException("preorder.out_of_radius", $"Địa chỉ cách điểm xuất hàng {km} km, ngoài bán kính giao {radius} km (BR-085).");
 
             var offers = await db.Offers.Include(o => o.Spec).Where(o => o.BatchId == batch.BatchId).ToListAsync(ct);
             var lines = new List<SalesOrderLine>();

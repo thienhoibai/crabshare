@@ -1,7 +1,4 @@
-/* Form thêm hoặc sửa một địa điểm nhận hàng (POST, PUT /api/me/sites, loại DeliveryAddress).
-   Dùng ở trang Địa điểm nhận hàng và ngay trong trang đặt trước. Toạ độ không bắt buộc khi lưu địa điểm; nó chỉ cần
-   lúc đặt trước, vì đơn tính khoảng cách từ điểm xuất hàng của Lô tới địa chỉ giao (BR-084, BR-085). Form mở từ
-   trang đặt trước truyền needLocation để vẫn đòi toạ độ, vì địa điểm đó dùng cho đơn ngay. */
+/* Form thêm hoặc sửa địa điểm nhận hàng trong sổ địa chỉ và khi đặt trước (POST, PUT /api/me/sites). */
 import { useState, type FormEvent } from 'react'
 import { LocateFixed } from 'lucide-react'
 import type { PartySiteResponse, SiteRequest } from '../../shared/api/api.gen'
@@ -18,12 +15,10 @@ export function parseCoords(text: string): { latitude: number; longitude: number
   return Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 ? { latitude, longitude } : null
 }
 
-export function SiteForm({ site, onDone, onCancel, needLocation = false }: {
+export function SiteForm({ site, onDone, onCancel }: {
   site?: PartySiteResponse
   onDone: (site: PartySiteResponse) => void
   onCancel: () => void
-  /** true khi địa điểm sẽ dùng ngay cho một đơn đặt trước: lúc đó phải có toạ độ. */
-  needLocation?: boolean
 }) {
   const [name, setName] = useState(site?.name ?? '')
   const [addressLine, setAddressLine] = useState(site?.addressLine ?? '')
@@ -42,7 +37,7 @@ export function SiteForm({ site, onDone, onCancel, needLocation = false }: {
   })
 
   const locate = () => {
-    if (!navigator.geolocation) return setMessage('Trình duyệt này không lấy được vị trí. Hãy dán toạ độ từ bản đồ.')
+    if (!navigator.geolocation) return setMessage('Trình duyệt này không lấy được vị trí. Bạn vẫn có thể lưu địa chỉ đã nhập.')
     setLocating(true)
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -51,7 +46,7 @@ export function SiteForm({ site, onDone, onCancel, needLocation = false }: {
         setLocating(false)
       },
       () => {
-        setMessage('Không lấy được vị trí hiện tại. Hãy dán toạ độ từ bản đồ.')
+        setMessage('Không lấy được vị trí hiện tại. Bạn vẫn có thể lưu địa chỉ đã nhập.')
         setLocating(false)
       },
       { enableHighAccuracy: true, timeout: 10_000 },
@@ -65,7 +60,6 @@ export function SiteForm({ site, onDone, onCancel, needLocation = false }: {
     const point = typed ? parseCoords(typed) : null
     if (!name.trim() || !addressLine.trim()) return setMessage('Nhập tên địa điểm và địa chỉ.')
     if (typed && !point) return setMessage('Toạ độ chưa đúng. Ví dụ: 10.7769, 106.7009.')
-    if (!point && needLocation) return setMessage('Cần toạ độ để tính khoảng cách giao của đơn. Bấm "Dùng vị trí hiện tại" hoặc dán toạ độ từ bản đồ.')
     setMessage('')
     save.mutate({
       siteType: 'DeliveryAddress',
@@ -80,17 +74,6 @@ export function SiteForm({ site, onDone, onCancel, needLocation = false }: {
     })
   }
 
-  const locationFields = (
-    <>
-      <Field label="Toạ độ" required={needLocation} hint="Dán vĩ độ và kinh độ từ bản đồ hoặc dùng vị trí hiện tại.">
-        <Input value={coords} placeholder="10.7769, 106.7009" required={needLocation} onChange={(e) => setCoords(e.target.value)} />
-      </Field>
-      <div>
-        <OpBtn type="button" variant="ghost" sm onClick={locate} disabled={locating}><LocateFixed size={15} /> {locating ? 'Đang lấy vị trí…' : 'Dùng vị trí hiện tại'}</OpBtn>
-      </div>
-    </>
-  )
-
   return (
     <form className="op-form" onSubmit={submit} noValidate>
       <div className="op-form__row">
@@ -102,9 +85,16 @@ export function SiteForm({ site, onDone, onCancel, needLocation = false }: {
         </Field>
       </div>
       <Field label="Địa chỉ" required>
-        <Input value={addressLine} maxLength={300} autoComplete="street-address" onChange={(e) => setAddressLine(e.target.value)} />
+        <Input value={addressLine} maxLength={300} autoComplete="street-address" placeholder="Số nhà, đường, phường/xã, tỉnh/thành" onChange={(e) => setAddressLine(e.target.value)} />
       </Field>
-      {needLocation ? locationFields : <OpMore label="Vị trí trên bản đồ (không bắt buộc)">{locationFields}</OpMore>}
+      <OpMore label="Vị trí trên bản đồ (không bắt buộc)">
+        <Field label="Toạ độ" hint="Dán vĩ độ và kinh độ từ bản đồ hoặc dùng vị trí hiện tại.">
+          <Input value={coords} placeholder="10.7769, 106.7009" onChange={(e) => setCoords(e.target.value)} />
+        </Field>
+        <div>
+          <OpBtn type="button" variant="ghost" sm onClick={locate} disabled={locating}><LocateFixed size={15} /> {locating ? 'Đang lấy vị trí…' : 'Dùng vị trí hiện tại'}</OpBtn>
+        </div>
+      </OpMore>
       <OpMore label="Tuỳ chọn thêm">
         <div className="op-form__row">
           <Field label="Tên người nhận">

@@ -6,7 +6,7 @@ namespace CrabShare.Api.Features.Sales;
 public sealed class PreorderRequest : IValidatableObject
 {
     [Required, StringLength(20)] public string BatchCode { get; set; } = "";
-    /// <summary>Địa chỉ giao (địa điểm loại DeliveryAddress) của khách, có toạ độ (BR-015, BR-084).</summary>
+    /// <summary>Địa chỉ giao của khách (loại DeliveryAddress). Dùng toạ độ, nếu có, để kiểm tra bán kính giao.</summary>
     [Range(1, long.MaxValue)] public long DeliverySiteId { get; set; }
     [Required] public List<PreorderLineRequest> Lines { get; set; } = [];
     /// <summary>Chia đơn thành các đợt giao (BR-234). Bỏ trống thì một đợt duy nhất.</summary>
