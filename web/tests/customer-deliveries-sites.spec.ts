@@ -62,8 +62,8 @@ test.describe('/khach/dia-diem', () => {
     await expect(cards).toHaveCount(3)
     await expect(cards.filter({ hasText: 'Nhà hàng Biển Xanh' })).toContainText('Mặc định')
     await expect(cards.filter({ hasText: 'Nhà hàng Biển Xanh' })).toContainText('12 Lê Lợi, Quận 1, TP. Hồ Chí Minh')
-    await expect(cards.filter({ hasText: 'Kho Thủ Đức' })).toContainText('Thiếu toạ độ')
-    await expect(cards.filter({ hasText: 'Bếp trung tâm Quận 7' })).not.toContainText('Thiếu toạ độ')
+    await expect(cards.filter({ hasText: 'Kho Thủ Đức' })).toContainText('Chưa có vị trí')
+    await expect(cards.filter({ hasText: 'Bếp trung tâm Quận 7' })).not.toContainText('Chưa có vị trí')
     expect(api.sent('GET', '/api/me/sites')[0].query).toEqual({ siteType: 'DeliveryAddress' })
   })
 
@@ -80,6 +80,7 @@ test.describe('/khach/dia-diem', () => {
 
     await dialog.getByLabel('Tên địa điểm').fill('  Quán Hải Sản Bờ Kè ')
     await dialog.getByLabel('Địa chỉ').fill('3 Trường Sa, Phú Nhuận')
+    await dialog.getByText('Vị trí trên bản đồ (không bắt buộc)', { exact: true }).click()
     await dialog.getByLabel('Toạ độ').fill('ở gần cầu')
     await save.click()
     await expect(dialog).toContainText('Toạ độ chưa đúng. Ví dụ: 10.7769, 106.7009.')
@@ -104,7 +105,8 @@ test.describe('/khach/dia-diem', () => {
 
     await page.getByRole('button', { name: 'Thêm địa điểm' }).click()
     const dialog = page.getByRole('dialog', { name: 'Thêm địa điểm nhận hàng' })
-    await expect(dialog).toContainText('Chưa bắt buộc. Khi đặt trước mới cần, để tính khoảng cách giao.')
+    await expect(dialog.getByText('Vị trí trên bản đồ (không bắt buộc)', { exact: true })).toBeVisible()
+    await expect(dialog.getByLabel('Toạ độ')).toBeHidden()
     await dialog.getByLabel('Tên địa điểm').fill('Kho Bình Thạnh')
     await dialog.getByLabel('Địa chỉ').fill('8 Điện Biên Phủ, Bình Thạnh')
     await dialog.getByRole('button', { name: 'Thêm địa điểm' }).click()
@@ -123,6 +125,7 @@ test.describe('/khach/dia-diem', () => {
     api.put('/api/me/sites/12', { ...sites[1], name: 'Bếp trung tâm Quận 7 (cổng sau)' })
     await page.locator('main .op-card').filter({ hasText: 'Bếp trung tâm Quận 7' }).getByRole('button', { name: 'Sửa' }).click()
     const dialog = page.getByRole('dialog', { name: 'Sửa Bếp trung tâm Quận 7' })
+    await dialog.getByText('Vị trí trên bản đồ (không bắt buộc)', { exact: true }).click()
     await expect(dialog.getByLabel('Toạ độ')).toHaveValue('10.77, 106.7')
     await dialog.getByLabel('Tên địa điểm').fill('Bếp trung tâm Quận 7 (cổng sau)')
     await dialog.getByRole('button', { name: 'Lưu địa điểm' }).click()

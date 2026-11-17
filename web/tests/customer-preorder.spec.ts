@@ -1,8 +1,9 @@
 /* /khach/dat-truoc/:code — khách đặt trước theo quy cách ở một Lô, tới bước chuyển cọc qua VietQR. */
 import type { PreorderRequest, SimulatePaymentRequest, WebhookResult } from '../src/shared/api/api.gen'
 import { aside, dateFromNow, expect, reply, signIn, test, vnd, type Api, type Page } from './support/app'
-import { depositRequest, mockCustomer, noDeliveries, orderDeposited, orderPending } from './support/customer'
-import { availabilityP, batchP } from './support/public'
+import { depositRequest, mockCustomer, noDeliveries, orderDeposited, orderPending, sites } from './support/customer'
+import { party } from './support/investor'
+import { availabilityP, batchP, batchPNoOffers } from './support/public'
 
 const URL = `/khach/dat-truoc/${batchP.batchCode}`
 const submit = (page: Page) => aside(page).getByRole('button', { name: 'Đặt trước' })
@@ -13,6 +14,64 @@ async function open(page: Page, api: Api) {
   await page.goto(URL)
   await expect(page.getByRole('heading', { name: 'Đặt trước', level: 1 })).toBeVisible()
 }
+
+test('chọn lô và đặt trước trong cổng khách hàng', async ({ page, api }) => {
+  mockCustomer(api)
+  await signIn(page, 'Customer')
+  await page.goto('/khach')
+  const menu = page.getByRole('navigation', { name: 'Menu Khách hàng' })
+  const catalog = menu.getByRole('link', { name: 'Lô nhận đặt trước' })
+  await catalog.click()
+  await expect(page).toHaveURL(/\/khach\/lo$/)
+  await expect(catalog).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('link', { name: batchPNoOffers.title })).toHaveCount(0)
+
+  await page.getByRole('link', { name: batchP.title }).click()
+  await expect(page).toHaveURL(new RegExp(`/khach/lo/${batchP.batchCode}$`))
+  await expect(catalog).toHaveAttribute('aria-current', 'page')
+  await page.getByRole('main').getByRole('link', { name: 'Đặt trước', exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(`${URL}$`))
+  await expect(catalog).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('heading', { name: 'Quy cách và số lượng' })).toBeVisible()
+  await expect(page.getByRole('link', { name: `Lô ${batchP.batchCode}`, exact: true })).toHaveAttribute('href', `/khach/lo/${batchP.batchCode}`)
+})
+
+test('trên điện thoại nhìn thấy nút đặt trước và nhập số lượng ngay dưới tên quy cách', async ({ page, api }) => {
+  mockCustomer(api)
+  await signIn(page, 'Customer')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/khach/lo/${batchP.batchCode}`)
+  const action = page.getByRole('main').getByRole('link', { name: 'Đặt trước', exact: true })
+  await expect(action).toBeInViewport({ ratio: 1 })
+  await action.click()
+  await page.setViewportSize({ width: 320, height: 760 })
+  const spec = page.getByRole('heading', { name: 'Cua gạch L hạng A', exact: true })
+  const quantity = page.getByLabel('Số con Cua gạch L hạng A', { exact: true })
+  await expect(spec).toBeVisible()
+  await quantity.fill('30')
+  expect((await quantity.boundingBox())!.y).toBeGreaterThan((await spec.boundingBox())!.y)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+})
+
+test('cổng khách hàng mở hồ sơ và thông báo ở góc phải', async ({ page, api }) => {
+  mockCustomer(api)
+  api.get('/api/me/party', { ...party, legalName: 'Hồ sơ khách hàng thử' })
+  await signIn(page, 'Customer')
+  await page.goto('/khach')
+  const menu = page.getByRole('navigation', { name: 'Menu Khách hàng' })
+  await expect(menu.getByRole('link', { name: 'Hồ sơ', exact: true })).toHaveCount(0)
+  await expect(menu.getByRole('link', { name: 'Thông báo', exact: true })).toHaveCount(0)
+  await page.getByRole('link', { name: 'Hồ sơ người dùng' }).click()
+  await expect(page).toHaveURL(/\/khach\/ho-so$/)
+  await expect(page.getByRole('heading', { name: 'Hồ sơ', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Hồ sơ khách hàng thử' })).toBeVisible()
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.getByRole('link', { name: 'Hồ sơ người dùng' })).toBeVisible()
+  await page.getByRole('link', { name: 'Cảnh báo và thông báo' }).click()
+  await expect(page).toHaveURL(/\/khach\/thong-bao$/)
+  await expect(page.getByRole('heading', { name: 'Thông báo', level: 1 })).toBeVisible()
+})
 
 test('đặt theo số con và theo kg, chọn nơi nhận, gửi đơn, quét QR đặt cọc rồi sang trang đơn', async ({ page, api }) => {
   await open(page, api)
@@ -27,17 +86,21 @@ test('đặt theo số con và theo kg, chọn nơi nhận, gửi đơn, quét Q
   api.get(`/api/preorders/${orderPending.orderNo}/deliveries`, noDeliveries(orderDeposited))
 
   await expect(page.getByText('P-2611-01 · Cua gạch')).toBeVisible()
-  await expect(page.getByRole('row', { name: /Cua gạch L hạng A/ })).toContainText(`${vnd(520_000)} / kg · còn 200 con`)
+  const largeSpec = page.getByRole('group', { name: 'Cua gạch L hạng A', exact: true })
+  const mediumSpec = page.getByRole('group', { name: 'Cua gạch M hạng A', exact: true })
+  await expect(largeSpec).toContainText(`${vnd(520_000)} / kg · Còn 200 con`)
   // Chưa nhập gì: nút gửi khoá, không có câu báo lỗi nào.
   await expect(submit(page)).toBeDisabled()
   await expect(aside(page)).toContainText('Số lượng0 con · 0 kg')
 
   await page.getByLabel('Số con Cua gạch L hạng A', { exact: true }).fill('30')
-  await expect(page.getByRole('row', { name: /Cua gạch L hạng A/ })).toContainText(`${vnd(6_552_000)}30 con · 12,6 kg`)
+  await expect(largeSpec).toContainText(vnd(6_552_000))
+  await expect(largeSpec).toContainText('30 con · 12,6 kg')
   await page.getByLabel('Đơn vị đặt Cua gạch M hạng A', { exact: true }).selectOption('ByKg')
   await page.getByLabel('Số kg Cua gạch M hạng A', { exact: true }).fill('5')
   // 5 kg quy ra số con theo khối lượng quy đổi 380 g, làm tròn lên.
-  await expect(page.getByRole('row', { name: /Cua gạch M hạng A/ })).toContainText(`${vnd(2_400_000)}14 con · 5 kg`)
+  await expect(mediumSpec).toContainText(vnd(2_400_000))
+  await expect(mediumSpec).toContainText('14 con · 5 kg')
 
   await expect(aside(page)).toContainText('Số lượng44 con · 17,6 kg')
   await expect(aside(page)).toContainText(`Giá trị ước tính${vnd(8_952_000)}`)
@@ -48,8 +111,8 @@ test('đặt theo số con và theo kg, chọn nơi nhận, gửi đơn, quét Q
   await expect(page.getByRole('radio', { name: /Nhà hàng Biển Xanh/ })).toBeChecked()
   await expect(page.getByRole('radio', { name: /Kho Thủ Đức/ })).toBeDisabled()
   await expect(page.getByText('Thiếu toạ độ', { exact: true })).toBeVisible()
-  // Có lời chỉ cách sửa: địa điểm thiếu toạ độ thì sang trang Địa điểm nhận hàng để bổ sung.
-  await expect(page.getByRole('link', { name: 'Bổ sung toạ độ' })).toHaveAttribute('href', '/khach/dia-diem')
+  // Có thể bổ sung vị trí của địa chỉ ngay trong form đặt trước.
+  await expect(page.getByRole('button', { name: 'Bổ sung vị trí cho Kho Thủ Đức' })).toBeVisible()
   // Mỗi địa chỉ là một thẻ bấm: ô radio nằm ẩn dưới nhãn, người dùng bấm vào thẻ.
   await page.getByText('Bếp trung tâm Quận 7', { exact: true }).click()
   await expect(page.getByRole('radio', { name: /Bếp trung tâm Quận 7/ })).toBeChecked()
@@ -122,6 +185,29 @@ test('chưa có nơi nhận hàng thì phải thêm địa chỉ trước khi đ
   await expect(page.getByRole('dialog', { name: 'Thêm địa điểm nhận hàng' })).toBeVisible()
 })
 
+test('bổ sung vị trí nhận hàng trong form đặt trước và giữ số lượng đã nhập', async ({ page, api }) => {
+  mockCustomer(api)
+  let dropOff = sites[2]
+  api.get('/api/me/sites', () => [dropOff])
+  api.put('/api/me/sites/13', () => {
+    dropOff = { ...dropOff, latitude: 10.7993, longitude: 106.6802 }
+    return dropOff
+  })
+  await signIn(page, 'Customer')
+  await page.goto(URL)
+  const count = page.getByLabel('Số con Cua gạch L hạng A', { exact: true })
+  await count.fill('30')
+  await expect(submit(page)).toBeDisabled()
+  await page.getByRole('button', { name: 'Bổ sung vị trí cho Kho Thủ Đức' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Sửa Kho Thủ Đức' })
+  await dialog.getByLabel('Toạ độ').fill('10.7993, 106.6802')
+  await dialog.getByRole('button', { name: 'Lưu địa điểm' }).click()
+  await expect(page.getByRole('radio', { name: /Kho Thủ Đức/ })).toBeChecked()
+  await expect(count).toHaveValue('30')
+  await expect(submit(page)).toBeEnabled()
+  await expect(page).toHaveURL(new RegExp(`${URL}$`))
+})
+
 test('chia hai đợt giao thì gửi kèm ngày và số lượng từng đợt', async ({ page, api }) => {
   await open(page, api)
   api.post('/api/preorders', () => reply(201, orderPending))
@@ -172,6 +258,6 @@ test('Lô không còn nhận đặt trước thì không có form, chỉ dẫn v
   await signIn(page, 'Customer')
   await page.goto(URL)
   await expect(page.getByText('Lô này hiện không nhận đặt trước')).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Xem Lô đang mở' })).toHaveAttribute('href', '/lo')
+  await expect(page.getByRole('link', { name: 'Xem Lô nhận đặt trước' })).toHaveAttribute('href', '/khach/lo')
   await expect(page.getByRole('button', { name: 'Đặt trước' })).toHaveCount(0)
 })

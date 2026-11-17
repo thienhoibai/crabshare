@@ -20,7 +20,7 @@ export default function NotificationsPage() {
       {!isInvestor ? (
         <OpPanel>
           <OpEmpty title="Chưa có thông báo" icon={<BellRing size={30} />}>
-            <a className="rd-btn rd-btn--ghost" href="/khach">Xem đơn của tôi</a>
+            <a className="rd-btn rd-btn--ghost" href="/khach/giao-hang">Theo dõi giao hàng</a>
           </OpEmpty>
         </OpPanel>
       ) : (

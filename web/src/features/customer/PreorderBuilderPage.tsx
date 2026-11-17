@@ -7,9 +7,10 @@ import { useNavigate, useParams } from 'react-router'
 import { ArrowLeft, MapPinPlus, ShoppingBag } from 'lucide-react'
 import type { AvailabilityResponse, ExploreBatchResponse, PartySiteResponse, PreorderRequest, PreorderResponse, SpecAvailability } from '../../shared/api/api.gen'
 import {
-  DecimalInput, Money, NumberInput, OpAside, OpBack, OpBtn, OpDl, OpEmpty, OpError, OpHeading, OpLoading, OpModal, OpNote, OpPanel, OpTable, RadioCards, Select,
+  DecimalInput, Money, NumberInput, OpAside, OpBack, OpBtn, OpDl, OpEmpty, OpError, OpHeading, OpLoading, OpModal, OpNote, OpPanel, RadioCards, Select,
   errorMessage, formatDateTime, formatVnd, label, toast, useGet, useSend,
 } from '../../shared/ui/console'
+import { preorderUnavailable } from '../public/batchView'
 import { fmtKg, fmtKm, orderHref } from './customerData'
 import { PayBox } from './PayBox'
 import { SiteForm } from './SiteForm'
@@ -36,7 +37,7 @@ export default function PreorderBuilderPage() {
 
   const [draft, setDraft] = useState<Record<string, Draft>>({})
   const [siteId, setSiteId] = useState<number | null>(null)
-  const [addingSite, setAddingSite] = useState(false)
+  const [editingSite, setEditingSite] = useState<PartySiteResponse | 'new' | null>(null)
   const [split, setSplit] = useState<TrancheDraft[] | null>(null)
   const [created, setCreated] = useState<PreorderResponse | null>(null)
 
@@ -54,7 +55,7 @@ export default function PreorderBuilderPage() {
 
   const b = batch.data
   const a = availability.data
-  const back = <OpBack href={`/lo/${encodeURIComponent(code)}`}><ArrowLeft size={16} /> Lô {code}</OpBack>
+  const back = <OpBack href={`/khach/lo/${encodeURIComponent(code)}`}><ArrowLeft size={16} /> Lô {code}</OpBack>
 
   if (created?.deposit) {
     const d = created.deposit
@@ -88,9 +89,10 @@ export default function PreorderBuilderPage() {
   const totalValue = lines.reduce((sum, l) => sum + l.value, 0)
   const deposit = Math.round((totalValue * a.depositRatePct) / 100)
   const splitLines: SplitLine[] = lines.map((l) => ({ specCode: l.spec.specCode, specName: l.spec.specName, mode: l.mode, qty: l.qty }))
-  const located = (s: PartySiteResponse) => s.latitude !== null && s.longitude !== null
+  const located = (s: PartySiteResponse) => s.latitude != null && s.longitude != null
   const usable = (sites.data ?? []).filter(located)
-  const chosen = usable.find((s) => s.siteId === siteId) ?? usable.find((s) => s.isDefault) ?? usable[0]
+  const missingLocation = sites.data?.filter((s) => !located(s)) ?? []
+  const chosen = siteId === null ? usable.find((s) => s.isDefault) ?? usable[0] : usable.find((s) => s.siteId === siteId)
   // Gợi ý ngày của đợt đầu: ngày Lô dự kiến nhận cua nếu ngày đó chưa qua, không thì để khách tự chọn.
   const firstDate = b.expectedReceiptDate && b.expectedReceiptDate >= new Date().toISOString().slice(0, 10) ? b.expectedReceiptDate : ''
 
@@ -118,13 +120,14 @@ export default function PreorderBuilderPage() {
     setSplit(null)
   }
 
-  if (!a.acceptingPreorders || a.specs.length === 0) {
+  const unavailable = preorderUnavailable(a)
+  if (unavailable) {
     return (
       <>
         <OpHeading crumb={back} eyebrow={`${b.batchCode} · ${label('crabType', b.crabType)}`} title="Đặt trước" description={b.title} />
         <OpPanel>
-          <OpEmpty title={a.acceptingPreorders ? 'Lô chưa có bảng chào giá' : 'Lô này hiện không nhận đặt trước'}>
-            <a className="rd-btn rd-btn--primary" href="/lo">Xem Lô đang mở</a>
+          <OpEmpty title={unavailable}>
+            <a className="rd-btn rd-btn--primary" href="/khach/lo">Xem Lô nhận đặt trước</a>
           </OpEmpty>
         </OpPanel>
       </>
@@ -137,47 +140,49 @@ export default function PreorderBuilderPage() {
 
       <div className="op-split">
         <div>
-          <OpPanel title="Quy cách và số lượng" subtitle={`Đơn tối thiểu ${a.minOrderCrabs} con quy đổi. Tiền hàng thật tính theo kg nghiệm thu khi giao.`}>
-            <OpTable
-              rows={a.specs}
-              rowKey={(s) => s.specCode}
-              columns={[
-                {
-                  key: 'spec', header: 'Quy cách',
-                  cell: (s) => <><b>{s.specName}</b><br /><small className="rd-muted">{formatVnd(s.pricePerKg)} / kg · {s.remaining > 0 ? `còn ${s.remaining} con` : 'đã hết'}</small></>,
-                },
-                {
-                  key: 'qty', header: 'Số lượng', width: 220,
-                  cell: (s) => {
-                    const d = draft[s.specCode] ?? EMPTY
-                    const off = s.remaining === 0
-                    return (
-                      <span className="op-inline" style={{ flexWrap: 'nowrap' }}>
-                        {d.mode === 'ByKg'
-                          ? <DecimalInput key="kg" sm aria-label={`Số kg ${s.specName}`} value={d.kg} disabled={off} onChange={(kg) => setLine(s.specCode, { kg })} />
-                          : <NumberInput key="con" sm aria-label={`Số con ${s.specName}`} value={d.crabs} max={s.remaining} disabled={off} onChange={(crabs) => setLine(s.specCode, { crabs })} />}
-                        <Select sm aria-label={`Đơn vị đặt ${s.specName}`} value={d.mode} disabled={off} style={{ width: 84, flex: 'none' }}
-                          onChange={(e) => setLine(s.specCode, { mode: e.target.value as Mode, crabs: null, kg: null })}>
+          <OpPanel title="Quy cách và số lượng" lead={`Đơn tối thiểu ${a.minOrderCrabs} con quy đổi. Tiền hàng tính theo kg khi nhận cua.`}>
+            <div className="customer-order-lines">
+              {a.specs.map((spec) => {
+                const entry = draft[spec.specCode] ?? EMPTY
+                const soldOut = spec.remaining === 0
+                const estimate = lines.find((line) => line.spec.specCode === spec.specCode)
+                return (
+                  <div className="customer-order-line" key={spec.specCode} role="group" aria-label={spec.specName}>
+                    <div className="customer-order-line__details">
+                      <h3>{spec.specName}</h3>
+                      <p>{formatVnd(spec.pricePerKg)} / kg · {soldOut ? 'Đã hết' : `Còn ${spec.remaining} con`}</p>
+                    </div>
+                    <div className="customer-order-line__fields">
+                      <label>
+                        <span>Số lượng</span>
+                        {entry.mode === 'ByKg'
+                          ? <DecimalInput key="kg" aria-label={`Số kg ${spec.specName}`} value={entry.kg} disabled={soldOut} onChange={(kg) => setLine(spec.specCode, { kg })} />
+                          : <NumberInput key="con" aria-label={`Số con ${spec.specName}`} value={entry.crabs} max={spec.remaining} disabled={soldOut} onChange={(crabs) => setLine(spec.specCode, { crabs })} />}
+                      </label>
+                      <label>
+                        <span>Đơn vị</span>
+                        <Select aria-label={`Đơn vị đặt ${spec.specName}`} value={entry.mode} disabled={soldOut}
+                          onChange={(e) => setLine(spec.specCode, { mode: e.target.value as Mode, crabs: null, kg: null })}>
                           <option value="ByCount">con</option>
                           <option value="ByKg">kg</option>
                         </Select>
-                      </span>
-                    )
-                  },
-                },
-                {
-                  key: 'est', header: 'Ước tính', num: true,
-                  cell: (s) => {
-                    const l = lines.find((x) => x.spec.specCode === s.specCode)
-                    return l ? <><Money value={l.value} /><br /><small className="rd-muted">{l.crabs} con · {fmtKg(l.kg)}</small></> : <span className="rd-muted">—</span>
-                  },
-                },
-              ]}
-            />
+                      </label>
+                    </div>
+                    <div className="customer-order-line__estimate">
+                      <div>
+                        <span>Ước tính</span>
+                        {estimate && <small>{estimate.crabs} con · {fmtKg(estimate.kg)}</small>}
+                      </div>
+                      {estimate ? <strong><Money value={estimate.value} /></strong> : <span>Chưa chọn</span>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </OpPanel>
 
           <OpPanel title="Giao tới" subtitle={b.deliveryRadiusKm ? `Lô giao trong bán kính ${fmtKm(b.deliveryRadiusKm)}.` : undefined}
-            action={<OpBtn variant="ghost" sm onClick={() => setAddingSite(true)}><MapPinPlus size={15} /> Thêm địa chỉ</OpBtn>}>
+            action={<OpBtn variant="ghost" sm onClick={() => setEditingSite('new')}><MapPinPlus size={15} /> Thêm địa chỉ</OpBtn>}>
             {sites.isPending ? <OpLoading /> : sites.isError ? <OpError error={sites.error} onRetry={() => void sites.refetch()} /> : sites.data.length > 0 && (
               <RadioCards<string>
                 name="delivery-site"
@@ -186,8 +191,17 @@ export default function PreorderBuilderPage() {
                 options={sites.data.map((s) => ({ value: String(s.siteId), label: s.name, hint: located(s) ? s.addressLine : 'Thiếu toạ độ', disabled: !located(s) }))}
               />
             )}
-            {sites.data?.some((s) => !located(s)) && (
-              <small className="rd-muted">Địa điểm thiếu toạ độ chưa chọn được vì chưa tính được khoảng cách giao. <a href="/khach/dia-diem">Bổ sung toạ độ</a></small>
+            {missingLocation.length > 0 && (
+              <div className="op-form">
+                <small className="rd-muted">Bổ sung vị trí để tính khoảng cách giao hàng.</small>
+                <div className="op-inline">
+                  {missingLocation.map((site) => (
+                    <OpBtn key={site.siteId} className="max-w-full" variant="ghost" sm onClick={() => setEditingSite(site)}>
+                      <span className="truncate">Bổ sung vị trí cho {site.name}</span>
+                    </OpBtn>
+                  ))}
+                </div>
+              </div>
             )}
             {!split && lines.length > 0 && (
               <div><OpBtn variant="ghost" sm onClick={() => setSplit(startSplit(splitLines, firstDate))}>Chia nhiều đợt giao</OpBtn></div>
@@ -215,9 +229,10 @@ export default function PreorderBuilderPage() {
         </OpAside>
       </div>
 
-      {addingSite && (
-        <OpModal title="Thêm địa điểm nhận hàng" onClose={() => setAddingSite(false)} wide>
-          <SiteForm needLocation onCancel={() => setAddingSite(false)} onDone={(site) => { setSiteId(site.siteId); setAddingSite(false) }} />
+      {editingSite && (
+        <OpModal title={editingSite === 'new' ? 'Thêm địa điểm nhận hàng' : `Sửa ${editingSite.name}`} onClose={() => setEditingSite(null)} wide>
+          <SiteForm site={editingSite === 'new' ? undefined : editingSite} needLocation onCancel={() => setEditingSite(null)}
+            onDone={(site) => { setSiteId(site.siteId); setEditingSite(null) }} />
         </OpModal>
       )}
     </>

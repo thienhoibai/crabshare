@@ -1,6 +1,6 @@
 /* Trang công khai: danh sách Lô đang mở (/lo), trang một Lô (/lo/:code), chuẩn phân hạng (/chuan-phan-hang). */
 import type { BatchResponse } from '../src/shared/api/api.gen'
-import { expect, reply, signIn, test, vnd } from './support/app'
+import { expect, reply, signIn, test, userOf, vnd } from './support/app'
 import { availabilityP, batchP, batchPNoOffers, batchT, explorePage, mockPublic } from './support/public'
 
 test.describe('/lo', () => {
@@ -164,6 +164,22 @@ test.describe('/lo/:code', () => {
     await expect(aside).toContainText('Lô này hiện không nhận góp vốn và đặt trước.')
     await expect(aside.getByRole('link', { name: 'Đặt trước' })).toHaveCount(0)
   })
+
+  for (const { name, stock, message } of [
+    { name: 'chưa có giá', stock: { remainingCrabs: 0, specs: [] }, message: 'Lô chưa có bảng chào giá' },
+    { name: 'đã hết cua', stock: { remainingCrabs: 0 }, message: 'Lô đã hết số lượng có thể đặt trước' },
+  ]) {
+    test(`không mời đặt trước khi lô ${name}`, async ({ page, api }) => {
+      mockPublic(api)
+      api.get(`/api/batches/${batchP.batchCode}/availability`, { ...availabilityP, ...stock })
+      await signIn(page, userOf('Customer', { roles: ['Customer', 'Investor'] }))
+      await page.goto(`/lo/${batchP.batchCode}`)
+      const aside = page.getByRole('complementary')
+      await expect(aside).toContainText(message)
+      await expect(aside.getByRole('link', { name: 'Đặt trước', exact: true })).toHaveCount(0)
+      await expect(aside.getByRole('link', { name: 'Góp vốn', exact: true })).toBeVisible()
+    })
+  }
 
   test('bản soạn thảo của người nuôi chưa công bố thì không hiện nội dung Lô', async ({ page, api }) => {
     // Người nuôi nhận BatchResponse (không có executorName) từ cùng đường dẫn; trang tìm bản công khai trong danh sách.
