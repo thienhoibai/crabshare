@@ -12,10 +12,22 @@ async function open(page: Page, api: Api, path: string) {
 }
 
 test.describe('/khach/giao-hang', () => {
+  test('khi không có việc cần xử lý thì mở ngay chuyến giao sắp tới', async ({ page, api }) => {
+    mockCustomer(api)
+    api.get(`/api/preorders/${orderDelivering.orderNo}/deliveries`, {
+      ...deliveriesAccepted,
+      shipments: [{ ...shipmentToAccept, status: 'Scheduled', dispatchedAt: null, acceptance: null }],
+    })
+    await signIn(page, 'Customer')
+    await page.goto('/khach/giao-hang')
+    await expect(page.getByRole('tab', { name: /Đang giao/ })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByText('Đã lên lịch, chưa xuất')).toBeVisible()
+  })
+
   test('chuyến chờ nghiệm thu nằm ở mục cần xử lý và dẫn thẳng tới chuyến đó trong đơn', async ({ page, api }) => {
     await open(page, api, '/khach/giao-hang')
     await expect(page.getByRole('heading', { name: 'Giao hàng và nghiệm thu' })).toBeVisible()
-    await expect(page.getByRole('tab', { name: /Cần tôi xử lý/ })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('tab', { name: /Cần xử lý/ })).toHaveAttribute('aria-selected', 'true')
 
     const row = page.getByRole('link', { name: new RegExp(`Chuyến ${SHIP}`) })
     await expect(row).toHaveAttribute('href', `/khach/don/${orderDelivering.orderNo}#chuyen-${SHIP}`)

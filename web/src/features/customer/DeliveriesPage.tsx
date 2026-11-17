@@ -52,7 +52,7 @@ function ShipmentRow({ s }: { s: ShipmentResponse }) {
 }
 
 function Shipments({ orders }: { orders: PreorderResponse[] }) {
-  const [tab, setTab] = useState<Tab>('todo')
+  const [selected, setSelected] = useState<Tab | null>(null)
   const queries = useDeliveriesOf(orders.map((o) => o.orderNo))
   if (queries.some((q) => q.isPending)) return <OpLoading label="Đang tải chuyến giao…" />
   const failed = queries.find((q) => q.isError)
@@ -64,6 +64,7 @@ function Shipments({ orders }: { orders: PreorderResponse[] }) {
     moving: shipments.filter((s) => ['transit', 'scheduled'].includes(shipmentStage(s))),
     done: shipments.filter((s) => shipmentStage(s) === 'done'),
   }
+  const tab = selected ?? (groups.todo.length ? 'todo' : groups.moving.length ? 'moving' : groups.done.length ? 'done' : 'todo')
   const empty: Record<Tab, string> = {
     todo: 'Không có chuyến nào chờ bạn xử lý',
     moving: 'Không có chuyến nào đang giao',
@@ -73,9 +74,10 @@ function Shipments({ orders }: { orders: PreorderResponse[] }) {
     <>
       <OpTabs<Tab>
         value={tab}
-        onChange={setTab}
+        onChange={setSelected}
+        label="Lọc chuyến giao"
         items={[
-          { key: 'todo', label: 'Cần tôi xử lý', count: groups.todo.length },
+          { key: 'todo', label: 'Cần xử lý', count: groups.todo.length },
           { key: 'moving', label: 'Đang giao', count: groups.moving.length },
           { key: 'done', label: 'Đã nghiệm thu' },
         ]}
@@ -94,7 +96,6 @@ export default function DeliveriesPage() {
   return (
     <>
       <OpHeading
-        eyebrow="Khách hàng"
         title="Giao hàng và nghiệm thu"
       />
       <QueryView query={orders}>

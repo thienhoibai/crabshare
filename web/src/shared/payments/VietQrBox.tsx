@@ -25,7 +25,9 @@ export interface VietQrInfo {
  * @param onExpire gọi một lần khi hết hạn — đồng hồ về 0 hoặc máy chủ báo Expired trước (đồng hồ máy lệch) —
  *   để trang tải lại giữ chỗ.
  */
-export function VietQrBox({ payment, status = 'Pending', onExpire }: { payment: VietQrInfo; status?: PaymentStatus; onExpire?: () => void }) {
+export function VietQrBox({ payment, status = 'Pending', onExpire, manualLabel }: {
+  payment: VietQrInfo; status?: PaymentStatus; onExpire?: () => void; manualLabel?: string
+}) {
   const until = Date.parse(payment.expiresAt)
   const cd = useCountdown(status === 'Pending' ? until : null)
   const timedOut = status === 'Pending' && cd.left <= 0
@@ -84,18 +86,18 @@ export function VietQrBox({ payment, status = 'Pending', onExpire }: { payment: 
         <p className="vq-timer" role="timer" aria-live="off"><Clock size={14} /> Mã hết hạn sau <b>{cd.text}</b></p>
         <p className="rd-note"><ScanLine size={14} /> {sandbox ? 'Mã thử nghiệm, không chuyển tiền thật.' : 'Quét bằng app ngân hàng, số tiền và nội dung đã điền sẵn.'}</p>
       </div>
-      <ManualTransfer payment={payment} />
+      <ManualTransfer payment={payment} label={manualLabel} />
     </div>
   )
 }
 
-function ManualTransfer({ payment }: { payment: VietQrInfo }) {
+function ManualTransfer({ payment, label = 'Không quét được mã? Chuyển khoản thủ công' }: { payment: VietQrInfo; label?: string }) {
   const [open, setOpen] = useState(false)
   const panel = useId()
   return (
     <div className="vq-manual">
       <button type="button" className="vq-manual__toggle" aria-expanded={open} aria-controls={panel} onClick={() => setOpen(!open)}>
-        Không quét được mã? Chuyển khoản thủ công
+        {label}
       </button>
       <div id={panel} className="vq-manual__body" hidden={!open}>
         <p className="vq-warn"><TriangleAlert size={16} />

@@ -114,7 +114,7 @@ export default function ConsoleLayout({ area, children }: { area: Area; children
 
   return (
     <Shell theme="light">
-      <div className="o2">
+      <div className={customer ? 'o2 o2--customer' : 'o2'}>
         <aside className="o2-side">
           <Logo href={config.home} />
           {!customer && card}

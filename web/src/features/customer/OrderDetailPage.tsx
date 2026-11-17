@@ -9,10 +9,10 @@ import { QRCodeSVG } from 'qrcode.react'
 import { ArrowLeft } from 'lucide-react'
 import type { CancelPreorderRequest, ExploreBatchResponse, PreorderResponse, SplitTranchesRequest } from '../../shared/api/api.gen'
 import {
-  Field, Money, OpAside, OpBack, OpBtn, OpConfirm, OpError, OpFacts, OpFlow, OpHeading, OpKv, OpLoading, OpNote, OpPanel, OpTable, OpTabs, StatusBadge, TextArea,
+  Field, Money, OpAside, OpBack, OpBadge, OpBtn, OpConfirm, OpError, OpFacts, OpFlow, OpHeading, OpKv, OpLoading, OpNote, OpPanel, OpTable, OpTabs, StatusBadge, TextArea,
   formatDate, formatDateTime, formatVnd, useGet, useSend, type Fact, type FlowStep, type TabItem,
 } from '../../shared/ui/console'
-import { CANCELLABLE, fmtKg, fmtKm, lineQty, shipmentStage, useOrderDeliveries } from './customerData'
+import { CANCELLABLE, depositHoldExpired, fmtKg, fmtKm, lineQty, shipmentStage, useOrderDeliveries } from './customerData'
 import { OrderClaims } from './OrderClaims'
 import { InvoiceTable, ShipmentCard } from './OrderShipments'
 import { PayBox } from './PayBox'
@@ -115,7 +115,7 @@ export default function OrderDetailPage() {
         crumb={<OpBack href="/khach"><ArrowLeft size={16} /> Đơn của tôi</OpBack>}
         eyebrow={`Lô ${o.batchCode}${batch.data?.title ? ` · ${batch.data.title}` : ''}`}
         title={`Đơn ${o.orderNo}`}
-        action={<StatusBadge kind="order" value={o.status} />}
+        action={depositHoldExpired(o) ? <OpBadge>Hết hạn đặt cọc</OpBadge> : <StatusBadge kind="order" value={o.status} />}
       />
 
       {o.status === 'Forfeited' ? <OpNote tone="danger">Đơn đã mất cọc.{o.cancelReason ? ` ${o.cancelReason}` : ''}</OpNote>
@@ -141,7 +141,7 @@ export default function OrderDetailPage() {
 
           {tab === 'order' && (
             <>
-              <OpPanel title="Quy cách đã đặt" subtitle="Giá trị là ước tính. Tiền hàng thật tính theo kg nghiệm thu của từng đợt.">
+              <OpPanel className="customer-order-detail-table" title="Quy cách đã đặt" subtitle="Giá trị là ước tính. Tiền hàng thật tính theo kg nghiệm thu của từng đợt.">
                 <OpTable
                   rows={o.lines}
                   rowKey={(l) => l.lineId}
@@ -153,7 +153,7 @@ export default function OrderDetailPage() {
                 />
               </OpPanel>
               <div id="dot-giao" style={{ scrollMarginTop: 90 }}>
-                <OpPanel title="Đợt giao" action={canSplit ? <OpBtn variant="ghost" sm onClick={openSplit}>Chia lại</OpBtn> : undefined}>
+                <OpPanel className="customer-order-detail-table" title="Đợt giao" action={canSplit ? <OpBtn variant="ghost" sm onClick={openSplit}>Chia lại</OpBtn> : undefined}>
                   <OpTable
                     rows={o.tranches}
                     rowKey={(t) => t.trancheId}
@@ -196,7 +196,7 @@ export default function OrderDetailPage() {
               <span><b>QR truy xuất của đơn</b><small>Mở trang truy xuất</small></span>
             </a>
           )}
-          <a className="op-link" href={`/lo/${encodeURIComponent(o.batchCode)}`}>Xem Lô {o.batchCode}</a>
+          <a className="op-link" href={`/khach/lo/${encodeURIComponent(o.batchCode)}`}>Xem Lô {o.batchCode}</a>
           {CANCELLABLE.includes(o.status) && <OpBtn variant="ghost" sm onClick={() => { setReason(''); cancel.reset(); setCancelling(true) }}>Huỷ đơn</OpBtn>}
         </OpAside>
       </div>

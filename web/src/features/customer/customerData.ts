@@ -29,6 +29,10 @@ export const DELIVERY_ORDER = ['Confirmed', 'Delivering', 'Delivered']
 /** Khách còn tự huỷ được (BR-096, BR-097). */
 export const CANCELLABLE = ['PendingDeposit', 'Deposited', 'Confirmed']
 
+/** Hết thời gian giữ đơn, khách không thể chuyển cọc theo mã cũ (BR-090). */
+export const depositHoldExpired = (order: Pick<PreorderResponse, 'status' | 'holdExpiresAt'>, now = Date.now()) =>
+  order.status === 'PendingDeposit' && !!order.holdExpiresAt && Date.parse(order.holdExpiresAt) <= now
+
 /** Mã trạng thái cọc (kind "deposit") suy ra từ trạng thái đơn; đơn huỷ khi chưa cọc thì không có. */
 export function depositState(order: Pick<PreorderResponse, 'status'>): string | null {
   switch (order.status) {
