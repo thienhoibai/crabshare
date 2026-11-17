@@ -1,0 +1,59 @@
+version: 2.1
+
+executors:
+  node:
+    docker:
+      - image: cimg/node:22.22
+
+jobs:
+  web-check:
+    executor: node
+    steps:
+      - checkout
+      - run:
+          name: Install web dependencies and build
+          working_directory: web
+          command: |
+            npm ci
+            npm run build
+      - run:
+          name: Run Playwright tests in Chromium
+          working_directory: web
+          command: |
+            npx playwright install --with-deps chromium
+            npm run test:kyc
+      - store_artifacts:
+          path: web/test-results
+          destination: playwright
+
+  web-deploy:
+    executor: node
+    steps:
+      - checkout
+      - run:
+          name: Build and deploy the existing Vercel project
+          command: |
+            case "$CIRCLE_BRANCH" in
+              main) environment=production; set -- --prod ;;
+              develop) environment=preview; set -- ;;
+              *) echo "Deployment branch must be main or develop" >&2; exit 1 ;;
+            esac
+            : "${VERCEL_TOKEN:?Set VERCEL_TOKEN in the crabshare-vercel context}"
+            : "${VERCEL_ORG_ID:?Set VERCEL_ORG_ID in the crabshare-vercel context}"
+            : "${VERCEL_PROJECT_ID:?Set VERCEL_PROJECT_ID in the crabshare-vercel context}"
+
+            # Project Root Directory is web/. Run from the repository root.
+            npx --yes vercel@latest pull --yes --environment="$environment" --token="$VERCEL_TOKEN"
+            npx --yes vercel@latest build "$@" --token="$VERCEL_TOKEN"
+            npx --yes vercel@latest deploy --prebuilt "$@" --token="$VERCEL_TOKEN"
+
+workflows:
+  web:
+    jobs:
+      - web-check
+      - web-deploy:
+          requires:
+            - web-check
+          context: crabshare-vercel
+          serial-group: << pipeline.project.slug >>/vercel-<< pipeline.git.branch >>
+          filters: pipeline.event.name == "push" and (pipeline.git.branch == "main" or pipeline.git.branch == "develop")
