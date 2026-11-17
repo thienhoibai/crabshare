@@ -20,6 +20,39 @@ test('các ô đăng ký thẳng hàng và cùng chiều cao khi có gợi ý m�
   expect(email!.x).toBeLessThan(password!.x)
 })
 
+test('đăng ký báo lỗi tại ô nhập, hiện mật khẩu và gửi đúng loại tài khoản', async ({ page, api }) => {
+  noData(api)
+  api.post('/api/auth/register', session('Investor'))
+  await page.goto('/dang-ky')
+  const submit = page.getByRole('button', { name: 'Tạo tài khoản' })
+  const fullName = page.getByRole('textbox', { name: 'Họ và tên', exact: true })
+  const password = page.getByLabel(/^Mật khẩu/)
+
+  await submit.click()
+  await expect(fullName).toBeFocused()
+  await expect(fullName).toHaveAccessibleDescription('Nhập họ và tên của bạn.')
+  await expect(password).toHaveAccessibleDescription('Mật khẩu cần ít nhất 8 ký tự.')
+  expect(api.writes()).toEqual([])
+
+  await page.getByText('Nhà đầu tư', { exact: true }).click()
+  await expect(page.getByText('Xác minh danh tính sau khi tạo tài khoản.')).toBeVisible()
+  await expect(page.getByLabel('Bạn mua cho')).toHaveCount(0)
+  await fullName.fill('Người dùng thử')
+  await page.getByRole('textbox', { name: 'Email', exact: true }).fill('nhadautu@test.local')
+  await password.fill('mat-khau-thu')
+  await page.getByRole('button', { name: 'Hiện mật khẩu' }).click()
+  await expect(password).toHaveAttribute('type', 'text')
+  await page.getByRole('button', { name: 'Ẩn mật khẩu' }).click()
+  await expect(password).toHaveAttribute('type', 'password')
+  await page.getByRole('checkbox', { name: 'Tôi đồng ý điều khoản sử dụng' }).check()
+  await submit.click()
+
+  await expect(page).toHaveURL(/\/nha-dau-tu$/)
+  expect(api.sent('POST', '/api/auth/register').map((c) => c.body)).toEqual([{
+    email: 'nhadautu@test.local', password: 'mat-khau-thu', fullName: 'Người dùng thử', role: 'Investor', partyType: 'Individual',
+  }])
+})
+
 const PORTALS: { role: Role; home: string; menu: string; link: string }[] = [
   { role: 'Customer', home: '/khach', menu: 'Menu Khách hàng', link: 'Đơn của tôi' },
   { role: 'Investor', home: '/nha-dau-tu', menu: 'Menu Nhà đầu tư', link: 'Lô đang gọi vốn' },
