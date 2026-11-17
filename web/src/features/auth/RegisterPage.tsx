@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react'
+import { isAxiosError } from 'axios'
 import { ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router'
-import { errorMessage } from '../../shared/api/http'
+import { errorMessage, type ApiProblem } from '../../shared/api/http'
 import { homePathFor } from '../../shared/auth/authStore'
 import { Checkbox, Field, Input, OpBtn, OpNote, RadioCards, Select, options } from '../../shared/ui/console'
 import AuthLayout from './AuthLayout'
@@ -9,6 +10,13 @@ import PasswordInput from './PasswordInput'
 import { useRegister } from './authApi'
 
 type RoleChoice = 'Customer' | 'Investor'
+const PHONE_TAKEN = 'Số điện thoại này đã được dùng cho một tài khoản khác.'
+
+function isPhoneConflict(error: unknown) {
+  if (!isAxiosError<ApiProblem>(error) || error.response?.status !== 409) return false
+  const problem = error.response.data
+  return problem?.code === 'auth.phone_taken' || problem?.detail === PHONE_TAKEN || !!problem?.detail?.includes("'ux_app_user_phone'")
+}
 
 /**
  * UC01 — Đăng ký tài khoản khách hàng hoặc nhà đầu tư (POST /api/auth/register). Đăng ký xong tự đăng nhập.
@@ -28,6 +36,7 @@ export default function RegisterPage() {
   const [registrationNo, setRegistrationNo] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [rejectedPhone, setRejectedPhone] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [terms, setTerms] = useState(false)
   const [message, setMessage] = useState('')
@@ -55,6 +64,7 @@ export default function RegisterPage() {
   const passwordInput = fieldDetails('password', 'Từ 8 ký tự')
   const legalNameInput = fieldDetails('legalName', 'Sau khi đăng ký, gửi ảnh giấy tờ ở trang Hồ sơ để được xác minh.')
   const termsError = attempted ? errors.terms : ''
+  const phoneError = phone.trim() === rejectedPhone ? PHONE_TAKEN : ''
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -67,12 +77,14 @@ export default function RegisterPage() {
       return
     }
 
+    const submittedPhone = phone.trim()
+    const phoneField = event.currentTarget.elements.namedItem('phone')
     register.mutate(
       {
         email: email.trim(),
         password,
         fullName: fullName.trim(),
-        phone: phone.trim() || undefined,
+        phone: submittedPhone || undefined,
         role,
         partyType: organisation ? partyType : 'Individual',
         legalName: organisation ? legalName.trim() : undefined,
@@ -81,7 +93,13 @@ export default function RegisterPage() {
       },
       {
         onSuccess: (res) => navigate(homePathFor(res.user), { replace: true }),
-        onError: (e) => setMessage(errorMessage(e)),
+        onError: (e) => {
+          if (!isPhoneConflict(e)) return setMessage(errorMessage(e))
+          setRejectedPhone(submittedPhone)
+          if (phoneField instanceof HTMLInputElement && phoneField.value.trim() === submittedPhone) {
+            requestAnimationFrame(() => phoneField.focus())
+          }
+        },
       },
     )
   }
@@ -108,8 +126,10 @@ export default function RegisterPage() {
           <Field {...nameInput.field} label="Họ và tên" required>
             <Input {...nameInput.input} autoComplete="name" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
           </Field>
-          <Field label="Số điện thoại (không bắt buộc)">
-            <Input name="phone" type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <Field label="Số điện thoại (không bắt buộc)" htmlFor="register-phone" error={phoneError} descriptionId="register-phone-error">
+            <Input id="register-phone" name="phone" type="tel" autoComplete="tel" value={phone}
+              aria-invalid={phoneError ? true : undefined} aria-describedby={phoneError ? 'register-phone-error' : undefined}
+              onChange={(e) => { setPhone(e.target.value); setRejectedPhone(null) }} />
           </Field>
         </div>
 

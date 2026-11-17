@@ -1,5 +1,5 @@
 /* Phần dùng chung của trang danh sách và trang chi tiết Lô công khai. */
-import type { ExploreBatchResponse } from '../../shared/api/api.gen'
+import type { AvailabilityResponse, ExploreBatchResponse } from '../../shared/api/api.gen'
 import { formatVnd } from '../../shared/lib/format'
 
 /** Lô P đang nhận góp vốn. */
@@ -9,6 +9,19 @@ export const isFunding = (b: Pick<ExploreBatchResponse, 'status' | 'batchMode'>)
 export const takesPreorders = (b: Pick<ExploreBatchResponse, 'offers' | 'preorderDeadline' | 'status'>) =>
   b.offers.length > 0 && !['Closed', 'Cancelled', 'Settlement', 'Settling', 'AwaitingSettlement', 'Liquidating'].includes(b.status) &&
   (!b.preorderDeadline || Date.parse(b.preorderDeadline) > Date.now())
+
+/** Số con còn đặt được bị giới hạn bởi tồn của cả lô và tồn theo từng quy cách. */
+export const preorderRemaining = (a: AvailabilityResponse) =>
+  Math.min(a.remainingCrabs, a.specs.reduce((sum, spec) => sum + spec.remaining, 0))
+
+/** Tình trạng đặt trước theo số lượng còn lại mới nhất, dùng chung cho chi tiết lô và form đặt trước. */
+export function preorderUnavailable(a: AvailabilityResponse): string | null {
+  if (!a.acceptingPreorders) return 'Lô này hiện không nhận đặt trước.'
+  if (a.specs.length === 0) return 'Lô chưa có bảng chào giá.'
+  const remaining = preorderRemaining(a)
+  if (remaining <= 0) return 'Lô đã hết số lượng có thể đặt trước.'
+  return remaining < a.minOrderCrabs ? `Số lượng còn lại chưa đủ cho đơn tối thiểu ${a.minOrderCrabs} con.` : null
+}
 
 /** "380.000 đ – 520.000 đ / kg" từ bảng chào giá. */
 export function priceRange(offers: { pricePerKg: number }[]): string | null {

@@ -50,6 +50,8 @@
 .o2-top__where b { color: var(--fg); font-weight: 600; }
 .o2-top__right { display: flex; align-items: center; gap: 10px; }
 .o2-bell { position: relative; }
+.o2-account-link { width: 44px; height: 44px; transition: box-shadow 0.2s; }
+.o2-account-link:hover, .o2-account-link[aria-current="page"] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent); }
 .o2-bell i { position: absolute; top: 8px; right: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg); }
 
 /* ---------- di động ---------- */

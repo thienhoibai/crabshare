@@ -186,13 +186,13 @@ export const AREAS: Record<Area, AreaConfig> = {
     home: '/khach',
     title: 'Khách hàng',
     roles: ['Customer'],
-    bell: '/khach/giao-hang',
+    bell: '/khach/thong-bao',
     groups: [
       {
         label: 'Đặt trước',
         items: [
           { href: '/khach', icon: ShoppingBag, label: 'Đơn của tôi', short: 'Đơn', tab: true },
-          { href: '/lo', icon: Sprout, label: 'Lô nhận đặt trước', short: 'Đặt trước', tab: true },
+          { href: '/khach/lo', icon: Sprout, label: 'Lô nhận đặt trước', short: 'Đặt trước', tab: true },
           { href: '/khach/giao-hang', icon: Truck, label: 'Giao hàng và nghiệm thu', short: 'Giao hàng', tab: true },
         ],
       },
@@ -200,9 +200,6 @@ export const AREAS: Record<Area, AreaConfig> = {
         label: 'Tài khoản',
         items: [
           { href: '/khach/dia-diem', icon: MapPin, label: 'Địa điểm nhận hàng' },
-          // API thông báo hiện chỉ mở cho vai trò nhà đầu tư (Features/Portfolio), nên chỉ hiện với tài khoản có vai trò đó.
-          { href: '/khach/thong-bao', icon: BellRing, label: 'Thông báo', roles: ['Investor'] },
-          { href: '/khach/ho-so', icon: UserRound, label: 'Hồ sơ', tab: true },
         ],
       },
     ],
