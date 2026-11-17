@@ -89,10 +89,8 @@ export default function PreorderBuilderPage() {
   const totalValue = lines.reduce((sum, l) => sum + l.value, 0)
   const deposit = Math.round((totalValue * a.depositRatePct) / 100)
   const splitLines: SplitLine[] = lines.map((l) => ({ specCode: l.spec.specCode, specName: l.spec.specName, mode: l.mode, qty: l.qty }))
-  const located = (s: PartySiteResponse) => s.latitude != null && s.longitude != null
-  const usable = (sites.data ?? []).filter(located)
-  const missingLocation = sites.data?.filter((s) => !located(s)) ?? []
-  const chosen = siteId === null ? usable.find((s) => s.isDefault) ?? usable[0] : usable.find((s) => s.siteId === siteId)
+  const addresses = sites.data ?? []
+  const chosen = siteId === null ? addresses.find((s) => s.isDefault) ?? addresses[0] : addresses.find((s) => s.siteId === siteId)
   // Gợi ý ngày của đợt đầu: ngày Lô dự kiến nhận cua nếu ngày đó chưa qua, không thì để khách tự chọn.
   const firstDate = b.expectedReceiptDate && b.expectedReceiptDate >= new Date().toISOString().slice(0, 10) ? b.expectedReceiptDate : ''
 
@@ -183,24 +181,20 @@ export default function PreorderBuilderPage() {
 
           <OpPanel title="Giao tới" subtitle={b.deliveryRadiusKm ? `Lô giao trong bán kính ${fmtKm(b.deliveryRadiusKm)}.` : undefined}
             action={<OpBtn variant="ghost" sm onClick={() => setEditingSite('new')}><MapPinPlus size={15} /> Thêm địa chỉ</OpBtn>}>
-            {sites.isPending ? <OpLoading /> : sites.isError ? <OpError error={sites.error} onRetry={() => void sites.refetch()} /> : sites.data.length > 0 && (
+            {sites.isPending ? <OpLoading /> : sites.isError ? <OpError error={sites.error} onRetry={() => void sites.refetch()} /> : addresses.length > 0 && (
               <RadioCards<string>
                 name="delivery-site"
                 value={chosen ? String(chosen.siteId) : null}
                 onChange={(v) => setSiteId(Number(v))}
-                options={sites.data.map((s) => ({ value: String(s.siteId), label: s.name, hint: located(s) ? s.addressLine : 'Thiếu toạ độ', disabled: !located(s) }))}
+                options={addresses.map((s) => ({ value: String(s.siteId), label: s.name, hint: s.addressLine }))}
               />
             )}
-            {missingLocation.length > 0 && (
-              <div className="op-form">
-                <small className="rd-muted">Bổ sung vị trí để tính khoảng cách giao hàng.</small>
-                <div className="op-inline">
-                  {missingLocation.map((site) => (
-                    <OpBtn key={site.siteId} className="max-w-full" variant="ghost" sm onClick={() => setEditingSite(site)}>
-                      <span className="truncate">Bổ sung vị trí cho {site.name}</span>
-                    </OpBtn>
-                  ))}
-                </div>
+            {chosen && (chosen.latitude == null || chosen.longitude == null) && (
+              <div className="op-inline">
+                <small className="rd-muted">Khoảng cách giao chưa xác định.</small>
+                <OpBtn className="max-w-full" variant="ghost" sm onClick={() => setEditingSite(chosen)}>
+                  <span className="truncate">Bổ sung vị trí cho {chosen.name}</span>
+                </OpBtn>
               </div>
             )}
             {!split && lines.length > 0 && (
@@ -231,7 +225,7 @@ export default function PreorderBuilderPage() {
 
       {editingSite && (
         <OpModal title={editingSite === 'new' ? 'Thêm địa điểm nhận hàng' : `Sửa ${editingSite.name}`} onClose={() => setEditingSite(null)} wide>
-          <SiteForm site={editingSite === 'new' ? undefined : editingSite} needLocation onCancel={() => setEditingSite(null)}
+          <SiteForm site={editingSite === 'new' ? undefined : editingSite} onCancel={() => setEditingSite(null)}
             onDone={(site) => { setSiteId(site.siteId); setEditingSite(null) }} />
         </OpModal>
       )}

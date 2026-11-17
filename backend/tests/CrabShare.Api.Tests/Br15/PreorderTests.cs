@@ -43,11 +43,32 @@ public sealed class PreorderTests(Br15Fixture f) : IClassFixture<Br15Fixture>
         Assert.Equal(6_710_000, order.GetProperty("estimatedValue").GetInt64());
         Assert.Equal(1_342_000, order.GetProperty("depositAmount").GetInt64());
         Assert.Equal(1_342_000, order.GetProperty("deposit").GetProperty("amount").GetInt64());
+        Assert.True(order.GetProperty("deliveryDistanceKm").GetDecimal() > 0);
         Assert.Single(order.GetProperty("tranches").EnumerateArray());
 
         var availability = await Br15Fixture.Body(await client.GetAsync($"/api/batches/{batch.Code}/availability"));
         Assert.Equal(100, availability.GetProperty("sellableCrabs").GetInt32());
         Assert.Equal(60, availability.GetProperty("remainingCrabs").GetInt32());
+    }
+
+    [Fact]
+    public async Task Preorder_accepts_a_manual_address_and_leaves_distance_unset()
+    {
+        var batch = await BatchWith100CrabsAsync();
+        var customer = await Br15Scenario.CustomerAsync(f);
+        using var client = customer.Client(f);
+        const string address = "12 Lê Lợi, Quận 1";
+        var site = await Br15Fixture.Body(await Br15Fixture.PostJson(client, "/api/me/sites", new
+        {
+            siteType = "DeliveryAddress", name = "Nhà hàng", addressLine = address,
+        }));
+
+        var order = await Br15Fixture.Body(await Br15Fixture.PostJson(client, "/api/preorders", Order(batch.Code, site.GetProperty("siteId").GetInt64())));
+
+        Assert.Equal("PendingDeposit", order.GetProperty("status").GetString());
+        Assert.Equal(address, order.GetProperty("deliveryAddress").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, order.GetProperty("deliveryDistanceKm").ValueKind);
+        Assert.Equal(1_342_000, order.GetProperty("deposit").GetProperty("amount").GetInt64());
     }
 
     [Fact]
