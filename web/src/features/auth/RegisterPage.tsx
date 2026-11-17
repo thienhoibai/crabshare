@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { ArrowRight } from 'lucide-react'
+import { useNavigate } from 'react-router'
 import { errorMessage } from '../../shared/api/http'
 import { homePathFor } from '../../shared/auth/authStore'
 import { Checkbox, Field, Input, OpBtn, OpNote, RadioCards, Select, options } from '../../shared/ui/console'
@@ -86,7 +87,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <AuthLayout title="Đăng ký" alternate={<>Đã có tài khoản? <Link to="/dang-nhap">Đăng nhập</Link></>}>
+    <AuthLayout mode="register">
       <form className="op-form" onSubmit={submit} onChange={() => setMessage('')} noValidate>
         <fieldset className="auth-roles">
           <legend className="op-label">Loại tài khoản</legend>
@@ -156,7 +157,10 @@ export default function RegisterPage() {
         </div>
 
         {message && <div role="alert"><OpNote tone="danger">{message}</OpNote></div>}
-        <OpBtn className="auth-submit" type="submit" full disabled={register.isPending}>{register.isPending ? 'Đang tạo tài khoản…' : 'Tạo tài khoản'}</OpBtn>
+        <OpBtn className="auth-submit" type="submit" full disabled={register.isPending}>
+          {register.isPending ? 'Đang tạo tài khoản…' : 'Tạo tài khoản'}
+          <ArrowRight size={18} aria-hidden="true" />
+        </OpBtn>
       </form>
     </AuthLayout>
   )

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router'
+import { ArrowRight } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router'
 import { errorMessage } from '../../shared/api/http'
 import { homePathFor } from '../../shared/auth/authStore'
 import { Field, Input, OpBtn, OpNote } from '../../shared/ui/console'
@@ -35,7 +36,7 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthLayout title="Đăng nhập" alternate={<>Chưa có tài khoản? <Link to="/dang-ky">Tạo tài khoản</Link></>}>
+    <AuthLayout mode="login">
       <form className="op-form" onSubmit={onSubmit} onChange={() => setMessage('')} noValidate>
         <Field htmlFor="login-email" label="Email">
           <Input id="login-email" name="email" type="email" autoComplete="email" value={email} placeholder="ban@vidu.vn" required
@@ -46,7 +47,10 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)} />
         </Field>
         {message && <div role="alert"><OpNote tone="danger">{message}</OpNote></div>}
-        <OpBtn className="auth-submit" type="submit" full disabled={login.isPending}>{login.isPending ? 'Đang đăng nhập…' : 'Đăng nhập'}</OpBtn>
+        <OpBtn className="auth-submit" type="submit" full disabled={login.isPending}>
+          {login.isPending ? 'Đang đăng nhập…' : 'Đăng nhập'}
+          <ArrowRight size={18} aria-hidden="true" />
+        </OpBtn>
       </form>
 
       {import.meta.env.DEV && (
