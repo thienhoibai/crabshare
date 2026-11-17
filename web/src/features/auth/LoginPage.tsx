@@ -39,7 +39,7 @@ export default function LoginPage() {
     <AuthLayout mode="login">
       <form className="op-form" onSubmit={onSubmit} onChange={() => setMessage('')} noValidate>
         <Field htmlFor="login-email" label="Email">
-          <Input id="login-email" name="email" type="email" autoComplete="email" value={email} placeholder="ban@vidu.vn" required
+          <Input id="login-email" name="email" type="email" autoComplete="email" value={email} placeholder="Nhập địa chỉ email" required
             onChange={(e) => setEmail(e.target.value)} />
         </Field>
         <Field htmlFor="login-password" label="Mật khẩu">

@@ -1,35 +1,31 @@
-/* /khach/thong-bao — Thông báo (GET /api/me/notifications, phân trang).
-   API hiện chỉ phát thông báo về góp vốn và chỉ nhận tài khoản có vai trò nhà đầu tư; tài khoản chỉ là khách hàng
-   nhận 403, nên trang không gọi API cho các tài khoản đó và chỉ đường tới nơi theo dõi đơn. */
+/* /khach/thong-bao — Việc cần làm lấy từ đơn và chuyến giao. Thông báo góp vốn dùng API riêng khi có vai trò nhà đầu tư. */
 import { useState } from 'react'
 import { BellRing, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { NotificationPage } from '../../shared/api/api.gen'
 import { useAuthStore } from '../../shared/auth/authStore'
 import { Money, OpEmpty, OpHeading, OpIcon, OpPanel, OpRow, QueryView, formatDateTime, useGet } from '../../shared/ui/console'
+import { CustomerTasks } from './CustomerTasks'
+import { useMyOrders } from './customerData'
 
 const PAGE_SIZE = 20
 
 export default function NotificationsPage() {
   const isInvestor = useAuthStore((s) => !!s.user?.roles.includes('Investor'))
   const [page, setPage] = useState(1)
+  const orders = useMyOrders()
   const notifications = useGet<NotificationPage>(isInvestor ? '/api/me/notifications' : null, { page, pageSize: PAGE_SIZE })
 
   return (
     <>
-      <OpHeading eyebrow="Tài khoản" title="Thông báo" />
-      {!isInvestor ? (
-        <OpPanel>
-          <OpEmpty title="Chưa có thông báo" icon={<BellRing size={30} />}>
-            <a className="rd-btn rd-btn--ghost" href="/khach/giao-hang">Theo dõi giao hàng</a>
-          </OpEmpty>
-        </OpPanel>
-      ) : (
+      <OpHeading title="Thông báo" />
+      <QueryView query={orders}>{(data) => <CustomerTasks orders={data.items} showEmpty />}</QueryView>
+      {isInvestor && (
         <QueryView query={notifications}>
           {(data) => {
-            if (data.total === 0) return <OpPanel><OpEmpty title="Chưa có thông báo" icon={<BellRing size={30} />} /></OpPanel>
+            if (data.total === 0) return <OpPanel title="Thông báo góp vốn"><OpEmpty title="Chưa có thông báo góp vốn" icon={<BellRing size={30} />} /></OpPanel>
             const pages = Math.ceil(data.total / data.pageSize)
             return (
-              <OpPanel className="op-list">
+              <OpPanel title="Thông báo góp vốn">
                 {data.items.map((n) => (
                   <OpRow
                     key={n.id}

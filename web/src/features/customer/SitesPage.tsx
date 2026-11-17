@@ -17,7 +17,6 @@ export default function SitesPage() {
   return (
     <>
       <OpHeading
-        eyebrow="Tài khoản"
         title="Địa điểm nhận hàng"
         action={<OpBtn onClick={() => setEditing('new')}><Plus size={17} /> Thêm địa điểm</OpBtn>}
       />

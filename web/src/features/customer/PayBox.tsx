@@ -27,7 +27,7 @@ export function PayBox({ start, onPaid }: { start: PayStart; onPaid?: () => void
 
   return (
     <div className="op-stack" style={{ gap: 10 }}>
-      <VietQrBox payment={payment} status={status} onExpire={() => void queryClient.invalidateQueries()} />
+      <VietQrBox payment={payment} status={status} manualLabel="Chuyển khoản thủ công" onExpire={() => void queryClient.invalidateQueries()} />
       {status === 'Pending' && <SimulatePaymentButton payment={{ paymentRequestId: start.paymentRequestId, referenceCode: payment.referenceCode }} />}
     </div>
   )

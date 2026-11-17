@@ -1,74 +1,49 @@
-/* /khach — Đơn của tôi: các đơn đặt trước (GET /api/preorders) kèm tóm tắt việc cần làm.
-   Việc cần làm lấy từ đơn chờ cọc và từ chuyến giao của các đơn đang giao (GET /api/preorders/{orderNo}/deliveries). */
+/* /khach — Đơn đặt trước và việc khách cần xử lý. */
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
 import { ChevronLeft, ChevronRight, Sprout } from 'lucide-react'
 import type { PreorderResponse } from '../../shared/api/api.gen'
 import {
-  Money, OpEmpty, OpFacts, OpHeading, OpPanel, OpTable, OpTabs, OpTodo, QueryView, StatusBadge, formatDate, formatDateTime, formatVnd,
-  type Todo,
+  Money, OpBadge, OpEmpty, OpHeading, OpPanel, OpTabs, QueryView, StatusBadge, formatDate, label,
 } from '../../shared/ui/console'
-import { DELIVERY_ORDER, OPEN_ORDER, depositState, nextTranche, orderHref, shipmentStage, useDeliveriesOf, useMyOrders } from './customerData'
+import { CustomerTasks } from './CustomerTasks'
+import { OPEN_ORDER, depositHoldExpired, depositState, nextTranche, orderHref, useMyOrders } from './customerData'
 
 type Filter = 'open' | 'closed' | 'all'
 
-function Summary({ orders }: { orders: PreorderResponse[] }) {
-  const waitingDeposit = orders.filter((o) => o.status === 'PendingDeposit')
-  const deliveries = useDeliveriesOf(orders.filter((o) => DELIVERY_ORDER.includes(o.status)).map((o) => o.orderNo))
-  const shipments = deliveries.flatMap((q) => q.data?.shipments ?? [])
-  const toAccept = shipments.filter((s) => shipmentStage(s) === 'accept')
-  const toPay = shipments.filter((s) => shipmentStage(s) === 'pay')
-  const balance = toPay.reduce((sum, s) => sum + (s.acceptance?.balanceDue ?? 0), 0)
-  const loading = deliveries.some((q) => q.isPending)
-
-  const todo: Todo[] = [
-    ...waitingDeposit.map((o) => ({
-      title: `Đặt cọc đơn ${o.orderNo}`,
-      sub: `${formatVnd(o.depositAmount)} · giữ đơn tới ${formatDateTime(o.holdExpiresAt)}`,
-      href: orderHref(o.orderNo, 'coc'),
-      tone: 'warn' as const,
-    })),
-    ...toAccept.map((s) => ({
-      title: `Nghiệm thu chuyến ${s.shipmentNo}`,
-      sub: `Đơn ${s.orderNo} · đợt ${s.trancheSeq}`,
-      href: orderHref(s.orderNo, `chuyen-${s.shipmentNo}`),
-      tone: 'gold' as const,
-    })),
-    ...toPay.map((s) => ({
-      title: `Trả phần còn lại của chuyến ${s.shipmentNo}`,
-      sub: `${formatVnd(s.acceptance?.balanceDue ?? 0)} · hạn ${formatDateTime(s.acceptance?.balanceDueAt)}`,
-      href: orderHref(s.orderNo, `chuyen-${s.shipmentNo}`),
-      tone: 'danger' as const,
-    })),
-  ]
-
+function OrderRow({ order }: { order: PreorderResponse }) {
+  const next = nextTranche(order)
+  const expired = depositHoldExpired(order)
+  const deposit = expired ? null : depositState(order)
+  const status = expired ? 'Hết hạn đặt cọc' : label('order', order.status)
   return (
-    <>
-      {todo.length > 0 && (
-        <OpPanel title="Việc cần làm" accent>
-          <OpTodo items={todo} />
-        </OpPanel>
-      )}
-      <OpFacts items={[
-        { label: 'Chờ đặt cọc', value: waitingDeposit.length, tone: waitingDeposit.length ? 'warn' : undefined },
-        { label: 'Chờ nghiệm thu', value: loading ? '…' : toAccept.length, tone: toAccept.length ? 'info' : undefined },
-        { label: 'Còn phải trả', value: loading ? '…' : formatVnd(balance), tone: balance > 0 ? 'danger' : undefined },
-        { label: 'Đơn đang chạy', value: orders.filter((o) => OPEN_ORDER.includes(o.status)).length },
-      ]} />
-    </>
+    <li>
+      <a className="customer-order-row" href={orderHref(order.orderNo)} aria-label={`Xem đơn ${order.orderNo}, ${status}`}>
+        <div className="customer-order-row__head">
+          <span><b>{order.orderNo}</b><small>Lô {order.batchCode}</small></span>
+          {expired ? <OpBadge>{status}</OpBadge> : <StatusBadge kind="order" value={order.status} />}
+        </div>
+        <dl className="customer-order-row__facts">
+          <div><dt>Số lượng</dt><dd>{order.convertedCrabs} con</dd></div>
+          <div><dt>Ước tính</dt><dd><Money value={order.estimatedValue} /></dd></div>
+          <div><dt>Tiền cọc</dt><dd><Money value={order.depositAmount} />{deposit && <StatusBadge kind="deposit" value={deposit} />}</dd></div>
+          <div>
+            <dt>Đợt giao tiếp theo</dt>
+            <dd>{next ? <>Đợt {next.seq}, {formatDate(next.dueDate)}<StatusBadge kind="deliveryTranche" value={next.status} /></> : 'Chưa có'}</dd>
+          </div>
+        </dl>
+      </a>
+    </li>
   )
 }
 
 export default function MyOrdersPage() {
-  const navigate = useNavigate()
   const [page, setPage] = useState(1)
-  const [filter, setFilter] = useState<Filter>('open')
+  const [picked, setPicked] = useState<Filter | null>(null)
   const orders = useMyOrders(page)
 
   return (
     <>
       <OpHeading
-        eyebrow="Khách hàng"
         title="Đơn của tôi"
         action={orders.data && orders.data.total > 0 ? <a className="rd-btn rd-btn--ghost" href="/khach/lo"><Sprout size={17} /> Xem Lô nhận đặt trước</a> : undefined}
       />
@@ -85,49 +60,25 @@ export default function MyOrdersPage() {
           }
           const open = data.items.filter((o) => OPEN_ORDER.includes(o.status))
           const closed = data.items.filter((o) => !OPEN_ORDER.includes(o.status))
+          const filter = picked ?? (open.length > 0 ? 'open' : 'all')
           const rows = filter === 'open' ? open : filter === 'closed' ? closed : data.items
           const pages = Math.ceil(data.total / data.pageSize)
           return (
             <>
-              <Summary orders={data.items} />
+              <CustomerTasks orders={data.items} />
               <OpTabs<Filter>
                 value={filter}
-                onChange={setFilter}
+                onChange={setPicked}
+                label="Lọc đơn đặt trước"
                 items={[
-                  { key: 'open', label: 'Đang chạy', count: open.length },
+                  { key: 'open', label: 'Đang xử lý', count: open.length },
                   { key: 'closed', label: 'Đã xong', count: closed.length },
                   { key: 'all', label: 'Tất cả' },
                 ]}
               />
-              <OpPanel>
-                <OpTable
-                  rows={rows}
-                  rowKey={(o) => o.orderNo}
-                  empty="Không có đơn nào ở mục này"
-                  onRowClick={(o) => navigate(orderHref(o.orderNo))}
-                  columns={[
-                    {
-                      key: 'order', header: 'Đơn',
-                      cell: (o) => <><a className="op-mono" href={orderHref(o.orderNo)}><b>{o.orderNo}</b></a><br /><small className="rd-muted">Lô {o.batchCode}</small></>,
-                    },
-                    {
-                      key: 'qty', header: 'Số lượng', num: true,
-                      cell: (o) => <><b>{o.convertedCrabs} con</b><br /><small className="rd-muted">{formatVnd(o.estimatedValue)}</small></>,
-                    },
-                    {
-                      key: 'deposit', header: 'Tiền cọc',
-                      cell: (o) => <><Money value={o.depositAmount} /><br /><StatusBadge kind="deposit" value={depositState(o)} /></>,
-                    },
-                    {
-                      key: 'next', header: 'Đợt kế tiếp',
-                      cell: (o) => {
-                        const t = nextTranche(o)
-                        return t ? <>Đợt {t.seq} · {formatDate(t.dueDate)}<br /><StatusBadge kind="deliveryTranche" value={t.status} /></> : <span className="rd-muted">—</span>
-                      },
-                    },
-                    { key: 'status', header: 'Trạng thái', cell: (o) => <StatusBadge kind="order" value={o.status} /> },
-                  ]}
-                />
+              <OpPanel title="Danh sách đơn">
+                {rows.length > 0 ? <ul className="customer-order-list">{rows.map((order) => <OrderRow key={order.orderNo} order={order} />)}</ul>
+                  : <OpEmpty title="Không có đơn nào ở mục này" />}
                 {pages > 1 && (
                   <div className="op-pager">
                     <span>Trang {data.page} / {pages} · {data.total} đơn</span>

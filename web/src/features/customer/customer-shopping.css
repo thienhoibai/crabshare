@@ -1,3 +1,96 @@
+/* Hallmark · checked: 2026-11-17 · genre: modern-minimal · shape: app screen · built: CrabShare */
+/* Critique · Hành động theo hạn xử lý đứng trước thông tin đối chiếu của đơn. */
+.o2--customer {
+  --customer-input-edge: var(--muted);
+  --customer-positive-ink: color-mix(in srgb, var(--ok-ink) 75%, var(--fg));
+}
+
+.o2--customer .o2-nav__label {
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.o2--customer .rd-eyebrow { letter-spacing: normal; text-transform: none; }
+.o2--customer .op-badge > i { display: none; }
+.o2--customer .op-facts .is-ok dd { color: var(--customer-positive-ink); }
+.o2--customer .vq-timer b { color: var(--warn-ink); }
+.o2--customer .vq-manual__toggle { min-height: 44px; }
+.o2--customer :is(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+.o2--customer :is(.op-input, .op-select, .op-textarea):not(:focus, :disabled, [aria-invalid="true"]) {
+  border-color: var(--customer-input-edge);
+}
+
+.o2--customer :is(.op-input, .op-select, .op-textarea):disabled { cursor: not-allowed; }
+.o2--customer :is(a.rd-btn, button.rd-btn):active:not(:disabled) { transform: scale(0.98); }
+
+@media (max-width: 900px) {
+  .o2--customer { grid-template-rows: auto 1fr; min-height: 100dvh; }
+  .o2--customer .o2-main :is(a, button, input, select, textarea, summary) { scroll-margin-block: 84px 112px; }
+}
+
+@media (max-width: 600px) {
+  .o2--customer .op-tabs { width: 100%; max-width: 100%; flex-wrap: wrap; overflow: visible; border-radius: 16px; }
+  .o2--customer .op-tabs > button { flex: 1 1 auto; justify-content: center; min-height: 40px; padding-inline: 12px; }
+  .o2--customer .op-tabs:has(> :nth-child(3):last-child) > button {
+    flex: 1 1 0;
+    min-width: 0;
+    gap: 4px;
+    padding-inline: 8px;
+    text-align: center;
+    white-space: normal;
+  }
+  .customer-order-detail-table .op-table :is(th, td) { padding-inline: 8px; white-space: normal; overflow-wrap: anywhere; }
+}
+
+.customer-task-panel { background: color-mix(in srgb, var(--bg) 40%, var(--surface)); }
+.customer-task-panel .op-todo { gap: 4px; }
+.customer-task-panel .op-todo > a {
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+
+.customer-task-panel .op-todo > a > .op-dot { display: none; }
+.customer-task-panel .op-todo > a > svg { flex: none; }
+.customer-task-panel .op-todo > a:hover { background: var(--input); }
+.customer-task-empty { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; }
+
+.customer-order-list { display: grid; min-width: 0; }
+.customer-order-list > li + li { border-top: 1px solid var(--line); }
+.customer-order-row {
+  display: grid;
+  align-items: start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  transition: background-color 160ms;
+  overflow-wrap: anywhere;
+}
+
+.customer-order-row:hover,
+.customer-order-row:active { background: var(--input); }
+.customer-order-row__head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: 8px; min-width: 0; }
+.customer-order-row__head > span:first-child { display: grid; gap: 4px; }
+.customer-order-row__head small,
+.customer-order-row__facts dt { color: var(--muted); font-size: 13px; }
+.customer-order-row__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.customer-order-row__facts dd { display: grid; justify-items: start; gap: 4px; font-size: 14px; font-weight: 600; }
+
+@media (min-width: 1140px) {
+  .customer-order-row { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+  .customer-order-row__head { justify-content: start; }
+  .customer-order-row__facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
 .customer-catalogue {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 20px;
@@ -13,7 +106,7 @@
 .customer-catalogue__link {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin-inline-start: auto;
   color: var(--fg);
   font-weight: 650;
@@ -27,8 +120,8 @@
 }
 
 .customer-lot-heading img { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 16px; }
-.customer-lot-heading h1 { font-size: clamp(24px, 3.4vw, 48px); line-height: 1.08; overflow-wrap: anywhere; }
-.customer-lot-heading p { margin-top: 6px; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.customer-lot-heading h1 { font-size: clamp(24px, 3.4vw, 48px); line-height: 1.08; overflow-wrap: anywhere; text-wrap: balance; }
+.customer-lot-heading p { margin-top: 8px; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
 .customer-lot-details { display: grid; min-width: 0; gap: 16px; }
 .customer-lot-summary { padding: clamp(16px, 3vw, 24px); border-radius: 20px; box-shadow: none; }
 
@@ -52,7 +145,7 @@
 .customer-price-list dd { text-align: end; }
 .customer-price-list small { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; }
 
-.customer-order-lines { display: grid; gap: 10px; container-type: inline-size; }
+.customer-order-lines { display: grid; gap: 12px; container-type: inline-size; }
 .customer-order-line {
   display: grid;
   align-items: end;
@@ -92,6 +185,8 @@
 .customer-order-line__estimate strong { color: var(--fg); }
 
 @media (prefers-reduced-motion: reduce) {
+  .o2--customer *, .o2--customer *::before, .o2--customer *::after { animation: none; transition: none; }
+  .o2--customer :is(a.rd-btn, button.rd-btn):active:not(:disabled) { transform: none; }
   .customer-catalogue a.op-card { transition: none; }
   .customer-catalogue a.op-card:hover { transform: none; }
 }
