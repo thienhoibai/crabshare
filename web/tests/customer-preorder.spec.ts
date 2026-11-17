@@ -139,7 +139,7 @@ test('đặt theo số con và theo kg, chọn nơi nhận, gửi đơn, quét Q
   await expect(aside(page).getByRole('link', { name: 'Xem đơn' })).toHaveAttribute('href', `/khach/don/${orderPending.orderNo}`)
   // Số tài khoản nằm sau bước "chuyển khoản thủ công".
   await expect(page.getByText('9704000000456')).toBeHidden()
-  await page.getByRole('button', { name: 'Không quét được mã? Chuyển khoản thủ công' }).click()
+  await page.getByRole('button', { name: 'Chuyển khoản thủ công' }).click()
   await expect(page.getByText('9704000000456')).toBeVisible()
   await expect(page.locator('dd', { hasText: `Lô ${batchP.batchCode}` })).toBeVisible()
 

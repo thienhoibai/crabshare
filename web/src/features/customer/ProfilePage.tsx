@@ -63,7 +63,7 @@ export default function ProfilePage() {
 
   return (
     <>
-      <OpHeading eyebrow="Tài khoản" title="Hồ sơ"
+      <OpHeading title="Hồ sơ"
         action={party.data ? <OpBtn onClick={() => setEditing(true)}><Pencil size={17} /> Sửa hồ sơ</OpBtn> : undefined} />
       <QueryView query={party}>
         {(p) => (

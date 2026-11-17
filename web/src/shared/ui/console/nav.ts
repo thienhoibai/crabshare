@@ -193,7 +193,7 @@ export const AREAS: Record<Area, AreaConfig> = {
         items: [
           { href: '/khach', icon: ShoppingBag, label: 'Đơn của tôi', short: 'Đơn', tab: true },
           { href: '/khach/lo', icon: Sprout, label: 'Lô nhận đặt trước', short: 'Đặt trước', tab: true },
-          { href: '/khach/giao-hang', icon: Truck, label: 'Giao hàng và nghiệm thu', short: 'Giao hàng', tab: true },
+          { href: '/khach/giao-hang', icon: Truck, label: 'Giao hàng', tab: true },
         ],
       },
       {

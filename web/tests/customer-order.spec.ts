@@ -16,6 +16,33 @@ async function open(page: Page, api: Api, path: string) {
 }
 
 test.describe('/khach', () => {
+  test('đọc được trạng thái và đợt giao của đơn trên điện thoại mà không cần cuộn ngang', async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await open(page, api, '/khach')
+    const order = page.getByRole('link', { name: new RegExp(`Xem đơn ${orderDelivering.orderNo}`) })
+    await expect(order).toContainText('Đang giao theo đợt')
+    await expect(order).toContainText('Đợt 1')
+    const geometry = await order.evaluate((element) => ({ width: element.clientWidth, content: element.scrollWidth }))
+    expect(geometry.content).toBeLessThanOrEqual(geometry.width + 1)
+    await expect(page.getByRole('main').locator('.op-tablewrap')).toHaveCount(0)
+  })
+
+  test('chuông của khách hàng hiện việc cần làm và đọc đúng thời hạn giữ đơn', async ({ page, api }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    mockCustomer(api)
+    api.get('/api/preorders', ordersPage([{ ...orderPending, holdExpiresAt: '2000-01-01T00:00:00Z' }, orderDelivering]))
+    await signIn(page, 'Customer')
+    await page.goto('/khach/thong-bao')
+    await expect(page.getByRole('heading', { name: 'Thông báo', exact: true })).toBeVisible()
+    await expect(page.getByRole('link', { name: `Nghiệm thu chuyến ${SHIP}` })).toHaveAttribute('href', `/khach/don/${orderDelivering.orderNo}#chuyen-${SHIP}`)
+    await expect(page.getByRole('link', { name: `Đặt cọc đơn ${orderPending.orderNo}` })).toHaveCount(0)
+    const header = await page.getByRole('banner').boundingBox()
+    expect(header!.height).toBeLessThan(76)
+    expect(api.sent('GET', '/api/me/notifications')).toEqual([])
+    await page.goto('/khach')
+    await expect(page.getByRole('link', { name: `Xem đơn ${orderPending.orderNo}, Hết hạn đặt cọc` })).toBeVisible()
+  })
+
   test('đầu trang là việc cần làm, bên dưới là các đơn đang chạy', async ({ page, api }) => {
     await open(page, api, '/khach')
     await expect(page.getByRole('heading', { name: 'Đơn của tôi' })).toBeVisible()
@@ -26,21 +53,17 @@ test.describe('/khach', () => {
     await expect(pay).toContainText(vnd(2_685_600))
     const accept = todo.getByRole('link', { name: `Nghiệm thu chuyến ${SHIP}` })
     await expect(accept).toHaveAttribute('href', `/khach/don/${orderDelivering.orderNo}#chuyen-${SHIP}`)
-    await expect(accept).toContainText(`Đơn ${orderDelivering.orderNo} · đợt 1`)
+    await expect(accept).toContainText(`Đơn ${orderDelivering.orderNo}, đợt 1`)
 
-    const facts = page.locator('dl.op-facts')
-    await expect(facts).toContainText('Chờ đặt cọc1')
-    await expect(facts).toContainText('Chờ nghiệm thu1')
-    await expect(facts).toContainText(`Còn phải trả${vnd(0)}`)
-    await expect(facts).toContainText('Đơn đang chạy2')
+    await expect(page.getByRole('tab', { name: /Đang xử lý/ })).toHaveAttribute('aria-selected', 'true')
 
-    const pending = page.getByRole('row', { name: new RegExp(orderPending.orderNo) })
+    const pending = page.getByRole('link', { name: new RegExp(`Xem đơn ${orderPending.orderNo}`) })
     await expect(pending).toContainText('Lô P-2611-01')
     await expect(pending).toContainText('44 con')
     await expect(pending).toContainText(vnd(8_952_000))
     await expect(pending).toContainText('Chưa cọc')
     await expect(pending).toContainText('Chờ đặt cọc')
-    const delivering = page.getByRole('row', { name: new RegExp(orderDelivering.orderNo) })
+    const delivering = page.getByRole('link', { name: new RegExp(`Xem đơn ${orderDelivering.orderNo}`) })
     await expect(delivering).toContainText('Đang giữ cọc')
     await expect(delivering).toContainText('Đợt 1')
     await expect(delivering).toContainText('Đã xuất hàng')
@@ -80,6 +103,7 @@ test.describe('/khach/don/:orderNo', () => {
 
     await expect(page.getByRole('heading', { name: `Đơn ${orderDelivering.orderNo}` })).toBeVisible()
     await expect(page.getByText('Lô T-2611-02 · Cua thịt Ngọc Hiển đợt 2')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Xem Lô T-2611-02' })).toHaveAttribute('href', '/khach/lo/T-2611-02')
     await expect(page.locator('header.op-heading')).toContainText('Đang giao theo đợt')
 
     const todo = panel(page, `Nghiệm thu chuyến ${SHIP}`)
