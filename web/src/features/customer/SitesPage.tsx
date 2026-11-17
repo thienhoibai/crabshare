@@ -27,15 +27,15 @@ export default function SitesPage() {
         ) : (
           <div className="op-cards">
             {rows.map((s) => {
-              const located = s.latitude !== null && s.longitude !== null
+              const located = s.latitude != null && s.longitude != null
               return (
                 <div key={s.siteId} className="op-card">
                   <span className="op-card__body">
                     <span className="op-between">
-                      <OpIcon tone={located ? 'gold' : 'warn'}><MapPin size={20} /></OpIcon>
+                      <OpIcon tone="gold"><MapPin size={20} /></OpIcon>
                       <span className="op-inline">
                         {s.isDefault && <OpBadge tone="ok">Mặc định</OpBadge>}
-                        {!located && <OpBadge tone="warn">Thiếu toạ độ</OpBadge>}
+                        {!located && <OpBadge>Chưa có vị trí</OpBadge>}
                       </span>
                     </span>
                     <b className="op-card__title">{s.name}</b>

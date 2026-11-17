@@ -80,6 +80,17 @@ export function SiteForm({ site, onDone, onCancel, needLocation = false }: {
     })
   }
 
+  const locationFields = (
+    <>
+      <Field label="Toạ độ" required={needLocation} hint="Dán vĩ độ và kinh độ từ bản đồ hoặc dùng vị trí hiện tại.">
+        <Input value={coords} placeholder="10.7769, 106.7009" required={needLocation} onChange={(e) => setCoords(e.target.value)} />
+      </Field>
+      <div>
+        <OpBtn type="button" variant="ghost" sm onClick={locate} disabled={locating}><LocateFixed size={15} /> {locating ? 'Đang lấy vị trí…' : 'Dùng vị trí hiện tại'}</OpBtn>
+      </div>
+    </>
+  )
+
   return (
     <form className="op-form" onSubmit={submit} noValidate>
       <div className="op-form__row">
@@ -93,13 +104,7 @@ export function SiteForm({ site, onDone, onCancel, needLocation = false }: {
       <Field label="Địa chỉ" required>
         <Input value={addressLine} maxLength={300} autoComplete="street-address" onChange={(e) => setAddressLine(e.target.value)} />
       </Field>
-      <Field label="Toạ độ" required={needLocation}
-        hint={needLocation ? 'Chép từ bản đồ: vĩ độ, kinh độ' : 'Chưa bắt buộc. Khi đặt trước mới cần, để tính khoảng cách giao.'}>
-        <Input value={coords} inputMode="decimal" placeholder="10.7769, 106.7009" onChange={(e) => setCoords(e.target.value)} />
-      </Field>
-      <div>
-        <OpBtn type="button" variant="ghost" sm onClick={locate} disabled={locating}><LocateFixed size={15} /> {locating ? 'Đang lấy vị trí…' : 'Dùng vị trí hiện tại'}</OpBtn>
-      </div>
+      {needLocation ? locationFields : <OpMore label="Vị trí trên bản đồ (không bắt buộc)">{locationFields}</OpMore>}
       <OpMore label="Tuỳ chọn thêm">
         <div className="op-form__row">
           <Field label="Tên người nhận">
@@ -111,7 +116,7 @@ export function SiteForm({ site, onDone, onCancel, needLocation = false }: {
         </div>
         <Checkbox checked={isDefault} onChange={setIsDefault} disabled={site?.isDefault}>Dùng làm địa điểm mặc định</Checkbox>
       </OpMore>
-      {(message || save.isError) && <OpNote tone="danger">{message || errorMessage(save.error)}</OpNote>}
+      {(message || save.isError) && <div role="alert"><OpNote tone="danger">{message || errorMessage(save.error)}</OpNote></div>}
       <div className="op-formfoot">
         <OpBtn type="button" variant="ghost" onClick={onCancel}>Đóng</OpBtn>
         <OpBtn type="submit" disabled={save.isPending}>{save.isPending ? 'Đang lưu…' : site ? 'Lưu địa điểm' : 'Thêm địa điểm'}</OpBtn>

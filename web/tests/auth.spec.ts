@@ -67,6 +67,25 @@ test('đăng ký báo lỗi tại ô nhập, hiện mật khẩu và gửi đún
   }])
 })
 
+test('đăng ký với số điện thoại đã dùng báo lỗi ngay tại ô số điện thoại', async ({ page, api }) => {
+  api.post('/api/auth/register', () => reply(409, {
+    status: 409, code: 'db.unique', detail: "Dữ liệu bị trùng: Cannot insert duplicate key with unique index 'ux_app_user_phone'.",
+  }))
+  await page.goto('/dang-ky')
+  await page.getByRole('textbox', { name: 'Họ và tên', exact: true }).fill('Người dùng thử')
+  await page.getByRole('textbox', { name: 'Email', exact: true }).fill('khach@test.local')
+  await page.getByLabel(/^Mật khẩu/).fill('mat-khau-thu')
+  const phone = page.getByLabel('Số điện thoại (không bắt buộc)', { exact: true })
+  await phone.fill('0901234567')
+  await page.getByRole('checkbox', { name: 'Tôi đồng ý điều khoản sử dụng' }).check()
+  await page.getByRole('button', { name: 'Tạo tài khoản' }).click()
+  await expect(phone).toHaveAccessibleDescription('Số điện thoại này đã được dùng cho một tài khoản khác.')
+  await expect(phone).toBeFocused()
+  await expect(page.getByText(/ux_app_user_phone/)).toHaveCount(0)
+  await phone.fill('0901234568')
+  await expect(phone).not.toHaveAttribute('aria-invalid', 'true')
+})
+
 const PORTALS: { role: Role; home: string; menu: string; link: string }[] = [
   { role: 'Customer', home: '/khach', menu: 'Menu Khách hàng', link: 'Đơn của tôi' },
   { role: 'Investor', home: '/nha-dau-tu', menu: 'Menu Nhà đầu tư', link: 'Lô đang gọi vốn' },

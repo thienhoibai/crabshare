@@ -12,6 +12,7 @@ import './console-v15.css'
 
 const initials = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(-2).map((w) => w[0]).join('').toUpperCase() || 'CS'
+const CUSTOMER_PROFILE = '/khach/ho-so'
 
 /** Mục menu khớp với đường dẫn hiện tại: href dài nhất là đầu của đường dẫn. */
 function activeHref(items: NavItem[], path: string): string | null {
@@ -61,6 +62,7 @@ function OperatorCard() {
 
 export default function ConsoleLayout({ area, children }: { area: Area; children?: ReactNode }) {
   const config = AREAS[area]
+  const customer = area === 'customer'
   const location = useLocation()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
@@ -71,19 +73,32 @@ export default function ConsoleLayout({ area, children }: { area: Area; children
   const roles = user?.roles ?? []
   const name = user?.fullName ?? config.title
   const allItems = config.groups.flatMap((g) => g.items).filter((i) => !i.roles || i.roles.some((r) => roles.includes(r)))
-  const active = activeHref(allItems, location.pathname)
+  const navPath = customer && location.pathname.startsWith('/khach/dat-truoc/') ? '/khach/lo' : location.pathname
+  const customerAccount = customer && (navPath === CUSTOMER_PROFILE || navPath === config.bell)
+  const active = customerAccount ? null : activeHref(allItems, navPath)
   const tabs = allItems.filter((i) => i.tab).slice(0, 4)
   const others = areasFor(roles).filter((a) => a !== area)
   const signOut = () => { logout(); window.location.href = '/' }
 
   const bell = config.bell ? (
-    <a href={config.bell} className="rd-iconbtn o2-bell" aria-label="Cảnh báo và thông báo"><Bell size={18} /></a>
+    <a href={config.bell} className="rd-iconbtn o2-bell" aria-label="Cảnh báo và thông báo"
+      aria-current={location.pathname === config.bell ? 'page' : undefined}><Bell size={18} aria-hidden="true" /></a>
   ) : null
+  const avatar = customer ? (
+    <a className="rd-avatar o2-account-link" href={CUSTOMER_PROFILE} aria-label="Hồ sơ người dùng" title="Hồ sơ người dùng"
+      aria-current={location.pathname === CUSTOMER_PROFILE ? 'page' : undefined}>{initials(name)}</a>
+  ) : <span className="rd-avatar" title={name}>{initials(name)}</span>
   const card = area === 'operator' ? <OperatorCard /> : (
     <div className="o2-farm">
       <small>Cổng</small>
       <b>{config.title}</b>
       <span>{user?.email}</span>
+    </div>
+  )
+  const identity = (
+    <div className="o2-me">
+      <span className="rd-avatar">{initials(name)}</span>
+      <span><b className="truncate">{name}</b><small>{config.title}</small></span>
     </div>
   )
   const switcher = others.length > 0 && (
@@ -102,21 +117,18 @@ export default function ConsoleLayout({ area, children }: { area: Area; children
       <div className="o2">
         <aside className="o2-side">
           <Logo href={config.home} />
-          {card}
+          {!customer && card}
           <NavLinks area={area} active={active} roles={roles} />
           <div className="o2-side__foot">
             {switcher}
-            <div className="o2-me">
-              <span className="rd-avatar">{initials(name)}</span>
-              <span><b className="truncate">{name}</b><small>{config.title}</small></span>
-            </div>
+            {!customer && identity}
             <button type="button" className="o2-out" onClick={signOut}><LogOut size={16} /> Đăng xuất</button>
           </div>
         </aside>
 
         <header className="o2-mhead">
           <Logo href={config.home} />
-          {bell}
+          <div className="o2-top__right">{bell}{customer && avatar}</div>
         </header>
 
         <main className="o2-main">
@@ -124,7 +136,7 @@ export default function ConsoleLayout({ area, children }: { area: Area; children
             <p className="o2-top__where">{config.title} · <b>{new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' })}</b></p>
             <div className="o2-top__right">
               {bell}
-              <span className="rd-avatar" title={name}>{initials(name)}</span>
+              {avatar}
             </div>
           </div>
           {children ?? <Outlet />}
@@ -132,7 +144,7 @@ export default function ConsoleLayout({ area, children }: { area: Area; children
 
         <nav className="o2-tabbar" aria-label="Điều hướng nhanh">
           {tabs.map(({ href, icon: Icon, label, short }) => (
-            <a key={href} href={href} className={`o2-tab ${active === href ? 'is-on' : ''}`}><Icon size={20} />{short ?? label}</a>
+            <a key={href} href={href} className={`o2-tab ${active === href ? 'is-on' : ''}`} aria-current={active === href ? 'page' : undefined}><Icon size={20} />{short ?? label}</a>
           ))}
           <button type="button" className={`o2-tab ${menuOpen ? 'is-on' : ''}`} onClick={() => setMenuOpen(true)}><Menu size={20} />Menu</button>
         </nav>
@@ -142,10 +154,7 @@ export default function ConsoleLayout({ area, children }: { area: Area; children
             <div className="o2-sheet__scrim" onClick={() => setMenuOpen(false)} />
             <div className="o2-sheet__panel">
               <div className="o2-sheet__head">
-                <div className="o2-me">
-                  <span className="rd-avatar">{initials(name)}</span>
-                  <span><b>{name}</b><small>{config.title}</small></span>
-                </div>
+                {customer ? <b>Menu khách hàng</b> : identity}
                 <button type="button" className="rd-iconbtn" onClick={() => setMenuOpen(false)} aria-label="Đóng"><X size={18} /></button>
               </div>
               <NavLinks area={area} active={active} roles={roles} onPick={() => setMenuOpen(false)} />
