@@ -1,4 +1,5 @@
 {
+  "buildCommand": "VITE_DEMO_TOOLS=true npm run build",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "git": { "deploymentEnabled": false },
   "github": { "enabled": false }
