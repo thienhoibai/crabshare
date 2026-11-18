@@ -51,15 +51,18 @@ function Flow({ f, refresh }: { f: FundingBatchResponse; refresh: () => void }) 
   }, [expired])
 
   const confirmed = (contributions.data ?? []).filter((c) => c.batchCode === f.batchCode && c.status === 'Confirmed')
-  const ready = f.me.kycVerified && f.me.riskAcknowledged
+  const organization = f.me.legalDossierVerified != null
+  const verified = f.me.legalDossierVerified ?? f.me.kycVerified
+  const ready = verified && f.me.riskAcknowledged
+  const hasPayment = !!reservation || paymentId !== null
   const allowed: Record<StepKey, boolean> = {
     kyc: false,
     risk: false,
     amount: ready,
-    pay: ready && (!!reservation || paymentId !== null),
+    pay: hasPayment,
     contract: !!reservation || confirmed.length > 0 || paidNow,
   }
-  const auto: StepKey = !f.me.kycVerified ? 'kyc' : !f.me.riskAcknowledged ? 'risk' : reservation ? 'pay' : 'amount'
+  const auto: StepKey = reservation ? 'pay' : !verified ? 'kyc' : !f.me.riskAcknowledged ? 'risk' : 'amount'
   const step = picked && allowed[picked] ? picked : auto
   const index = STEPS.findIndex((s) => s.key === step)
 
@@ -74,9 +77,15 @@ function Flow({ f, refresh }: { f: FundingBatchResponse; refresh: () => void }) 
       <OpSteps step={index + 1} total={STEPS.length} />
 
       {step === 'kyc' && (
-        <OpPanel title={STEPS[0].title}>
-          <OpNote tone="danger">Bạn chưa xác minh danh tính.</OpNote>
-          <div className="op-formfoot"><a className="rd-btn rd-btn--primary" href="/nha-dau-tu/ho-so?tab=xac-minh">Xác minh danh tính</a></div>
+        <OpPanel title={organization ? 'Xác minh hồ sơ pháp lý' : STEPS[0].title}>
+          <OpNote tone="danger">{organization
+            ? 'Hãy gửi giấy tờ pháp lý và chờ Admin xác minh trước khi góp vốn.'
+            : 'Bạn chưa xác minh danh tính.'}</OpNote>
+          <div className="op-formfoot">
+            <a className="rd-btn rd-btn--primary" href={organization ? '/nha-dau-tu/ho-so?tab=ho-so' : '/nha-dau-tu/ho-so?tab=xac-minh'}>
+              {organization ? 'Mở hồ sơ đối tác' : 'Xác minh danh tính'}
+            </a>
+          </div>
         </OpPanel>
       )}
       {step === 'risk' && <RiskStep onAcknowledged={() => { setPicked(null); refresh() }} />}

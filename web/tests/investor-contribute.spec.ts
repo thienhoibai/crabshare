@@ -241,6 +241,15 @@ test('chưa xác minh danh tính thì dừng ở bước 1 và chỉ có lối s
   expect(api.writes()).toEqual([])
 })
 
+test('eKYC đạt của đại diện chưa mở bước giữ chỗ khi hồ sơ tổ chức đang chờ duyệt', async ({ page, api }) => {
+  serve(api, { funding: { ...fundingNew, me: { kycVerified: true, riskAcknowledged: true, legalDossierVerified: false } } })
+  await page.goto(URL)
+  await expect(step(page, 1)).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Xác minh hồ sơ pháp lý' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Mở hồ sơ đối tác' })).toHaveAttribute('href', '/nha-dau-tu/ho-so?tab=ho-so')
+  await expect(page.getByRole('textbox', { name: /^Số tiền/ })).toHaveCount(0)
+})
+
 test('số tiền dưới mức tối thiểu hoặc quá phần còn nhận thì không giữ chỗ được', async ({ page, api }) => {
   serve(api, { funding: fundingNew, risk: riskDisclosure })
   await page.goto(URL)

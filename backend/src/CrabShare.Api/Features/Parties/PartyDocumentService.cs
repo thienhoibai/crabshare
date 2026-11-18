@@ -41,12 +41,8 @@ public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, Party
     public async Task<PartyDocumentResponse> UploadMineAsync(UploadPartyDocumentRequest req, CancellationToken ct)
     {
         var partyId = await parties.PartyIdOfUserAsync(me.UserId, ct);
-        var party = await db.Parties.AsNoTracking().SingleAsync(p => p.PartyId == partyId, ct);
-        if (party.PartyType == "Individual")
-            throw new BusinessRuleException("party.documents_org_only",
-                "Chỉ hộ kinh doanh, hợp tác xã hoặc doanh nghiệp mới gửi giấy tờ. Cá nhân xác minh bằng eKYC.");
-        if (await db.PartyDocuments.CountAsync(d => d.PartyId == partyId && d.RemovedAt == null, ct) >= MaxActiveDocuments)
-            throw new BusinessRuleException("party.documents_full", $"Mỗi đối tác gửi tối đa {MaxActiveDocuments} giấy tờ. Hãy xoá bớt giấy tờ cũ.");
+        var partyType = await db.Parties.Where(p => p.PartyId == partyId).Select(p => p.PartyType).SingleAsync(ct);
+        RequireOrganization(partyType);
 
         var image = await images.ReadAsync(req.File!, ct);
         var now = clock.GetUtcNow();
@@ -56,9 +52,14 @@ public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, Party
 
         try
         {
-            var id = await db.InTransactionAsync(async () =>
+            return await db.InTransactionAsync(async () =>
             {
+                await audit.LockAsync(ct);
                 var tracked = await db.Parties.SingleAsync(p => p.PartyId == partyId, ct);
+                RequireOrganization(tracked.PartyType);
+                if (await db.PartyDocuments.CountAsync(d => d.PartyId == partyId && d.RemovedAt == null, ct) >= MaxActiveDocuments)
+                    throw new BusinessRuleException("party.documents_full", $"Mỗi đối tác gửi tối đa {MaxActiveDocuments} giấy tờ. Hãy xoá bớt giấy tờ cũ.");
+
                 var doc = new PartyDocument
                 {
                     PartyId = partyId, DocType = req.DocType, FileUri = stored.Uri, ContentType = image.ContentType, Sha256 = image.Sha256,
@@ -74,9 +75,8 @@ public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, Party
                 }
                 await db.SaveChangesAsync(ct);
                 await audit.WriteAsync("party_document", doc.DocumentId, "upload", null, new { doc.PartyId, doc.DocType, doc.Sha256 }, ct);
-                return doc.DocumentId;
+                return new PartyDocumentResponse(doc.DocumentId, doc.DocType, doc.ContentType, doc.Note, doc.UploadedAt);
             }, ct);
-            return (await ListAsync(partyId, ct)).Single(d => d.DocumentId == id);
         }
         catch
         {
@@ -89,12 +89,13 @@ public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, Party
     {
         await db.InTransactionAsync(async () =>
         {
+            await audit.LockAsync(ct);
             var partyId = await parties.PartyIdOfUserAsync(me.UserId, ct);
             var doc = await db.PartyDocuments.SingleOrDefaultAsync(d => d.DocumentId == documentId && d.PartyId == partyId && d.RemovedAt == null, ct)
                       ?? throw new NotFoundException("party.document_not_found", "Không tìm thấy giấy tờ.");
-            var status = await db.Parties.Where(p => p.PartyId == partyId).Select(p => p.VerificationStatus).SingleAsync(ct);
+            var party = await db.Parties.SingleAsync(p => p.PartyId == partyId, ct);
             // Giấy tờ là căn cứ của lần xác minh đã xong nên không xoá được nữa.
-            if (status == "Verified")
+            if (party.LegalDossierVerified)
                 throw new BusinessRuleException("party.document_locked", "Hồ sơ đã được xác minh nên không xoá giấy tờ được.");
             doc.RemovedAt = clock.GetUtcNow();
             await db.SaveChangesAsync(ct);
@@ -127,6 +128,13 @@ public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, Party
 
     public Task<(Stream Content, string ContentType)> AdminFileAsync(long partyId, long documentId, CancellationToken ct)
         => FileAsync(partyId, documentId, ct);
+
+    private static void RequireOrganization(string partyType)
+    {
+        if (partyType == "Individual")
+            throw new BusinessRuleException("party.documents_org_only",
+                "Chỉ hộ kinh doanh, hợp tác xã hoặc doanh nghiệp mới gửi giấy tờ. Cá nhân xác minh bằng eKYC.");
+    }
 
     private async Task<IReadOnlyList<PartyDocumentResponse>> ListAsync(long partyId, CancellationToken ct)
         => await db.PartyDocuments.AsNoTracking().Where(d => d.PartyId == partyId && d.RemovedAt == null).OrderBy(d => d.UploadedAt)

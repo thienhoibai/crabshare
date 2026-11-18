@@ -24,6 +24,8 @@ export default function FundingDetailPage() {
     <QueryView query={funding}>
       {(f) => {
         const reservation = f.myActiveReservation
+        const verified = f.me.legalDossierVerified ?? f.me.kycVerified
+        const verificationTitle = f.me.legalDossierVerified != null ? 'Xác minh hồ sơ pháp lý' : 'Xác minh danh tính'
         return (
           <>
             <OpHeading
@@ -79,8 +81,8 @@ export default function FundingDetailPage() {
 
               <OpAside>
                 <OpFlow steps={[
-                  { title: 'Xác minh danh tính', state: f.me.kycVerified ? 'done' : 'now' },
-                  { title: 'Xác nhận công bố rủi ro', state: f.me.riskAcknowledged ? 'done' : f.me.kycVerified ? 'now' : 'todo' },
+                  { title: verificationTitle, state: verified ? 'done' : 'now' },
+                  { title: 'Xác nhận công bố rủi ro', state: f.me.riskAcknowledged ? 'done' : verified ? 'now' : 'todo' },
                   { title: 'Giữ chỗ và chuyển khoản', sub: reservation ? `Đang giữ ${formatVnd(reservation.amount)}` : undefined, state: reservation ? 'now' : 'todo' },
                   { title: 'Ký hợp đồng' },
                 ]} />
