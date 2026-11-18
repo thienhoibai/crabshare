@@ -1,0 +1,14 @@
+:root {
+  --inv-font-body: 'Bricolage Grotesque', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --inv-space-xs: 8px;
+  --inv-space-sm: 12px;
+  --inv-space-md: 16px;
+  --inv-space-lg: 24px;
+  --inv-radius: 16px;
+}
+
+.o2--investor {
+  --inv-focus: var(--fg);
+  --inv-selected: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  --inv-rule: color-mix(in srgb, var(--fg) 18%, var(--surface));
+}

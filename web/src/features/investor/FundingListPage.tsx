@@ -13,7 +13,7 @@ export default function FundingListPage() {
 
   return (
     <>
-      <OpHeading eyebrow="Góp vốn" title="Lô đang gọi vốn" />
+      <OpHeading title="Lô đang gọi vốn" description="Xem điều kiện mở Lô và chọn khoản vốn phù hợp." />
 
       {reserved && (
         <OpNote>
@@ -34,7 +34,7 @@ export default function FundingListPage() {
                 image={crabImg(b.crabType, 640)}
                 badge={<OpBadge tone="gold">Còn nhận {formatVnd(b.remainingCapacity)}</OpBadge>}
                 title={b.title}
-                sub={`${b.batchCode} · ${label('crabType', b.crabType)} · ${b.operatorName}`}
+                sub={`${b.batchCode}, ${label('crabType', b.crabType)}, ${b.operatorName}`}
                 foot={
                   <>
                     <span>Góp từ <b className="rd-num">{formatVnd(b.minContribution)}</b></span>

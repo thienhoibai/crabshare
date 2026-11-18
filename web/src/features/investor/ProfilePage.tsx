@@ -116,11 +116,11 @@ export default function ProfilePage() {
   // Chưa chọn mục: người chưa xác minh vào thẳng mục xác minh, người đã xác minh vào tài khoản nhận tiền.
   const tab = asked ?? (kyc.data && kyc.data.verificationStatus !== 'Verified' ? 'xac-minh' : 'tai-khoan')
 
-  if (!asked && kyc.isPending) return <><OpHeading eyebrow="Giấy tờ và tiền" title="Hồ sơ và xác minh" /><OpLoading /></>
+  if (!asked && kyc.isPending) return <><OpHeading title="Hồ sơ và xác minh" /><OpLoading /></>
 
   return (
     <>
-      <OpHeading eyebrow="Giấy tờ và tiền" title="Hồ sơ và xác minh" />
+      <OpHeading title="Hồ sơ và xác minh" />
       <OpTabs<Tab> items={TABS} value={tab} onChange={(key) => setParams({ tab: key }, { replace: true })} label="Các mục của hồ sơ" />
 
       {tab === 'xac-minh' && <OpPanel title="Xác minh danh tính"><KycVerification /></OpPanel>}
