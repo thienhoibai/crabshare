@@ -9,6 +9,7 @@ import { Logo, Shell } from '../kit/kit'
 import { AREAS, areasFor, type Area, type NavItem } from './nav'
 import './console.css'
 import './console-v15.css'
+import '../../../features/investor/investorPages.css'
 
 const initials = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(-2).map((w) => w[0]).join('').toUpperCase() || 'CS'
@@ -73,7 +74,8 @@ export default function ConsoleLayout({ area, children }: { area: Area; children
   const roles = user?.roles ?? []
   const name = user?.fullName ?? config.title
   const allItems = config.groups.flatMap((g) => g.items).filter((i) => !i.roles || i.roles.some((r) => roles.includes(r)))
-  const navPath = customer && location.pathname.startsWith('/khach/dat-truoc/') ? '/khach/lo' : location.pathname
+  const navPath = customer && location.pathname.startsWith('/khach/dat-truoc/') ? '/khach/lo'
+    : area === 'investor' && location.pathname.startsWith('/nha-dau-tu/gop-von/') ? '/nha-dau-tu/lo' : location.pathname
   const customerAccount = customer && (navPath === CUSTOMER_PROFILE || navPath === config.bell)
   const active = customerAccount ? null : activeHref(allItems, navPath)
   const tabs = allItems.filter((i) => i.tab).slice(0, 4)
@@ -114,7 +116,7 @@ export default function ConsoleLayout({ area, children }: { area: Area; children
 
   return (
     <Shell theme="light">
-      <div className={customer ? 'o2 o2--customer' : 'o2'}>
+      <div className={`o2 o2--${area}`}>
         <aside className="o2-side">
           <Logo href={config.home} />
           {!customer && card}

@@ -128,7 +128,7 @@ const holdingSpot = (): Partial<Server> => {
   }
 }
 
-const step = (page: Page, n: number) => page.getByText(`Góp vốn · bước ${n} / 5`)
+const step = (page: Page, n: number) => page.getByText(`Góp vốn: ${['Xác minh danh tính', 'Công bố rủi ro', 'Số tiền góp', 'Chuyển khoản', 'Hợp đồng'][n - 1]}`, { exact: true })
 
 test.beforeEach(async ({ page }) => {
   await signIn(page, 'Investor')
@@ -188,7 +188,7 @@ test('góp vốn trọn luồng: xác nhận rủi ro, giữ chỗ, chuyển kho
 
   // Ngân hàng báo có (nút giả lập của bản dev): trang tự sang bước hợp đồng, không cần gửi biên lai.
   await page.getByRole('button', { name: 'Giả lập đã chuyển khoản' }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'Đã nhận tiền. Khoản góp đã được xác nhận.' })).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Đã nhận tiền. Kiểm tra chữ ký để hoàn tất khoản góp.' })).toBeVisible()
   expect(api.sent('POST', '/api/dev/payments/simulate').map((c) => c.body)).toEqual([{ referenceCode: REFERENCE }])
 
   // Bước 5: lập hợp đồng từ mẫu; người nuôi ký trước nên chưa có nút ký.
@@ -397,7 +397,7 @@ test('lập hợp đồng trước khi chuyển khoản rồi quay về đúng m
   await page.goto(URL)
   await expect(page.getByRole('img', { name: /Mã VietQR chuyển/ })).toBeVisible()
 
-  await page.getByText('Tuỳ chọn khác').click()
+  await expect(page.getByRole('button', { name: 'Lập hợp đồng trước' })).toBeVisible()
   await page.getByRole('button', { name: 'Lập hợp đồng trước' }).click()
   await expect(step(page, 5)).toBeVisible()
   const contract = panel(page, 'Hợp đồng')
@@ -427,4 +427,24 @@ test('hết hạn giữ chỗ khi đang chờ chuyển khoản thì mã QR biế
   await expect(page.getByRole('img', { name: /Mã VietQR chuyển/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Giữ chỗ 15 phút' })).toBeDisabled()
   expect(api.writes()).toEqual(['POST /api/contributions/905/payment-requests'])
+})
+
+test('nhận tiền nhưng chưa đủ chữ ký không tuyên bố khoản góp đã xác nhận', async ({ page, api }) => {
+  const initial = holdingSpot()
+  const server = serve(api, { ...initial, contract: contractAt('OperatorSigned', initial.mine![0]) })
+  api.post('/api/dev/payments/simulate', () => {
+    server.payment = { ...server.payment!, status: 'Paid', qrContent: null }
+    return { outcome: 'Matched', transactionId: 77, referenceCode: REFERENCE, paymentRequestId: 6001, purpose: 'Contribution', refundInstructionId: null }
+  })
+  await page.goto(URL)
+  await expect(page.getByRole('group', { name: 'Thanh toán và hợp đồng' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Lập hợp đồng trước', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Giả lập đã chuyển khoản' }).click()
+
+  await expect(page.getByRole('status').filter({ hasText: 'Đã nhận tiền.' })).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Khoản góp đã được xác nhận' })).toHaveCount(0)
+  const contract = panel(page, 'Hợp đồng')
+  await expect(contract.getByText('Người nuôi đã ký', { exact: true })).toBeVisible()
+  await expect(contract.getByRole('button', { name: 'Ký số hợp đồng' })).toBeVisible()
+  expect(server.mine[0].status).toBe('Reserved')
 })

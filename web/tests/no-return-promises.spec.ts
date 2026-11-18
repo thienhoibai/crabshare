@@ -67,7 +67,8 @@ for (const area of AREAS) {
         area.mock(api)
         if (target.role) await signIn(page, target.role)
         await page.goto(target.path)
-        const ready = page.getByText(target.ready)
+        // Responsive financial records have desktop and mobile markup; check the visible version.
+        const ready = page.getByText(target.ready).filter({ visible: true })
         await expect(area.checkInitialPage ? ready : ready.first()).toBeVisible()
         if (area.checkInitialPage) {
           await area.checkInitialPage(page, api, target.path)

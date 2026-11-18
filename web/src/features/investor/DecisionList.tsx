@@ -36,7 +36,7 @@ export function DecisionList({ decisions, showBatch = false }: { decisions: Deci
           <OpPanel
             key={d.decisionNo}
             accent={d.canVote}
-            title={`${label('decisionKind', d.kind)}${showBatch ? ` · Lô ${d.batchCode}` : ''}`}
+            title={`${label('decisionKind', d.kind)}${showBatch ? `, Lô ${d.batchCode}` : ''}`}
             action={<StatusBadge kind="decision" value={d.status} />}
           >
             <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.proposal}</p>
@@ -46,8 +46,8 @@ export function DecisionList({ decisions, showBatch = false }: { decisions: Deci
               {open && !d.myChoice && !d.canVote && <OpBadge>Bạn không có quyền biểu quyết</OpBadge>}
             </div>
             <div className="op-stack">
-              <OpMeter label="Đồng ý" value={d.yesCapital} max={d.eligibleCapital} display={`${formatVnd(d.yesCapital)} · ${d.yesPct}%`} tone="var(--ok)" />
-              <OpMeter label="Không đồng ý" value={d.noCapital} max={d.eligibleCapital} display={`${formatVnd(d.noCapital)} · ${d.noPct}%`} tone="var(--danger)" />
+              <OpMeter label="Đồng ý" value={d.yesCapital} max={d.eligibleCapital} display={`${formatVnd(d.yesCapital)}, ${d.yesPct}%`} tone="var(--ok)" />
+              <OpMeter label="Không đồng ý" value={d.noCapital} max={d.eligibleCapital} display={`${formatVnd(d.noCapital)}, ${d.noPct}%`} tone="var(--danger)" />
             </div>
             {d.canVote && (
               <div className="op-formfoot">
@@ -62,7 +62,7 @@ export function DecisionList({ decisions, showBatch = false }: { decisions: Deci
       {pending && (
         <OpConfirm
           title={`Biểu quyết: ${CHOICE[pending.choice]}`}
-          sub={`${label('decisionKind', pending.decision.kind)} · Lô ${pending.decision.batchCode} · ${pending.decision.decisionNo}`}
+          sub={`${label('decisionKind', pending.decision.kind)}, Lô ${pending.decision.batchCode}, ${pending.decision.decisionNo}`}
           confirmLabel={`Gửi phiếu ${CHOICE[pending.choice].toLowerCase()}`}
           variant={pending.choice === 'Yes' ? 'primary' : 'danger'}
           pending={vote.isPending}

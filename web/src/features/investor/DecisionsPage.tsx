@@ -21,7 +21,7 @@ export default function DecisionsPage() {
 
   return (
     <>
-      <OpHeading eyebrow="Góp vốn" title="Biểu quyết" description="Phiếu của bạn tính theo vốn đã chốt ở Lô." />
+      <OpHeading title="Biểu quyết" description="Phiếu của bạn tính theo vốn đã chốt ở Lô." />
       <OpTabs<Filter>
         value={filter}
         onChange={setFilter}
