@@ -17,3 +17,6 @@ Recorded 2026-11-18. Scope: the user-authorized investor web UX changes, preserv
 Screenshots use repository fixtures and are not evidence of live backend records. The configured minimum preorder threshold is not supplied in the current public response; the UI explicitly reports unavailable data and does not infer a value. Financial calculations, routes, permissions, contracts and consent text are preserved. No backend, schema or runtime dependency was added.
 
 Local comparison: `.hallmark/compare.html`. Captures and the comparison are generated local artifacts and are ignored by Git. Existing risk and contract disclosures are unchanged; display wording now distinguishes payment receipt, signatures, contribution confirmation and actual payout.
+## Pull request CI follow-up
+
+PR #101 initially passed 467/468 browser cases. The remaining portfolio readiness check matched both the explanatory sentence and the actual capital label. Its fixture marker now anchors the exact data label (`/^Vốn đã xác nhận$/`), so explanatory copy cannot count as loaded portfolio data. This changes only test readiness, not the application or the prohibited-copy scan.
