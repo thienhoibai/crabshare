@@ -34,6 +34,8 @@ Cloudinary__ApiSecret=<api-secret>
 
 Cũng hỗ trợ `CLOUDINARY_URL=cloudinary://<api-key>:<api-secret>@<cloud-name>` nếu không đặt ba trường riêng; vẫn cần chọn Storage__Provider=Cloudinary. Không đặt secret trong VITE_*, Flutter hoặc biến build frontend.
 
+Trên GitHub, mở **Actions → Check Cloudinary on Azure → Run workflow** và chọn nhánh `develop`. Workflow dùng Azure OIDC hiện có để đọc cấu hình của `crabshare-api` và kiểm tra Cloudinary nhận khóa bằng `GET /ping`. Log chỉ báo kết quả kiểm tra, không in giá trị khóa. Để kiểm chứng luồng ảnh thực tế, gửi ảnh mới trên lô demo, kiểm tra Cloudinary Media Library rồi mở lại ảnh trong CrabShare.
+
 Compose tự host có các biến `CRABSHARE_STORAGE_PROVIDER`, `CRABSHARE_CLOUDINARY_CLOUD_NAME`, `CRABSHARE_CLOUDINARY_API_KEY`, `CRABSHARE_CLOUDINARY_API_SECRET`. Mặc định Compose vẫn Local để không làm hỏng môi trường chưa cấu hình; không khẳng định cấu hình đã được đưa lên Azure/production.
 
 Sai/mất khóa thì cập nhật secrets trên backend và restart; không cần đổi DB vì chữ ký được tạo khi đọc. Adapter không cho lấy URL tùy ý hoặc đọc asset thuộc cloud khác. Test DB dùng Provider=Local tường minh để không tải fixture lên tài khoản thật.
