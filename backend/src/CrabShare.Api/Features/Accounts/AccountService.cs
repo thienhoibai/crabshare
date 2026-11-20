@@ -1,4 +1,5 @@
 using System.Data;
+using CrabShare.Api.Common;
 using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Errors;
@@ -31,6 +32,7 @@ public sealed class AccountService(AppDbContext db, ICurrentUser me, IEkycProvid
         ValidateImage(req.Selfie);
         var investor = await GetInvestorAsync(tracking: false, ct);
         RequireUnverified(investor);
+        var expectedName = await VerificationNameAsync(investor, ct);
         var consentAt = UtcNow();
 
         // Không dùng IFileStorage, không lưu tên file, ảnh hoặc FullNameOnCard vào CSDL/log.
@@ -41,7 +43,12 @@ public sealed class AccountService(AppDbContext db, ICurrentUser me, IEkycProvid
         await ValidateImageHeaderAsync(back, req.IdCardBack.ContentType, ct);
         await ValidateImageHeaderAsync(selfie, req.Selfie.ContentType, ct);
         // Gọi provider một lần, ngoài transaction và ngoài vòng retry của SQL Server.
-        var result = await ekyc.VerifyAsync(front, back, selfie, ct);
+        var result = await ekyc.VerifyAsync(front, back, selfie, expectedName, ct);
+        var passed = result.Passed && !string.IsNullOrWhiteSpace(result.FullNameOnCard) &&
+                     LegalNames.Match(expectedName, result.FullNameOnCard);
+        var failureReason = !result.Passed ? result.FailureReason ?? "Xác minh danh tính không đạt."
+            : string.IsNullOrWhiteSpace(result.FullNameOnCard) ? "Chưa có tên trên giấy tờ từ nhà cung cấp để đối chiếu hồ sơ."
+            : "Họ tên trên giấy tờ không khớp tên pháp lý trong hồ sơ.";
         var checkedAt = UtcNow();
 
         return await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
@@ -52,18 +59,29 @@ public sealed class AccountService(AppDbContext db, ICurrentUser me, IEkycProvid
             var previousHash = await AuditChain.LockAndReadTailAsync(db, ct);
             var current = await GetInvestorAsync(tracking: true, ct);
             RequireUnverified(current);
+            if (await VerificationNameAsync(current, ct) != expectedName)
+                throw new ConflictException("kyc.profile_changed", "Tên trong hồ sơ đã thay đổi. Vui lòng xác minh lại.");
             var oldValue = AuditChain.Snapshot(new { current.VerificationStatus, current.VerifiedAt });
 
-            current.VerificationStatus = result.Passed ? "Verified" : "Rejected";
-            current.VerifiedAt = result.Passed ? checkedAt : null;
+            current.VerificationStatus = passed ? "Verified" : "Rejected";
+            current.VerifiedAt = passed ? checkedAt : null;
+            var party = await db.Parties.SingleOrDefaultAsync(p => p.PartyId == current.User.PartyId, ct);
+            if (party is { PartyType: "Individual" })
+            {
+                party.VerificationStatus = current.VerificationStatus;
+                party.VerifiedAt = current.VerifiedAt;
+                party.VerifiedBy = null;
+                party.RejectReason = passed ? null : Truncate(failureReason, 300);
+                party.UpdatedAt = checkedAt;
+            }
             var check = new KycCheck
             {
                 UserId = current.UserId,
                 CheckType = "EkycIdFace",
                 ProviderRef = result.ProviderReference,
                 ConsentAt = consentAt,
-                Result = result.Passed ? "Passed" : "Failed",
-                FailureReason = result.Passed ? null : Truncate(result.FailureReason ?? "Xác minh danh tính không đạt.", 300),
+                Result = passed ? "Passed" : "Failed",
+                FailureReason = passed ? null : Truncate(failureReason, 300),
                 CheckedAt = checkedAt,
                 CreatedAt = checkedAt,
             };
@@ -81,6 +99,12 @@ public sealed class AccountService(AppDbContext db, ICurrentUser me, IEkycProvid
             await transaction.CommitAsync(ct);
             return ToResponse(current, check);
         });
+    }
+
+    private async Task<string> VerificationNameAsync(Investor investor, CancellationToken ct)
+    {
+        var party = await db.Parties.AsNoTracking().SingleOrDefaultAsync(p => p.PartyId == investor.User.PartyId, ct);
+        return party is { PartyType: "Individual" } ? party.LegalName : investor.User.FullName;
     }
 
     private async Task<Investor> GetInvestorAsync(bool tracking, CancellationToken ct)

@@ -269,7 +269,7 @@ public sealed class FundingService(
             .SingleOrDefaultAsync(ct) ?? throw new NotFoundException("funding.investor_not_found", "Không tìm thấy hồ sơ nhà đầu tư.");
         if (investor.UserStatus == "Locked")
             throw new ForbiddenException("auth.locked", "Tài khoản đã bị khoá.");
-        var organization = investor.InvestorKind == "Organization" || investor.Party is { PartyType: not "Individual" };
+        var organization = investor.Party is null ? investor.InvestorKind == "Organization" : investor.Party.PartyType != "Individual";
         return new InvestorInfo(investor.UserId, investor.VerificationStatus == "Verified",
             organization ? investor.Party?.LegalDossierVerified == true : null);
     }

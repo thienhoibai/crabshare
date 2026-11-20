@@ -1651,6 +1651,8 @@ export interface PayoutProfileResponse {
   ownerType: string
   expectedHolderName: string
   account: PayoutAccountResponse | null
+  recipientVerified?: boolean
+  verificationMethod?: string
 }
 
 export interface PayoutStatus {

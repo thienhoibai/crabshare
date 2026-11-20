@@ -1,5 +1,4 @@
-using System.Globalization;
-using System.Text;
+using CrabShare.Api.Common;
 
 namespace CrabShare.Api.Infrastructure.Ekyc;
 
@@ -16,14 +15,8 @@ public sealed class FakeBankNameMatcher : IBankNameMatcher
     public Task<BankNameMatchResult> MatchAsync(string expectedName, string holderName, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        return Task.FromResult(new BankNameMatchResult(Normalize(expectedName) == Normalize(holderName),
+        return Task.FromResult(new BankNameMatchResult(LegalNames.Match(expectedName, holderName),
             $"FAKE-BANK-{Guid.NewGuid():N}"));
     }
 
-    private static string Normalize(string name)
-    {
-        var chars = name.Trim().Replace('đ', 'd').Replace('Đ', 'D').Normalize(NormalizationForm.FormD)
-            .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark);
-        return string.Join(' ', new string(chars.ToArray()).ToUpperInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-    }
 }

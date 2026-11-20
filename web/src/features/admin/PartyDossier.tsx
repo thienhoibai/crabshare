@@ -37,7 +37,7 @@ export function PartyDossier({ party, dossier }: { party: PartyResponse; dossier
                   <small className="rd-muted">{[a.email, a.phone].filter(Boolean).join(' · ')}</small>
                 </div>
                 <div className="op-acct__end">
-                  {a.investorVerification && <span><small className="rd-muted">Nhà đầu tư </small><StatusBadge kind="verification" value={a.investorVerification} /></span>}
+                  {a.investorVerification && <span><small className="rd-muted">{organization ? 'Danh tính người đại diện ' : 'Danh tính cá nhân '}</small><StatusBadge kind="verification" value={a.investorVerification} /></span>}
                   {a.ekycResult
                     ? <span><small className="rd-muted">eKYC {a.ekycCheckedAt ? formatDate(a.ekycCheckedAt) : ''} </small><StatusBadge kind="kyc" value={a.ekycResult} /></span>
                     : !organization && <small className="rd-muted">Chưa làm eKYC</small>}

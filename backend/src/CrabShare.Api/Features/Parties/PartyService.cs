@@ -34,6 +34,7 @@ public sealed class PartyService(AppDbContext db, ICurrentUser me, PartyDirector
             var before = Snapshot(party);
             var legalChanged = party.LegalName != req.LegalName.Trim() || party.RegistrationNo != Clean(req.RegistrationNo) ||
                                party.PartyType != req.PartyType;
+            var personalIdentityChanged = legalChanged && (party.PartyType == "Individual" || req.PartyType == "Individual");
             party.LegalName = req.LegalName.Trim();
             party.PartyType = req.PartyType;
             party.RegistrationNo = Clean(req.RegistrationNo);
@@ -46,6 +47,15 @@ public sealed class PartyService(AppDbContext db, ICurrentUser me, PartyDirector
                 party.VerificationStatus = "Pending";
                 party.VerifiedAt = null;
                 party.VerifiedBy = null;
+            }
+            if (personalIdentityChanged)
+            {
+                var investor = await db.Investors.SingleOrDefaultAsync(i => i.UserId == me.UserId, ct);
+                if (investor is not null)
+                {
+                    investor.VerificationStatus = "Unverified";
+                    investor.VerifiedAt = null;
+                }
             }
             await db.SaveChangesAsync(ct);
             await audit.WriteAsync("party", party.PartyId, "update", before, Snapshot(party), ct);

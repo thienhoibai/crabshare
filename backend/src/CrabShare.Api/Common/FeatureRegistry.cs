@@ -88,6 +88,7 @@ public static class FeatureRegistry
         // Khôi
         services.AddScoped<AccountService>();        // Features/Accounts
         services.AddScoped<PaymentProfileService>();
+        services.AddScoped<PayoutRecipientService>();
         services.AddScoped<AdminAccountService>();
         services.AddScoped<EvidenceService>();      // CS-44
         services.AddScoped<CaptureRequestService>();
