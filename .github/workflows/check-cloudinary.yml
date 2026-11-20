@@ -1,0 +1,75 @@
+name: Check Cloudinary on Azure
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+
+jobs:
+  check:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Check storage provider and Cloudinary credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          az webapp config appsettings list --resource-group crabshare-rg --name crabshare-api \
+            --query "[?name=='Storage__Provider' || starts_with(name, 'Cloudinary__') || name=='CLOUDINARY_URL']" \
+            --only-show-errors --output json | python3 -c '
+          import base64
+          import http.client
+          import json
+          import re
+          import sys
+          from urllib.parse import unquote, urlsplit
+
+          def check(label, passed):
+              status = "PASS" if passed else "FAIL"
+              print(f"{label}: {status}")
+              if not passed:
+                  sys.exit(1)
+
+          try:
+              settings = {item["name"].lower(): item["value"] or "" for item in json.load(sys.stdin)}
+          except (ValueError, KeyError, TypeError):
+              sys.exit("FAIL: Could not read Azure App Settings.")
+
+          check("Cloudinary storage provider", settings.get("storage__provider", "").lower() == "cloudinary")
+          cloud = settings.get("cloudinary__cloudname", "")
+          key = settings.get("cloudinary__apikey", "")
+          secret = settings.get("cloudinary__apisecret", "")
+          if not secret and settings.get("cloudinary_url"):
+              try:
+                  url = urlsplit(settings["cloudinary_url"])
+                  if url.scheme != "cloudinary" or url.password is None:
+                      raise ValueError()
+                  cloud, key, secret = url.hostname or "", unquote(url.username or ""), unquote(url.password)
+              except ValueError:
+                  sys.exit("FAIL: CLOUDINARY_URL is invalid.")
+
+          if secret.lower().startswith("@microsoft.keyvault("):
+              sys.exit("FAIL: Azure returned a Key Vault reference instead of a resolved Cloudinary secret.")
+          check("Cloudinary credentials configured", bool(re.fullmatch(r"[a-zA-Z0-9_-]+", cloud)
+                and re.fullmatch(r"[0-9]+", key) and secret.strip()))
+
+          authorization = base64.b64encode(f"{key}:{secret}".encode()).decode()
+          connection = http.client.HTTPSConnection("api.cloudinary.com", timeout=15)
+          try:
+              connection.request("GET", f"/v1_1/{cloud}/ping", headers={"Authorization": f"Basic {authorization}"})
+              response = connection.getresponse()
+              check(f"Cloudinary authenticated ping (HTTP {response.status})",
+                    response.status == 200 and json.loads(response.read(4096)).get("status") == "ok")
+          except (OSError, http.client.HTTPException, ValueError, AttributeError):
+              sys.exit("FAIL: Cloudinary ping did not return a valid response.")
+          finally:
+              connection.close()
+          '

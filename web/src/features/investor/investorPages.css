@@ -1,21 +1,151 @@
-/* Kiểu riêng của cổng nhà đầu tư (tiền tố inv-). Dùng biến màu của bộ kit, không thêm màu mới. */
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: full
+ * paper: CrabShare warm neutral · accent: CrabShare orange · display: Bricolage Grotesque · body: Bricolage Grotesque
+ * nav: kept role shell · signature: deadline queue and capital ledger · states: loading empty error full
+ * axes: light/grotesk-sans/warm · posture: restrained · v2.0.0 */
+/* Hallmark · pre-emit critique: P keep brand H queue first E native links S partial errors R mobile records V no new imagery · weakest: dense financial tables, restacked on mobile */
+/* Hallmark · finish-review: subagent · 1 finding · 1 resolved · gap: none. Finish notes: F1 is JSX attribute syntax; F3 uses the app type scale; shared role controls retain their existing weight hierarchy. */
+@import './tokens.css';
+
+html, body { overflow-x: clip; }
 
 /* khung cuộn của bản công bố rủi ro */
-.inv-risk { display: grid; gap: 14px; max-height: 420px; overflow-y: auto; padding: 18px 20px; border-radius: 18px; border: 1px solid var(--line); background: var(--input); font-size: 15px; line-height: 1.6; }
+.inv-risk { display: grid; gap: 16px; max-height: 420px; overflow-y: auto; padding: 16px 20px; border-radius: 16px; border: 1px solid var(--line); background: var(--input); font-size: 16px; line-height: 1.6; }
 .inv-risk:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.inv-risk ol { display: grid; gap: 10px; padding-left: 24px; list-style: decimal; }
+.inv-risk ol { display: grid; gap: 12px; padding-left: 24px; list-style: decimal; }
 .inv-risk li { padding-left: 4px; }
-.inv-risk li.is-key { padding: 10px 12px; border-radius: 12px; font-weight: 600; border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent); background: color-mix(in srgb, var(--danger) 7%, var(--surface)); }
+.inv-risk li.is-key { padding: 12px; border-radius: 12px; font-weight: 600; border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent); background: color-mix(in srgb, var(--danger) 7%, var(--surface)); }
 
 /* biểu đồ chỉ số nước */
 .inv-chart { width: 100%; height: 220px; }
+.inv-chart-label { font-size: 14px; font-weight: 400; color: var(--muted); }
 .inv-chart .recharts-cartesian-axis-tick-value { fill: var(--muted); font-size: 11px; }
 
 /* thông báo: dòng có mốc thời gian bên phải */
-.inv-notice { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 14px 0; border-top: 1px solid var(--line); }
+.inv-notice { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 16px; align-items: start; padding: 16px 0; border-top: 1px solid var(--line); }
 .inv-notice:first-child { padding-top: 0; border-top: 0; }
 .inv-notice:last-child { padding-bottom: 0; }
 .inv-notice > div { display: grid; gap: 4px; min-width: 0; }
 .inv-notice p { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
 .inv-notice time { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) { .inv-notice { grid-template-columns: 44px minmax(0, 1fr); } .inv-notice time { grid-column: 2; } }
+
+/* The role class contains every override to the shared console. */
+.o2--investor { font-family: var(--inv-font-body); }
+.o2--investor .o2-main { max-width: 1200px; margin-inline: auto; gap: var(--inv-space-lg); padding-bottom: 48px; }
+.o2--investor .o2-top__where { gap: var(--inv-space-sm); }
+.o2--investor .o2-nav__label,
+.o2--investor .o2-farm small { text-transform: none; letter-spacing: normal; font-size: 13px; color: var(--muted); }
+.o2--investor .o2-farm { background: var(--input); color: var(--fg); border-radius: var(--inv-radius); }
+.o2--investor .o2-farm span { color: var(--muted); }
+.o2--investor .o2-nav a { font-weight: 400; border-radius: 8px; }
+.o2--investor .o2-nav a.is-on { background: var(--inv-selected); color: var(--fg); }
+.o2--investor :is(h1, h2, h3) { min-width: 0; overflow-wrap: break-word; }
+.o2--investor .op-heading { align-items: start; }
+.o2--investor .op-heading .rd-h2 { font-size: 32px; line-height: 1.2; letter-spacing: -0.02em; font-variation-settings: 'wght' 650, 'wdth' 100, 'opsz' 32; }
+.o2--investor .op-heading .rd-muted { margin-top: 8px; line-height: 1.5; }
+.o2--investor .op-panel { border-radius: var(--inv-radius); padding: var(--inv-space-lg); box-shadow: none; border: 0; }
+.o2--investor .op-panel__head { align-items: center; }
+.o2--investor .op-panel__head > span { font-size: 13px; }
+.o2--investor .rd-btn--primary { background: var(--accent); box-shadow: none; }
+.o2--investor .rd-btn--primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--fg)); }
+.o2--investor .rd-btn--primary::before { content: none; }
+.o2--investor :is(button, a, summary, input, select, textarea):focus-visible { outline: 2px solid var(--inv-focus); outline-offset: 3px; transition: none; }
+.o2--investor :is(button, a):active { opacity: .8; }
+.o2--investor button:disabled { cursor: not-allowed; opacity: .55; }
+.o2--investor .op-badge i,
+.o2--investor .op-dot { display: none; }
+.o2--investor .op-badge { gap: 0; }
+.o2--investor .op-todo { gap: 0; }
+.o2--investor .op-todo a { grid-template-columns: minmax(0, 1fr) 20px; padding: 16px 0; background: none; border-radius: 0; border: 0; border-bottom: 1px solid var(--line); }
+.o2--investor .op-todo a:first-child { padding-top: 0; }
+.o2--investor .op-todo a:last-child { padding-bottom: 0; border-bottom: 0; }
+.o2--investor .op-todo a:hover { color: var(--accent); transform: none; }
+.o2--investor .op-todo small { font-size: 13px; line-height: 1.5; }
+.inv-overview { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: var(--inv-space-lg); align-items: start; }
+.inv-action-queue { border-top: 3px solid var(--accent) !important; }
+.inv-action-queue .op-note { margin-top: var(--inv-space-md); }
+.inv-action-queue .op-note .rd-btn { margin-top: var(--inv-space-xs); }
+.inv-capital-summary { gap: var(--inv-space-sm); }
+.inv-waiting { padding-inline: var(--inv-space-lg); color: var(--muted); font-size: 14px; }
+.o2--investor .inv-money { display: grid; gap: var(--inv-space-xs); background: var(--surface); color: var(--fg); padding: var(--inv-space-lg); border-radius: var(--inv-radius); min-height: 0; }
+.o2--investor .inv-money > small { color: var(--muted); font-size: 14px; }
+.o2--investor .inv-money > b { font-size: 36px; line-height: 1.2; font-variation-settings: 'wght' 650, 'wdth' 100, 'opsz' 32; }
+.o2--investor .inv-money > b em { margin-left: 4px; font-style: normal; color: var(--muted); font-size: 16px; }
+.o2--investor .inv-money .op-hero__sub { color: var(--muted); font-size: 13px; }
+.inv-money__ledger { display: grid; gap: var(--inv-space-sm); margin-top: var(--inv-space-xs) !important; padding-top: var(--inv-space-md) !important; border-top: 1px solid var(--line); }
+.inv-money__ledger li { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; font-size: 14px; }
+.inv-money__ledger li > span { color: var(--muted); }
+.inv-money__ledger b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.o2--investor .op-facts { gap: 0; }
+.o2--investor .op-facts > div { border: 0; border-radius: 0; background: none; padding: 8px 16px; border-left: 1px solid var(--line); }
+.o2--investor .op-facts > div:first-child { border-left: 0; padding-left: 0; }
+.o2--investor .op-facts dt { font-size: 13px; }
+.o2--investor .op-facts dd { font-size: 20px; }
+.o2--investor .inv-position { gap: var(--inv-space-lg); }
+.o2--investor .inv-position .op-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.o2--investor .inv-position .op-facts > div { padding: 8px 12px; }
+.o2--investor .inv-position .op-facts > div:nth-child(odd) { border-left: 0; padding-left: 0; }
+.inv-alert-link { display: inline-flex; }
+.inv-alert-link:hover { text-decoration: underline; }
+.o2--investor .op-tabs { width: 100%; border: 0; border-bottom: 1px solid var(--inv-rule); border-radius: 0; padding: 0; gap: var(--inv-space-md); background: var(--bg); scrollbar-width: thin; }
+.o2--investor .op-tabs > :is(button, a) { border-radius: 0; padding: 12px 4px; border-bottom: 2px solid transparent; min-height: 44px; }
+.o2--investor .op-tabs > .is-on { color: var(--fg); background: none; border-bottom-color: var(--accent); }
+.o2--investor .op-card { border-radius: var(--inv-radius); box-shadow: none; }
+.o2--investor .op-card__media { aspect-ratio: 2 / 1; }
+.o2--investor .op-card__title { overflow-wrap: break-word; }
+.o2--investor .op-input,
+.o2--investor .op-select,
+.o2--investor .op-textarea { border-color: var(--inv-rule); font-size: 16px; }
+.o2--investor .op-field__hint { color: var(--muted); min-height: 1lh; }
+.o2--investor .op-aside { border-radius: var(--inv-radius); box-shadow: none; }
+.inv-funding-terms { display: grid; gap: var(--inv-space-md); }
+.inv-contribution-tasks { display: grid; gap: var(--inv-space-sm); }
+.inv-contribution-tasks [aria-pressed="true"] { background: var(--inv-selected); border-color: var(--accent); }
+.inv-settlement-list { display: none; }
+.inv-settlement-card { display: grid; gap: var(--inv-space-md); padding: var(--inv-space-lg); background: var(--surface); border-radius: var(--inv-radius); }
+.inv-settlement-card header { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: var(--inv-space-sm); }
+.inv-settlement-card h2 { font-size: 18px; line-height: 1.4; }
+.inv-settlement-card header p { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.inv-settlement-card__amount { display: grid; gap: 4px; }
+.inv-settlement-card__amount dt { color: var(--muted); font-size: 14px; }
+.inv-settlement-card__amount dd { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.inv-settlement-card > .op-link { display: inline-flex; align-items: center; min-height: 44px; justify-self: start; }
+.inv-contribution-list { display: none; }
+.inv-contribution-record { display: grid; gap: var(--inv-space-sm); padding-block: var(--inv-space-md); border-top: 1px solid var(--line); }
+.inv-contribution-record:first-child { padding-top: 0; border-top: 0; }
+.inv-contribution-record > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--inv-space-xs); }
+.inv-contribution-record > header b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.inv-contribution-record dl { display: grid; gap: var(--inv-space-sm); }
+.inv-contribution-record dt { font-size: 13px; color: var(--muted); }
+.inv-contribution-record dd { overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .o2--investor { display: block; }
+  .o2--investor .o2-main { padding: 16px 16px 112px; gap: 20px; }
+  .o2--investor .op-heading { gap: var(--inv-space-md); }
+  .o2--investor .op-heading .rd-h2 { font-size: 26px; }
+  .o2--investor .op-heading .rd-muted { font-size: 14px; }
+  .inv-overview { grid-template-columns: minmax(0, 1fr); gap: var(--inv-space-md); }
+  .o2--investor .op-panel, .o2--investor .inv-money { padding: 20px; }
+  .o2--investor .inv-money > b { font-size: 30px; }
+  .o2--investor .op-tabs { position: sticky; top: 60px; z-index: 10; }
+  .o2--investor .o2-tabbar { box-shadow: none; border-radius: var(--inv-radius); }
+  .o2--investor .o2-tab { color: var(--on-dark); font-size: 11px; }
+  .o2--investor .o2-tab:focus-visible { outline-color: var(--on-dark); outline-offset: -3px; }
+  .o2--investor .op-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--inv-space-sm); }
+  .o2--investor .op-facts > div:nth-child(odd) { border-left: 0; padding-left: 0; }
+}
+@media (max-width: 640px) {
+  .inv-settlement-table, .inv-contribution-table { display: none; }
+  .inv-settlement-list { display: grid; gap: var(--inv-space-md); }
+  .inv-contribution-list { display: block; }
+  .o2--investor .inv-position { grid-template-columns: minmax(0, 1fr); }
+  .o2--investor .inv-position > * { grid-column: 1 / -1; }
+  .o2--investor .inv-position .op-panel { padding-top: 16px; padding-bottom: 16px; }
+  .o2--investor .inv-position .op-facts dd { font-size: 18px; }
+  .o2--investor .op-row { gap: 12px; }
+  .o2--investor .op-row__name b { font-size: 16px; }
+  .o2--investor .op-formfoot .rd-btn { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .o2--investor *, .o2--investor *::before, .o2--investor *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

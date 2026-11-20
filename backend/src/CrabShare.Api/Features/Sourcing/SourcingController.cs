@@ -16,6 +16,7 @@ public sealed class SourcingController(SourcingService sourcing) : ControllerBas
     public async Task<ActionResult<ProcurementOrderResponse>> CreateOrder(string code, ProcurementOrderRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await sourcing.CreateOrderAsync(code, req, ct));
 
+    [EndpointSummary("Liệt kê đơn mua nguồn của lô")]
     [HttpGet("api/batches/{code}/procurement-orders")]
     public async Task<ActionResult<IReadOnlyList<ProcurementOrderResponse>>> Orders(string code, CancellationToken ct) => Ok(await sourcing.OrdersAsync(code, ct));
 
@@ -24,9 +25,11 @@ public sealed class SourcingController(SourcingService sourcing) : ControllerBas
     public async Task<ActionResult<GoodsReceiptResponse>> CreateReceipt(string poNo, GoodsReceiptRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await sourcing.CreateReceiptAsync(poNo, req, ct));
 
+    [EndpointSummary("Liệt kê phiếu nhận hàng của lô")]
     [HttpGet("api/batches/{code}/goods-receipts")]
     public async Task<ActionResult<IReadOnlyList<GoodsReceiptResponse>>> Receipts(string code, CancellationToken ct) => Ok(await sourcing.ReceiptsAsync(code, ct));
 
+    [EndpointSummary("Xem chi tiết phiếu nhận hàng")]
     [HttpGet("api/goods-receipts/{receiptNo}")]
     public async Task<ActionResult<GoodsReceiptResponse>> Receipt(string receiptNo, CancellationToken ct) => Ok(await sourcing.ReceiptAsync(receiptNo, ct));
 
@@ -35,6 +38,7 @@ public sealed class SourcingController(SourcingService sourcing) : ControllerBas
     public async Task<ActionResult<InspectionResponse>> Inspect(string receiptNo, IncomingInspectionRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await sourcing.InspectAsync(receiptNo, req, ct));
 
+    [EndpointSummary("Hoàn tất kiểm phẩm đầu vào cho phiếu nhận hàng")]
     [HttpPost("api/goods-receipts/{receiptNo}/complete"), Authorize(Policy = Policies.Qc)]
     public async Task<ActionResult<GoodsReceiptResponse>> Complete(string receiptNo, CancellationToken ct) => Ok(await sourcing.CompleteReceiptAsync(receiptNo, ct));
 }
@@ -49,12 +53,15 @@ public sealed class HoldingController(HoldingService holding) : ControllerBase
     public async Task<ActionResult<CrabUnitResponse>> Box(string code, BoxRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await holding.BoxAsync(code, req, ct));
 
+    [EndpointSummary("Liệt kê hộp nuôi phục vụ tiếp nhận cua")]
     [HttpGet("api/batches/{code}/boxes")]
     public async Task<ActionResult<IReadOnlyList<BoxStateResponse>>> Boxes(string code, CancellationToken ct) => Ok(await holding.BoxesAsync(code, ct));
 
+    [EndpointSummary("Xem tình trạng lưu giữ cua của lô")]
     [HttpGet("api/batches/{code}/holding")]
     public async Task<ActionResult<HoldingResponse>> Holding(string code, CancellationToken ct) => Ok(await holding.HoldingAsync(code, ct));
 
+    [EndpointSummary("Liệt kê cua trong lô")]
     [HttpGet("api/batches/{code}/crab-units")]
     public async Task<ActionResult<IReadOnlyList<CrabUnitResponse>>> Crabs(string code, [FromQuery] string? status, CancellationToken ct)
         => Ok(await holding.CrabsAsync(code, status, ct));
@@ -63,6 +70,7 @@ public sealed class HoldingController(HoldingService holding) : ControllerBase
     [EndpointSummary("Chi tiết một con cua: lô nguồn, các hộp đã ở, sự kiện tồn (BR-102, BR-142)")]
     public async Task<ActionResult<CrabUnitResponse>> Crab(string crabCode, CancellationToken ct) => Ok(await holding.CrabAsync(crabCode, ct));
 
+    [EndpointSummary("Chuyển cua sang vị trí lưu giữ khác")]
     [HttpPost("api/crab-units/{crabCode}/move")]
     public async Task<ActionResult<CrabUnitResponse>> Move(string crabCode, MoveRequest req, CancellationToken ct) => Ok(await holding.MoveAsync(crabCode, req, ct));
 

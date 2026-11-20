@@ -16,10 +16,12 @@ public sealed class PreordersController(PreorderService preorders) : ControllerB
     public async Task<ActionResult<PreorderResponse>> Create(PreorderRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await preorders.CreateAsync(req, ct));
 
+    [EndpointSummary("Liệt kê đơn đặt trước của tôi")]
     [HttpGet]
     public async Task<ActionResult<PagedResult<PreorderResponse>>> Mine([FromQuery] PageQuery paging, CancellationToken ct)
         => Ok(await preorders.MineAsync(paging, ct));
 
+    [EndpointSummary("Xem chi tiết đơn đặt trước")]
     [HttpGet("{orderNo}")]
     [Authorize]
     public async Task<ActionResult<PreorderResponse>> Get(string orderNo, CancellationToken ct) => Ok(await preorders.GetAsync(orderNo, ct));
@@ -43,6 +45,7 @@ public sealed class PreorderQueriesController(PreorderService preorders) : Contr
     public async Task<ActionResult<AvailabilityResponse>> Availability(string code, CancellationToken ct)
         => Ok(await preorders.AvailabilityAsync(code, ct));
 
+    [EndpointSummary("Liệt kê đơn đặt trước của hộ nuôi")]
     [HttpGet("api/operators/me/preorders"), Authorize(Policy = Policies.Operator)]
     public async Task<ActionResult<PagedResult<PreorderResponse>>> ForOperator([FromQuery] string? batchCode, [FromQuery] PageQuery paging, CancellationToken ct)
         => Ok(await preorders.ForOperatorAsync(batchCode, paging, ct));

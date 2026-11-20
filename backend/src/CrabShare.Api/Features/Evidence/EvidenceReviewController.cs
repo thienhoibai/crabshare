@@ -9,11 +9,14 @@ namespace CrabShare.Api.Features.Evidence;
 [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
 public sealed class EvidenceReviewController(EvidenceReviewService reviews) : ControllerBase
 {
+    [EndpointSummary("Liệt kê minh chứng cần thẩm định")]
     [HttpGet]
     public async Task<ActionResult<PagedResult<ReviewEvidenceSummary>>> List([FromQuery] EvidenceReviewQuery query,
         [FromQuery] PageQuery paging, CancellationToken ct) => Ok(await reviews.ListAsync(query, paging, ct));
+    [EndpointSummary("Xem hồ sơ thẩm định minh chứng")]
     [HttpGet("{id:long:min(1)}")]
     public async Task<ActionResult<ReviewEvidenceDetail>> Get(long id, CancellationToken ct) => Ok(await reviews.GetAsync(id, ct));
+    [EndpointSummary("Xem ảnh phục vụ thẩm định")]
     [HttpGet("{id:long:min(1)}/image")]
     public async Task<IActionResult> Image(long id, CancellationToken ct)
     {
@@ -21,6 +24,7 @@ public sealed class EvidenceReviewController(EvidenceReviewService reviews) : Co
         Response.Headers["X-Content-Type-Options"] = "nosniff";
         return File(image.Stream, image.ContentType);
     }
+    [EndpointSummary("Ghi nhận kết quả thẩm định minh chứng")]
     [HttpPost("{id:long:min(1)}/verdict")]
     public async Task<ActionResult<ReviewEvidenceDetail>> Verdict(long id, EvidenceVerdictRequest request, CancellationToken ct)
         => Ok(await reviews.DecideAsync(id, request, ct));

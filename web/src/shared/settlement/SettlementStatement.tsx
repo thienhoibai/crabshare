@@ -57,7 +57,7 @@ export function SettlementStatement({ s }: { s: SettlementResponse }) {
     { key: 'capital', header: 'Vốn hoàn', num: true, cell: (l) => <Money value={l.capitalReturn} /> },
     { key: 'share', header: 'Phần chia', num: true, cell: (l) => <span className={l.profitShare < 0 ? 'op-danger' : ''}><Money value={l.profitShare} /></span> },
     ...(showTax ? [{ key: 'tax', header: 'Khấu trừ thuế', num: true, cell: (l: SettlementLineResponse) => <Money value={l.taxWithheld} /> }] : []),
-    { key: 'net', header: 'Thực nhận', num: true, cell: (l) => <b><Money value={l.netPayout} /></b> },
+    { key: 'net', header: 'Phần theo bảng', num: true, cell: (l) => <b><Money value={l.netPayout} /></b> },
     ...(showPayout ? [{ key: 'payout', header: 'Chi trả', cell: (l: SettlementLineResponse) => (l.payoutStatus ? <StatusBadge kind="instruction" value={l.payoutStatus} /> : '—') }] : []),
   ]
 

@@ -12,6 +12,7 @@ public sealed class TimelineController(TimelineService timeline) : ControllerBas
     public async Task<ActionResult<TimelinePage>> Get(string code, [FromQuery] TimelineQuery query, CancellationToken ct)
         => Ok(await timeline.ReadAsync(code, query, ct));
 
+    [EndpointSummary("Tải tệp minh chứng trong dòng thời gian của lô")]
     [HttpGet("evidence/{id:long:min(1)}/file")]
     public async Task<IActionResult> FileContent(string code, long id, CancellationToken ct)
     {

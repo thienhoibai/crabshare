@@ -24,7 +24,7 @@ test('danh mục hiện tổng vốn đã ghi nhận và từng Lô với giai �
   await expect(rows).toHaveText([new RegExp(running.batch.title), new RegExp(open.batch.title), new RegExp(closed.batch.title)])
   // Lô đang nuôi: ngày nuôi và phần vốn đã chốt.
   await expect(rows.nth(0)).toHaveAttribute('href', `/nha-dau-tu/danh-muc/${RUN}`)
-  await expect(rows.nth(0)).toContainText(`${RUN} · HTX Năm Căn`)
+  await expect(rows.nth(0)).toContainText(`${RUN}, HTX Năm Căn`)
   await expect(rows.nth(0)).toContainText('Đang lưu nuôi')
   await expect(rows.nth(0)).toContainText('1 cảnh báo')
   await expect(rows.nth(0)).toContainText('Ngày nuôi 12 / 30')

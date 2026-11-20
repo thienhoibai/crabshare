@@ -46,11 +46,11 @@ export function ContractStep({ batchCode, reservation, confirmed, onPay }: {
   return (
     <OpPanel
       title="Hợp đồng"
-      subtitle="Người nuôi ký trước, bạn ký sau trên cùng một file. Lô chỉ thả cua khi mọi hợp đồng đủ hai chữ ký."
+      lead="Người nuôi ký trước, bạn ký sau trên cùng một file. Có thể ký trong lúc chờ chuyển khoản."
       accent={!!c?.canSign}
       action={rows.length > 1 ? (
         <Select sm value={current.contributionId} aria-label="Chọn khoản góp" onChange={(e) => { sign.reset(); setPickedId(Number(e.target.value)) }}>
-          {rows.map((r) => <option key={r.contributionId} value={r.contributionId}>{formatVnd(r.amount)} · {label('contribution', r.status)}</option>)}
+          {rows.map((r) => <option key={r.contributionId} value={r.contributionId}>{formatVnd(r.amount)} ({label('contribution', r.status)})</option>)}
         </Select>
       ) : undefined}
     >

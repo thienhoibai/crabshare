@@ -27,7 +27,7 @@ export default function PortfolioPage() {
 
   return (
     <>
-      <OpHeading eyebrow="Góp vốn" title="Lô tôi đã góp" />
+      <OpHeading title="Lô tôi đã góp" description="Vốn đã xác nhận và trạng thái từng Lô." />
 
       <div className="op-toolbar">
         <Input className="op-toolbar__grow" value={q} maxLength={100} placeholder="Tìm mã Lô, tên Lô, người nuôi" aria-label="Tìm Lô"
@@ -62,7 +62,7 @@ export default function PortfolioPage() {
                       href={portfolioHref(p.batch.code)}
                       media={crabImg(p.batch.crabType)}
                       title={p.batch.title}
-                      sub={`${p.batch.code} · ${p.batch.operatorName}`}
+                      sub={`${p.batch.code}, ${p.batch.operatorName}`}
                       mid={
                         <>
                           <span className="op-inline">
@@ -75,7 +75,7 @@ export default function PortfolioPage() {
                       end={
                         <>
                           <b>{formatVnd(p.confirmedAmount)}</b>
-                          <small>{p.settlement ? `Thực nhận ${formatVnd(p.settlement.netPayout)}` : `${ratioText(p.capitalRatio)} vốn của Lô${isFrozen(p) ? '' : ', chưa chốt'}`}</small>
+                          <small>{p.settlement ? `${p.settlement.status === 'PaidOut' ? 'Thực nhận' : 'Số được nhận đã duyệt'} ${formatVnd(p.settlement.netPayout)}` : `${ratioText(p.capitalRatio)} vốn của Lô${isFrozen(p) ? '' : ', chưa chốt'}`}</small>
                         </>
                       }
                     />

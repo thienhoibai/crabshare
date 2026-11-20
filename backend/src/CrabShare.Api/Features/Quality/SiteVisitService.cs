@@ -133,6 +133,7 @@ public sealed class SiteVisitsController(SiteVisitService visits) : ControllerBa
     public async Task<ActionResult<SiteVisitReportResponse>> Report(long assignmentId, [FromForm] SiteVisitReportRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await visits.SubmitAsync(assignmentId, req, ct));
 
+    [EndpointSummary("Xem các lần kiểm tra thực địa của lô")]
     [HttpGet("api/batches/{code}/site-visits")]
     public async Task<ActionResult<IReadOnlyList<SiteVisitReportResponse>>> List(string code, CancellationToken ct) => Ok(await visits.ListAsync(code, null, ct));
 }

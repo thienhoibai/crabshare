@@ -7,6 +7,7 @@ namespace CrabShare.Api.Features.Evidence;
 [ApiController, Route("api/evidence"), Authorize(Policy = Policies.Operator)]
 public sealed class EvidenceController(EvidenceService evidence) : ControllerBase
 {
+    [EndpointSummary("Tải lên ảnh minh chứng")]
     [HttpPost, Consumes("multipart/form-data")]
     [RequestSizeLimit(EvidenceUploadLimits.MaxRequestBytes)]
     [RequestFormLimits(MemoryBufferThreshold = EvidenceUploadLimits.MaxRequestBytes, MultipartBodyLengthLimit = EvidenceUploadLimits.MaxImageBytes)]

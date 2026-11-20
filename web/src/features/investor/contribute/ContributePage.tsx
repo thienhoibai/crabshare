@@ -1,6 +1,5 @@
-/* /nha-dau-tu/gop-von/:code — Luồng góp vốn vào một Lô P theo năm bước (UC10, UC11, UC12, UC14):
-   1 xác minh danh tính · 2 công bố rủi ro · 3 số tiền và giữ chỗ · 4 chuyển khoản VietQR · 5 hợp đồng.
-   Mỗi lúc chỉ hiện một bước với một nút chính. Bước hiện tại suy ra từ dữ liệu của máy chủ (GET /api/funding/batches/{code}). */
+/* /nha-dau-tu/gop-von/:code — Xác minh, công bố rủi ro, giữ chỗ, rồi hoàn tất tiền và chữ ký song song.
+   Mỗi lúc mở một việc, có thể chuyển giữa thanh toán và hợp đồng. Dữ liệu máy chủ quyết định việc được phép làm. */
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { ArrowLeft } from 'lucide-react'
@@ -70,11 +69,23 @@ function Flow({ f, refresh }: { f: FundingBatchResponse; refresh: () => void }) 
     <>
       <OpHeading
         crumb={<OpBack href={fundingHref(f.batchCode)}><ArrowLeft size={16} /> {f.batchCode}</OpBack>}
-        eyebrow={`Góp vốn · bước ${index + 1} / ${STEPS.length}`}
+        description={`Góp vốn: ${STEPS[index].title}`}
         title={f.title}
         action={reservation && !expired ? <OpBadge tone="warn">Giữ chỗ còn {countdown.text}</OpBadge> : undefined}
       />
-      <OpSteps step={index + 1} total={STEPS.length} />
+      <OpSteps step={Math.min(index + 1, 4)} total={4} />
+
+      {(step === 'pay' || step === 'contract') && (
+        <div className="inv-contribution-tasks">
+          <p>Chuyển khoản và ký hợp đồng có thể thực hiện song song. Khoản góp chỉ được xác nhận khi đủ tiền và chữ ký.</p>
+          <div className="op-inline" role="group" aria-label="Thanh toán và hợp đồng">
+            <button type="button" className="rd-btn rd-btn--ghost" aria-pressed={step === 'pay'} disabled={!allowed.pay || paidNow} onClick={() => setPicked('pay')}>
+              Chuyển khoản{paidNow ? ': đã nhận tiền' : ''}
+            </button>
+            <button type="button" className="rd-btn rd-btn--ghost" aria-pressed={step === 'contract'} onClick={() => setPicked('contract')}>Hợp đồng</button>
+          </div>
+        </div>
+      )}
 
       {step === 'kyc' && (
         <OpPanel title={organization ? 'Xác minh hồ sơ pháp lý' : STEPS[0].title}>

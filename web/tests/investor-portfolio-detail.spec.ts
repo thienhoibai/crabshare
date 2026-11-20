@@ -15,7 +15,7 @@ test.beforeEach(async ({ page, api }) => {
 test('Lô đã chốt vốn: ba số tiền của tôi, tiến độ, các khoản góp và phần gấp lại', async ({ page, api }) => {
   await page.goto(lot(RUN))
   await expect(page.getByRole('heading', { name: running.batch.title, level: 1 })).toBeVisible()
-  await expect(page.getByText(`${RUN} · Cua gạch · HTX Năm Căn`)).toBeVisible()
+  await expect(page.getByText(`${RUN}, Cua gạch, HTX Năm Căn`)).toBeVisible()
   await expect(page.getByRole('main').getByText('1 cảnh báo', { exact: true })).toBeVisible()
   await expect(page.getByRole('main').getByText('Đang lưu nuôi', { exact: true })).toBeVisible()
   await expect(page.getByRole('main').getByRole('link', { name: 'Lô tôi đã góp' })).toHaveAttribute('href', '/nha-dau-tu/danh-muc')
@@ -86,7 +86,7 @@ test('Lô còn gọi vốn: chưa có ba số tiền, khoản chưa có hợp đ
   await page.goto(lot(OPEN))
   await expect(page.getByRole('heading', { name: open.batch.title, level: 1 })).toBeVisible()
   await expect(page.getByText('10.000.000đ')).toBeVisible()
-  await expect(page.getByText('16,67% vốn của Lô · Lô chưa chốt vốn nên chưa giải ngân')).toBeVisible()
+  await expect(page.getByText('16,67% vốn của Lô, Lô chưa chốt vốn nên chưa giải ngân')).toBeVisible()
   await expect(page.getByText('Đã giải ngân theo mốc')).toHaveCount(0)
 
   const mine = panel(page, 'Khoản góp của tôi')
@@ -104,7 +104,7 @@ test('Lô đã qua gọi vốn mà khoản góp chưa có hợp đồng thì ch�
   api.get(`/api/investor/portfolio/${RUN}`, { ...detailRunning, contributions: [{ ...detailRunning.contributions[0], contractNo: null, contractStatus: null }] })
   await page.goto(lot(RUN))
   const mine = panel(page, 'Khoản góp của tôi')
-  await expect(mine.getByText('Chưa lập')).toBeVisible()
+  await expect(mine.getByRole('table').getByText('Chưa lập')).toBeVisible()
   await expect(mine.getByRole('link', { name: 'Lập hợp đồng' })).toHaveCount(0)
 })
 
@@ -112,7 +112,7 @@ test('không lấy được ba số tiền thì chỉ hiện số đã góp và 
   api.get(`/api/batches/${RUN}/money-summary`, () => reply(500, { status: 500, detail: 'Máy chủ đang bận.' }))
   await page.goto(lot(RUN))
   await expect(page.getByText('30.000.000đ')).toBeVisible()
-  await expect(page.getByText('15% vốn của Lô · chưa lấy được số giải ngân')).toBeVisible()
+  await expect(page.getByText('15% vốn của Lô, chưa lấy được số giải ngân')).toBeVisible()
   await expect(page.getByText('Còn giữ')).toHaveCount(0)
   await expect(panel(page, 'Khoản góp của tôi').getByRole('row')).toHaveCount(3)
 })
@@ -150,7 +150,7 @@ test('mục Thiết bị: biểu đồ chỉ số nước theo 7 hoặc 30 ngày
 
   const water = panel(page, 'Chỉ số nước')
   for (const chart of ['nhiệt độ nước', 'độ mặn', 'ph']) await expect(water.getByRole('img', { name: `Biểu đồ ${chart} theo thời gian` })).toBeVisible()
-  await expect(water.getByText(/^6 lượt đo · gần nhất /)).toBeVisible()
+  await expect(water.getByText(/^6 lượt đo, gần nhất /)).toBeVisible()
   await expect(water.getByText('1 lượt chưa hiệu chuẩn hoặc nghi sai')).toBeVisible()
   expect(api.sent('GET', `/api/batches/${RUN}/water-readings`).map((c) => c.query)).toEqual([{}])
 
@@ -163,12 +163,12 @@ test('mục Thiết bị: biểu đồ chỉ số nước theo 7 hoặc 30 ngày
   // Mỗi hộp một ảnh mới nhất; ảnh tải qua endpoint cần đăng nhập.
   const images = panel(page, 'Ảnh hộp')
   const figures = images.getByRole('figure')
-  await expect(figures).toHaveText([/Hộp A-01 · /, /Hộp A-02 · .* · không thấy cua/])
+  await expect(figures).toHaveText([/Hộp A-01, /, /Hộp A-02, .*, không thấy cua/])
   await expect(images.getByRole('img', { name: /^Ảnh hộp A-01 lúc/ })).toHaveAttribute('src', /^blob:/)
   expect(api.sent('GET', /^\/api\/device-images\/\d+\/file$/).map((c) => c.path).sort()).toEqual(['/api/device-images/9003/file', '/api/device-images/9004/file'])
 
   await images.getByLabel('Chọn hộp').selectOption({ label: 'Hộp A-01' })
-  await expect(figures).toHaveText([/Hộp A-01 · /, /Hộp A-01 · /])
+  await expect(figures).toHaveText([/Hộp A-01, /, /Hộp A-01, /])
   expect(api.sent('GET', `/api/batches/${RUN}/device-images`).map((c) => c.query)).toEqual([{}, { slotCode: 'A-01' }])
 
   // Bấm ảnh để xem lớn, Esc để đóng.
@@ -206,8 +206,8 @@ test('mục Biểu quyết: bỏ phiếu phải qua hộp xác nhận; lỗi hi�
   await expect(current.getByText('Đang biểu quyết')).toBeVisible()
   await expect(current.getByText(decisionOpen.proposal)).toBeVisible()
   await expect(current.getByText(`Hạn ${viDateTime(decisionOpen.closesAt)}`)).toBeVisible()
-  await expect(current.getByText(`${vnd(80_000_000)} · 40%`)).toBeVisible()
-  await expect(current.getByText(`${vnd(20_000_000)} · 10%`)).toBeVisible()
+  await expect(current.getByText(`${vnd(80_000_000)}, 40%`)).toBeVisible()
+  await expect(current.getByText(`${vnd(20_000_000)}, 10%`)).toBeVisible()
   const past = panel(page, 'Bán phần dư')
   await expect(past.getByText('Thông qua', { exact: true })).toBeVisible()
   await expect(past.getByText(`Kết thúc ${viDateTime(decisionPassed.decidedAt!)}`)).toBeVisible()
@@ -216,7 +216,7 @@ test('mục Biểu quyết: bỏ phiếu phải qua hộp xác nhận; lỗi hi�
 
   await current.getByRole('button', { name: 'Không đồng ý' }).click()
   const against = page.getByRole('dialog', { name: 'Biểu quyết: Không đồng ý' })
-  await expect(against).toContainText(`Thanh lý sớm · Lô ${RUN} · ${decisionOpen.decisionNo}`)
+  await expect(against).toContainText(`Thanh lý sớm, Lô ${RUN}, ${decisionOpen.decisionNo}`)
   expect(api.writes()).toEqual([])
   await against.getByRole('button', { name: 'Gửi phiếu không đồng ý' }).click()
   await expect(against.getByText('Chưa ghi được phiếu, thử lại.')).toBeVisible()
@@ -231,7 +231,7 @@ test('mục Biểu quyết: bỏ phiếu phải qua hộp xác nhận; lỗi hi�
   await expect(page.getByRole('status').filter({ hasText: 'Đã ghi nhận phiếu của bạn.' })).toBeVisible()
   await expect(inFavour).toHaveCount(0)
   await expect(current.getByText('Bạn đã chọn: Đồng ý')).toBeVisible()
-  await expect(current.getByText(`${vnd(110_000_000)} · 55%`)).toBeVisible()
+  await expect(current.getByText(`${vnd(110_000_000)}, 55%`)).toBeVisible()
   await expect(current.getByRole('button')).toHaveCount(0)
 
   expect(api.writes()).toEqual([`POST ${path}`, `POST ${path}`])
@@ -283,7 +283,7 @@ test('mục Quyết toán khi bảng mới công bố để lấy góp ý: số 
   await page.goto(lot(RUN, 'quyet-toan'))
   const statement = panel(page, 'Bảng quyết toán')
   await expect(statement.getByText('Đang lấy góp ý')).toBeVisible()
-  await expect(fact(statement, 'Tôi thực nhận theo bảng')).toContainText(vnd(31_200_000))
+  await expect(fact(statement, 'Phần của tôi theo bảng')).toContainText(vnd(31_200_000))
   await expect(fact(statement, 'Góp ý tới')).toContainText(viDateTime(proposed.feedbackDeadline!))
   await expect(statement.getByRole('link', { name: 'Mở bảng quyết toán' })).toHaveAttribute('href', '/nha-dau-tu/quyet-toan/32')
   await expect(page.getByText('Bảng quyết toán chưa được công bố.')).toHaveCount(0)

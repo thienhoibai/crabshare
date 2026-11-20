@@ -54,11 +54,11 @@ export function SettlementTab({ detail }: { detail: PortfolioDetail }) {
               { label: 'Phần chia', value: formatVnd(approved.profitShare) },
               ...(approved.taxWithheld > 0 ? [{ label: 'Khấu trừ thuế', value: formatVnd(-approved.taxWithheld) }] : []),
               ...(approved.inKindQtyKg > 0 ? [{ label: 'Nhận bằng hiện vật', value: `${approved.inKindQtyKg.toLocaleString('vi-VN')} kg` }] : []),
-              { label: 'Tôi thực nhận', value: formatVnd(approved.netPayout), total: true },
+              { label: approved.status === 'PaidOut' ? 'Tôi thực nhận' : 'Số được nhận đã duyệt', value: formatVnd(approved.netPayout), total: true },
             ]} />
           ) : statement && (
             <OpDl items={[
-              { label: 'Tôi thực nhận theo bảng', value: statement.myNetPayout !== null ? formatVnd(statement.myNetPayout) : '—' },
+              { label: statement.status === 'PaidOut' ? 'Tôi thực nhận' : statement.status === 'Approved' ? 'Số được nhận đã duyệt' : 'Phần của tôi theo bảng', value: statement.myNetPayout !== null ? formatVnd(statement.myNetPayout) : '—' },
               ...(statement.feedbackOpen ? [{ label: 'Góp ý tới', value: formatDateTime(statement.feedbackDeadline) }] : []),
             ]} />
           )}

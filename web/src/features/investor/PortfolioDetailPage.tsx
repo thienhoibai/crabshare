@@ -9,7 +9,7 @@ import {
   OpBack, OpBadge, OpEmpty, OpError, OpFacts, OpHeading, OpLoading, OpPanel, OpStat, OpTabs, StatusBadge, errorMessage, label, useGet,
 } from '../../shared/ui/console'
 import { DecisionList } from './DecisionList'
-import { MoneyStat, batchApi, enc, isFrozen, ratioText, type PortfolioTab } from './investorShared'
+import { MoneyStat, batchApi, enc, isFrozen, portfolioHref, ratioText, type PortfolioTab } from './investorShared'
 import { ContributionsTab } from './portfolio/ContributionsTab'
 import { DevicesTab } from './portfolio/DevicesTab'
 import { SettlementTab } from './portfolio/SettlementTab'
@@ -32,13 +32,13 @@ function Summary({ detail }: { detail: PortfolioDetail }) {
   const share = `${ratioText(position.capitalRatio)} vốn của Lô`
 
   return (
-    <div className="op-grid">
+    <div className="op-grid inv-position">
       <div className="op-span-7">
         {frozen && money.isPending ? <OpPanel><OpLoading /></OpPanel>
           : money.data?.mine ? <MoneyStat title="Tôi đã góp vào Lô này" figures={money.data.mine} sub={share} />
             : (
               <OpStat label="Tôi đã góp vào Lô này" value={new Intl.NumberFormat('vi-VN').format(position.confirmedAmount)} unit="đ"
-                sub={frozen ? `${share} · chưa lấy được số giải ngân` : `${share} · Lô chưa chốt vốn nên chưa giải ngân`} />
+                sub={frozen ? `${share}, chưa lấy được số giải ngân` : `${share}, Lô chưa chốt vốn nên chưa giải ngân`} />
             )}
       </div>
       {progress.data && (
@@ -86,17 +86,17 @@ export default function PortfolioDetailPage() {
     <>
       <OpHeading
         crumb={<OpBack href="/nha-dau-tu/danh-muc"><ArrowLeft size={16} /> Lô tôi đã góp</OpBack>}
-        eyebrow={`${b.code} · ${label('crabType', b.crabType)} · ${b.operatorName}`}
+        description={`${b.code}, ${label('crabType', b.crabType)}, ${b.operatorName}`}
         title={b.title}
         action={
           <>
-            {b.openAlerts > 0 && <OpBadge tone="danger">{b.openAlerts} cảnh báo</OpBadge>}
+            {b.openAlerts > 0 && <a className="inv-alert-link" href={portfolioHref(b.code, 'nhat-trinh')} title="Xem nhật trình để theo dõi cảnh báo"><OpBadge tone="danger">{b.openAlerts} cảnh báo</OpBadge></a>}
             <StatusBadge kind="batch" value={b.status} />
           </>
         }
       />
-      <Summary detail={d} />
       <OpTabs<PortfolioTab> items={TABS} value={tab} onChange={(key) => setParams(key === 'khoan-gop' ? {} : { tab: key }, { replace: true })} label="Các mục của Lô" />
+      <Summary detail={d} />
 
       {tab === 'khoan-gop' && <ContributionsTab detail={d} />}
       {tab === 'nhat-trinh' && <BatchTimeline code={b.code} />}

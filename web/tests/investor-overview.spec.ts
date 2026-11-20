@@ -16,7 +16,9 @@ test('tổng quan cộng ba số tiền của các Lô đã chốt vốn và li�
 
   // Đã góp 30 + 20 triệu ở hai Lô đã chốt vốn; 10 triệu ở Lô còn gọi vốn chỉ ghi là chờ chốt.
   await expect(page.getByText('50.000.000đ')).toBeVisible()
-  await expect(page.getByText(`2 Lô đã chốt vốn · thêm ${vnd(10_000_000)} chờ chốt vốn`)).toBeVisible()
+  await expect(page.getByText('Vốn góp ở Lô đã chốt', { exact: true })).toBeVisible()
+  await expect(page.getByText('2 Lô đã chốt vốn', { exact: true })).toBeVisible()
+  await expect(page.getByText(`Thêm ${vnd(10_000_000)} đã xác nhận, chờ chốt vốn.`)).toBeVisible()
   await expect(page.getByRole('listitem').filter({ hasText: 'Đã giải ngân theo mốc' })).toContainText(vnd(32_000_000))
   await expect(page.getByRole('listitem').filter({ hasText: 'Còn giữ' })).toContainText(vnd(18_000_000))
 
@@ -57,19 +59,19 @@ test('việc cần làm gom đủ: xác minh, khoản đang giữ chỗ, hợp �
   await expect(todo).toHaveText([
     /Xác minh danh tính.*Cần có trước khi góp vốn/,
     new RegExp(`Chuyển khoản cho Lô ${NEW}`),
-    /Ký hợp đồng HD-2611-0731/,
     /Biểu quyết QD-2610-04-02: Thanh lý sớm/,
     new RegExp(`Xem bảng quyết toán Lô ${RUN}`),
+    /Ký hợp đồng HD-2611-0731/,
   ])
   await expect(todo.nth(0)).toHaveAttribute('href', '/nha-dau-tu/ho-so')
   await expect(todo.nth(1)).toHaveAttribute('href', `/nha-dau-tu/gop-von/${NEW}`)
-  await expect(todo.nth(1)).toContainText(`${vnd(10_000_000)} · giữ chỗ tới ${viDateTime(reservation.expiresAt)}`)
-  await expect(todo.nth(2)).toHaveAttribute('href', '/nha-dau-tu/hop-dong?id=731')
-  await expect(todo.nth(2)).toContainText(`Lô ${OPEN} · ${vnd(10_000_000)}`)
-  await expect(todo.nth(3)).toHaveAttribute('href', '/nha-dau-tu/bieu-quyet')
-  await expect(todo.nth(3)).toContainText(`Lô ${RUN} · hạn `)
-  await expect(todo.nth(4)).toHaveAttribute('href', '/nha-dau-tu/quyet-toan/32')
-  await expect(todo.nth(4)).toContainText(`Góp ý tới ${viDateTime(proposed.feedbackDeadline!)}`)
+  await expect(todo.nth(1)).toContainText(`${vnd(10_000_000)}, giữ chỗ tới ${viDateTime(reservation.expiresAt)}`)
+  await expect(todo.nth(2)).toHaveAttribute('href', `/nha-dau-tu/danh-muc/${RUN}?tab=bieu-quyet`)
+  await expect(todo.nth(2)).toContainText(`Lô ${RUN}, hạn `)
+  await expect(todo.nth(3)).toHaveAttribute('href', '/nha-dau-tu/quyet-toan/32')
+  await expect(todo.nth(3)).toContainText(`Góp ý tới ${viDateTime(proposed.feedbackDeadline!)}`)
+  await expect(todo.nth(4)).toHaveAttribute('href', '/nha-dau-tu/hop-dong?id=731')
+  await expect(todo.nth(4)).toContainText(`Lô ${OPEN}, ${vnd(10_000_000)}`)
 
   // Bấm việc đầu tiên: người chưa xác minh vào thẳng mục xác minh danh tính của hồ sơ.
   await todo.nth(0).click()
@@ -108,6 +110,7 @@ test('một Lô không lấy được số tiền thì báo rõ và không cộn
   api.get(`/api/batches/${DONE}/money-summary`, () => reply(500, { status: 500, detail: 'Máy chủ đang bận.' }))
   await page.goto('/nha-dau-tu')
   await expect(page.getByText('Chưa lấy được số tiền của 1 Lô.')).toBeVisible()
+  await expect(page.getByText('Vốn góp đã tải được', { exact: true })).toBeVisible()
   await expect(page.getByText('30.000.000đ')).toBeVisible()
   await expect(page.getByText(/^1 Lô đã chốt vốn/)).toBeVisible()
   await expect(page.getByRole('listitem').filter({ hasText: 'Đã giải ngân theo mốc' })).toContainText(vnd(12_000_000))

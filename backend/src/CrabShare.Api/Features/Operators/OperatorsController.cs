@@ -14,10 +14,12 @@ public sealed class OperatorsController(OperatorService operators) : ControllerB
         => CreatedAtAction(nameof(Me), await operators.CreateAsync(req, ct));
 
     // Xác minh role/membership từ DB trong service: token trước khi đăng ký vẫn dùng được cho UC04.
+    [EndpointSummary("Xem hồ sơ hộ nuôi của tôi")]
     [HttpGet("me")]
     public async Task<ActionResult<OperatorResponse>> Me(CancellationToken ct)
         => Ok(await operators.GetMeAsync(ct));
 
+    [EndpointSummary("Cập nhật hồ sơ hộ nuôi")]
     [HttpPut("me")]
     public async Task<ActionResult<OperatorResponse>> Update(OperatorProfileRequest req, CancellationToken ct)
         => Ok(await operators.UpdateAsync(req, ct));
@@ -28,6 +30,7 @@ public sealed class OperatorsController(OperatorService operators) : ControllerB
         => Ok(await operators.SubmitAsync(ct));
 
     // BR-007: mỗi hộ nuôi một tài khoản do người đại diện đứng tên, không khai nhân viên. Chỉ còn xem danh sách (dữ liệu cũ).
+    [EndpointSummary("Liệt kê thành viên hộ nuôi")]
     [HttpGet("me/members")]
     public async Task<ActionResult<IReadOnlyList<OperatorMemberResponse>>> Members(CancellationToken ct)
         => Ok(await operators.ListMembersAsync(ct));

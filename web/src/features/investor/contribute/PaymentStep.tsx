@@ -47,7 +47,7 @@ export function PaymentStep({ reservation, paymentId, onPayment, onExpire, onPai
   useEffect(() => {
     if (status !== 'Paid' || told.current) return
     told.current = true
-    toast('Đã nhận tiền. Khoản góp đã được xác nhận.')
+    toast('Đã nhận tiền. Kiểm tra chữ ký để hoàn tất khoản góp.')
     void queryClient.invalidateQueries()
     onPaid()
     // onPaid đổi theo mỗi lần vẽ; chỉ cần chạy khi trạng thái đổi sang Paid
@@ -76,12 +76,14 @@ export function PaymentStep({ reservation, paymentId, onPayment, onExpire, onPai
       {payment.data?.status === 'Pending' && <div className="op-formfoot"><SimulatePaymentButton payment={payment.data} /></div>}
 
       {!lapsed && status !== 'Paid' && reservation && (
-        <OpMore label="Tuỳ chọn khác">
-          <div className="op-inline">
-            <OpBtn variant="ghost" sm onClick={onContract}>Lập hợp đồng trước</OpBtn>
-            <OpBtn variant="ghost" sm onClick={() => { cancel.reset(); setCancelling(true) }}>Huỷ giữ chỗ</OpBtn>
+        <>
+          <div className="op-formfoot">
+            <OpBtn variant="ghost" onClick={onContract}>Lập hợp đồng trước</OpBtn>
           </div>
-        </OpMore>
+          <OpMore label="Tuỳ chọn khác">
+            <OpBtn variant="ghost" sm onClick={() => { cancel.reset(); setCancelling(true) }}>Huỷ giữ chỗ</OpBtn>
+          </OpMore>
+        </>
       )}
 
       {cancelling && reservation && (
