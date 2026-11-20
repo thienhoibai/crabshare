@@ -26,6 +26,7 @@ public sealed class MyPartyController(PartyService parties, PartyDocumentService
     public async Task<ActionResult<PartyDocumentResponse>> UploadDocument([FromForm] UploadPartyDocumentRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await documents.UploadMineAsync(req, ct));
 
+    [EndpointSummary("Tải tài liệu trong hồ sơ đối tác")]
     [HttpGet("party/documents/{documentId:long}/file")]
     public async Task<IActionResult> DocumentFile(long documentId, CancellationToken ct)
     {
@@ -33,6 +34,7 @@ public sealed class MyPartyController(PartyService parties, PartyDocumentService
         return File(content, type);
     }
 
+    [EndpointSummary("Gỡ tài liệu khỏi hồ sơ")]
     [HttpDelete("party/documents/{documentId:long}")]
     public async Task<IActionResult> RemoveDocument(long documentId, CancellationToken ct)
     {
@@ -49,14 +51,17 @@ public sealed class MyPartyController(PartyService parties, PartyDocumentService
     public async Task<ActionResult<IReadOnlyList<PartySiteResponse>>> Sites([FromQuery] string? siteType, CancellationToken ct)
         => Ok(await parties.ListMySitesAsync(siteType, ct));
 
+    [EndpointSummary("Thêm địa điểm hoạt động")]
     [HttpPost("sites")]
     public async Task<ActionResult<PartySiteResponse>> AddSite(SiteRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await parties.AddMySiteAsync(req, ct));
 
+    [EndpointSummary("Cập nhật địa điểm hoạt động")]
     [HttpPut("sites/{siteId:long}")]
     public async Task<ActionResult<PartySiteResponse>> UpdateSite(long siteId, SiteRequest req, CancellationToken ct)
         => Ok(await parties.UpdateMySiteAsync(siteId, req, ct));
 
+    [EndpointSummary("Xóa địa điểm hoạt động")]
     [HttpDelete("sites/{siteId:long}")]
     public async Task<IActionResult> RemoveSite(long siteId, CancellationToken ct)
     {
@@ -70,11 +75,13 @@ public sealed class MyPartyController(PartyService parties, PartyDocumentService
     public async Task<ActionResult<IReadOnlyList<RelatedPartyResponse>>> Related(CancellationToken ct) => Ok(await parties.ListRelatedAsync(ct));
 
     [Authorize(Policy = Policies.Operator)]
+    [EndpointSummary("Khai báo bên liên quan")]
     [HttpPost("related-parties")]
     public async Task<ActionResult<RelatedPartyResponse>> AddRelated(RelatedPartyRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await parties.AddRelatedAsync(req, ct));
 
     [Authorize(Policy = Policies.Operator)]
+    [EndpointSummary("Gỡ bên liên quan")]
     [HttpDelete("related-parties/{id:long}")]
     public async Task<IActionResult> RemoveRelated(long id, CancellationToken ct)
     {
@@ -106,10 +113,12 @@ public sealed class PartiesController(PartyService parties) : ControllerBase
 [Route("api/admin/parties")]
 public sealed class AdminPartiesController(PartyService parties, PartyDocumentService documents) : ControllerBase
 {
+    [EndpointSummary("Liệt kê hồ sơ đối tác")]
     [HttpGet]
     public async Task<ActionResult<PagedResult<PartySummaryResponse>>> List([FromQuery] PartyListQuery filter, [FromQuery] PageQuery paging, CancellationToken ct)
         => Ok(await parties.ListAsync(filter, paging, ct));
 
+    [EndpointSummary("Xem chi tiết hồ sơ đối tác")]
     [HttpGet("{partyId:long}")]
     public async Task<ActionResult<PartyResponse>> Get(long partyId, CancellationToken ct) => Ok(await parties.GetAsync(partyId, ct));
 
@@ -117,6 +126,7 @@ public sealed class AdminPartiesController(PartyService parties, PartyDocumentSe
     [EndpointSummary("Căn cứ để xác minh: tài khoản đứng tên, kết quả eKYC và giấy tờ pháp lý đã gửi (BR-009)")]
     public async Task<ActionResult<PartyDossierResponse>> Dossier(long partyId, CancellationToken ct) => Ok(await documents.DossierAsync(partyId, ct));
 
+    [EndpointSummary("Tải tài liệu đối tác để thẩm định")]
     [HttpGet("{partyId:long}/documents/{documentId:long}/file")]
     public async Task<IActionResult> DocumentFile(long partyId, long documentId, CancellationToken ct)
     {
@@ -129,10 +139,12 @@ public sealed class AdminPartiesController(PartyService parties, PartyDocumentSe
     public async Task<ActionResult<PartyResponse>> RecordExternal(ExternalPartyRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await parties.RecordExternalAsync(req, ct));
 
+    [EndpointSummary("Xác minh hồ sơ đối tác")]
     [HttpPost("{partyId:long}/verify")]
     public async Task<ActionResult<PartyResponse>> Verify(long partyId, CancellationToken ct)
         => Ok(await parties.DecideAsync(partyId, true, new PartyDecisionRequest(), ct));
 
+    [EndpointSummary("Từ chối hồ sơ đối tác")]
     [HttpPost("{partyId:long}/reject")]
     public async Task<ActionResult<PartyResponse>> Reject(long partyId, PartyDecisionRequest req, CancellationToken ct)
         => Ok(await parties.DecideAsync(partyId, false, req, ct));
@@ -152,6 +164,7 @@ public sealed class AdminQcController(PartyService parties) : ControllerBase
     [EndpointSummary("Pool Nhân viên kiểm phẩm kèm thống kê uy tín (BR-017)")]
     public async Task<ActionResult<IReadOnlyList<QcInspectorResponse>>> List(CancellationToken ct) => Ok(await parties.ListQcAsync(ct));
 
+    [EndpointSummary("Cấp quyền kiểm phẩm cho người dùng")]
     [HttpPost]
     public async Task<IActionResult> Grant(GrantQcRequest req, CancellationToken ct)
     {
@@ -159,6 +172,7 @@ public sealed class AdminQcController(PartyService parties) : ControllerBase
         return NoContent();
     }
 
+    [EndpointSummary("Thu hồi quyền kiểm phẩm của người dùng")]
     [HttpDelete("{userId:long}")]
     public async Task<IActionResult> Revoke(long userId, CancellationToken ct)
     {

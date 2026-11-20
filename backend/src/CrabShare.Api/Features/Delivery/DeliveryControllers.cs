@@ -27,6 +27,7 @@ public sealed class DeliveryController(DeliveryService delivery) : ControllerBas
     public async Task<ActionResult<OrderDeliveriesResponse>> CancelTranche(long id, CancelTrancheRequest req, CancellationToken ct)
         => Ok(await delivery.CancelTrancheAsync(id, req, ct));
 
+    [EndpointSummary("Xem chuyến giao hàng theo mã")]
     [HttpGet("api/shipments/{shipmentNo}")]
     public async Task<ActionResult<ShipmentResponse>> Shipment(string shipmentNo, CancellationToken ct) => Ok(await delivery.ShipmentAsync(shipmentNo, ct));
 
@@ -67,9 +68,11 @@ public sealed class ClaimsController(ClaimService claims) : ControllerBase
     public async Task<ActionResult<ClaimResponse>> Create(string orderNo, [FromForm] CreateClaimRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await claims.CreateAsync(orderNo, req, ct));
 
+    [EndpointSummary("Xem chi tiết khiếu nại")]
     [HttpGet("api/claims/{claimNo}")]
     public async Task<ActionResult<ClaimResponse>> Get(string claimNo, CancellationToken ct) => Ok(await claims.GetAsync(claimNo, ct));
 
+    [EndpointSummary("Xem ảnh đính kèm khiếu nại")]
     [HttpGet("api/claims/{claimNo}/photo")]
     public async Task<IActionResult> Photo(string claimNo, CancellationToken ct)
     {
@@ -77,6 +80,7 @@ public sealed class ClaimsController(ClaimService claims) : ControllerBase
         return File(content, type);
     }
 
+    [EndpointSummary("Liệt kê khiếu nại của hộ nuôi")]
     [HttpGet("api/operators/me/claims"), Authorize(Policy = Policies.Operator)]
     public async Task<ActionResult<IReadOnlyList<ClaimResponse>>> Mine([FromQuery] string? status, CancellationToken ct) => Ok(await claims.ListAsync(status, true, ct));
 
@@ -90,6 +94,7 @@ public sealed class ClaimsController(ClaimService claims) : ControllerBase
     public async Task<ActionResult<ClaimResponse>> Reply(string claimNo, CustomerReplyRequest req, CancellationToken ct)
         => Ok(await claims.CustomerReplyAsync(claimNo, req, ct));
 
+    [EndpointSummary("Liệt kê khiếu nại dành cho quản trị viên")]
     [HttpGet("api/admin/claims"), Authorize(Policy = Policies.Admin)]
     public async Task<ActionResult<IReadOnlyList<ClaimResponse>>> All([FromQuery] string? status, CancellationToken ct) => Ok(await claims.ListAsync(status, false, ct));
 
@@ -112,6 +117,7 @@ public sealed class DirectSalesController(DirectSaleService sales) : ControllerB
     [EndpointSummary("Cua đã duyệt hạng còn trong tồn, chưa phân bổ")]
     public async Task<ActionResult<IReadOnlyList<SellableCrab>>> Sellable(string code, CancellationToken ct) => Ok(await sales.SellableAsync(code, ct));
 
+    [EndpointSummary("Xem các đơn bán trực tiếp của lô")]
     [HttpGet("api/batches/{code}/direct-sales")]
     public async Task<ActionResult<IReadOnlyList<DirectSaleResponse>>> List(string code, CancellationToken ct) => Ok(await sales.ListAsync(code, ct));
 
@@ -125,6 +131,7 @@ public sealed class DirectSalesController(DirectSaleService sales) : ControllerB
     public async Task<ActionResult<DirectSaleResponse>> FinalOrder(string code, FinalOrderRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await sales.CreateFinalOrderAsync(code, req, ct));
 
+    [EndpointSummary("Xem chi tiết đơn bán trực tiếp")]
     [HttpGet("api/direct-sales/{orderNo}")]
     public async Task<ActionResult<DirectSaleResponse>> Get(string orderNo, CancellationToken ct) => Ok(await sales.GetAsync(orderNo, ct));
 

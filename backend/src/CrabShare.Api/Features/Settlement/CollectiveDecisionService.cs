@@ -235,6 +235,7 @@ public sealed class CollectiveDecisionsController(CollectiveDecisionService deci
     public async Task<ActionResult<DecisionResponse>> Propose(string code, ProposeDecisionRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await decisions.ProposeAsync(code, req, ct));
 
+    [EndpointSummary("Xem các quyết định tập thể của lô")]
     [HttpGet("api/batches/{code}/decisions")]
     public async Task<ActionResult<IReadOnlyList<DecisionResponse>>> List(string code, CancellationToken ct) => Ok(await decisions.ListAsync(code, ct));
 

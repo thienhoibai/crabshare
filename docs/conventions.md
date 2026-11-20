@@ -44,7 +44,7 @@ Mọi exception đều nhận **(code, message)** theo đúng thứ tự đó.
 1. Tạo thư mục `Features/<Module>/` (đọc `README.md` trong thư mục đó: use case, bảng, endpoint dự kiến).
 2. Copy cách viết của `Features/Auth/`: `<Module>Dtos.cs`, `<Module>Service.cs`, `<Tên thư mục>Controller.cs` (ví dụ `Features/Batches/BatchesController.cs`).
 3. Bỏ comment 2 dòng của module trong `Common/FeatureRegistry.cs` (`using` + `AddScoped<...Service>()`). Controller tự được nhận, không cần đăng ký.
-4. Chạy API (F5 trong Visual Studio) → trình duyệt mở `http://localhost:5233/scalar` → thử endpoint.
+4. Chạy API (F5 trong Visual Studio) → trình duyệt mở `http://localhost:5233/swagger` → thử endpoint.
 5. Viết test cho quy tắc nghiệp vụ quan trọng (`backend/tests/CrabShare.Api.Tests`).
 6. Thay đổi tiền / hợp đồng / chi phí chuẩn / trạng thái lô / quyết toán: bọc trong `db.InTransactionAsync(...)` và gọi `IAuditLog.WriteAsync`. Việc chạy định kỳ: kế thừa `Common/Jobs/RecurringJob`. Cả hai xem `Features/Admin/README.md`.
 

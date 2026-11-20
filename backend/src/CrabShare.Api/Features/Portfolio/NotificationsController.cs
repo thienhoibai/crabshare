@@ -18,6 +18,7 @@ public sealed record NotificationPage(IReadOnlyList<InvestorNotification> Items,
 [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
 public sealed class NotificationsController(NotificationService notifications) : ControllerBase
 {
+    [EndpointSummary("Xem danh sách thông báo của tôi")]
     [HttpGet]
     public async Task<ActionResult<NotificationPage>> List([FromQuery] NotificationQuery query, [FromQuery] PageQuery paging, CancellationToken ct)
         => Ok(await notifications.ListAsync(query, paging, ct));
