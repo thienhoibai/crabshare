@@ -1,0 +1,117 @@
+%% Figure 4.35 – Activity Diagram: WF-05 Settlement, tiered remuneration, payout and loss case
+%% v3.2 · 05/11/2026 · Register v1.4
+%% Business level; generated from gen-activity.js with the same nodes and flows as CrabShare_Activity_Diagrams.drawio.
+%% Lanes = subgraphs (one per actor). «planned» = in Register v1.4, not yet on develop @ 420a379 (dashed).
+%% draw.io splits this figure into 3 parts; the connectors (A, B) join them here into one flow.
+flowchart TB
+  subgraph LANE_adm["Platform Administrator"]
+    direction TB
+    s((" "))
+    a1("Start the settlement calculation")
+    a2("Review the draft statement")
+    d2{"recalculate?"}
+    a3("Propose the statement with a 7–14 day feedback window")
+    a4("Answer the feedback (answered or unresolved)")
+    a5("Approve the settlement")
+    a6("Send the payment instructions")
+    a7("Resend the failed instruction")
+  end
+  subgraph LANE_sys["CrabShare System"]
+    direction TB
+    mS{" "}
+    s1("Sum the revenue lines: delivered orders, invoiced sales, forfeited deposits, final order (new revenue types «planned»)")
+    s2("Compute the Revenue Pool = actual revenue − locked Standard Cost of the funded boxes")
+    d1{"Pool > 0?"}
+    s3("Compute the remuneration: floor(Pool × rate), cut by tier below the survival threshold (tiers «planned»)")
+    s4("Allocate the loss pro rata, each capped at its capital; no remuneration; the Operator bears any excess")
+    s5("Split the rest pro rata by capital, largest-remainder rounding")
+    m1{" "}
+    ob1["Settlement [Draft], one line per investor"]
+    t1>"⌛ feedback window ends"]
+    s7("Lock the statement; create the payment instructions (remuneration, payouts)")
+    d4{"all payouts succeeded?"}
+    s8("Close the settlement and the Batch")
+    e((("end")))
+  end
+  subgraph LANE_inv["Investor"]
+    direction TB
+    f1[" "]
+    i1("Review own line: capital, share, net payout")
+    d3{"disagree?"}
+    i2("Submit feedback with grounds")
+    mJ{" "}
+    j1[" "]
+  end
+  subgraph LANE_op["Operator"]
+    direction TB
+    o1("Review the full statement and the remuneration tier")
+  end
+  subgraph LANE_psp["Payment Service Provider"]
+    direction TB
+    mP{" "}
+    p1("Pay out from the Batch account; report each result")
+  end
+  cA(("A"))
+  cB(("B"))
+  s -->|"[sales closed, return windows over]"| a1
+  a1 --> mS
+  mS --> s1
+  s1 --> s2
+  s2 --> d1
+  d1 -->|"[yes]"| s3
+  d1 -->|"[no: loss]"| s4
+  s3 --> s5
+  s5 --> m1
+  s4 --> m1
+  m1 --> ob1
+  ob1 --> a2
+  a2 --> d2
+  d2 -->|"[yes]"| mS
+  d2 -->|"[no]"| a3
+  a3 --> cA
+  cA --> f1
+  f1 --> i1
+  f1 --> o1
+  i1 --> d3
+  d3 -->|"[yes]"| i2
+  d3 -->|"[no]"| mJ
+  i2 --> a4
+  a4 --> mJ
+  o1 --> j1
+  mJ --> j1
+  j1 --> t1
+  t1 -->|"[no open feedback]"| a5
+  a5 --> cB
+  cB --> s7
+  s7 --> a6
+  a6 --> mP
+  mP --> p1
+  p1 --> d4
+  d4 -->|"[yes]"| s8
+  d4 -->|"[no]"| a7
+  s8 --> e
+  a7 --> mP
+  classDef planned stroke-dasharray:5 5,color:#64748b,stroke:#64748b,fill:#f8fafc
+  classDef bar fill:#1e293b,stroke:#1e293b,color:#1e293b
+  classDef startNode fill:#111111,stroke:#111111,color:#111111
+  classDef object fill:#fff7ed,stroke:#c2410c
+  classDef conn fill:#ffffff,stroke:#1e293b,stroke-width:2px
+  class f1,j1 bar
+  class s startNode
+  class ob1 object
+  class cA,cB conn
+
+%% The Administrator starts the calculation; the settlement engine computes it (UC38). Customer refunds are settled before the Pool is computed.
+%% Connector A continues on part 2. Investor and Operator review in parallel; the merge joins the two outcomes of the Investor's branch before the join.
+%% Feedback moves the settlement to Disputed until the Administrator answers it (Figure 4.15). Connector B continues on part 3. Approval locks the
+%% statement and creates one payment instruction per payee (Figure 4.12); the sandbox gateway answers at once (Created → Succeeded or Failed). The last
+%% successful payout closes the settlement and the Batch. Traceability: UC38, UC37, UC35, UC36, UC39, UC40 (TP1 Thiện). Worked example (Register v1.4):
+%% Standard Cost 100,000,000 VND; revenue 300,000,000 VND → Pool 200,000,000 VND; survival 90% above an 85% threshold → remuneration 10% = 20,000,000
+%% VND; A receives 15,000,000 + 27,000,000 = 42,000,000 VND, B the same, C 196,000,000 VND, so payouts plus remuneration equal the revenue; at 80%
+%% survival the remuneration halves. Exception branches: negative Revenue Pool (loss capped at capital, no capital call, no carry-over), recalculation,
+%% investor feedback, failed payout resent. «planned» in v1.4: revenue lines InvoicedSale (low-grade or resold crabs), ForfeitedDeposit and FinalOrder
+%% (the code counts completed orders and offtake forfeits), remuneration tiers by survival rate (the code uses one fixed percentage). Survival = 1 −
+%% deaths ÷ crabs stocked in the funded boxes; restocked crabs that die count, deaths in transit only lower revenue. Unused Standard Cost, including an
+%% unused mortality reserve, stays with the Operator; only an early liquidation returns unspent capital. Removed in v1.4 (still in code): offtake
+%% forfeits as revenue. States: settlement Draft → Proposed ⇄ Disputed → Approved → PaidOut → Closed (Figure 4.14); payment instruction Created →
+%% Succeeded / Failed (4.12); Batch Settlement → Closed (4.8). Design decisions of 05/11/2026 applied here were confirmed by the lead.

@@ -1,0 +1,869 @@
+%% CrabShare – Logical ERD (Figure 4.2) · v3.2 · 05/11/2026 · Register v1.4
+%% Built from database/migrations V001–V017 (develop @ 420a379) plus the Register v1.4 changes.
+%% Types are DBMS-independent: Integer, Money (integer VND), Decimal, Text, Date, DateTime, Boolean, UUID.
+%% "planned" = in Register v1.4 but not in code yet; "changed" = meaning or values change in v1.4; "derived" = derived value or snapshot stored once; "composite FK" = BatchId is also part of a composite foreign key that keeps both rows in the same Batch.
+%% Removed from the v1.4 model (kept only in the Physical ERD): ProductListing, PriceHistory, PriceCheck, OrderLine, StockReservation, OfftakeCommitment, BatchOfftakePrice, CrabTag, TagScan, ProductionThreshold.
+%% Design decisions of 05/11/2026 applied here were confirmed by the lead (Batch opening condition, box rows, forfeited deposits, survival rate, weighed-kg balance, unused Standard Cost, InvoicedSale); the affected rules end with (confirmed by the lead).
+erDiagram
+    %% ===== A1 · Identity, accounts, farm and boxes
+    User {
+        Integer UserId PK
+        Text Email UK
+        Text Phone UK "optional"
+        Text FullName
+        Text PasswordHash
+        Text Status
+        DateTime LastLoginAt "optional"
+    }
+    UserRole {
+        Integer UserId PK, FK
+        Text RoleCode PK
+        DateTime GrantedAt
+    }
+    Customer {
+        Integer UserId PK, FK
+        Text DisplayName "optional"
+    }
+    DeliveryAddress {
+        Integer AddressId PK
+        Integer CustomerId FK
+        Text RecipientName
+        Text RecipientPhone
+        Text AddressLine
+        Text Province
+        Boolean IsDefault
+        Decimal Latitude "planned, optional"
+        Decimal Longitude "planned, optional"
+    }
+    Investor {
+        Integer UserId PK, FK
+        Text InvestorKind
+        Text OrganizationName "optional"
+        Text TaxCode "optional"
+        Text VerificationStatus
+        DateTime VerifiedAt "optional"
+    }
+    IdentityCheck {
+        Integer KycCheckId PK
+        Integer UserId FK
+        Text CheckType
+        Text ProviderRef "optional"
+        DateTime ConsentAt "optional"
+        Text Result
+        Text FailureReason "optional"
+        Integer ReviewedBy FK "optional"
+        DateTime CheckedAt
+    }
+    Operator {
+        Integer OperatorId PK
+        Text LegalName
+        Text TaxCode UK
+        Text BusinessRegNo
+        Text FarmAddress
+        Integer ApprovedBoxCapacity
+        Text Status
+        DateTime SubmittedAt "optional"
+        DateTime ApprovedAt "optional"
+        Integer ApprovedBy FK "optional"
+        Decimal FarmLatitude "planned, optional"
+        Decimal FarmLongitude "planned, optional"
+    }
+    OperatorMember {
+        Integer UserId PK, FK
+        Integer OperatorId FK
+        Text MemberRole
+        DateTime JoinedAt
+    }
+    PayoutAccount {
+        Integer PayoutAccountId PK
+        Integer OwnerUserId FK "optional"
+        Integer OwnerOperatorId FK "optional"
+        Text BankCode
+        Text AccountNo
+        Text AccountHolderName
+        Text NameMatchStatus
+        Text Status
+        Text AccountNoDigest UK "optional"
+    }
+    Box {
+        Integer BoxId PK
+        Integer OperatorId FK
+        Text BoxCode
+        Text RowCode "optional"
+        Integer RackNo "optional"
+        Integer TierNo "optional"
+        Integer ColumnNo "optional"
+        Text Status
+    }
+    %% BK Box (OperatorId, BoxCode)
+    BoxAllocation {
+        Integer BoxAllocationId PK
+        Integer BatchId FK
+        Integer BoxId FK
+        DateTime AllocatedAt
+        DateTime ReleasedAt "optional"
+        Integer BoxRowId FK "planned"
+    }
+    %% «planned» entity BoxRow: no table yet
+    BoxRow {
+        Integer BoxRowId PK "planned"
+        Integer BatchId FK "planned"
+        Text RowCode "planned"
+        Integer BoxCount "planned, derived"
+        Money CapitalVnd "planned, derived"
+    }
+    %% BK BoxRow (BatchId, RowCode)
+    %% rule BoxRow: groups allocated boxes by Box.RowCode; CapitalVnd = BoxCount × cost per box, not below the platform minimum (confirmed by the lead)
+    %% ===== A2 · Batch, Standard Cost, funding and contracts
+    Batch {
+        Integer BatchId PK
+        Text BatchCode UK
+        Integer OperatorId FK
+        Text CrabType
+        Text Title
+        Integer SeedQuantity
+        Decimal ExpectedOutputKg
+        Integer CycleDays
+        Integer RestockCutoffDays
+        Money MinViableCapital
+        Money TargetCapital
+        Money MaxCapital
+        Money MinContribution "changed, derived"
+        Decimal OperatorSharePct
+        Integer FrozenStockCapMonths
+        Decimal PreOrderCapPct "changed"
+        Decimal DepositPct "changed"
+        Integer FeeTierId FK "optional"
+        Money PlatformFeeAmount "derived, optional"
+        Text Status
+        DateTime FundingOpenAt "optional"
+        DateTime FundingDeadline "optional"
+        DateTime CapitalClosedAt "optional"
+        Money TotalConfirmedCapital "derived, optional"
+        DateTime StockedAt "optional"
+        Date ExpectedHarvestDate "optional"
+        DateTime HarvestStartedAt "optional"
+        DateTime EarlyLiquidationAt "optional"
+        DateTime ClosedAt "optional"
+        Integer ApprovedBy FK "optional"
+        DateTime ApprovedAt "optional"
+        Text RejectionReason "optional"
+        Money PricePerKgVnd "planned"
+        Money FloorPriceVnd "planned"
+        Decimal SurvivalThresholdPct "planned"
+        Decimal DeliveryRadiusKm "planned"
+        Decimal MinPreOrderRatioPct "planned"
+        Integer SalesWindowDays "planned"
+    }
+    %% rule Batch: opens when confirmed capital ≥ MinViableCapital and pre-order ratio ≥ MinPreOrderRatioPct; else refund all (confirmed by the lead)
+    BatchAccount {
+        Integer BatchAccountId PK
+        Integer BatchId FK, UK
+        Text ProviderName
+        Text ProviderAccountNo UK
+        Text Status
+        DateTime OpenedAt "optional"
+        DateTime ClosedAt "optional"
+    }
+    CapitalShare {
+        Integer BatchId PK, FK
+        Integer InvestorId PK, FK
+        Money ConfirmedAmount
+        DateTime SnapshottedAt
+    }
+    ContractSignature {
+        Integer SignatureId PK
+        Integer ContractId FK
+        Text SignerRole
+        Integer SigningOrder
+        Integer SignerUserId FK
+        Text ProviderRequestId "optional"
+        Text SignedHash
+        DateTime SignedAt
+    }
+    %% BK ContractSignature (ContractId, SignerRole)
+    %% BK ContractSignature (ContractId, SigningOrder)
+    ContractTemplate {
+        Integer TemplateId PK
+        Text VersionCode UK
+        Text ContentHash
+        Text Status
+        DateTime EffectiveFrom "optional"
+    }
+    Contribution {
+        Integer ContributionId PK
+        Integer BatchId FK
+        Integer InvestorId FK
+        Money Amount "changed"
+        Text Status
+        DateTime ReservedAt
+        DateTime ExpiresAt
+        DateTime ConfirmedAt "optional"
+        DateTime RefundedAt "optional"
+    }
+    %% rule Contribution: Amount = Σ CapitalVnd of its BoxRows (confirmed by the lead)
+    DisbursementTranche {
+        Integer TrancheId PK
+        Integer BatchId FK
+        Integer TrancheNo
+        Money PlannedAmount
+        Date PlannedDate "optional"
+        Text UnlockCondition
+        Text Status
+        DateTime RequestedAt "optional"
+        DateTime ExplanationDeadline "optional"
+        DateTime ReleasedAt "optional"
+        Text AnchorCode "optional"
+        Integer OffsetDays "optional"
+    }
+    %% BK DisbursementTranche (BatchId, TrancheNo)
+    FeeTier {
+        Integer FeeTierId PK
+        Text TierCode UK
+        Money MinCapital
+        Money MaxCapital "optional"
+        Money FeeAmount
+        Date EffectiveFrom
+        Date EffectiveTo "optional"
+        Boolean MinInclusive
+        Boolean MaxInclusive
+    }
+    InvestmentContract {
+        Integer ContractId PK
+        Text ContractNo UK
+        Integer ContributionId FK, UK
+        Integer TemplateId FK
+        Text Status
+        Text SigningMethod
+        Text DraftHash
+        Text FinalFileUri "optional"
+        Text FinalHash "optional"
+        DateTime FullySignedAt "optional"
+    }
+    RiskAcknowledgement {
+        Integer InvestorId PK, FK
+        Integer RiskDisclosureId PK, FK
+        DateTime AcknowledgedAt
+        Boolean ScrolledToEnd
+    }
+    RiskDisclosure {
+        Integer RiskDisclosureId PK
+        Text VersionCode UK
+        Text ContentHash
+        DateTime EffectiveFrom
+        Text Status
+    }
+    StandardCostItem {
+        Integer CostItemId PK
+        Integer CostVersionId FK
+        Text Category
+        Text Description
+        Decimal Quantity
+        Text Unit
+        Money UnitPrice
+        Integer TrancheNo "optional"
+    }
+    TranchePlan {
+        Integer CostVersionId PK, FK
+        Integer TrancheNo PK
+        Date PlannedDate "optional"
+        Text UnlockCondition
+        Text AnchorCode "optional"
+        Integer OffsetDays "optional"
+    }
+    StandardCostVersion {
+        Integer CostVersionId PK
+        Integer BatchId FK
+        Integer VersionNo
+        Text Status
+        DateTime SubmittedAt "optional"
+        Integer ApprovedBy FK "optional"
+        DateTime ApprovedAt "optional"
+        DateTime LockedAt "optional"
+    }
+    %% BK StandardCostVersion (BatchId, VersionNo)
+    %% «planned» entity RowAllocation: no table yet
+    RowAllocation {
+        Integer RowAllocationId PK "planned"
+        Integer ContributionId FK "planned"
+        Integer BoxRowId FK "planned"
+        Text Status "planned"
+    }
+    %% rule RowAllocation: at most one Held or Allocated allocation per BoxRow (confirmed by the lead)
+    %% «planned» entity RemunerationTier: no table yet
+    RemunerationTier {
+        Integer RemunerationTierId PK "planned"
+        Integer BatchId FK "planned"
+        Integer TierNo "planned"
+        Decimal MinSurvivalPct "planned"
+        Decimal MaxSurvivalPct "planned, optional"
+        Decimal RemunerationPct "planned"
+    }
+    %% BK RemunerationTier (BatchId, TierNo)
+    %% ===== A3 · Production, evidence and alerts
+    Alert {
+        Integer AlertId PK
+        Integer BatchId FK
+        Text AlertType
+        Text Severity
+        Text Message
+        DateTime RaisedAt
+        DateTime AckDeadline
+        DateTime AcknowledgedAt "optional"
+        Integer AcknowledgedBy FK "optional"
+        Text ResponseNote "optional"
+        DateTime EscalatedAt "optional"
+        Text Status
+    }
+    CaptureRequest {
+        Integer CaptureRequestId PK
+        Integer BatchId FK
+        Integer BoxId FK
+        DateTime RequestedAt
+        DateTime DueAt
+        Text Status
+        DateTime FulfilledAt "optional"
+    }
+    Crab {
+        Integer CrabId PK
+        UUID CrabUuid UK
+        Integer BatchId FK "composite FK"
+        Integer BoxAllocationId FK
+        DateTime StockedAt
+        Integer ReplacesCrabId FK "optional"
+        Integer HarvestId FK "optional"
+        Integer GradeId FK "optional"
+        Integer WeightG "optional"
+        Text Status
+        Integer OrderId FK "planned, optional"
+    }
+    CrabHistory {
+        Integer CrabEventId PK
+        Integer CrabId FK
+        Text EventType
+        DateTime OccurredAt
+        Integer ActorId FK "optional"
+        Integer EvidenceId FK "optional"
+        Text Note "optional"
+    }
+    Evidence {
+        Integer EvidenceId PK
+        Integer BatchId FK
+        Integer BoxEventId FK "optional"
+        Integer TrancheId FK "optional"
+        Integer BoxId FK "optional"
+        Integer CaptureRequestId FK "optional"
+        Text MediaType
+        Text FileUri
+        Text Sha256
+        Text PerceptualHash "optional"
+        DateTime CapturedAt "optional"
+        DateTime ReceivedAt
+        Decimal Latitude "optional"
+        Decimal Longitude "optional"
+        Text Source
+        Text PartnerLabel "optional"
+        Decimal RiskScore "optional"
+        Text ReviewStatus
+        Text Explanation "optional"
+        DateTime ExplainedAt "optional"
+        Integer CrabId FK "optional"
+        Integer IngestionMessageId FK, UK "planned, optional"
+    }
+    CrabDetection {
+        Integer DetectionId PK
+        Integer EvidenceId FK
+        Text ModelVersion
+        Boolean CrabDetected "optional"
+        Decimal Confidence "optional"
+        Text BboxJson "optional"
+        DateTime DetectedAt
+    }
+    %% BK CrabDetection (EvidenceId, ModelVersion)
+    EvidenceReview {
+        Integer EvidenceReviewId PK
+        Integer EvidenceId FK
+        Integer ReviewerId FK
+        Text Verdict
+        Text Note "optional"
+        DateTime ReviewedAt
+    }
+    %% BK EvidenceReview (EvidenceId, ReviewerId)
+    ProductionLog {
+        Integer ProductionLogId PK
+        Integer BatchId FK
+        Date LogDate
+        Decimal FeedKg "optional"
+        Text Note "optional"
+        Text Source
+        Text PlausibilityFlag
+        DateTime VerifiedAt "optional"
+        Integer RecordedBy FK "optional"
+        DateTime ReceivedAt
+        Integer IngestionMessageId FK, UK "planned, optional"
+    }
+    %% BK ProductionLog (BatchId, LogDate, Source)
+    BoxEvent {
+        Integer BoxEventId PK
+        Integer BoxAllocationId FK
+        Integer BatchId FK "composite FK"
+        Text EventType
+        DateTime OccurredAt
+        Integer Quantity
+        Text Note "optional"
+        Text Source
+        DateTime ReceivedAt
+        Integer IngestionMessageId FK, UK "planned, optional"
+    }
+    BoxEventDetail {
+        Integer BoxEventId PK, FK
+        Integer BatchId FK "composite FK"
+        Integer CrabId FK
+        Integer DestinationBoxAllocationId FK "optional"
+        Integer ActorId FK
+        UUID RequestId
+        Text RequestHash
+        Integer PolicyVersionId FK "optional"
+        Integer AliveCount
+    }
+    %% BK BoxEventDetail (BatchId, RequestId)
+    BoxEventPolicy {
+        Integer PolicyVersionId PK
+        Integer BatchId FK
+        Integer VersionNo
+        Text RestockCutoffBasis
+        Integer RestockCutoffDays
+        Integer MortalityWindowHours "optional"
+        Decimal MortalityThresholdPercent "optional"
+        Text MortalitySeverity "optional"
+        Integer MortalityAckWithinHours "optional"
+        Integer CreatedBy FK
+    }
+    %% BK BoxEventPolicy (BatchId, VersionNo)
+    %% «planned» entity IngestionMessage: no table yet
+    IngestionMessage {
+        Integer IngestionMessageId PK "planned"
+        Integer OperatorId FK "planned"
+        Text ClientMessageId "planned"
+        Text MessageType "planned"
+        Text BatchCode "planned"
+        Text BoxCode "planned, optional"
+        DateTime OccurredAt "planned"
+        Text PayloadJson "planned"
+        DateTime ReceivedAt "planned"
+        Text Status "planned"
+        Text RejectReason "planned, optional"
+    }
+    %% BK IngestionMessage (OperatorId, ClientMessageId)
+    %% rule IngestionMessage: BatchCode, BoxCode as received
+    %% ===== A4 · Harvest, traceability and pricing
+    Harvest {
+        Integer HarvestId PK
+        Integer BatchId FK
+        DateTime HarvestedAt
+        Integer HarvestedCount "derived"
+        Decimal TotalWeightKg "derived"
+        Integer DeclaredBy FK
+        Text Note "optional"
+        Text Name "optional"
+        Text LifecycleStatus "optional"
+        DateTime CompletedAt "optional"
+        Integer CompletedBy FK "optional"
+        Integer RevisionNo
+    }
+    HarvestRecord {
+        Integer BoxEventId PK, FK
+        Integer HarvestId FK
+        Integer BatchId FK "composite FK"
+        Integer CrabId FK, UK
+        Text BoxCode "derived"
+        Integer WeightG
+        Text ShellCondition
+        Text GradeCode "derived"
+        Text GradeName "derived"
+        DateTime RecordedAt
+        Integer HarvestedCount "derived"
+        Decimal TotalWeightKg "derived"
+    }
+    HarvestStartRequest {
+        UUID RequestId PK
+        Integer HarvestId FK
+        Integer BatchId FK "composite FK"
+        Integer ActorId FK
+        Text RequestHash
+    }
+    ProductGrade {
+        Integer GradeId PK
+        Text GradeCode UK
+        Text GradeName
+        Integer MinWeightG "optional"
+        Integer MaxWeightG "optional"
+    }
+    %% «planned» entity PriceObservation: no table yet
+    PriceObservation {
+        Integer PriceObservationId PK "planned"
+        Date ObservedOn "planned"
+        Text Source "planned"
+        Text SourceRef "planned, optional"
+        Text CrabType "planned"
+        Integer GradeId FK "planned, optional"
+        Money PriceVndPerKg "planned"
+    }
+    %% BK PriceObservation (ObservedOn, Source, CrabType, GradeId)
+    %% «planned» entity PriceSuggestion: no table yet
+    PriceSuggestion {
+        Integer PriceSuggestionId PK "planned"
+        Integer BatchId FK "planned, optional"
+        Text CrabType "planned"
+        Date TargetFrom "planned"
+        Date TargetTo "planned"
+        Money LowVndPerKg "planned"
+        Money MidVndPerKg "planned"
+        Money HighVndPerKg "planned"
+        Decimal MapePct "planned"
+        Date DataFrom "planned"
+        Date DataTo "planned"
+        DateTime GeneratedAt "planned"
+    }
+    %% rule PriceSuggestion: BatchId set when the Batch is saved; shown as a range with a warning
+    %% ===== A5 · Bulk orders, invoices and complaints
+    Complaint {
+        Integer ComplaintId PK
+        Integer OrderId FK
+        Text ComplaintType
+        Text Description
+        Text EvidenceUri "optional"
+        Text Status
+        Text Resolution "optional"
+        Money RefundAmount "optional"
+        Integer ResolvedBy FK "optional"
+        DateTime OpenedAt
+        DateTime ResolvedAt "optional"
+        Text OperatorResponse "optional"
+        Text OperatorEvidenceUri "optional"
+        DateTime RespondedAt "optional"
+        DateTime EscalatedAt "optional"
+        Text AdminNotes "optional"
+    }
+    ProductRating {
+        Integer RatingId PK
+        Integer OrderId FK, UK
+        Integer Stars
+        Text Comment "optional"
+    }
+    SalesOrder {
+        Integer OrderId PK
+        Text OrderNo UK
+        Integer CustomerId FK "changed, optional"
+        Integer BatchId FK
+        Text OrderType "changed"
+        Text Status "changed"
+        Money TotalAmount
+        Money DepositAmount "optional"
+        DateTime BalanceDueAt "optional"
+        Text RecipientName "derived"
+        Text RecipientPhone "derived"
+        Text ShippingAddress "derived"
+        DateTime PlacedAt
+        DateTime PaidAt "optional"
+        DateTime ShippedAt "optional"
+        DateTime DeliveredAt "optional"
+        DateTime ReturnWindowEndsAt "optional"
+        DateTime CompletedAt "optional"
+        DateTime CancelledAt "optional"
+        Text CancelReason "optional"
+        Text CarrierName "optional"
+        Text VehiclePlate "optional"
+        Text DriverPhone "optional"
+        DateTime ExpectedArrivalAt "optional"
+        Text ShippingNote "optional"
+        DateTime ReceivedAt "optional"
+        Integer CrabCount "planned, optional"
+        Decimal EstimatedKg "planned, optional"
+        Decimal WeighedKg "planned, optional"
+        Decimal TransitLossKg "planned, optional"
+        Money BalanceVnd "planned, derived, optional"
+        DateTime ForfeitedAt "planned, optional"
+        Text SaleReason "planned, optional"
+    }
+    %% rule SalesOrder: SaleReason only for InvoicedSale (confirmed by the lead)
+    %% «planned» entity Invoice: no table yet
+    Invoice {
+        Integer InvoiceId PK "planned"
+        Integer OrderId FK, UK "planned"
+        Text InvoiceNo UK "planned"
+        Text BuyerName "planned"
+        Text BuyerTaxCode "planned, optional"
+        Money AmountVnd "planned"
+        DateTime IssuedAt "planned"
+    }
+    %% rule Invoice: one per delivered order (BulkPreOrder, InvoicedSale or FinalOrder) (confirmed by the lead)
+    %% «planned» entity PreOrderQuota: no table yet
+    PreOrderQuota {
+        Integer BatchId PK, FK "planned"
+        Integer MaxCrabCount "planned"
+        Integer HeldCrabCount "planned, derived"
+        Integer DepositedCrabCount "planned, derived"
+    }
+    %% rule PreOrderQuota: HeldCrabCount + DepositedCrabCount ≤ MaxCrabCount (no overselling)
+    %% «planned» entity PreOrderHold: no table yet
+    PreOrderHold {
+        Integer PreOrderHoldId PK "planned"
+        Integer BatchId FK "planned"
+        Integer OrderId FK, UK "planned"
+        Integer CrabCount "planned"
+        Text Status "planned"
+        DateTime ExpiresAt "planned"
+    }
+    %% rule PreOrderHold: one per order; Active until ExpiresAt (Orders:ReservationMinutes = 15)
+    %% «planned» entity OrderQrCode: no table yet
+    OrderQrCode {
+        Integer OrderQrCodeId PK "planned"
+        Integer OrderId FK, UK "planned"
+        Text QrToken UK "planned"
+        DateTime IssuedAt "planned"
+        DateTime RevokedAt "planned, optional"
+    }
+    %% ===== A6 · Payments, settlement and audit
+    AuditRecord {
+        Integer AuditId PK
+        Text EntityType
+        Integer EntityId
+        Text ActionType
+        Text OldValue "optional"
+        Text NewValue "optional"
+        Integer ActorUserId FK "optional"
+        DateTime OccurredAt
+        Text PrevHash "optional"
+        Text RowHash
+    }
+    PaymentInstruction {
+        Integer InstructionId PK
+        Integer BatchAccountId FK
+        Text InstructionType
+        Money Amount
+        Integer PayoutAccountId FK "optional"
+        Text BeneficiaryNote "optional"
+        Integer TrancheId FK "optional"
+        Integer SettlementLineId FK "optional"
+        Integer ContributionId FK "optional"
+        Integer OrderId FK "optional"
+        Text Status
+        DateTime SentAt "optional"
+        DateTime CompletedAt "optional"
+    }
+    PaymentRequest {
+        Integer PaymentRequestId PK
+        Text ReferenceCode UK
+        Integer BatchAccountId FK
+        Text Purpose "changed"
+        Money Amount
+        Integer ContributionId FK "optional"
+        Integer OrderId FK "optional"
+        DateTime ExpiresAt
+        Text Status
+    }
+    ProviderTransaction {
+        Integer TransactionId PK
+        Text ProviderTxnId UK
+        Integer BatchAccountId FK
+        Text Direction
+        Money Amount
+        Text ReferenceCode "optional"
+        Integer PaymentRequestId FK "optional"
+        Integer InstructionId FK "optional"
+        Text MatchStatus
+        DateTime OccurredAt
+        DateTime ReceivedAt
+    }
+    Settlement {
+        Integer SettlementId PK
+        Integer BatchId FK, UK
+        Integer RevisionNo
+        Money ActualRevenue "derived"
+        Money LockedStandardCost "derived"
+        Money RevenuePool "derived"
+        Decimal OperatorSharePct "changed"
+        Money OperatorRemuneration "derived"
+        Money DepreciationAmount
+        Money TaxTotal
+        Text Status
+        DateTime ProposedAt "optional"
+        DateTime FeedbackDeadline "optional"
+        Integer ApprovedBy FK "optional"
+        DateTime ApprovedAt "optional"
+        Decimal SurvivalRatePct "planned, derived"
+        Integer AppliedTierId FK "planned, optional"
+    }
+    SettlementFeedback {
+        Integer FeedbackId PK
+        Integer SettlementId FK
+        Integer UserId FK
+        Text Content
+        Text Status
+        Text Response "optional"
+        DateTime RespondedAt "optional"
+    }
+    SettlementLine {
+        Integer SettlementLineId PK
+        Integer SettlementId FK
+        Integer BatchId FK "composite FK"
+        Integer InvestorId FK
+        Money CapitalReturn
+        Money ProfitShare
+        Money TaxWithheld
+        Money NetPayout "derived"
+        Decimal InKindQtyKg
+    }
+    %% BK SettlementLine (SettlementId, InvestorId)
+    %% «planned» entity RevenueLine: no table yet
+    RevenueLine {
+        Integer RevenueLineId PK "planned"
+        Integer SettlementId FK "planned"
+        Integer OrderId FK "planned"
+        Text LineType "planned"
+        Money AmountVnd "planned"
+        DateTime RecognisedAt "planned"
+    }
+    %% BK RevenueLine (SettlementId, OrderId, LineType)
+    %% ===== Relationships: parent (left) to child (right), label = foreign key
+    User |o--o{ Alert : "AcknowledgedBy"
+    Batch ||--o{ Alert : "BatchId"
+    User ||--o{ UserRole : "UserId"
+    User |o--o{ AuditRecord : "ActorUserId"
+    User |o--o{ Batch : "ApprovedBy"
+    FeeTier |o--o{ Batch : "FeeTierId"
+    Operator ||--o{ Batch : "OperatorId"
+    Batch ||--o| BatchAccount : "BatchId"
+    Batch ||--o{ CapitalShare : "BatchId"
+    Investor ||--o{ CapitalShare : "InvestorId"
+    Batch ||--o{ CaptureRequest : "BatchId"
+    Box ||--o{ CaptureRequest : "BoxId"
+    SalesOrder ||--o{ Complaint : "OrderId"
+    User |o--o{ Complaint : "ResolvedBy"
+    InvestmentContract ||--o{ ContractSignature : "ContractId"
+    User ||--o{ ContractSignature : "SignerUserId"
+    Batch ||--o{ Contribution : "BatchId"
+    Investor ||--o{ Contribution : "InvestorId"
+    Batch ||--o{ Crab : "BatchId"
+    ProductGrade |o--o{ Crab : "GradeId"
+    Harvest |o--o{ Crab : "HarvestId"
+    Crab |o--o| Crab : "ReplacesCrabId"
+    BoxAllocation ||--o{ Crab : "BoxAllocationId"
+    User |o--o{ CrabHistory : "ActorId"
+    Crab ||--o{ CrabHistory : "CrabId"
+    Evidence |o--o{ CrabHistory : "EvidenceId"
+    User ||--o| Customer : "UserId"
+    Customer ||--o{ DeliveryAddress : "CustomerId"
+    Batch ||--o{ DisbursementTranche : "BatchId"
+    Batch ||--o{ Evidence : "BatchId"
+    CaptureRequest |o--o{ Evidence : "CaptureRequestId"
+    Crab |o--o{ Evidence : "CrabId"
+    BoxEvent |o--o{ Evidence : "BoxEventId"
+    Box |o--o{ Evidence : "BoxId"
+    DisbursementTranche |o--o{ Evidence : "TrancheId"
+    Evidence ||--o{ CrabDetection : "EvidenceId"
+    Evidence ||--o{ EvidenceReview : "EvidenceId"
+    User ||--o{ EvidenceReview : "ReviewerId"
+    Batch ||--o{ Harvest : "BatchId"
+    User |o--o{ Harvest : "CompletedBy"
+    User ||--o{ Harvest : "DeclaredBy"
+    Crab ||--o| HarvestRecord : "CrabId"
+    BoxEventDetail ||--o| HarvestRecord : "BoxEventId"
+    BoxEvent ||--o| HarvestRecord : "BoxEventId"
+    Harvest ||--o{ HarvestRecord : "HarvestId"
+    User ||--o{ HarvestStartRequest : "ActorId"
+    Harvest ||--o{ HarvestStartRequest : "HarvestId"
+    Contribution ||--o| InvestmentContract : "ContributionId"
+    ContractTemplate ||--o{ InvestmentContract : "TemplateId"
+    User ||--o| Investor : "UserId"
+    User |o--o{ IdentityCheck : "ReviewedBy"
+    User ||--o{ IdentityCheck : "UserId"
+    User |o--o{ Operator : "ApprovedBy"
+    Operator ||--|{ OperatorMember : "OperatorId"
+    User ||--o| OperatorMember : "UserId"
+    BatchAccount ||--o{ PaymentInstruction : "BatchAccountId"
+    Contribution |o--o{ PaymentInstruction : "ContributionId"
+    SalesOrder |o--o{ PaymentInstruction : "OrderId"
+    PayoutAccount |o--o{ PaymentInstruction : "PayoutAccountId"
+    SettlementLine |o--o{ PaymentInstruction : "SettlementLineId"
+    DisbursementTranche |o--o{ PaymentInstruction : "TrancheId"
+    BatchAccount ||--o{ PaymentRequest : "BatchAccountId"
+    Contribution |o--o{ PaymentRequest : "ContributionId"
+    SalesOrder |o--o{ PaymentRequest : "OrderId"
+    Operator |o--o{ PayoutAccount : "OwnerOperatorId"
+    User |o--o{ PayoutAccount : "OwnerUserId"
+    Operator ||--o{ Box : "OperatorId"
+    SalesOrder ||--o| ProductRating : "OrderId"
+    Batch ||--o{ ProductionLog : "BatchId"
+    User |o--o{ ProductionLog : "RecordedBy"
+    BatchAccount ||--o{ ProviderTransaction : "BatchAccountId"
+    PaymentInstruction |o--o{ ProviderTransaction : "InstructionId"
+    PaymentRequest |o--o{ ProviderTransaction : "PaymentRequestId"
+    Investor ||--o{ RiskAcknowledgement : "InvestorId"
+    RiskDisclosure ||--o{ RiskAcknowledgement : "RiskDisclosureId"
+    Batch ||--o{ SalesOrder : "BatchId"
+    User |o--o{ SalesOrder : "CustomerId"
+    User |o--o{ Settlement : "ApprovedBy"
+    Batch ||--o| Settlement : "BatchId"
+    Settlement ||--o{ SettlementFeedback : "SettlementId"
+    User ||--o{ SettlementFeedback : "UserId"
+    Batch ||--o{ SettlementLine : "BatchId"
+    CapitalShare ||--o{ SettlementLine : "BatchId"
+    Investor ||--o{ SettlementLine : "InvestorId"
+    Settlement ||--o{ SettlementLine : "SettlementId"
+    Batch ||--o{ BoxAllocation : "BatchId"
+    Box ||--o{ BoxAllocation : "BoxId"
+    Batch ||--o{ BoxEvent : "BatchId"
+    BoxAllocation ||--o{ BoxEvent : "BoxAllocationId"
+    User ||--o{ BoxEventDetail : "ActorId"
+    Crab ||--o{ BoxEventDetail : "CrabId"
+    BoxAllocation |o--o{ BoxEventDetail : "DestinationBoxAllocationId"
+    BoxEvent ||--o| BoxEventDetail : "BoxEventId"
+    BoxEventPolicy |o--o{ BoxEventDetail : "PolicyVersionId"
+    User ||--o{ BoxEventPolicy : "CreatedBy"
+    Batch ||--o{ BoxEventPolicy : "BatchId"
+    StandardCostVersion ||--|{ StandardCostItem : "CostVersionId"
+    StandardCostVersion ||--o{ TranchePlan : "CostVersionId"
+    User |o--o{ StandardCostVersion : "ApprovedBy"
+    Batch ||--|{ StandardCostVersion : "BatchId"
+    %% planned
+    SalesOrder |o--o{ Crab : "OrderId (planned)"
+    %% planned
+    IngestionMessage |o--o| Evidence : "IngestionMessageId (planned)"
+    %% planned
+    IngestionMessage |o--o| ProductionLog : "IngestionMessageId (planned)"
+    %% planned
+    RemunerationTier |o--o{ Settlement : "AppliedTierId (planned)"
+    %% planned
+    BoxRow ||--|{ BoxAllocation : "BoxRowId (planned)"
+    %% planned
+    IngestionMessage |o--o| BoxEvent : "IngestionMessageId (planned)"
+    %% planned
+    Batch ||--|{ BoxRow : "BatchId (planned)"
+    %% planned
+    Contribution ||--|{ RowAllocation : "ContributionId (planned)"
+    %% planned
+    BoxRow ||--o{ RowAllocation : "BoxRowId (planned)"
+    %% planned
+    Batch ||--|{ RemunerationTier : "BatchId (planned)"
+    %% planned
+    Operator ||--o{ IngestionMessage : "OperatorId (planned)"
+    %% planned
+    ProductGrade |o--o{ PriceObservation : "GradeId (planned)"
+    %% planned
+    Batch |o--o{ PriceSuggestion : "BatchId (planned)"
+    %% planned
+    SalesOrder ||--o| Invoice : "OrderId (planned)"
+    %% planned
+    Batch ||--o| PreOrderQuota : "BatchId (planned)"
+    %% planned
+    PreOrderQuota ||--o{ PreOrderHold : "BatchId (planned)"
+    %% planned
+    SalesOrder ||--o| PreOrderHold : "OrderId (planned)"
+    %% planned
+    SalesOrder ||--o| OrderQrCode : "OrderId (planned)"
+    %% planned
+    Settlement ||--o{ RevenueLine : "SettlementId (planned)"
+    %% planned
+    SalesOrder ||--o{ RevenueLine : "OrderId (planned)"

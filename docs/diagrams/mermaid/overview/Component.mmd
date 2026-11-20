@@ -1,0 +1,74 @@
+%% CrabShare – System Overview: Component Diagram (Figure 4.1, parts 1/2 and 2/2) · v3.2 · 05/11/2026 · Register v1.4
+%% Code: develop @ 420a379. Dashed outline or line = «planned» (in Register v1.4, not in code yet).
+%% Removed in v1.4 but still in code, not drawn: Catalog (listings, store, cart, checkout), Offtake, per-crab tags, PreorderBalance job.
+%% Design decisions of 05/11/2026 applied here were confirmed by the lead (box rows, forfeited deposits, weighed-kg balance, InvoicedSale).
+flowchart LR
+  classDef comp fill:#eff6ff,stroke:#1d4ed8,color:#0f172a
+  classDef ext fill:#fef3c7,stroke:#b45309,color:#0f172a
+  classDef data fill:#f1f5f9,stroke:#1e293b,color:#0f172a
+  classDef planned fill:#f8fafc,stroke:#64748b,stroke-dasharray:6 4,color:#475569
+
+  subgraph C1["[C1] Web App · React 19 + Vite (Vercel)"]
+    C11["[C1.1] Auth and session<br/>axios + JWT"]:::comp
+    C12["[C1.2] Customer orders<br/>bulk pre-order, tracking, returns"]:::comp
+    C13["[C1.3] Farm map «planned»"]:::planned
+    C14["[C1.4] Investor portal<br/>box rows «planned»"]:::comp
+    C15["[C1.5] Operator workspace"]:::comp
+    C16["[C1.6] Admin console"]:::comp
+    C17["[C1.7] Public trace page<br/>by order QR «planned»"]:::comp
+  end
+  subgraph C2["[C2] Mobile App · Flutter (Android)"]
+    C21["[C2.1] Auth and session<br/>Dio + JWT"]:::comp
+    C22["[C2.2] Investor tabs"]:::comp
+    C23["[C2.3] Operator tabs<br/>live evidence, harvest per box"]:::comp
+    C24["[C2.4] QR scan<br/>order QR «planned»"]:::comp
+  end
+  X5["[X5] Device & Camera Simulator «planned»"]:::planned
+  X6["[X6] Map tile service «planned»"]:::planned
+  X7["[X7] Static web resources<br/>Google Fonts · Pexels photos"]:::ext
+
+  subgraph C3["[C3] CrabShare API · ASP.NET Core .NET 10 (Azure App Service)"]
+    I1(("[I1] REST /api/*"))
+    I2(("[I2] /api/ingest/v1/* «planned»")):::planned
+    I3(("[I3] payment webhook"))
+    CTRL["[C3.1] REST controllers<br/>51 classes in 49 files, all ApiController"]:::comp
+    FEAT["[C3.2] Feature modules<br/>Auth · Accounts · Operators · Boxes · Batches · Funding · Contracts · Payments · Settlement · Portfolio · Production · Evidence · Alerts · Harvest · Orders · Admin · Health<br/>planned parts: box rows, farm map query, row allocation, pre-order quota and holds, invoiced sales, final order, order QR, revenue lines, tiers"]:::comp
+    PRICE["Price Module «planned»"]:::planned
+    INGEST["Ingestion «planned»"]:::planned
+    JOBS["[C3.3] Background jobs<br/>8 hosted jobs · final-order reminder «planned»"]:::comp
+    COMMON["[C3.4] Common<br/>auth, audit hash chain, errors"]:::comp
+    ENGINE["[C3.5] SettlementEngine library"]:::comp
+    INFRA["[C3.6] Infrastructure adapters<br/>Persistence · Storage · Payments · Signing · eKYC · Crab detection · Security"]:::comp
+  end
+
+  S1[("[S1] SQL Server<br/>Azure SQL / LocalDB")]:::data
+  S2[("[S2] File storage<br/>/home/data/storage")]:::data
+  X1["[X1] Payment intermediary (VietQR)<br/>in-process Fake today · sandbox «planned»"]:::ext
+  X2["[X2] Viettel digital signing<br/>in-process Fake today · sandbox «planned»"]:::ext
+  X3["[X3] eKYC provider<br/>in-process Fake today · sandbox «planned»"]:::ext
+  X4["[X4] Cloudinary<br/>evidence photos"]:::ext
+  M1["[M1] Crab detection model «planned»"]:::planned
+
+  C11 -->|"HTTPS · JSON · Bearer JWT"| I1
+  C21 -->|"HTTPS · JSON · Bearer JWT"| I1
+  C13 -.->|"HTTPS tiles «planned»"| X6
+  C1 -->|"HTTPS GET"| X7
+  X5 -.->|"HTTPS POST · X-Api-Key «planned»"| I2
+  X1 -.->|"HTTPS POST · HMAC-SHA256 «planned»"| I3
+  I1 --> CTRL
+  I2 -.-> INGEST
+  I3 --> CTRL
+  CTRL -.->|calls| FEAT
+  JOBS -.->|invoke| FEAT
+  FEAT -.->|use| COMMON
+  FEAT -.->|"Settlement uses"| ENGINE
+  FEAT -.->|"use ports"| INFRA
+  FEAT -.- PRICE
+  FEAT -.- INGEST
+  INFRA -->|"TDS 1433 · TLS · Managed Identity"| S1
+  INFRA -->|"file I/O"| S2
+  INFRA -->|"HTTPS Upload API · signed URL"| X4
+  INFRA -.->|"REST/HTTPS sandbox «planned» (in-process Fake today)"| X1
+  INFRA -.->|"REST/HTTPS sandbox «planned» (in-process Fake today)"| X2
+  INFRA -.->|"REST/HTTPS sandbox «planned» (in-process Fake today)"| X3
+  INFRA -.->|"loads in-process «planned»"| M1

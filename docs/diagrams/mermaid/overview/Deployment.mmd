@@ -1,0 +1,51 @@
+%% CrabShare – System Overview: Deployment / CI-CD Diagram (Figure 4.4) · v3.2 · 05/11/2026 · Register v1.4
+%% Sources: .github/workflows/*.yml and docs/deploy.md on develop @ 420a379. Dashed = «planned».
+flowchart LR
+  classDef node fill:#f8fafc,stroke:#1e293b,color:#0f172a
+  classDef ext fill:#fef3c7,stroke:#b45309,color:#0f172a
+  classDef planned fill:#f8fafc,stroke:#64748b,stroke-dasharray:6 4,color:#475569
+
+  N1["[N1] User PC · browser"]:::node
+  N2["[N2] Android phone · CrabShare APK"]:::node
+  N3["[N3] demo machine · Device & Camera Simulator «planned»"]:::planned
+  N14["[N14] Map tile service «planned»"]:::planned
+
+  subgraph PREVIEW["Preview / staging (develop) · web only"]
+    N8["[N8] Vercel Preview<br/>develop alias + one URL per PR"]:::node
+  end
+  subgraph PROD["Production · Azure East Asia · crabshare-rg"]
+    N4["[N4] Vercel Production<br/>crabshare.vercel.app (main)"]:::node
+    N5["[N5] Azure App Service crabshare-api<br/>Linux B1 · .NET 10 · deployed from develop"]:::node
+    N6[("[N6] Azure SQL crabshare<br/>V001–V017")]:::node
+  end
+  subgraph CICD["CI/CD · GitHub"]
+    N9["[N9] GitHub repository<br/>main · develop · feature branches"]:::node
+    N10["[N10] GitHub Actions<br/>ci.yml · deploy-backend.yml · deploy-web.yml · release-mobile.yml · acceptance-tools.yml"]:::node
+    N11["[N11] GitHub Releases<br/>draft demo APK"]:::node
+  end
+  subgraph EXT["External services"]
+    N7["[N7] Cloudinary<br/>evidence photos"]:::ext
+    N13["[N13] Sandbox providers<br/>VietQR intermediary · Viettel · eKYC<br/>in-process Fake today · sandbox «planned»"]:::ext
+  end
+  subgraph DEV["Local development · each member's PC"]
+    N12["[N12] Developer PC<br/>Vite :5173 · dotnet run :5233 · LocalDB · Flutter"]:::node
+  end
+
+  N1 -->|"HTTPS GET (preview)"| N8
+  N1 -->|"HTTPS GET static · CDN"| N4
+  N1 -->|"HTTPS · JSON · Bearer JWT (CORS)"| N5
+  N1 -.->|"HTTPS tiles «planned»"| N14
+  N2 -->|"HTTPS · JSON · Bearer JWT"| N5
+  N3 -.->|"HTTPS POST /api/ingest/v1 «planned»"| N5
+  N8 -.->|"previews call the production API"| N5
+  N5 -->|"TDS 1433 · TLS · Managed Identity"| N6
+  N5 -->|"HTTPS Upload API · signed URL"| N7
+  N5 -.->|"REST/HTTPS sandbox «planned» (in-process Fake today)"| N13
+  N12 -->|"git push · pull request"| N9
+  N9 -->|"push / pull_request triggers"| N10
+  N10 -->|"Vercel CLI --prod"| N4
+  N10 -->|"Vercel CLI preview · alias"| N8
+  N10 -->|"OIDC · zip deploy · smoke test"| N5
+  N10 -->|"DbMigrator · TDS/TLS"| N6
+  N10 -->|"gh release create --draft"| N11
+  N11 -->|"APK download"| N2
