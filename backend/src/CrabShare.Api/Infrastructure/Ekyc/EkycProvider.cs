@@ -6,7 +6,7 @@ namespace CrabShare.Api.Infrastructure.Ekyc;
 /// </summary>
 public interface IEkycProvider
 {
-    Task<EkycResult> VerifyAsync(Stream idCardFront, Stream idCardBack, Stream selfie, CancellationToken ct);
+    Task<EkycResult> VerifyAsync(Stream idCardFront, Stream idCardBack, Stream selfie, string expectedName, CancellationToken ct);
 }
 
 public sealed record EkycResult(bool Passed, string ProviderReference, string? FullNameOnCard, string? FailureReason);
@@ -14,6 +14,6 @@ public sealed record EkycResult(bool Passed, string ProviderReference, string? F
 /// <summary>Bản giả lập: luôn trả về đạt. Thay bằng class gọi nhà cung cấp eKYC khi có API key dùng thử.</summary>
 public sealed class FakeEkycProvider : IEkycProvider
 {
-    public Task<EkycResult> VerifyAsync(Stream idCardFront, Stream idCardBack, Stream selfie, CancellationToken ct) =>
-        Task.FromResult(new EkycResult(true, $"FAKE-EKYC-{Guid.NewGuid():N}"[..20], null, null));
+    public Task<EkycResult> VerifyAsync(Stream idCardFront, Stream idCardBack, Stream selfie, string expectedName, CancellationToken ct) =>
+        Task.FromResult(new EkycResult(true, $"FAKE-EKYC-{Guid.NewGuid():N}"[..20], expectedName, null));
 }

@@ -120,10 +120,17 @@ public sealed class PartyDirectory(AppDbContext db, TimeProvider clock)
         switch (action)
         {
             case "approve":
+                var partyType = FarmPartyType(farm.LegalName);
+                var registrationNo = await db.Parties.AnyAsync(p => p.RegistrationNo == farm.TaxCode && p.PartyId != partyId, ct)
+                    ? party.RegistrationNo
+                    : farm.TaxCode;
+                // Duyệt vai trò người nuôi không xác nhận bộ giấy tờ pháp lý của nhà đầu tư.
+                if (!party.LegalDossierVerified || party.LegalName != farm.LegalName ||
+                    party.PartyType != partyType || party.RegistrationNo != registrationNo)
+                    party.VerifiedBy = null;
                 party.LegalName = farm.LegalName;
-                party.PartyType = FarmPartyType(farm.LegalName);
-                if (!await db.Parties.AnyAsync(p => p.RegistrationNo == farm.TaxCode && p.PartyId != partyId, ct))
-                    party.RegistrationNo = farm.TaxCode;
+                party.PartyType = partyType;
+                party.RegistrationNo = registrationNo;
                 party.VerificationStatus = "Verified";
                 party.RejectReason = null;
                 party.VerifiedAt = now;
@@ -137,6 +144,7 @@ public sealed class PartyDirectory(AppDbContext db, TimeProvider clock)
                 break;
             case "reject":
                 party.VerificationStatus = "Rejected";
+                party.VerifiedBy = null;
                 party.RejectReason = reason?.Trim() ?? "Hồ sơ người nuôi bị từ chối.";
                 await SetRoleAsync(partyId, PartnerRoleTypes.Farmer, "Pending", ct, party.RejectReason);
                 break;

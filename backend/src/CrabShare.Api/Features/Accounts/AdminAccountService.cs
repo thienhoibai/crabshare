@@ -107,6 +107,15 @@ public sealed class AdminAccountService(AppDbContext db, ICurrentUser me, TimePr
             var now = Now();
             check.Result = "ExceptionApproved"; check.ReviewedBy = me.UserId;
             investor.VerificationStatus = "Verified"; investor.VerifiedAt = now;
+            var party = await db.Parties.SingleOrDefaultAsync(p => p.PartyId == investor.User.PartyId, ct);
+            if (party is { PartyType: "Individual" })
+            {
+                party.VerificationStatus = "Verified";
+                party.VerifiedAt = now;
+                party.VerifiedBy = me.UserId;
+                party.RejectReason = null;
+                party.UpdatedAt = now;
+            }
             AppendAudit("KycCheck", id, "ApproveKycException", old,
                 AuditChain.Snapshot(new { check.Result, check.ReviewedBy, investor.VerificationStatus, investor.VerifiedAt, Reason = reason.Trim() }), now, previousHash);
             await db.SaveChangesAsync(ct);

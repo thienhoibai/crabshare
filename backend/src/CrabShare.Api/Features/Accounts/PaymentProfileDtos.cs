@@ -15,7 +15,8 @@ public sealed class PayoutAccountRequest
 public sealed record PayoutAccountResponse(long PayoutAccountId, string BankCode, string AccountNo,
     string AccountHolderName, string NameMatchStatus, string Status, DateTimeOffset UpdatedAt);
 
-public sealed record PayoutProfileResponse(string OwnerType, string ExpectedHolderName, PayoutAccountResponse? Account);
+public sealed record PayoutProfileResponse(string OwnerType, string ExpectedHolderName, PayoutAccountResponse? Account,
+    bool RecipientVerified = true, string VerificationMethod = "Ekyc");
 
 public sealed class AddressRequest
 {

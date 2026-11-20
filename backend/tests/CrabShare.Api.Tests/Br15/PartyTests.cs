@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using CrabShare.Api.Common.Auth;
+using CrabShare.Api.Features.Accounts;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrabShare.Api.Tests.Br15;
@@ -43,6 +44,33 @@ public sealed class PartyTests(Br15Fixture f) : IClassFixture<Br15Fixture>
         });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Equal("auth.legal_name_required", await Br15Fixture.ErrorCode(response));
+    }
+
+    [Fact]
+    public async Task Changing_personal_legal_name_requires_new_identity_and_bank_checks()
+    {
+        var userId = await f.CreateUserAsync("Nguyễn An", Roles.Investor, Roles.Customer);
+        using var client = f.Client(userId, Roles.Investor, Roles.Customer);
+        var partyId = await f.PartyIdOfUserAsync(userId);
+        await using var db = f.OpenDb();
+        var party = await db.Parties.AsNoTracking().SingleAsync(p => p.PartyId == partyId);
+        var saved = await client.PutAsJsonAsync("/api/me/payout-account", new
+        {
+            bankCode = "VCB", accountNo = Random.Shared.NextInt64(1000000000, 9999999999).ToString(),
+            accountHolderName = party.LegalName,
+        });
+        saved.EnsureSuccessStatusCode();
+        var updated = await client.PutAsJsonAsync("/api/me/party", new
+        {
+            legalName = party.LegalName + " Mới", partyType = "Individual", registrationNo = party.RegistrationNo,
+            representative = party.Representative, phone = party.Phone,
+        });
+        updated.EnsureSuccessStatusCode();
+        Assert.Equal("Unverified", await db.Investors.Where(i => i.UserId == userId).Select(i => i.VerificationStatus).SingleAsync());
+        var payout = (await client.GetFromJsonAsync<PayoutProfileResponse>("/api/me/payout-account"))!;
+        Assert.False(payout.RecipientVerified);
+        Assert.Equal("Pending", payout.Account!.NameMatchStatus);
+        Assert.Equal("Locked", payout.Account.Status);
     }
 
     [Theory]

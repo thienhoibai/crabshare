@@ -1,5 +1,7 @@
+using CrabShare.Api.Common;
 using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Common.Errors;
+using CrabShare.Api.Features.Accounts;
 using CrabShare.Api.Infrastructure.Payments;
 using CrabShare.Api.Infrastructure.Persistence;
 using CrabShare.Api.Infrastructure.Persistence.Entities;
@@ -13,7 +15,8 @@ namespace CrabShare.Api.Features.Payments;
 /// <c>provider_transaction</c> chiều Out (khớp lệnh); bị từ chối → Failed, gửi lại được. Hoàn vốn góp của lô huỷ thành công thì
 /// khoản góp chuyển Refunded (TL-17: chỉ đánh dấu hoàn khi trung gian xác nhận). Hoàn tiền đơn hàng chỉ đổi lệnh chi, không sửa đơn.
 /// </summary>
-public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProvider clock, IPaymentGateway gateway)
+public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProvider clock, IPaymentGateway gateway,
+    PayoutRecipientService recipients)
 {
     /// <summary>Đích "trả về đúng tài khoản đã chuyển" khi người nhận chưa khai tài khoản nhận tiền (chỉ dùng với hoàn tiền, bản sandbox).</summary>
     private static readonly (string Bank, string Account, string Name) OriginalSender = ("SOURCE", "ORIGINAL-SENDER", "Tài khoản đã chuyển tiền");
@@ -51,6 +54,21 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
                 await db.SettlementLines.Where(l => l.SettlementLineId == lineId).Select(l => l.InvestorId).SingleAsync(ct), ct);
         if (payout is null && instruction.InstructionType is not ("Refund" or "TaxPayment" or "PlatformFee" or "Commission"))
             throw new BusinessRuleException("payment.no_payout_account", "Người nhận chưa có tài khoản nhận tiền đang dùng.");
+        if (payout is not null)
+        {
+            if (payout.Status != "Active" || payout.NameMatchStatus != "Matched")
+                throw new BusinessRuleException("payment.payout_account_unavailable",
+                    "Tài khoản nhận tiền cần đang hoạt động và đã đối chiếu tên.");
+            var recipient = payout.OwnerUserId is { } userId
+                ? await recipients.ForUserAsync(userId, ct)
+                : await recipients.ForOperatorAsync(payout.OwnerOperatorId!.Value, ct);
+            if (!recipient.Verified)
+                throw new BusinessRuleException("payment.recipient_unverified",
+                    "Hồ sơ người nhận tiền cần được xác minh trước khi gửi lệnh chi.");
+            if (!LegalNames.Match(recipient.LegalName, payout.AccountHolderName))
+                throw new BusinessRuleException("payment.payout_name_mismatch",
+                    "Tên chủ tài khoản chưa khớp tên pháp lý hiện tại. Cần đối chiếu lại tài khoản nhận tiền.");
+        }
         var (bank, accountNo, name) = payout is not null ? (payout.BankCode, payout.AccountNo, payout.AccountHolderName)
             : instruction.InstructionType == "TaxPayment" ? StateTreasury
             : instruction.InstructionType is "PlatformFee" or "Commission" ? PlatformAccount : OriginalSender;
