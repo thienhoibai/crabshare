@@ -55,6 +55,7 @@ app.UseAuthorization();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwaggerUI(o => o.SwaggerEndpoint("../openapi/v1.json", "CrabShare API v1"));
     app.MapScalarApiReference(o => o.WithTitle("CrabShare API"));
     if (builder.Configuration.GetValue<bool>("Security:UpgradeLegacyPayouts") || builder.Configuration.GetValue<bool>("Seed:Enabled"))
         await new PayoutProtectionUpgrade(app.Services.GetRequiredService<IServiceScopeFactory>()).StartAsync(CancellationToken.None);

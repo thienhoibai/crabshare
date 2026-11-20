@@ -8,18 +8,22 @@ namespace CrabShare.Api.Features.Boxes;
 [ApiController, Authorize, Route("api/boxes")]
 public sealed class BoxesController(BoxService boxes) : ControllerBase
 {
+    [EndpointSummary("Liệt kê hộp nuôi")]
     [HttpGet, Authorize(Policy = Policies.Operator)]
     public async Task<IActionResult> List([FromQuery] BoxListQuery query, [FromQuery] PageQuery paging, CancellationToken ct)
         => Ok(await boxes.ListAsync(query, paging, ct));
 
+    [EndpointSummary("Đăng ký một dãy hộp nuôi")]
     [HttpPost("range")]
     public async Task<IActionResult> Range(BoxRangeRequest request, CancellationToken ct)
         => StatusCode(201, await boxes.CreateRangeAsync(request, ct));
 
+    [EndpointSummary("Đăng ký một hộp nuôi")]
     [HttpPost]
     public async Task<IActionResult> Create(CreateBoxRequest request, CancellationToken ct)
         => StatusCode(201, await boxes.CreateAsync(request, ct));
 
+    [EndpointSummary("Cập nhật hộp nuôi theo mã")]
     [HttpPatch("{slotCode}")]
     public async Task<IActionResult> Update(string slotCode, UpdateBoxRequest request, CancellationToken ct)
         => Ok(await boxes.UpdateAsync(slotCode, request, ct));

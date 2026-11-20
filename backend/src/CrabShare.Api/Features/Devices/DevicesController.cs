@@ -31,38 +31,46 @@ public sealed class DevicesController(DeviceIngestService ingest) : ControllerBa
 {
     private const long MaxRequestBytes = 40 * 1024 * 1024;
 
+    [EndpointSummary("Ghi nhận tín hiệu kết nối từ thiết bị")]
     [HttpPost("heartbeat")]
     public async Task<ActionResult<HeartbeatResponse>> Heartbeat(HeartbeatMessage msg, [FromHeader(Name = "X-Device-Key")] string? key, CancellationToken ct)
         => Ok(await ingest.HeartbeatAsync(msg, key, ct));
 
+    [EndpointSummary("Tra cứu phiên đo đang mở của thiết bị")]
     [HttpGet("{code}/open-session")]
     public async Task<ActionResult<OpenSessionResponse>> OpenSession(string code, [FromHeader(Name = "X-Device-Key")] string? key, CancellationToken ct)
         => Ok(await ingest.OpenSessionAsync(code, key, ct));
 
+    [EndpointSummary("Gửi kết quả đo từ trạm")]
     [HttpPost("ingest/measurements"), Consumes("multipart/form-data"), RequestSizeLimit(MaxRequestBytes)]
     public async Task<ActionResult<IngestAccepted>> Measurement([FromForm] StationMeasurementForm form, [FromHeader(Name = "X-Device-Key")] string? key,
         [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, CancellationToken ct)
         => Accepted(await ingest.MeasurementAsync(form.Meta, form.White, form.Red, key, idempotencyKey, ct));
 
+    [EndpointSummary("Gửi ảnh hộp nuôi từ thiết bị")]
     [HttpPost("ingest/box-images"), Consumes("multipart/form-data"), RequestSizeLimit(MaxRequestBytes)]
     public async Task<ActionResult<IngestAccepted>> BoxImage([FromForm] BoxImageForm form, [FromHeader(Name = "X-Device-Key")] string? key,
         [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, CancellationToken ct)
         => Accepted(await ingest.BoxImageAsync(form.Meta, form.Image, key, idempotencyKey, ct));
 
+    [EndpointSummary("Gửi số đo chất lượng nước")]
     [HttpPost("ingest/water-readings")]
     public async Task<ActionResult<IngestAccepted>> Water(WaterReadingMessage msg, [FromHeader(Name = "X-Device-Key")] string? key,
         [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, CancellationToken ct)
         => Accepted(await ingest.WaterReadingAsync(msg, key, idempotencyKey, ct));
 
+    [EndpointSummary("Gửi kết quả hiệu chuẩn thiết bị")]
     [HttpPost("calibration")]
     public async Task<ActionResult<IngestAccepted>> Calibration(CalibrationMessage msg, [FromHeader(Name = "X-Device-Key")] string? key,
         [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, CancellationToken ct)
         => Accepted(await ingest.CalibrationAsync(msg, key, idempotencyKey, ct));
 
+    [EndpointSummary("Lấy danh sách lệnh dành cho thiết bị")]
     [HttpGet("{code}/commands")]
     public async Task<ActionResult<IReadOnlyList<DeviceCommandResponse>>> Commands(string code, [FromHeader(Name = "X-Device-Key")] string? key, CancellationToken ct)
         => Ok(await ingest.CommandsAsync(code, key, ct));
 
+    [EndpointSummary("Xác nhận lệnh thiết bị")]
     [HttpPost("commands/{id:long}/ack")]
     public async Task<IActionResult> Ack(long id, [FromHeader(Name = "X-Device-Key")] string? key, [FromQuery] string? deviceCode, CancellationToken ct)
     {
@@ -80,15 +88,19 @@ public sealed class DeviceManagementController(DeviceAdminService devices, Devic
     public async Task<ActionResult<DeviceRegisteredResponse>> Register(RegisterDeviceRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await devices.RegisterAsync(req, ct));
 
+    [EndpointSummary("Liệt kê thiết bị đã đăng ký")]
     [HttpGet("api/admin/devices"), Authorize(Policy = Policies.Admin)]
     public async Task<ActionResult<IReadOnlyList<DeviceResponse>>> List([FromQuery] long? operatorId, CancellationToken ct) => Ok(await devices.ListAsync(operatorId, ct));
 
+    [EndpointSummary("Đổi khóa xác thực của thiết bị")]
     [HttpPost("api/admin/devices/{code}/rotate-key"), Authorize(Policy = Policies.Admin)]
     public async Task<IActionResult> RotateKey(string code, CancellationToken ct) => Ok(new { deviceKey = await devices.RotateKeyAsync(code, ct) });
 
+    [EndpointSummary("Gỡ thiết bị")]
     [HttpPost("api/admin/devices/{code}/remove"), Authorize(Policy = Policies.Admin)]
     public async Task<ActionResult<DeviceResponse>> Remove(string code, CancellationToken ct) => Ok(await devices.RemoveAsync(code, ct));
 
+    [EndpointSummary("Liệt kê thiết bị của hộ nuôi")]
     [HttpGet("api/operators/me/devices"), Authorize(Policy = Policies.Operator)]
     public async Task<ActionResult<IReadOnlyList<DeviceResponse>>> Mine(CancellationToken ct) => Ok(await devices.ListAsync(null, ct));
 
@@ -107,10 +119,12 @@ public sealed class DeviceManagementController(DeviceAdminService devices, Devic
     public async Task<ActionResult<IReadOnlyList<WaterReadingResponse>>> Water(string code, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, CancellationToken ct)
         => Ok(await data.WaterAsync(code, from, to, ct));
 
+    [EndpointSummary("Liệt kê ảnh thiết bị theo lô")]
     [HttpGet("api/batches/{code}/device-images")]
     public async Task<ActionResult<IReadOnlyList<DeviceImageResponse>>> Images(string code, [FromQuery] string? slotCode, CancellationToken ct)
         => Ok(await data.BoxImagesAsync(code, slotCode, ct));
 
+    [EndpointSummary("Tải tệp ảnh do thiết bị gửi")]
     [HttpGet("api/device-images/{id:long}/file")]
     public async Task<IActionResult> ImageFile(long id, CancellationToken ct)
     {
@@ -132,9 +146,11 @@ public sealed class MeasurementSessionsController(MeasurementSessionService sess
     public async Task<ActionResult<SessionResponse>> Open(OpenSessionRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await sessions.OpenAsync(req, ct));
 
+    [EndpointSummary("Xem phiên đo theo mã")]
     [HttpGet("api/measurement-sessions/{sessionNo}")]
     public async Task<ActionResult<SessionResponse>> Get(string sessionNo, CancellationToken ct) => Ok(await sessions.GetAsync(sessionNo, ct));
 
+    [EndpointSummary("Hủy phiên đo")]
     [HttpPost("api/measurement-sessions/{sessionNo}/cancel")]
     public async Task<ActionResult<SessionResponse>> Cancel(string sessionNo, CancellationToken ct) => Ok(await sessions.CancelAsync(sessionNo, ct));
 }

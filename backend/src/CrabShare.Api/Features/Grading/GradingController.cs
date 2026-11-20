@@ -52,9 +52,11 @@ public sealed class GradingController(GradingService grading) : ControllerBase
     public async Task<ActionResult<IReadOnlyList<GradeDecisionResponse>>> CrabHistory(string crabCode, CancellationToken ct)
         => Ok(await grading.CrabHistoryAsync(crabCode, ct));
 
+    [EndpointSummary("Xem quyết định phân hạng theo mã")]
     [HttpGet("api/grade-decisions/{decisionNo}")]
     public async Task<ActionResult<GradeDecisionResponse>> Get(string decisionNo, CancellationToken ct) => Ok(await grading.DecisionAsync(decisionNo, ct));
 
+    [EndpointSummary("Xem ảnh của quyết định phân hạng")]
     [HttpGet("api/grade-decisions/{decisionNo}/photo")]
     public async Task<IActionResult> Photo(string decisionNo, CancellationToken ct)
     {
@@ -72,6 +74,7 @@ public sealed class GradingController(GradingService grading) : ControllerBase
     public async Task<ActionResult<GradeDecisionResponse>> Hold(string decisionNo, HoldDecisionRequest req, CancellationToken ct)
         => Ok(await grading.HoldAsync(decisionNo, req, ct));
 
+    [EndpointSummary("Xác nhận kết quả kiểm tra lại đối với cua tạm giữ")]
     [HttpPost("api/grade-decisions/{decisionNo}/confirm-hold"), Authorize(Policy = Policies.Qc)]
     public async Task<ActionResult<GradeDecisionResponse>> ConfirmHold(string decisionNo, CancellationToken ct)
         => Ok(await grading.ConfirmHoldAsync(decisionNo, ct));
@@ -97,6 +100,7 @@ public sealed class GradingStandardsController(GradingStandardService standards)
     [EndpointSummary("Chuẩn phân hạng và bộ quy tắc đang áp dụng (chuẩn nội bộ tham chiếu, không phải chứng nhận)")]
     public async Task<ActionResult<IReadOnlyList<GradingStandardResponse>>> Standards(CancellationToken ct) => Ok(await standards.StandardsAsync(false, ct));
 
+    [EndpointSummary("Liệt kê các bộ quy tắc phân hạng")]
     [HttpGet("api/admin/grade-rule-sets"), Authorize(Policy = Policies.Admin)]
     public async Task<ActionResult<IReadOnlyList<GradingStandardResponse>>> All(CancellationToken ct) => Ok(await standards.StandardsAsync(true, ct));
 
@@ -105,6 +109,7 @@ public sealed class GradingStandardsController(GradingStandardService standards)
     public async Task<ActionResult<GradeRuleSetResponse>> Create(CreateRuleSetRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await standards.CreateDraftAsync(req, ct));
 
+    [EndpointSummary("Cập nhật quy tắc trong bộ phân hạng")]
     [HttpPut("api/admin/grade-rule-sets/{id:long}/rules"), Authorize(Policy = Policies.Admin)]
     public async Task<ActionResult<GradeRuleSetResponse>> Rules(long id, ReplaceRulesRequest req, CancellationToken ct)
         => Ok(await standards.ReplaceRulesAsync(id, req, ct));

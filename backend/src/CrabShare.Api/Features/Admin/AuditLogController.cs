@@ -8,9 +8,11 @@ namespace CrabShare.Api.Features.Admin;
 [ApiController, Route("api/admin/audit-log"), Authorize(Policy = Policies.Admin), ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AuditLogController(AuditLogQueryService audit) : ControllerBase
 {
+    [EndpointSummary("Tra cứu nhật ký kiểm toán")]
     [HttpGet]
     public async Task<ActionResult<AuditLogPage>> List([FromQuery] AuditLogQuery query, [FromQuery] PageQuery paging, CancellationToken ct)
         => Ok(await audit.ListAsync(query, paging, ct));
+    [EndpointSummary("Xuất nhật ký kiểm toán")]
     [HttpGet("export")]
     public async Task<FileContentResult> Export([FromQuery] AuditLogQuery query, CancellationToken ct)
     {
