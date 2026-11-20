@@ -29,7 +29,7 @@ builder.Services.AddFeatureServices();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
-// 6. Tài liệu API (OpenAPI) — xem tại /scalar khi chạy Development
+// 6. Tài liệu API (OpenAPI) — xem tại /swagger
 builder.Services.AddOpenApi(o => o.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
 
 // 7. Cho phép web (Vite khi dev, Vercel khi deploy) và app Flutter chạy trên trình duyệt gọi API.
@@ -52,10 +52,11 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapOpenApi();
+app.UseSwaggerUI(o => o.SwaggerEndpoint("../openapi/v1.json", "CrabShare API v1"));
+
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
-    app.UseSwaggerUI(o => o.SwaggerEndpoint("../openapi/v1.json", "CrabShare API v1"));
     app.MapScalarApiReference(o => o.WithTitle("CrabShare API"));
     if (builder.Configuration.GetValue<bool>("Security:UpgradeLegacyPayouts") || builder.Configuration.GetValue<bool>("Seed:Enabled"))
         await new PayoutProtectionUpgrade(app.Services.GetRequiredService<IServiceScopeFactory>()).StartAsync(CancellationToken.None);
