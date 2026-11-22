@@ -30,7 +30,6 @@ export default function RegisterPage() {
   const [role, setRole] = useState<RoleChoice>('Customer')
   const [organisation, setOrganisation] = useState(false)
   const [partyType, setPartyType] = useState('Company')
-  const [customerType, setCustomerType] = useState('Restaurant')
   const [fullName, setFullName] = useState('')
   const [legalName, setLegalName] = useState('')
   const [registrationNo, setRegistrationNo] = useState('')
@@ -89,7 +88,6 @@ export default function RegisterPage() {
         partyType: organisation ? partyType : 'Individual',
         legalName: organisation ? legalName.trim() : undefined,
         registrationNo: organisation ? registrationNo.trim() || undefined : undefined,
-        customerType: role === 'Customer' ? customerType : undefined,
       },
       {
         onSuccess: (res) => navigate(homePathFor(res.user), { replace: true }),
@@ -142,14 +140,6 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)} />
           </Field>
         </div>
-
-        {role === 'Customer' && (
-          <Field label="Bạn mua cho">
-            <Select value={customerType} onChange={(e) => setCustomerType(e.target.value)}>
-              {options('customerType').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </Select>
-          </Field>
-        )}
 
         <Checkbox checked={organisation} onChange={setOrganisation}>Đăng ký cho doanh nghiệp, hộ kinh doanh hoặc hợp tác xã</Checkbox>
         {organisation && (

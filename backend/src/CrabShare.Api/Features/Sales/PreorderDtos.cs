@@ -5,6 +5,8 @@ namespace CrabShare.Api.Features.Sales;
 /// <summary>Đặt trước sỉ theo quy cách (BR-085…092, BR-234). Mỗi đơn chỉ chứa cua của một Lô.</summary>
 public sealed class PreorderRequest : IValidatableObject
 {
+    [RegularExpression("^(Restaurant|Trader|Wholesaler|Agent|CentralKitchen|Other)$")]
+    public string? CustomerType { get; set; }
     [Required, StringLength(20)] public string BatchCode { get; set; } = "";
     /// <summary>Địa chỉ giao của khách (loại DeliveryAddress). Dùng toạ độ, nếu có, để kiểm tra bán kính giao.</summary>
     [Range(1, long.MaxValue)] public long DeliverySiteId { get; set; }

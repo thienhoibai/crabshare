@@ -1773,6 +1773,7 @@ export interface PreorderLineResponse {
 }
 
 export interface PreorderRequest {
+  customerType?: string | null
   batchCode: string
   deliverySiteId?: number
   lines: PreorderLineRequest[]
