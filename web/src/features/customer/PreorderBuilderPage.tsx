@@ -7,7 +7,7 @@ import { useNavigate, useParams } from 'react-router'
 import { ArrowLeft, MapPinPlus, ShoppingBag } from 'lucide-react'
 import type { AvailabilityResponse, ExploreBatchResponse, PartySiteResponse, PreorderRequest, PreorderResponse, SpecAvailability } from '../../shared/api/api.gen'
 import {
-  DecimalInput, Money, NumberInput, OpAside, OpBack, OpBtn, OpDl, OpEmpty, OpError, OpHeading, OpLoading, OpModal, OpNote, OpPanel, RadioCards, Select,
+  DecimalInput, Field, options, Money, NumberInput, OpAside, OpBack, OpBtn, OpDl, OpEmpty, OpError, OpHeading, OpLoading, OpModal, OpNote, OpPanel, RadioCards, Select,
   errorMessage, formatDateTime, formatVnd, label, toast, useGet, useSend,
 } from '../../shared/ui/console'
 import { preorderUnavailable } from '../public/batchView'
@@ -36,6 +36,7 @@ export default function PreorderBuilderPage() {
   const sites = useGet<PartySiteResponse[]>('/api/me/sites', { siteType: 'DeliveryAddress' })
 
   const [draft, setDraft] = useState<Record<string, Draft>>({})
+  const [customerType, setCustomerType] = useState('')
   const [siteId, setSiteId] = useState<number | null>(null)
   const [editingSite, setEditingSite] = useState<PartySiteResponse | 'new' | null>(null)
   const [split, setSplit] = useState<TrancheDraft[] | null>(null)
@@ -106,6 +107,7 @@ export default function PreorderBuilderPage() {
     if (problem || !chosen) return
     create.mutate({
       batchCode: a.batchCode,
+      customerType: customerType || undefined,
       deliverySiteId: chosen.siteId,
       lines: lines.map((l) => (l.mode === 'ByKg' ? { specCode: l.spec.specCode, mode: l.mode, qtyKg: l.kg } : { specCode: l.spec.specCode, mode: l.mode, qtyCrabs: l.crabs })),
       tranches: split ? toTrancheRequests(splitLines, split) : null,
@@ -218,6 +220,12 @@ export default function PreorderBuilderPage() {
           ]} />
           {create.isError ? <OpNote tone="danger">{errorMessage(create.error)}</OpNote>
             : problem && lines.length > 0 ? <p className="op-danger" style={{ fontSize: 14 }}>{problem}</p> : null}
+          <Field label="Bạn mua cho (không bắt buộc)">
+            <Select value={customerType} onChange={(event) => setCustomerType(event.target.value)}>
+              <option value="">Bỏ qua</option>
+              {options('customerType').map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </Select>
+          </Field>
           <OpBtn full onClick={submit} disabled={!!problem || create.isPending}><ShoppingBag size={17} /> {create.isPending ? 'Đang gửi…' : 'Đặt trước'}</OpBtn>
           <small className="rd-muted">Đơn được giữ {a.holdMinutes} phút để bạn chuyển cọc.</small>
         </OpAside>

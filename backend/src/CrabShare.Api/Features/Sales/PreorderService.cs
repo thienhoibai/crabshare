@@ -44,8 +44,8 @@ public sealed class PreorderService(AppDbContext db, ICurrentUser me, TimeProvid
         {
             await audit.LockAsync(ct);
             var userId = me.UserId;
-            if (!await db.Customers.AnyAsync(c => c.UserId == userId, ct))
-                throw new ForbiddenException("preorder.customer_required", "Tài khoản chưa có hồ sơ khách hàng.");
+            var customer = await db.Customers.SingleOrDefaultAsync(c => c.UserId == userId, ct)
+                ?? throw new ForbiddenException("preorder.customer_required", "Tài khoản chưa có hồ sơ khách hàng.");
             var partyId = await parties.PartyIdOfUserAsync(userId, ct);
             var batch = await db.Batches.FromSqlInterpolated($"SELECT * FROM dbo.batch WITH (UPDLOCK, HOLDLOCK) WHERE batch_code = {req.BatchCode}")
                             .SingleOrDefaultAsync(ct)
@@ -116,6 +116,7 @@ public sealed class PreorderService(AppDbContext db, ICurrentUser me, TimeProvid
                 ShippingAddress = site.AddressLine, PlacedAt = now, CreatedAt = now, UpdatedAt = now,
             };
             db.SalesOrders.Add(order);
+            if (req.CustomerType is { Length: > 0 }) customer.CustomerType = req.CustomerType;
             await db.SaveChangesAsync(ct);
             foreach (var line in lines) line.OrderId = order.OrderId;
             db.SalesOrderLines.AddRange(lines);
