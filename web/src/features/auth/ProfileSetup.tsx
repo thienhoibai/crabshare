@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import type { PartyResponse, UpdatePartyRequest } from '../../shared/api/api.gen'
+import type { KycStatusResponse, PartyDocumentResponse, PartyResponse, UpdatePartyRequest } from '../../shared/api/api.gen'
 import { homePathFor, useAuthStore } from '../../shared/auth/authStore'
 import { PartyDocuments } from '../../shared/party/PartyDocuments'
 import { Field, Input, OpBtn, QueryView, RadioCards, errorMessage, options, useGet, useSend } from '../../shared/ui/console'
@@ -18,7 +18,7 @@ function Steps({ party }: { party: PartyResponse }) {
   const [representative, setRepresentative] = useState(party.representative ?? user.fullName)
   const [phone, setPhone] = useState(party.phone ?? user.phone ?? '')
   const [saved, setSaved] = useState(party)
-  const save = useSend<PartyResponse, UpdatePartyRequest>('put', '/api/me/party', { quietError: true })
+  const save = useSend<KycStatusResponse, PartyDocumentResponse, PartyResponse, UpdatePartyRequest>('put', '/api/me/party', { quietError: true })
   const org = type !== 'Individual'
   const body = { legalName: name.trim(), partyType: type, registrationNo: org ? number.trim() || null : null,
     representative: org ? representative.trim() : null, phone: phone.trim() || null }
@@ -27,13 +27,24 @@ function Steps({ party }: { party: PartyResponse }) {
   function persist(next: number) {
     save.mutate(body, { onSuccess: (result) => { setSaved(result); setStep(next) } })
   }
+  const investorKyc = !org && user.roles.includes('Investor')
+  const kyc = useGet<KycStatusResponse>(step === 1 && investorKyc ? '/api/me/kyc' : null)
+  const documents = useGet<PartyDocumentResponse[]>(step === 1 && org && legalSaved ? '/api/me/party/documents' : null)
+  const verificationReady = org ? saved.legalDossierVerified || !!documents.data?.length :
+    !investorKyc || kyc.data?.verificationStatus === 'Verified'
   const help = ['Nhập họ tên hoặc tên đơn vị theo giấy tờ dùng để xác minh.',
     org ? 'Điền đúng tên trên giấy đăng ký. Lưu thông tin rồi gửi ảnh rõ chữ, đủ bốn góc để quản trị viên đối chiếu.' : 'Chọn tư cách của người đứng tên hồ sơ. Nhà đầu tư cá nhân cần xác minh danh tính trước khi giữ chỗ góp vốn.',
     'Kiểm tra email tài khoản và số điện thoại để CrabShare có thể liên hệ với bạn.']
   return <ol className="setup-steps">{titles.map((title, i) => <li key={title} aria-current={i === step ? 'step' : undefined}>
     <span className="setup-marker" aria-label={i < step ? 'Đã hoàn tất bước' : undefined}>{i < step ? '✓' : i + 1}</span>
-    <section className="setup-card">
+    <section className="setup-card" data-locked={i > step || undefined} aria-disabled={i > step || undefined}>
       <h2>{title}</h2>
+      {i > step && <fieldset disabled className="setup-preview">
+        {i === 1 && <><legend>Bạn đăng ký với tư cách nào?</legend>
+          <RadioCards value={null} onChange={() => {}} options={options('partyType')} /></>}
+        {i === 2 && <><Field label="Email tài khoản" htmlFor="preview-email"><Input id="preview-email" value={user.email} readOnly /></Field>
+          <Field label="Số điện thoại liên hệ" htmlFor="preview-phone"><Input id="preview-phone" value={phone} readOnly /></Field></>}
+      </fieldset>}
       {i < step && <p>{[name, options('partyType').find(o => o.value === type)?.label, phone || user.email][i]}</p>}
       {i === step && <>
         <details className="setup-help"><summary aria-label={'Hướng dẫn ' + title}>?</summary><p>{help[i]}</p></details>
@@ -55,7 +66,7 @@ function Steps({ party }: { party: PartyResponse }) {
         <div className="setup-actions">
           {i > 0 && <OpBtn variant="ghost" disabled={save.isPending} onClick={() => setStep(i - 1)}>Quay lại</OpBtn>}
           {i === 0 && <OpBtn disabled={!name.trim()} onClick={() => setStep(1)}>Tiếp tục</OpBtn>}
-          {i === 1 && legalSaved && <OpBtn onClick={() => setStep(2)}>Tiếp tục</OpBtn>}
+          {i === 1 && legalSaved && <OpBtn disabled={!verificationReady} onClick={() => setStep(2)}>Tiếp tục</OpBtn>}
           {i === 2 && <OpBtn disabled={save.isPending} onClick={() => persist(3)}>Hoàn tất</OpBtn>}
         </div>
       </>}

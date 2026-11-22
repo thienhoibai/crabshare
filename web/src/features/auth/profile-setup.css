@@ -16,3 +16,6 @@
   .setup-help { display: block; }
   .setup-help summary { position: absolute; right: .75rem; top: .75rem; padding: .4rem .8rem; cursor: pointer; list-style: none; }
 }
+.setup-card[data-locked] { opacity: .48; }
+.setup-preview { display: grid; gap: .75rem; margin: 0; padding: 0; border: 0; min-width: 0; pointer-events: none; }
+.setup-preview legend { margin-bottom: .5rem; }
