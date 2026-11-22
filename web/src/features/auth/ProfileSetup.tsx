@@ -13,6 +13,10 @@ const titles = ['Thông tin hồ sơ', 'Xác minh hồ sơ', 'Thông tin liên h
 
 type HelpTopic = 'name' | 'type' | 'verification' | 'contact'
 
+function defaultHelp(topic: HelpTopic | null) {
+  return window.matchMedia('(max-width: 780px)').matches ? null : topic
+}
+
 function FieldHelp({ title, open, toggle, children }: { title: string; open: boolean; toggle: () => void; children: ReactNode }) {
   return <div className="setup-field-help">
     <button type="button" aria-label={'Hướng dẫn ' + title.toLowerCase()} aria-expanded={open} onClick={toggle}>?</button>
@@ -28,7 +32,7 @@ function Steps({ party }: { party: PartyResponse }) {
   const [number, setNumber] = useState(party.registrationNo ?? '')
   const [representative, setRepresentative] = useState(party.representative ?? user.fullName)
   const [phone, setPhone] = useState(party.phone ?? user.phone ?? '')
-  const [helpTopic, setHelpTopic] = useState<HelpTopic | null>('name')
+  const [helpTopic, setHelpTopic] = useState(() => defaultHelp('name'))
   const save = useSend<PartyResponse, UpdatePartyRequest>('put', '/api/me/party', { quietError: true })
   const org = type !== 'Individual'
   const body = { legalName: name.trim(), partyType: type, registrationNo: org ? number.trim() || null : null,
@@ -51,7 +55,7 @@ function Steps({ party }: { party: PartyResponse }) {
 
   function goTo(next: number) {
     setStep(next)
-    setHelpTopic(next === 0 ? 'name' : next === 1 ? (investorKyc ? 'verification' : 'type') : next === 2 ? 'contact' : null)
+    setHelpTopic(defaultHelp(next === 0 ? 'name' : next === 1 ? (investorKyc ? 'verification' : 'type') : next === 2 ? 'contact' : null))
   }
 
   function help(topic: HelpTopic, title: string, content: ReactNode) {
@@ -74,7 +78,7 @@ function Steps({ party }: { party: PartyResponse }) {
         {i === 0 && <div className="setup-field">{help('name', 'Tên trên hồ sơ', <p>Nhập họ tên hoặc tên đơn vị theo giấy tờ dùng để xác minh.</p>)}<Field label="Tên trên hồ sơ" htmlFor="setup-name"><Input id="setup-name" value={name} maxLength={200} onChange={e => setName(e.target.value)} /></Field></div>}
         {i === 1 && <>
           <div className="setup-field">{help('type', 'Tư cách đăng ký', <p>Chọn cá nhân nếu đứng tên bằng giấy tờ tùy thân. Nếu có đăng ký kinh doanh, chọn loại hình ghi trên giấy chứng nhận.</p>)}<fieldset className="auth-roles"><legend>Bạn đăng ký với tư cách nào?</legend>
-            <RadioCards value={type} onChange={value => { setType(value); setHelpTopic(value !== 'Individual' || user.roles.includes('Investor') ? 'verification' : 'type') }} options={options('partyType')} />
+            <RadioCards value={type} onChange={value => { setType(value); setHelpTopic(defaultHelp(value !== 'Individual' || user.roles.includes('Investor') ? 'verification' : 'type')) }} options={options('partyType')} />
           </fieldset></div>
           {org && <div className="op-form setup-field">{!legalSaved && help('verification', documentTitle, <p>Điền thông tin theo giấy chứng nhận. Sau khi lưu, bạn có thể tải ảnh giấy tờ để gửi duyệt.</p>)}
             <Field label="Tên pháp lý" htmlFor="setup-legal"><Input id="setup-legal" value={name} maxLength={200} onChange={e => setName(e.target.value)} /></Field>
