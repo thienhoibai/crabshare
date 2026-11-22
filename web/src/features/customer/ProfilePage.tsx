@@ -11,7 +11,7 @@ import {
   tone, useGet, useSend,
 } from '../../shared/ui/console'
 
-function EditForm({ party, onClose }: { party: PartyResponse; onClose: () => void }) {
+export function EditForm({ party, onClose }: { party: PartyResponse; onClose: () => void }) {
   const [legalName, setLegalName] = useState(party.legalName)
   const [partyType, setPartyType] = useState(party.partyType)
   const [registrationNo, setRegistrationNo] = useState(party.registrationNo ?? '')

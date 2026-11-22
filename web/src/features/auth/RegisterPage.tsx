@@ -3,7 +3,6 @@ import { isAxiosError } from 'axios'
 import { ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { errorMessage, type ApiProblem } from '../../shared/api/http'
-import { homePathFor } from '../../shared/auth/authStore'
 import { Checkbox, Field, Input, OpBtn, OpNote, RadioCards, options } from '../../shared/ui/console'
 import AuthLayout from './AuthLayout'
 import PasswordInput from './PasswordInput'
@@ -90,7 +89,7 @@ export default function RegisterPage() {
         registrationNo: organisation ? registrationNo.trim() || undefined : undefined,
       },
       {
-        onSuccess: (res) => navigate(homePathFor(res.user), { replace: true }),
+        onSuccess: () => navigate('/hoan-thien-ho-so', { replace: true }),
         onError: (e) => {
           if (!isPhoneConflict(e)) return setMessage(errorMessage(e))
           setRejectedPhone(submittedPhone)
