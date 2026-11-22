@@ -4,7 +4,7 @@ import { ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { errorMessage, type ApiProblem } from '../../shared/api/http'
 import { homePathFor } from '../../shared/auth/authStore'
-import { Checkbox, Field, Input, OpBtn, OpNote, RadioCards, Select, options } from '../../shared/ui/console'
+import { Checkbox, Field, Input, OpBtn, OpNote, RadioCards, options } from '../../shared/ui/console'
 import AuthLayout from './AuthLayout'
 import PasswordInput from './PasswordInput'
 import { useRegister } from './authApi'
@@ -28,8 +28,8 @@ export default function RegisterPage() {
   const navigate = useNavigate()
   const register = useRegister()
   const [role, setRole] = useState<RoleChoice>('Customer')
-  const [organisation, setOrganisation] = useState(false)
-  const [partyType, setPartyType] = useState('Company')
+  const [partyType, setPartyType] = useState('Individual')
+  const organisation = partyType !== 'Individual'
   const [fullName, setFullName] = useState('')
   const [legalName, setLegalName] = useState('')
   const [registrationNo, setRegistrationNo] = useState('')
@@ -61,7 +61,7 @@ export default function RegisterPage() {
   const nameInput = fieldDetails('fullName')
   const emailInput = fieldDetails('email')
   const passwordInput = fieldDetails('password', 'Từ 8 ký tự')
-  const legalNameInput = fieldDetails('legalName', 'Sau khi đăng ký, gửi ảnh giấy tờ ở trang Hồ sơ để được xác minh.')
+  const legalNameInput = fieldDetails('legalName', 'Nhập đúng tên ghi trên giấy chứng nhận đăng ký của bạn.')
   const termsError = attempted ? errors.terms : ''
   const phoneError = phone.trim() === rejectedPhone ? PHONE_TAKEN : ''
 
@@ -85,7 +85,7 @@ export default function RegisterPage() {
         fullName: fullName.trim(),
         phone: submittedPhone || undefined,
         role,
-        partyType: organisation ? partyType : 'Individual',
+        partyType,
         legalName: organisation ? legalName.trim() : undefined,
         registrationNo: organisation ? registrationNo.trim() || undefined : undefined,
       },
@@ -141,14 +141,12 @@ export default function RegisterPage() {
           </Field>
         </div>
 
-        <Checkbox checked={organisation} onChange={setOrganisation}>Đăng ký cho doanh nghiệp, hộ kinh doanh hoặc hợp tác xã</Checkbox>
+        <fieldset className="auth-roles">
+          <legend className="op-label">Bạn đăng ký với tư cách nào?</legend>
+          <RadioCards name="partyType" value={partyType} onChange={setPartyType} options={options('partyType')} />
+        </fieldset>
         {organisation && (
           <div className="op-subform">
-            <Field label="Loại hình">
-              <Select value={partyType} onChange={(e) => setPartyType(e.target.value)}>
-                {options('partyType').filter((o) => o.value !== 'Individual').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </Select>
-            </Field>
             <Field label="Mã số thuế">
               <Input value={registrationNo} onChange={(e) => setRegistrationNo(e.target.value)} inputMode="numeric" />
             </Field>
