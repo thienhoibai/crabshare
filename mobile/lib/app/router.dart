@@ -67,7 +67,17 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: Routes.onboarding,
     refreshListenable: refresh,
-    redirect: (context, state) => redirectFor(ref.read(sessionProvider), state.matchedLocation),
+    redirect: (context, state) {
+      final session = ref.read(sessionProvider);
+      final path = state.uri.path;
+      if (path == Routes.kyc && !session.isSignedIn) {
+        return '${Routes.login}?next=kyc';
+      }
+      if (path == Routes.login && state.uri.queryParameters['next'] == 'kyc' && session.user?.isInvestor == true) {
+        return Routes.kyc;
+      }
+      return redirectFor(session, state.matchedLocation);
+    },
     routes: [
       GoRoute(path: Routes.onboarding, builder: (context, state) => const OnboardingPage()),
       GoRoute(path: Routes.login, builder: (context, state) => const LoginPage()),

@@ -1,6 +1,7 @@
 /* UC02 — Xác minh danh tính eKYC của nhà đầu tư: GET /api/me/kyc, POST /api/kyc/ekyc (multipart IdCardFront, IdCardBack, Selfie, Consent).
    Ảnh chỉ chuyển cho nhà cung cấp eKYC, hệ thống chỉ lưu kết quả. Hai thành phần ở đây không có khung bao: đặt trong OpPanel của trang gọi. */
 import { useState, type FormEvent } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import { ShieldCheck } from 'lucide-react'
 import type { KycStatusResponse } from '../../shared/api/api.gen'
 import { useAuthStore } from '../../shared/auth/authStore'
@@ -18,6 +19,7 @@ const PHOTOS = [
 type PhotoKey = (typeof PHOTOS)[number]['key']
 
 const ALLOWED = ['image/jpeg', 'image/png', 'image/webp']
+const mobileKycUrl = 'crabshare://app/i/kyc'
 const MAX_BYTES = 5 * 1024 * 1024
 
 const useKyc = () => {
@@ -76,6 +78,16 @@ function InvestorKyc() {
               <StatusBadge kind="verification" value={data.verificationStatus} />
               {data.verifiedAt && <span className="rd-muted">Xác minh lúc {formatDateTime(data.verifiedAt)}</span>}
             </div>
+
+            {!verified && (
+              <details className="op-more">
+                <summary>Xác minh bằng ứng dụng CrabShare</summary>
+                <p>Quét mã bằng điện thoại có cài CrabShare. Đăng nhập cùng tài khoản đang dùng trên web.</p>
+                <QRCodeSVG value={mobileKycUrl} size={144} marginSize={4} title="Mở màn xác minh trên điện thoại" />
+                <p><a className="op-link" href={mobileKycUrl}>Mở ứng dụng trên điện thoại này</a></p>
+                <OpBtn variant="ghost" onClick={() => void kyc.refetch()}>Kiểm tra kết quả</OpBtn>
+              </details>
+            )}
 
             {!verified && last?.failureReason && <OpNote tone="danger">{last.failureReason}</OpNote>}
 
