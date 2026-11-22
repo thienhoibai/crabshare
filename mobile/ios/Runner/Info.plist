@@ -4,7 +4,12 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
-	<key>CFBundleDevelopmentRegion</key>
+	<key>CFBundleURLTypes</key>
+    <array><dict>
+        <key>CFBundleURLSchemes</key>
+        <array><string>crabshare</string></array>
+    </dict></array>
+    <key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>CrabShare</string>
