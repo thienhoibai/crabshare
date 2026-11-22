@@ -8,13 +8,10 @@
 .setup-card { position: relative; display: grid; gap: 1rem; }
 .setup-card h2 { margin: 0; padding-right: 2rem; }
 .setup-steps aside { align-self: center; }
-.setup-help { display: none; }
 .setup-actions { display: flex; justify-content: flex-end; gap: .75rem; }
 @media (max-width: 720px) {
   .setup-steps li { grid-template-columns: 2rem minmax(0, 1fr); gap: .5rem; }
   .setup-steps aside { display: none; }
-  .setup-help { display: block; }
-  .setup-help summary { position: absolute; right: .75rem; top: .75rem; padding: .4rem .8rem; cursor: pointer; list-style: none; }
 }
 .setup-card[data-locked] { opacity: .48; }
 .setup-preview { display: grid; gap: .75rem; margin: 0; padding: 0; border: 0; min-width: 0; pointer-events: none; }
@@ -22,3 +19,20 @@
 .profile-setup h1 { font-size: clamp(1.6rem, 3vw, 2.3rem); font-weight: 700; margin-bottom: 1.5rem; }
 .setup-card h2 { font-size: clamp(1.25rem, 2.4vw, 1.75rem); font-weight: 650; }
 .setup-card .op-radio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.setup-field { position: relative; display: grid; gap: .75rem; }
+.setup-field-help > button { position: absolute; z-index: 1; top: 0; right: 0; width: 2rem; height: 2rem; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--ink); cursor: pointer; }
+.setup-field-help > button[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.setup-field-help:has(> button) + fieldset > legend { padding-right: 2.25rem; }
+.setup-field-help aside { position: absolute; top: 0; left: calc(100% + clamp(1rem, 3vw, 2rem) + 1rem); width: calc((100% + 2 * clamp(1rem, 3vw, 2rem)) * .64); box-sizing: border-box; }
+.setup-field-help h3 { font-size: 1.125rem; font-weight: 650; margin: 0 0 .5rem; }
+.setup-field-help li { display: list-item; padding: 0; }
+.setup-field-help li::before { display: none; }
+.setup-field-help ul { padding-left: 1.2rem; }
+@media (max-width: 720px) {
+  .setup-field-help { min-height: 2rem; }
+  .setup-field-help aside { display: block; position: static; width: auto; margin-top: 2.4rem; }
+}
+@media (min-width: 721px) {
+  .setup-field-help { display: contents; }
+}

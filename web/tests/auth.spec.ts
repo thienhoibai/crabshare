@@ -76,14 +76,35 @@ test('đăng ký báo lỗi tại ô nhập, hiện mật khẩu và gửi đún
   await expect(contact).not.toBeFocused()
   await page.getByRole('button', { name: 'Tiếp tục' }).click()
   await expect(household).toBeEnabled()
+  await expect(page.getByRole('heading', { name: 'Xác minh danh tính', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Hướng dẫn tư cách đăng ký' }).click()
+  await expect(page.getByRole('heading', { name: 'Tư cách đăng ký', exact: true })).toBeVisible()
   await expect(contact).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Tiếp tục' })).toBeDisabled()
   await page.getByText('Hộ kinh doanh', { exact: true }).click()
   await expect(page.getByLabel('Tên pháp lý')).toBeVisible()
   await expect(page.getByLabel('Mã số thuế hoặc số đăng ký')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Giấy chứng nhận đăng ký hộ kinh doanh' })).toBeVisible()
   expect(api.sent('POST', '/api/auth/register').map((c) => c.body)).toEqual([{
     email: 'nhadautu@test.local', password: 'mat-khau-thu', fullName: 'Người dùng thử', role: 'Investor', partyType: 'Individual',
   }])
+})
+
+test('hồ sơ tổ chức đã bị từ chối không mở bước liên hệ dù còn giấy tờ cũ', async ({ page, api }) => {
+  api.get('/api/me/party', {
+    ...party, partyType: 'Company', representative: 'Người đại diện', verificationStatus: 'Rejected',
+    rejectReason: 'Ảnh bị mờ', legalDossierVerified: false,
+  })
+  api.get('/api/me/party/documents', [
+    { documentId: 1, docType: 'BusinessRegistration', contentType: 'image/png', uploadedAt: '2026-11-22T07:00:00Z' },
+  ])
+  api.get('/api/me/party/documents/1/file', () => reply(404))
+  await signIn(page, 'Investor')
+  await page.goto('/hoan-thien-ho-so')
+  await page.getByRole('button', { name: 'Tiếp tục' }).click()
+  await expect(page.getByText(/Hồ sơ bị từ chối.*Ảnh bị mờ/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Tiếp tục' })).toBeDisabled()
+  await expect(page.getByLabel('Số điện thoại liên hệ')).toBeDisabled()
 })
 
 test('đăng ký với số điện thoại đã dùng báo lỗi ngay tại ô số điện thoại', async ({ page, api }) => {
