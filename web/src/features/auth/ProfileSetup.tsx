@@ -18,7 +18,7 @@ function Steps({ party }: { party: PartyResponse }) {
   const [representative, setRepresentative] = useState(party.representative ?? user.fullName)
   const [phone, setPhone] = useState(party.phone ?? user.phone ?? '')
   const [saved, setSaved] = useState(party)
-  const save = useSend<KycStatusResponse, PartyDocumentResponse, PartyResponse, UpdatePartyRequest>('put', '/api/me/party', { quietError: true })
+  const save = useSend<PartyResponse, UpdatePartyRequest>('put', '/api/me/party', { quietError: true })
   const org = type !== 'Individual'
   const body = { legalName: name.trim(), partyType: type, registrationNo: org ? number.trim() || null : null,
     representative: org ? representative.trim() : null, phone: phone.trim() || null }
@@ -78,7 +78,7 @@ function Steps({ party }: { party: PartyResponse }) {
 
 export default function ProfileSetup() {
   const party = useGet<PartyResponse>('/api/me/party')
-  return <main className="profile-setup"><h1>Hoàn thiện hồ sơ</h1>
+  return <div className="profile-setup"><h1>Hoàn thiện hồ sơ</h1>
     <QueryView query={party}>{p => <Steps key={p.partyId} party={p} />}</QueryView>
-  </main>
+  </div>
 }

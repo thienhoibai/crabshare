@@ -19,3 +19,6 @@
 .setup-card[data-locked] { opacity: .48; }
 .setup-preview { display: grid; gap: .75rem; margin: 0; padding: 0; border: 0; min-width: 0; pointer-events: none; }
 .setup-preview legend { margin-bottom: .5rem; }
+.profile-setup h1 { font-size: clamp(1.6rem, 3vw, 2.3rem); font-weight: 700; margin-bottom: 1.5rem; }
+.setup-card h2 { font-size: clamp(1.25rem, 2.4vw, 1.75rem); font-weight: 650; }
+.setup-card .op-radio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
