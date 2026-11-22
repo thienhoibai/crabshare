@@ -115,7 +115,26 @@ class _KycFormState extends ConsumerState<_KycForm> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
               children: [
-                const SubPageHeader(title: 'Xác minh danh tính'),
+                SubPageHeader(
+                  title: 'Xác minh danh tính',
+                  trailing: IconButton(
+                    tooltip: 'Hướng dẫn chụp ảnh',
+                    icon: const Icon(Icons.help_outline),
+                    onPressed: () => showDialog<void>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Cách chụp ảnh xác minh'),
+                        content: const Text(
+                          'Chụp lần lượt mặt trước và mặt sau của giấy tờ. Đặt giấy tờ trên mặt phẳng, giữ đủ bốn góc trong khung và tránh ánh đèn phản chiếu.\n\n'
+                          'Khi chụp khuôn mặt, nhìn thẳng vào camera ở nơi đủ sáng. Bạn có thể chụp lại từng ảnh trước khi gửi.',
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Đã hiểu')),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 verification.when(
                   skipError: true,
