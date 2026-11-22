@@ -112,7 +112,7 @@ public sealed class FundingService(
             (long)confirmed, (long)reserved, (long)Math.Max(0, batch.MaxCapital - confirmed - reserved),
             contributions.Where(c => c.Status == "Confirmed").Select(c => c.InvestorId).Distinct().Count(),
             batch.FundingOpenAt, batch.FundingDeadline, IsOpen(batch, now), await HoldMinutesAsync(batch, ct),
-            new FundingEligibility(investor.VerificationStatus == "Verified", await HasAcknowledgedActiveAsync(investor.UserId, ct)),
+            new FundingEligibility(investor.KycVerified, await HasAcknowledgedActiveAsync(investor.UserId, ct), investor.LegalDossierVerified),
             mine is null ? null : ToResponse(mine, batch, now));
     }
 
@@ -124,7 +124,9 @@ public sealed class FundingService(
             // Giao thức chung: khoá chuỗi audit trước, rồi khoá dòng lô tới khi commit
             await audit.LockAsync(ct);
             var investor = await RequireInvestorAsync(ct);
-            if (investor.VerificationStatus != "Verified")
+            if (investor.LegalDossierVerified == false)
+                throw new BusinessRuleException("funding.legal_dossier_required", "Hồ sơ pháp lý của tổ chức cần được Admin xác minh trước khi góp vốn.");
+            if (investor.LegalDossierVerified is null && !investor.KycVerified)
                 throw new BusinessRuleException("funding.kyc_required", "Bạn cần xác minh danh tính (eKYC) trước khi góp vốn.");
             if (!await HasAcknowledgedActiveAsync(investor.UserId, ct))
                 throw new BusinessRuleException("funding.risk_ack_required", "Bạn cần đọc và xác nhận bản công bố rủi ro trước khi góp vốn.");
@@ -252,20 +254,24 @@ public sealed class FundingService(
 
     // ---------- Dùng chung ----------
 
-    private sealed record InvestorInfo(long UserId, string VerificationStatus);
+    private sealed record InvestorInfo(long UserId, bool KycVerified, bool? LegalDossierVerified);
 
     private async Task<InvestorInfo> RequireInvestorAsync(CancellationToken ct)
     {
         if (!me.IsInRole(Roles.Investor))
             throw new ForbiddenException("auth.investor_only", "Chỉ nhà đầu tư mới góp vốn được.");
         var userId = me.UserId;
-        var investor = await db.Investors.AsNoTracking()
-            .Where(i => i.UserId == userId)
-            .Select(i => new { i.UserId, i.VerificationStatus, UserStatus = i.User.Status })
+        var investor = await (from i in db.Investors.AsNoTracking()
+            where i.UserId == userId
+            join party in db.Parties on i.User.PartyId equals (long?)party.PartyId into parties
+            from party in parties.DefaultIfEmpty()
+            select new { i.UserId, i.InvestorKind, i.VerificationStatus, UserStatus = i.User.Status, Party = party })
             .SingleOrDefaultAsync(ct) ?? throw new NotFoundException("funding.investor_not_found", "Không tìm thấy hồ sơ nhà đầu tư.");
         if (investor.UserStatus == "Locked")
             throw new ForbiddenException("auth.locked", "Tài khoản đã bị khoá.");
-        return new InvestorInfo(investor.UserId, investor.VerificationStatus);
+        var organization = investor.Party is null ? investor.InvestorKind == "Organization" : investor.Party.PartyType != "Individual";
+        return new InvestorInfo(investor.UserId, investor.VerificationStatus == "Verified",
+            organization ? investor.Party?.LegalDossierVerified == true : null);
     }
 
     private async Task<RiskDisclosure> ActiveDisclosureAsync(CancellationToken ct)

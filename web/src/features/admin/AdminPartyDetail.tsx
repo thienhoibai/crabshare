@@ -5,7 +5,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import { ArrowLeft, BadgeCheck, Plus, XCircle } from 'lucide-react'
-import type { PartnerRoleResponse, PartyDecisionRequest, PartyResponse, RoleChangeRequest } from '../../shared/api/api.gen'
+import type { PartnerRoleResponse, PartyDecisionRequest, PartyDossierResponse, PartyResponse, RoleChangeRequest } from '../../shared/api/api.gen'
 import {
   Field, OpBack, OpBtn, OpConfirm, OpHeading, OpKv, OpNote, OpPanel, OpTable, QueryView, Select, StatusBadge, formatDate, label, options, useGet, useSend,
 } from '../../shared/ui/console'
@@ -23,6 +23,7 @@ export default function AdminPartyDetail() {
   const { partyId = '' } = useParams()
   const base = `/api/admin/parties/${encodeURIComponent(partyId)}`
   const party = useGet<PartyResponse>(base)
+  const dossier = useGet<PartyDossierResponse>(party.data && !party.data.isPlatform && `${base}/dossier`)
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const [reason, setReason] = useState('')
   const close = () => { setDialog(null); setReason('') }
@@ -37,6 +38,10 @@ export default function AdminPartyDetail() {
     <QueryView query={party}>
       {(p) => {
         const verified = p.verificationStatus === 'Verified'
+        const organization = p.partyType !== 'Individual'
+        const hasAccount = (dossier.data?.accounts.length ?? 0) > 0
+        const needsLegalReview = organization && hasAccount && !p.legalDossierVerified
+        const verifyDisabled = organization && (!dossier.isSuccess || (hasAccount && dossier.data?.documents.length === 0))
         const profile = [
           { label: 'Mã số thuế hoặc số đăng ký', value: p.registrationNo },
           { label: 'Người đại diện', value: p.representative },
@@ -53,14 +58,14 @@ export default function AdminPartyDetail() {
               action={
                 <>
                   <StatusBadge kind="verification" value={p.verificationStatus} />
-                  {!p.isPlatform && !verified && <OpBtn sm onClick={() => open({ kind: 'verify' })}><BadgeCheck size={16} /> Xác minh</OpBtn>}
+                  {!p.isPlatform && (!verified || needsLegalReview) && <OpBtn sm disabled={verifyDisabled} onClick={() => open({ kind: 'verify' })}><BadgeCheck size={16} /> Xác minh</OpBtn>}
                   {!p.isPlatform && p.verificationStatus !== 'Rejected' && <OpBtn sm variant="danger" onClick={() => open({ kind: 'reject' })}><XCircle size={16} /> Từ chối</OpBtn>}
                 </>
               }
             />
             {p.verificationStatus === 'Rejected' && p.rejectReason && <OpNote tone="danger">Lý do từ chối: {p.rejectReason}</OpNote>}
 
-            {!p.isPlatform && <PartyDossier party={p} />}
+            {!p.isPlatform && <PartyDossier party={p} dossier={dossier} />}
 
             <OpPanel
               title="Vai trò"
@@ -119,13 +124,16 @@ export default function AdminPartyDetail() {
             {dialog?.kind === 'verify' && (
               <OpConfirm
                 title="Xác minh đối tác"
-                sub={p.partyType === 'Individual'
-                  ? `${p.legalName} · đã xem kết quả eKYC trong mục Căn cứ xác minh`
-                  : `${p.legalName} · đã đối chiếu giấy tờ trong mục Căn cứ xác minh với tên pháp lý và mã số thuế`}
+                sub={!hasAccount && dossier.isSuccess
+                  ? `${p.legalName} · đã đối chiếu thông tin hồ sơ đối tác`
+                  : organization
+                    ? `${p.legalName} · đã đối chiếu giấy tờ trong mục Căn cứ xác minh với tên pháp lý và mã số thuế`
+                    : `${p.legalName} · đã xem kết quả eKYC trong mục Căn cứ xác minh`}
                 confirmLabel="Xác minh"
                 pending={verify.isPending}
                 error={verify.error}
-                onConfirm={() => verify.mutate()}
+                disabled={verifyDisabled}
+                onConfirm={() => verify.mutate(undefined, { onError: () => void dossier.refetch() })}
                 onClose={close}
               />
             )}

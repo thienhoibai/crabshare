@@ -25,7 +25,7 @@ export function PartyDocuments({ party }: { party: PartyResponse }) {
   })
 
   if (party.partyType === 'Individual') return null
-  const locked = party.verificationStatus === 'Verified'
+  const locked = party.legalDossierVerified ?? (party.verificationStatus === 'Verified')
 
   return (
     <OpPanel title="Giấy tờ pháp lý" subtitle="Ảnh giấy chứng nhận đăng ký, giấy phép hoặc giấy uỷ quyền. Admin đối chiếu với tên pháp lý và mã số thuế trước khi xác minh.">

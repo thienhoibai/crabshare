@@ -947,6 +947,7 @@ export interface FundingCloseResult {
 export interface FundingEligibility {
   kycVerified: boolean
   riskAcknowledged: boolean
+  legalDossierVerified?: boolean | null
 }
 
 export interface GoodsReceiptRequest {
@@ -1572,6 +1573,7 @@ export interface PartyResponse {
   isPlatform: boolean
   roles: PartnerRoleResponse[]
   sites: PartySiteResponse[]
+  legalDossierVerified?: boolean
 }
 
 export interface PartySiteResponse {
@@ -1649,6 +1651,8 @@ export interface PayoutProfileResponse {
   ownerType: string
   expectedHolderName: string
   account: PayoutAccountResponse | null
+  recipientVerified?: boolean
+  verificationMethod?: string
 }
 
 export interface PayoutStatus {

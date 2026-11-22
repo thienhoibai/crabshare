@@ -26,11 +26,13 @@ function Editor({ profile, owner }: { profile: PayoutProfileResponse; owner: Pay
   const [holder, setHolder] = useState(account?.accountHolderName ?? profile.expectedHolderName)
   // Tài khoản khớp tên mà bị khoá là do Admin khoá: không tự mở lại bằng cách lưu.
   const adminLocked = account?.status === 'Locked' && account.nameMatchStatus === 'Matched'
+  const verified = profile.recipientVerified !== false
+  const disabled = adminLocked || !verified
   const valid = /^[A-Za-z0-9_-]{1,20}$/.test(bankCode.trim()) && /^[0-9]{4,30}$/.test(accountNo.trim()) && holder.trim().length > 0
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    if (!valid || adminLocked || save.isPending) return
+    if (!valid || disabled || save.isPending) return
     save.mutate({ bankCode: bankCode.trim().toUpperCase(), accountNo: accountNo.trim(), accountHolderName: holder.trim() })
   }
 
@@ -43,24 +45,30 @@ function Editor({ profile, owner }: { profile: PayoutProfileResponse; owner: Pay
         </div>
       )}
       {/* Chỉ một ghi chú, khi tài khoản đang không nhận được tiền. */}
-      {adminLocked
-        ? <OpNote tone="danger">Tài khoản đang bị Admin khoá. Liên hệ Admin để mở lại.</OpNote>
-        : account?.nameMatchStatus === 'Mismatched' && <OpNote tone="danger">Tên chưa khớp nên tài khoản đang khoá. Sửa tên rồi lưu lại.</OpNote>}
+      {!verified
+        ? <OpNote>
+          Hồ sơ chủ sở hữu cần được xác minh trước khi đăng ký tài khoản nhận tiền.{' '}
+          {owner === 'Investor' && <a className="op-link" href={profile.verificationMethod === 'LegalDossier'
+            ? '/nha-dau-tu/ho-so?tab=ho-so' : '/nha-dau-tu/ho-so?tab=xac-minh'}>Mở mục xác minh</a>}
+        </OpNote>
+        : adminLocked
+          ? <OpNote tone="danger">Tài khoản đang bị Admin khoá. Liên hệ Admin để mở lại.</OpNote>
+          : account?.nameMatchStatus === 'Mismatched' && <OpNote tone="danger">Tên chưa khớp nên tài khoản đang khoá. Sửa tên rồi lưu lại.</OpNote>}
 
       <form className="op-form" onSubmit={submit}>
         <div className="op-form__row">
           <Field label="Mã ngân hàng" required hint="Ví dụ: VCB, BIDV, TCB">
-            <Input value={bankCode} onChange={(e) => setBankCode(e.target.value)} maxLength={20} autoCapitalize="characters" disabled={adminLocked} />
+            <Input value={bankCode} onChange={(e) => setBankCode(e.target.value)} maxLength={20} autoCapitalize="characters" disabled={disabled} />
           </Field>
           <Field label="Số tài khoản" required>
-            <Input value={accountNo} onChange={(e) => setAccountNo(e.target.value.replace(/\D/g, ''))} maxLength={30} inputMode="numeric" autoComplete="off" disabled={adminLocked} />
+            <Input value={accountNo} onChange={(e) => setAccountNo(e.target.value.replace(/\D/g, ''))} maxLength={30} inputMode="numeric" autoComplete="off" disabled={disabled} />
           </Field>
         </div>
         <Field label="Tên chủ tài khoản" required hint={`Phải khớp: ${profile.expectedHolderName}`}>
-          <Input value={holder} onChange={(e) => setHolder(e.target.value)} maxLength={150} autoComplete="off" disabled={adminLocked} />
+          <Input value={holder} onChange={(e) => setHolder(e.target.value)} maxLength={150} autoComplete="off" disabled={disabled} />
         </Field>
         <div className="op-formfoot">
-          <OpBtn type="submit" disabled={!valid || adminLocked || save.isPending}>
+          <OpBtn type="submit" disabled={!valid || disabled || save.isPending}>
             <Landmark size={17} /> {save.isPending ? 'Đang đối chiếu…' : 'Lưu tài khoản'}
           </OpBtn>
         </div>
@@ -74,7 +82,7 @@ export default function PayoutAccountForm({ owner }: { owner: PayoutOwner }) {
   const profile = usePayoutProfile(owner)
   return (
     <QueryView query={profile}>
-      {(data) => <Editor key={`${userId}-${owner}-${data.account?.updatedAt ?? 'new'}`} profile={data} owner={owner} />}
+      {(data) => <Editor key={`${userId}-${owner}-${data.expectedHolderName}-${data.recipientVerified}-${data.account?.updatedAt ?? 'new'}`} profile={data} owner={owner} />}
     </QueryView>
   )
 }

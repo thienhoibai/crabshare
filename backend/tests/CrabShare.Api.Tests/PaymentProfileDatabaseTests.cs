@@ -50,9 +50,61 @@ public class PaymentProfileDatabaseTests(KycDatabaseFixture fixture) : IClassFix
         => new() { RecipientName = "Nguyễn An", RecipientPhone = "0901234567", AddressLine = line, Province = "Cà Mau", IsDefault = isDefault };
 
     [Fact]
+    public async Task Unverified_owner_cannot_activate_a_payout_account()
+    {
+        var id = await fixture.CreateInvestorAsync("Unverified");
+        using var client = Client(id, Roles.Investor);
+        var profile = (await client.GetFromJsonAsync<PayoutProfileResponse>("/api/me/payout-account"))!;
+        Assert.False(profile.RecipientVerified);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.PutAsJsonAsync("/api/me/payout-account", Bank())).StatusCode);
+        Assert.False(await Db(db => db.PayoutAccounts.AnyAsync(p => p.OwnerUserId == id)));
+    }
+
+    [Fact]
+    public async Task Organization_uses_approved_legal_name_and_not_the_representatives_name()
+    {
+        var id = await fixture.CreateInvestorAsync("Verified");
+        await Db(async db =>
+        {
+            var party = new Party
+            {
+                LegalName = "Công ty Cua Việt", PartyType = "Company", Representative = "KYC Test",
+                VerificationStatus = "Pending", RegisteredAt = DateTimeOffset.UtcNow,
+            };
+            db.Parties.Add(party);
+            await db.SaveChangesAsync();
+            (await db.AppUsers.SingleAsync(u => u.UserId == id)).PartyId = party.PartyId;
+            await db.SaveChangesAsync();
+            return true;
+        });
+        using var client = Client(id, Roles.Investor);
+        var profile = (await client.GetFromJsonAsync<PayoutProfileResponse>("/api/me/payout-account"))!;
+        Assert.Equal("Công ty Cua Việt", profile.ExpectedHolderName);
+        Assert.False(profile.RecipientVerified);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,
+            (await client.PutAsJsonAsync("/api/me/payout-account", Bank("CONG TY CUA VIET"))).StatusCode);
+
+        await Db(async db =>
+        {
+            var partyId = await db.AppUsers.Where(u => u.UserId == id).Select(u => u.PartyId).SingleAsync();
+            var party = await db.Parties.SingleAsync(p => p.PartyId == partyId);
+            party.VerificationStatus = "Verified";
+            party.VerifiedBy = id + 1;
+            await db.SaveChangesAsync();
+            return true;
+        });
+        var mismatch = await client.PutAsJsonAsync("/api/me/payout-account", Bank("KYC Test"));
+        Assert.Equal("Mismatched", (await mismatch.Content.ReadFromJsonAsync<PayoutProfileResponse>())!.Account!.NameMatchStatus);
+        var matched = await client.PutAsJsonAsync("/api/me/payout-account", Bank("CONG TY CUA VIET"));
+        profile = (await matched.Content.ReadFromJsonAsync<PayoutProfileResponse>())!;
+        Assert.True(profile.RecipientVerified);
+        Assert.Equal("Active", profile.Account!.Status);
+    }
+
+    [Fact]
     public async Task Matching_account_is_active_and_records_bank_check_without_changing_identity()
     {
-        var id = await fixture.CreateInvestorAsync(); using var client = Client(id, Roles.Investor);
+        var id = await fixture.CreateInvestorAsync("Verified"); using var client = Client(id, Roles.Investor);
         var response = await client.PutAsJsonAsync("/api/me/payout-account", Bank()); response.EnsureSuccessStatusCode();
         var profile = (await response.Content.ReadFromJsonAsync<PayoutProfileResponse>())!;
         Assert.Equal("Active", profile.Account!.Status); Assert.Equal("Matched", profile.Account.NameMatchStatus);
@@ -60,7 +112,7 @@ public class PaymentProfileDatabaseTests(KycDatabaseFixture fixture) : IClassFix
         {
             Assert.Equal("Passed", (await db.KycChecks.SingleAsync(k => k.UserId == id)).Result);
             Assert.Equal("BankNameMatch", (await db.KycChecks.SingleAsync(k => k.UserId == id)).CheckType);
-            Assert.Equal("Unverified", (await db.Investors.SingleAsync(i => i.UserId == id)).VerificationStatus);
+            Assert.Equal("Verified", (await db.Investors.SingleAsync(i => i.UserId == id)).VerificationStatus);
             Assert.True(await db.AuditLogs.AnyAsync(a => a.EntityType == "PayoutAccount" && a.EntityId == profile.Account.PayoutAccountId));
             return true;
         });
@@ -70,7 +122,7 @@ public class PaymentProfileDatabaseTests(KycDatabaseFixture fixture) : IClassFix
     [Fact]
     public async Task Mismatch_is_locked_and_can_be_corrected()
     {
-        var id = await fixture.CreateInvestorAsync(); using var client = Client(id, Roles.Investor);
+        var id = await fixture.CreateInvestorAsync("Verified"); using var client = Client(id, Roles.Investor);
         var input = Bank("Someone Else");
         var response = await client.PutAsJsonAsync("/api/me/payout-account", input); response.EnsureSuccessStatusCode();
         Assert.Equal("Locked", (await response.Content.ReadFromJsonAsync<PayoutProfileResponse>())!.Account!.Status);
@@ -83,7 +135,7 @@ public class PaymentProfileDatabaseTests(KycDatabaseFixture fixture) : IClassFix
     [Fact]
     public async Task Replacing_account_closes_old_record_and_preserves_its_bank_details()
     {
-        var id = await fixture.CreateInvestorAsync(); using var client = Client(id, Roles.Investor);
+        var id = await fixture.CreateInvestorAsync("Verified"); using var client = Client(id, Roles.Investor);
         var first = Bank(); (await client.PutAsJsonAsync("/api/me/payout-account", first)).EnsureSuccessStatusCode();
         (await client.PutAsJsonAsync("/api/me/payout-account", Bank())).EnsureSuccessStatusCode();
         await Db(async db =>
@@ -97,7 +149,7 @@ public class PaymentProfileDatabaseTests(KycDatabaseFixture fixture) : IClassFix
     [Fact]
     public async Task Concurrent_updates_leave_one_active_account()
     {
-        var id = await fixture.CreateInvestorAsync();
+        var id = await fixture.CreateInvestorAsync("Verified");
         using var a = Client(id, Roles.Investor); using var b = Client(id, Roles.Investor);
         var responses = await Task.WhenAll(a.PutAsJsonAsync("/api/me/payout-account", Bank()), b.PutAsJsonAsync("/api/me/payout-account", Bank()));
         foreach (var response in responses) response.EnsureSuccessStatusCode();
@@ -107,8 +159,8 @@ public class PaymentProfileDatabaseTests(KycDatabaseFixture fixture) : IClassFix
     [Fact]
     public async Task Another_owner_cannot_claim_a_bank_account()
     {
-        using var a = Client(await fixture.CreateInvestorAsync(), Roles.Investor);
-        using var b = Client(await fixture.CreateInvestorAsync(), Roles.Investor); var input = Bank();
+        using var a = Client(await fixture.CreateInvestorAsync("Verified"), Roles.Investor);
+        using var b = Client(await fixture.CreateInvestorAsync("Verified"), Roles.Investor); var input = Bank();
         (await a.PutAsJsonAsync("/api/me/payout-account", input)).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Conflict, (await b.PutAsJsonAsync("/api/me/payout-account", input)).StatusCode);
     }
@@ -116,7 +168,7 @@ public class PaymentProfileDatabaseTests(KycDatabaseFixture fixture) : IClassFix
     [Fact]
     public async Task Locked_users_cannot_access_profiles_and_matched_locked_accounts_cannot_be_bypassed()
     {
-        var id = await fixture.CreateInvestorAsync(); using var client = Client(id, Roles.Investor);
+        var id = await fixture.CreateInvestorAsync("Verified"); using var client = Client(id, Roles.Investor);
         (await client.PutAsJsonAsync("/api/me/payout-account", Bank())).EnsureSuccessStatusCode();
         await Db(async db => { var account = await db.PayoutAccounts.SingleAsync(p => p.OwnerUserId == id); account.Status = "Locked"; await db.SaveChangesAsync(); return true; });
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync("/api/me/payout-account", Bank())).StatusCode);
