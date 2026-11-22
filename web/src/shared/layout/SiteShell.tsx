@@ -15,7 +15,7 @@ const LINKS = [
   { href: '/#chia', label: 'Cách chia tiền' },
 ]
 
-function AccountMenu() {
+export function AccountMenu() {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const [open, setOpen] = useState(false)

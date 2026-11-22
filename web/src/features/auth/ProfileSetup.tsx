@@ -4,6 +4,8 @@ import type { KycStatusResponse, PartyDocumentResponse, PartyResponse, UpdatePar
 import { homePathFor, useAuthStore } from '../../shared/auth/authStore'
 import { PartyDocuments } from '../../shared/party/PartyDocuments'
 import { Field, Input, OpBtn, QueryView, RadioCards, errorMessage, options, useGet, useSend } from '../../shared/ui/console'
+import { AccountMenu } from '../../shared/layout/SiteShell'
+import { Logo, Shell } from '../../shared/ui/kit/kit'
 import KycVerification from '../accounts/KycVerification'
 import './profile-setup.css'
 
@@ -109,7 +111,18 @@ function Steps({ party }: { party: PartyResponse }) {
 
 export default function ProfileSetup() {
   const party = useGet<PartyResponse>('/api/me/party')
-  return <div className="profile-setup"><h1>Hoàn thiện hồ sơ</h1>
-    <QueryView query={party}>{p => <Steps key={p.partyId} party={p} />}</QueryView>
-  </div>
+  return <Shell theme="light">
+    <div className="setup-workspace">
+      <header className="setup-header">
+        <div className="setup-header-inner">
+          <Logo />
+          <h1>Hoàn thiện hồ sơ</h1>
+          <AccountMenu />
+        </div>
+      </header>
+      <main className="profile-setup">
+        <QueryView query={party}>{p => <Steps key={p.partyId} party={p} />}</QueryView>
+      </main>
+    </div>
+  </Shell>
 }
