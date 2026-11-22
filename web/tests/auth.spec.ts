@@ -1,4 +1,5 @@
 /* Đăng nhập (/dang-nhap) và chuyển hướng theo vai trò; chặn trang theo vai trò (RequireRole). */
+import { party } from './support/investor'
 import type { AuthResponse, LoginRequest } from '../src/shared/api/api.gen'
 import { expect, reply, signIn, test, userOf, type Api, type Role } from './support/app'
 
@@ -35,7 +36,7 @@ test('các ô đăng ký thẳng hàng và cùng chiều cao khi có gợi ý m�
 })
 
 test('đăng ký báo lỗi tại ô nhập, hiện mật khẩu và gửi đúng loại tài khoản', async ({ page, api }) => {
-  noData(api)
+  api.get('/api/me/party', party)
   api.post('/api/auth/register', session('Investor'))
   await page.goto('/dang-ky')
   const submit = page.getByRole('button', { name: 'Tạo tài khoản' })
@@ -61,7 +62,8 @@ test('đăng ký báo lỗi tại ô nhập, hiện mật khẩu và gửi đún
   await page.getByRole('checkbox', { name: 'Tôi đồng ý điều khoản sử dụng' }).check()
   await submit.click()
 
-  await expect(page).toHaveURL(/\/nha-dau-tu$/)
+  await expect(page).toHaveURL(/\/hoan-thien-ho-so$/)
+  await expect(page.getByRole('heading', { name: 'Thông tin hồ sơ' })).toBeVisible()
   expect(api.sent('POST', '/api/auth/register').map((c) => c.body)).toEqual([{
     email: 'nhadautu@test.local', password: 'mat-khau-thu', fullName: 'Người dùng thử', role: 'Investor', partyType: 'Individual',
   }])

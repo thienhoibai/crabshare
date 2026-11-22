@@ -1,0 +1,15 @@
+.profile-setup { max-width: 68rem; margin: 2rem auto; padding: 1rem; }
+.profile-setup ol { display: flex; gap: 2.5rem; padding-left: 1.5rem; flex-wrap: wrap; }
+.profile-setup li[aria-current] { color: var(--accent); font-weight: 700; }
+.setup-columns { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; gap: 1.5rem; }
+.setup-columns section, .setup-columns aside { padding: 1.5rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
+.setup-actions { display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin-top: 1.5rem; }
+.setup-columns details { display: none; }
+@media (max-width: 720px) {
+  .setup-columns { display: flex; flex-direction: column; align-items: stretch; gap: .5rem; }
+  .setup-columns aside { order: -1; padding: .75rem 1rem; }
+  .setup-columns details { display: block; }
+  .setup-columns summary { text-align: right; cursor: pointer; }
+  .setup-desktop-help { display: none; }
+  .profile-setup ol { gap: .5rem 2rem; }
+}
