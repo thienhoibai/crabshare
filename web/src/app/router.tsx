@@ -91,7 +91,7 @@ export const router = createBrowserRouter([
       { path: '/', element: <Landing /> },
       { path: '/dang-nhap', element: <LoginPage /> },
       { path: '/dang-ky', element: <RegisterPage /> },
-      { path: '/hoan-thien-ho-so', element: <RequireRole roles={['Customer', 'Investor']}><SiteShell><ProfileSetup /></SiteShell></RequireRole> },
+      { path: '/hoan-thien-ho-so', element: <RequireRole roles={['Customer', 'Investor']}><ProfileSetup /></RequireRole> },
       ...publicRoutes,
       // Tài khoản đã đăng nhập nhưng chưa thuộc hộ nuôi nào: nộp hồ sơ hộ nuôi ở đây, được duyệt rồi mới vào cổng người nuôi.
       { path: '/dang-ky-ho-nuoi', element: <RequireRole><SiteShell><OperatorRegistration /></SiteShell></RequireRole> },
