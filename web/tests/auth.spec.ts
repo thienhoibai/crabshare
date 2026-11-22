@@ -40,6 +40,7 @@ test('đăng ký báo lỗi tại ô nhập, hiện mật khẩu và gửi đún
   api.post('/api/auth/register', session('Investor'))
   await page.goto('/dang-ky')
   const submit = page.getByRole('button', { name: 'Tạo tài khoản' })
+  await expect(page.getByText('Bạn đăng ký với tư cách nào?')).toHaveCount(0)
   const fullName = page.getByRole('textbox', { name: 'Họ và tên', exact: true })
   const password = page.getByLabel(/^Mật khẩu/)
 
@@ -64,6 +65,12 @@ test('đăng ký báo lỗi tại ô nhập, hiện mật khẩu và gửi đún
 
   await expect(page).toHaveURL(/\/hoan-thien-ho-so$/)
   await expect(page.getByRole('heading', { name: 'Thông tin hồ sơ' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Thông tin liên hệ' })).toBeVisible()
+  await expect(page.getByText('Bạn đăng ký với tư cách nào?')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Tiếp tục' }).click()
+  await page.getByText('Hộ kinh doanh', { exact: true }).click()
+  await expect(page.getByLabel('Tên pháp lý')).toBeVisible()
+  await expect(page.getByLabel('Mã số thuế hoặc số đăng ký')).toBeVisible()
   expect(api.sent('POST', '/api/auth/register').map((c) => c.body)).toEqual([{
     email: 'nhadautu@test.local', password: 'mat-khau-thu', fullName: 'Người dùng thử', role: 'Investor', partyType: 'Individual',
   }])

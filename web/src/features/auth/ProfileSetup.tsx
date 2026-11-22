@@ -1,49 +1,73 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import type { PartyResponse } from '../../shared/api/api.gen'
+import type { PartyResponse, UpdatePartyRequest } from '../../shared/api/api.gen'
 import { homePathFor, useAuthStore } from '../../shared/auth/authStore'
 import { PartyDocuments } from '../../shared/party/PartyDocuments'
-import { label, OpBtn, OpKv, QueryView, useGet } from '../../shared/ui/console'
+import { Field, Input, OpBtn, QueryView, RadioCards, errorMessage, options, useGet, useSend } from '../../shared/ui/console'
 import KycVerification from '../accounts/KycVerification'
-import { EditForm } from '../customer/ProfilePage'
 import './profile-setup.css'
 
-const titles = ['Thông tin hồ sơ', 'Xác minh', 'Thông tin liên hệ']
+const titles = ['Thông tin hồ sơ', 'Xác minh hồ sơ', 'Thông tin liên hệ']
+
+function Steps({ party }: { party: PartyResponse }) {
+  const user = useAuthStore((s) => s.user)!
+  const [step, setStep] = useState(0)
+  const [name, setName] = useState(party.legalName)
+  const [type, setType] = useState(party.partyType)
+  const [number, setNumber] = useState(party.registrationNo ?? '')
+  const [representative, setRepresentative] = useState(party.representative ?? user.fullName)
+  const [phone, setPhone] = useState(party.phone ?? user.phone ?? '')
+  const [saved, setSaved] = useState(party)
+  const save = useSend<PartyResponse, UpdatePartyRequest>('put', '/api/me/party', { quietError: true })
+  const org = type !== 'Individual'
+  const body = { legalName: name.trim(), partyType: type, registrationNo: org ? number.trim() || null : null,
+    representative: org ? representative.trim() : null, phone: phone.trim() || null }
+  const legalSaved = saved.partyType === type && saved.legalName === body.legalName &&
+    (!org || (saved.registrationNo === body.registrationNo && saved.representative === body.representative))
+  function persist(next: number) {
+    save.mutate(body, { onSuccess: (result) => { setSaved(result); setStep(next) } })
+  }
+  const help = ['Nhập họ tên hoặc tên đơn vị theo giấy tờ dùng để xác minh.',
+    org ? 'Điền đúng tên trên giấy đăng ký. Lưu thông tin rồi gửi ảnh rõ chữ, đủ bốn góc để quản trị viên đối chiếu.' : 'Chọn tư cách của người đứng tên hồ sơ. Nhà đầu tư cá nhân cần xác minh danh tính trước khi giữ chỗ góp vốn.',
+    'Kiểm tra email tài khoản và số điện thoại để CrabShare có thể liên hệ với bạn.']
+  return <ol className="setup-steps">{titles.map((title, i) => <li key={title} aria-current={i === step ? 'step' : undefined}>
+    <span className="setup-marker" aria-label={i < step ? 'Đã hoàn tất bước' : undefined}>{i < step ? '✓' : i + 1}</span>
+    <section className="setup-card">
+      <h2>{title}</h2>
+      {i < step && <p>{[name, options('partyType').find(o => o.value === type)?.label, phone || user.email][i]}</p>}
+      {i === step && <>
+        <details className="setup-help"><summary aria-label={'Hướng dẫn ' + title}>?</summary><p>{help[i]}</p></details>
+        {i === 0 && <Field label="Tên trên hồ sơ" htmlFor="setup-name"><Input id="setup-name" value={name} maxLength={200} onChange={e => setName(e.target.value)} /></Field>}
+        {i === 1 && <>
+          <fieldset className="auth-roles"><legend>Bạn đăng ký với tư cách nào?</legend>
+            <RadioCards value={type} onChange={setType} options={options('partyType')} />
+          </fieldset>
+          {org && <div className="op-form">
+            <Field label="Tên pháp lý" htmlFor="setup-legal"><Input id="setup-legal" value={name} maxLength={200} onChange={e => setName(e.target.value)} /></Field>
+            <Field label="Mã số thuế hoặc số đăng ký" htmlFor="setup-number"><Input id="setup-number" value={number} maxLength={30} onChange={e => setNumber(e.target.value)} /></Field>
+            <Field label="Người đại diện" htmlFor="setup-rep"><Input id="setup-rep" value={representative} maxLength={150} onChange={e => setRepresentative(e.target.value)} /></Field>
+          </div>}
+          {!legalSaved ? <OpBtn disabled={save.isPending || !name.trim() || (org && !representative.trim())} onClick={() => persist(1)}>Lưu thông tin hồ sơ</OpBtn>
+            : org ? <PartyDocuments party={saved} /> : user.roles.includes('Investor') ? <KycVerification /> : <p>Khách hàng cá nhân có thể tiếp tục sang bước liên hệ.</p>}
+        </>}
+        {i === 2 && <><p>Email tài khoản · {user.email}</p><Field label="Số điện thoại liên hệ" htmlFor="setup-phone"><Input id="setup-phone" type="tel" maxLength={15} value={phone} onChange={e => setPhone(e.target.value)} /></Field></>}
+        {save.isError && <p role="alert">{errorMessage(save.error)}</p>}
+        <div className="setup-actions">
+          {i > 0 && <OpBtn variant="ghost" disabled={save.isPending} onClick={() => setStep(i - 1)}>Quay lại</OpBtn>}
+          {i === 0 && <OpBtn disabled={!name.trim()} onClick={() => setStep(1)}>Tiếp tục</OpBtn>}
+          {i === 1 && legalSaved && <OpBtn onClick={() => setStep(2)}>Tiếp tục</OpBtn>}
+          {i === 2 && <OpBtn disabled={save.isPending} onClick={() => persist(3)}>Hoàn tất</OpBtn>}
+        </div>
+      </>}
+      {step === 3 && i === 2 && <Link to={homePathFor(user)}>Vào trang chính</Link>}
+    </section>
+    {step === i && <aside>{help[i]}</aside>}
+  </li>)}</ol>
+}
 
 export default function ProfileSetup() {
-  const user = useAuthStore((state) => state.user)!
   const party = useGet<PartyResponse>('/api/me/party')
-  const [step, setStep] = useState(0)
-  const [editing, setEditing] = useState(false)
-  return <main className="profile-setup">
-    <h1>Hoàn thiện hồ sơ</h1>
-    <ol aria-label="Tiến độ hoàn thiện hồ sơ">
-      {titles.map((title, index) => <li key={title} aria-current={step === index ? 'step' : undefined}>{title}</li>)}
-    </ol>
-    <QueryView query={party}>{(p) => {
-      const organization = p.partyType !== 'Individual'
-      const investor = user.roles.includes('Investor')
-      const help = [
-        'Đối chiếu tên pháp lý với tên trên giấy đăng ký của tổ chức hoặc giấy tờ tùy thân của cá nhân.',
-        organization ? 'Chụp đủ bốn góc của giấy chứng nhận. Kiểm tra chữ rõ nét, không bị lóa. Mỗi ảnh JPEG, PNG hoặc WebP tối đa 5 MB.' :
-          investor ? 'Chuẩn bị giấy tờ tùy thân và chụp ảnh ở nơi đủ sáng. Cần xác minh đạt trước khi giữ chỗ góp vốn.' : 'Khách hàng cá nhân có thể tiếp tục đặt hàng mà không cần xác minh eKYC.',
-        'Kiểm tra email tài khoản và số điện thoại liên hệ của đối tác.',
-      ]
-      return <div className="setup-columns">
-        <section>
-          <h2>{titles[step]}</h2>
-          {step === 0 && <OpKv items={[{ label: 'Tư cách đăng ký', value: label('partyType', p.partyType) }, { label: 'Tên pháp lý', value: p.legalName }]} />}
-          {step === 1 && (organization ? <PartyDocuments party={p} /> : investor ? <KycVerification /> : <p>Hồ sơ cá nhân của bạn có thể tiếp tục sang bước liên hệ.</p>)}
-          {step === 2 && <OpKv items={[{ label: 'Email tài khoản', value: user.email }, { label: 'Số điện thoại liên hệ', value: p.phone || 'Chưa cung cấp' }]} />}
-          {step !== 1 && <OpBtn variant="ghost" onClick={() => setEditing(true)}>Sửa hồ sơ</OpBtn>}
-          <div className="setup-actions">
-            {step > 0 && <OpBtn variant="ghost" onClick={() => setStep(step - 1)}>Quay lại</OpBtn>}
-            {step < 2 ? <OpBtn onClick={() => setStep(step + 1)}>Tiếp tục</OpBtn> : <Link className="op-link" to={homePathFor(user)}>Vào trang chính</Link>}
-          </div>
-          {editing && <EditForm party={p} onClose={() => setEditing(false)} />}
-        </section>
-        <aside><details key={step}><summary aria-label={'Hướng dẫn ' + titles[step]}>? <span>Hướng dẫn</span></summary><p>{help[step]}</p></details><p className="setup-desktop-help">{help[step]}</p></aside>
-      </div>
-    }}</QueryView>
+  return <main className="profile-setup"><h1>Hoàn thiện hồ sơ</h1>
+    <QueryView query={party}>{p => <Steps key={p.partyId} party={p} />}</QueryView>
   </main>
 }
