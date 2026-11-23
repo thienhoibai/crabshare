@@ -57,6 +57,20 @@ public sealed class PartyService(AppDbContext db, ICurrentUser me, PartyDirector
                     investor.VerifiedAt = null;
                 }
             }
+            if (req.CompleteCustomerProfile && me.IsInRole(Roles.Customer))
+            {
+                if (party.PartyType != "Individual")
+                {
+                    var submitted = party.VerificationStatus == "Pending" && await db.PartyDocuments.AnyAsync(
+                        d => d.PartyId == partyId && d.RemovedAt == null, ct);
+                    if (legalChanged || !(party.LegalDossierVerified || submitted))
+                        throw new BusinessRuleException("party.documents_required", "Hãy gửi giấy tờ pháp lý trước khi hoàn tất hồ sơ.");
+                }
+
+                var account = await db.AppUsers.SingleAsync(u => u.UserId == me.UserId, ct);
+                account.CustomerProfileCompletedAt ??= clock.GetUtcNow();
+            }
+
             await db.SaveChangesAsync(ct);
             await audit.WriteAsync("party", party.PartyId, "update", before, Snapshot(party), ct);
             return party.PartyId;

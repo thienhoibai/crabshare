@@ -126,6 +126,7 @@ public sealed class AuthService(AppDbContext db, TokenService tokens, TimeProvid
         var roles = user.AppUserRoles.Select(r => r.RoleCode).OrderBy(r => r).ToList();
         var operatorId = await db.OperatorMembers.Where(m => m.UserId == user.UserId)
             .Select(m => (long?)m.OperatorId).FirstOrDefaultAsync(ct);
-        return new MeResponse(user.UserId, user.Email, user.FullName, user.Phone, user.Status, roles, operatorId);
+        var customerProfileRequired = roles.Count == 1 && roles[0] == Roles.Customer && user.CustomerProfileCompletedAt is null;
+        return new MeResponse(user.UserId, user.Email, user.FullName, user.Phone, user.Status, roles, operatorId, customerProfileRequired);
     }
 }

@@ -12,7 +12,10 @@ export interface Me {
   status: string
   roles: Role[]
   operatorId: number | null
+  customerProfileRequired?: boolean
 }
+
+export const PROFILE_SETUP_PATH = '/hoan-thien-ho-so'
 
 interface AuthState {
   token: string | null

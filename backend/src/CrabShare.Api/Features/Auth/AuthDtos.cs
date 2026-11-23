@@ -53,4 +53,4 @@ public sealed class LoginRequest
 
 public sealed record AuthResponse(string AccessToken, DateTimeOffset ExpiresAt, MeResponse User);
 
-public sealed record MeResponse(long UserId, string Email, string FullName, string? Phone, string Status, IReadOnlyList<string> Roles, long? OperatorId);
+public sealed record MeResponse(long UserId, string Email, string FullName, string? Phone, string Status, IReadOnlyList<string> Roles, long? OperatorId, bool CustomerProfileRequired = false);

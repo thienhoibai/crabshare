@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { errorMessage } from '../../shared/api/http'
-import { homePathFor } from '../../shared/auth/authStore'
+import { homePathFor, PROFILE_SETUP_PATH } from '../../shared/auth/authStore'
 import { Field, Input, OpBtn, OpNote } from '../../shared/ui/console'
 import AuthLayout from './AuthLayout'
 import PasswordInput from './PasswordInput'
@@ -21,7 +21,7 @@ export default function LoginPage() {
   const submit = (creds: { email: string; password: string }) => {
     setMessage('')
     login.mutate(creds, {
-      onSuccess: (res) => navigate(params.get('next') ?? homePathFor(res.user), { replace: true }),
+      onSuccess: (res) => navigate(res.user.customerProfileRequired ? PROFILE_SETUP_PATH : params.get('next') ?? homePathFor(res.user), { replace: true }),
       onError: (e) => setMessage(errorMessage(e)),
     })
   }

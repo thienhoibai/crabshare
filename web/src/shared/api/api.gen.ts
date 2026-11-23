@@ -1220,6 +1220,7 @@ export interface MeasurementValuesRequest {
 }
 
 export interface MeResponse {
+  customerProfileRequired?: boolean
   userId: number
   email: string
   fullName: string
@@ -2520,6 +2521,7 @@ export interface UpdateBoxRequest {
 }
 
 export interface UpdatePartyRequest {
+  completeCustomerProfile?: boolean
   legalName: string
   partyType: string
   registrationNo?: string | null
