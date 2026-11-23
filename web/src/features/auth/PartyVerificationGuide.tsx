@@ -66,7 +66,7 @@ export default function PartyVerificationGuide({ type, investor }: { type: strin
       </div>}
       {organization ? <ul>
         <li>Dùng tên pháp lý và số đăng ký (nếu có) trên giấy chứng nhận. Điền thông tin người đại diện.</li>
-        <li>Chụp đủ các trang. JPEG, PNG hoặc WebP, tối đa 5 MB mỗi ảnh.</li>
+        <li>Chụp hoặc quét đủ các trang. Gửi tệp PDF, JPEG, PNG hoặc WebP, tối đa 5 MB mỗi tệp.</li>
         <li>Gửi giấy tờ để quản trị viên đối chiếu hồ sơ.</li>
       </ul> : investor ? <ul>
         <li>Chuẩn bị bản gốc thẻ căn cước và chụp ở nơi đủ sáng.</li>

@@ -1,7 +1,7 @@
 /* Đăng nhập (/dang-nhap) và chuyển hướng theo vai trò; chặn trang theo vai trò (RequireRole). */
 import { kycUnverified, party } from './support/investor'
-import type { AuthResponse, LoginRequest } from '../src/shared/api/api.gen'
-import { expect, photo, reply, signIn, test, userOf, type Api, type Role } from './support/app'
+import type { AuthResponse, LoginRequest, PartyDocumentResponse } from '../src/shared/api/api.gen'
+import { expect, file, photo, reply, signIn, test, TOKEN, userOf, type Api, type Role } from './support/app'
 
 const session = (role: Role): AuthResponse => ({ accessToken: `token-${role}`, expiresAt: '2099-01-01T00:00:00Z', user: userOf(role) })
 
@@ -144,6 +144,41 @@ test('hồ sơ tổ chức đã bị từ chối không mở bước liên hệ 
   await expect(page.getByText(/Hồ sơ bị từ chối.*Ảnh bị mờ/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Tiếp tục' })).toBeDisabled()
   await expect(page.getByLabel('Số điện thoại liên hệ')).toBeDisabled()
+})
+
+test('tổ chức gửi giấy đăng ký dạng PDF trong bước xác minh rồi tải lại bản đã gửi', async ({ page, api }) => {
+  const path = '/api/me/party/documents'
+  const pdf = Buffer.from('%PDF-1.4\n%%EOF\n')
+  const document: PartyDocumentResponse = {
+    documentId: 501, docType: 'BusinessRegistration', contentType: 'application/pdf', note: null, uploadedAt: '2026-11-23T07:00:00Z',
+  }
+  let uploaded = false
+  api.get('/api/me/party', () => ({
+    ...party, partyType: 'Company', representative: 'Người đại diện', verificationStatus: uploaded ? 'Pending' : 'Unverified',
+  }))
+  api.get(path, () => uploaded ? [document] : [])
+  api.post(path, () => { uploaded = true; return document })
+  api.get(`${path}/501/file`, file(pdf, 'application/pdf'))
+
+  await signIn(page, 'Customer')
+  await page.goto('/hoan-thien-ho-so')
+  await page.getByRole('button', { name: 'Tiếp tục' }).click()
+  const [picker] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.getByRole('button', { name: 'Chọn tệp PDF', exact: true }).click(),
+  ])
+  expect(await picker.element().getAttribute('accept')).toMatch(/application\/pdf/)
+  await picker.setFiles({ name: 'giay-dang-ky.pdf', mimeType: 'application/pdf', buffer: pdf })
+  await expect(page.getByText('giay-dang-ky.pdf', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Gửi giấy tờ', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Tiếp tục' })).toBeEnabled()
+  expect(api.sent('POST', path)).toMatchObject([{ multipart: true, body: { DocType: 'BusinessRegistration', File: 'file:giay-dang-ky.pdf' } }])
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: /Tải PDF/ }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/\.pdf$/)
+  expect(api.sent('GET', `${path}/501/file`)).toMatchObject([{ auth: `Bearer ${TOKEN}` }])
 })
 
 test('đăng ký với số điện thoại đã dùng báo lỗi ngay tại ô số điện thoại', async ({ page, api }) => {
