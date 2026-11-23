@@ -11,21 +11,21 @@ export const organizationGuides = {
   Household: {
     label: 'Hộ kinh doanh',
     icon: Store,
-    sample: 'household.png',
+    sample: 'household.jpg',
     document: 'Giấy chứng nhận đăng ký hộ kinh doanh',
     example: 'Một vựa cua gia đình đã đăng ký dưới tên hộ kinh doanh.',
   },
   Company: {
     label: 'Doanh nghiệp',
     icon: Building2,
-    sample: 'company.png',
+    sample: 'company.jpg',
     document: 'Giấy chứng nhận đăng ký doanh nghiệp',
     example: 'Người đại diện đăng ký cho một công ty TNHH kinh doanh hải sản.',
   },
   Cooperative: {
     label: 'Hợp tác xã',
     icon: UsersRound,
-    sample: 'cooperative.png',
+    sample: 'cooperative.jpg',
     document: 'Giấy chứng nhận đăng ký hợp tác xã',
     example: 'Nhiều hộ nuôi cùng bán cua dưới tên một HTX đã đăng ký. Chọn mục này khi giao dịch đứng tên HTX và tài khoản do người đại diện đứng tên.',
   },
@@ -49,7 +49,7 @@ export default function PartyVerificationGuide({ type, investor }: { type: strin
       <figure className="setup-guide-figure">
         {organization ? (
           <img className="setup-guide-certificate" src={'/profile-samples/' + organization.sample}
-            alt={organization.document + ', bố cục minh họa'} width={400} height={530} />
+            alt={organization.document + ', ảnh mẫu'} />
         ) : <div className="setup-guide-art" aria-hidden="true">
           <div className="setup-guide-paper">
             <Icon />
@@ -57,7 +57,7 @@ export default function PartyVerificationGuide({ type, investor }: { type: strin
           </div>
           {investor && <ScanLine className="setup-guide-scan" />}
         </div>}
-        <figcaption>{organization ? 'Mẫu đã lược bỏ thông tin nhận dạng' : 'Minh họa thẻ căn cước'}</figcaption>
+        <figcaption>{organization ? 'Ảnh mẫu giấy chứng nhận' : 'Minh họa thẻ căn cước'}</figcaption>
       </figure>
       {organization && <div className="setup-guide-photo-tips">
         <span><Crop aria-hidden="true" /> Đủ bốn góc</span>
