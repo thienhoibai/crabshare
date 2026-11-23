@@ -135,29 +135,3 @@
 
 .ga-label-form { display: grid; gap: 12px; }
 .ga-label-list { max-height: 13rem; overflow: auto; margin: 10px 0; }
-
-/* Compact unified batch + station controls bar */
-.ga-bar-station { display: inline-flex; align-items: center; gap: 8px; }
-.ga-bar-sep { color: rgba(21, 19, 15, .18); margin: 0 2px; }
-.ga-bar-station .op-select,
-.ga-bar-station select { width: auto !important; min-width: 195px; min-height: 34px !important; height: 34px !important; padding: 3px 10px !important; font-size: 13px !important; border-radius: 10px !important; }
-.ga-bar-controls { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
-.ga-bar-controls .op-select,
-.ga-bar-controls select { width: auto !important; min-width: 190px; max-width: 240px; min-height: 34px !important; height: 34px !important; padding: 3px 10px !important; font-size: 13px !important; border-radius: 10px !important; }
-.ga-bar-controls .rd-btn { min-height: 34px !important; height: 34px !important; padding: 5px 12px !important; white-space: nowrap; }
-
-/* Single-line automated numbering & position selector inside ga-start-card */
-.ga-auto-single { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.ga-auto-pill { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 10px; background: #f7f5f0; border: 1px solid rgba(21, 19, 15, .12); white-space: nowrap; }
-.ga-auto-pill b { font-size: 13.5px; font-weight: 700; color: #15130f; font-variant-numeric: tabular-nums; }
-.ga-auto-pill span { font-size: 11px; font-weight: 600; color: #1d8a5a; background: #eaf6ef; border-radius: 999px; padding: 2px 7px; }
-.ga-auto-select { flex: 1 1 200px; min-width: 190px; max-width: 280px; }
-.ga-jump-inline { display: inline-flex; align-items: center; gap: 5px; }
-.ga-jump-inline .op-input { width: 72px !important; min-width: 72px; text-align: center; }
-.ga-auto-check { display: inline-flex; align-items: center; white-space: nowrap; font-size: 12.5px; margin: 0 2px; }
-.ga-auto-check label { margin: 0 !important; gap: 6px; font-size: 12.5px; }
-.ga-auto-action { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
-@media (max-width: 960px) {
-  .ga-bar-controls { flex-wrap: wrap; }
-  .ga-auto-action { margin-left: 0; }
-}

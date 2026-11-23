@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { errorMessage } from '../../../shared/api/http'
-import { Field, Input, OpBtn, OpPanel, OpNote, useGet, useSend } from '../../../shared/ui/console'
+import { Field, Input, OpBtn, OpMore, OpNote, useGet, useSend } from '../../../shared/ui/console'
 import type { RuntimeResponse } from './StationRuntime'
 
 interface WifiStatus { id: number; status: string; message: string | null }
@@ -27,7 +27,7 @@ export function StationWifi({ code, runtime }: { code: string; runtime?: Runtime
     : !ready ? 'Trạm cần online và hoàn tất hoặc hủy lượt đo trước khi đổi Wi-Fi.'
     : 'Nhập mạng đang phủ sóng tại Pi. Hỗ trợ WPA2 và chế độ WPA2/WPA3 hỗn hợp.'
   return (
-    <OpPanel title="Đổi Wi-Fi của thiết bị" lead={`Trạm ${code}`}>
+    <OpMore label="Đổi Wi-Fi của thiết bị">
       <form autoComplete="off" onSubmit={event => {
         event.preventDefault()
         if (ready && !waiting && !send.isPending) send.mutate({ ssid, password })
@@ -40,6 +40,6 @@ export function StationWifi({ code, runtime }: { code: string; runtime?: Runtime
         </OpBtn>
         <div role="status"><OpNote tone={send.isError || job?.status === 'Rejected' ? 'danger' : undefined}>{note}</OpNote></div>
       </form>
-    </OpPanel>
+    </OpMore>
   )
 }
