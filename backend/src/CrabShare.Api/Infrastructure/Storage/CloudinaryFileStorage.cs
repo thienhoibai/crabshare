@@ -74,7 +74,10 @@ public sealed class CloudinaryFileStorage(CloudinaryStorageOptions options, Loca
             || result.GetProperty("type").GetString() != "authenticated")
             throw Unavailable("Cloudinary trả về định danh ảnh không đúng yêu cầu.");
         var format = result.GetProperty("format").GetString();
-        if (format is not ("jpg" or "jpeg" or "png" or "webp" or "pdf")) throw Unavailable("Cloudinary trả về định dạng ảnh không được hỗ trợ.");
+        var validFormat = expected == "application/pdf"
+            ? format == "pdf"
+            : format is "jpg" or "jpeg" or "png" or "webp";
+        if (!validFormat) throw Unavailable("Cloudinary trả về định dạng tệp không được hỗ trợ.");
         return new(Prefix + publicId + "." + format, Convert.ToHexStringLower(SHA256.HashData(bytes)), bytes.Length, contentType);
     }
 

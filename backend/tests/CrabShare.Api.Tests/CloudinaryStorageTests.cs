@@ -83,8 +83,10 @@ public sealed class CloudinaryStorageTests
         await using var stream = await services.GetRequiredService<IFileStorage>().OpenReadAsync("cloudinary:test-cloud/image/authenticated/crabshare/evidence/test.png", default);
         using var result = new MemoryStream(); await stream.CopyToAsync(result); Assert.Equal(new byte[] { 8, 9, 10 }, result.ToArray());
     }
-    [Fact]
-    public async Task Pdf_is_uploaded_and_downloaded_as_an_authenticated_asset()
+    [Theory]
+    [InlineData("pdf")]
+    [InlineData("jpg")]
+    public async Task Pdf_is_downloadable_only_when_cloudinary_preserves_its_format(string returnedFormat)
     {
         var bytes = "%PDF-1.7\n%%EOF\n"u8.ToArray();
         string? publicId = null;
@@ -100,7 +102,7 @@ public sealed class CloudinaryStorageTests
                 Assert.Equal(bytes, await parts["file"].ReadAsByteArrayAsync());
                 publicId = await parts["public_id"].ReadAsStringAsync();
                 return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(
-                    new { public_id = publicId, format = "pdf", resource_type = "image", type = "authenticated" })) };
+                    new { public_id = publicId, format = returnedFormat, resource_type = "image", type = "authenticated" })) };
             }
 
             Assert.Equal("/v1_1/test-cloud/image/download", request.RequestUri!.AbsolutePath);
@@ -112,6 +114,13 @@ public sealed class CloudinaryStorageTests
         });
         var storage = services.GetRequiredService<IFileStorage>();
         using var input = new MemoryStream(bytes);
+        if (returnedFormat != "pdf")
+        {
+            await Assert.ThrowsAsync<CrabShare.Api.Common.Errors.AppException>(() =>
+                storage.SaveAsync(input, "certificate.pdf", "application/pdf", "party-documents/test", default));
+            return;
+        }
+
         var saved = await storage.SaveAsync(input, "certificate.pdf", "application/pdf", "party-documents/test", default);
         Assert.Equal($"cloudinary:test-cloud/image/authenticated/{publicId}.pdf", saved.Uri);
         await using var read = await storage.OpenReadAsync(saved.Uri, default);
