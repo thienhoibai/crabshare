@@ -120,6 +120,7 @@ public sealed class DeviceCommand
     [Column("command_type"), MaxLength(20), Unicode(false)] public string CommandType { get; set; } = "";
     [Column("box_code"), MaxLength(30), Unicode(false)] public string? BoxCode { get; set; }
     [Column("measurement_session_id")] public long? MeasurementSessionId { get; set; }
+    [Column("protected_payload"), MaxLength(2048)] public string? ProtectedPayload { get; set; }
     [Column("status"), MaxLength(20), Unicode(false)] public string Status { get; set; } = "Pending";
     [Column("reason"), MaxLength(300)] public string? Reason { get; set; }
     [Column("created_by")] public long? CreatedBy { get; set; }

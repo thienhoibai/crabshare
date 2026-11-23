@@ -5,6 +5,7 @@ using CrabShare.Api.Common.Errors;
 using CrabShare.Api.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrabShare.Api.Features.Devices;
@@ -41,6 +42,8 @@ public sealed class StationRuntimeState
     [StringLength(500)] public string? SensorError { get; set; }
     public bool WebStartReady { get; set; }
     public StationStartOutcome? StartOutcome { get; set; }
+    public bool WifiConfigReady { get; set; }
+    public WifiOutcome? WifiOutcome { get; set; }
 }
 
 public sealed record StationStartOutcome([Range(1, long.MaxValue)] long Id, bool Accepted,
@@ -49,7 +52,7 @@ public sealed record StationStartOutcome([Range(1, long.MaxValue)] long Id, bool
 public sealed record StationRuntimeResponse(DateTimeOffset? ReceivedAt, StationRuntimeState? State, bool Fresh);
 
 [ApiController]
-public sealed class StationRuntimeController(AppDbContext db, ICurrentUser me, TimeProvider clock) : ControllerBase
+public sealed class StationRuntimeController(AppDbContext db, ICurrentUser me, TimeProvider clock, IDataProtectionProvider protection) : ControllerBase
 {
     [AllowAnonymous, HttpPost("api/devices/{code}/station-state"), RequestSizeLimit(16 * 1024)]
     public async Task<IActionResult> Publish(string code, StationRuntimeState state, [FromHeader(Name = "X-Device-Key")] string? key,
@@ -69,7 +72,8 @@ public sealed class StationRuntimeController(AppDbContext db, ICurrentUser me, T
                 .SetProperty(d => d.Status, "Active").SetProperty(d => d.UpdatedAt, now), ct);
         if (changed == 0) throw new ForbiddenException("device.removed", "Thiết bị đã được gỡ.");
         var start = await StationStartCommands.Poll(db, device, state, clock, ct);
-        return Ok(new { receivedAt = now, start });
+        var wifi = start is null ? await WifiCommands.Poll(db, device, state, protection, clock, ct) : null;
+        return Ok(new { receivedAt = now, start, wifi });
     }
 
     [Authorize(Policy = Policies.Operator), HttpGet("api/operators/me/devices/{code}/station-state")]

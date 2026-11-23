@@ -14,6 +14,7 @@ import { GradeAiOpenSessionForm } from './devices/GradeAiOpenSessionForm'
 import { BatchWeighingHistory, type WeighingHistoryPage } from './devices/BatchWeighingHistory'
 import { StationRuntime, type RuntimeResponse } from './devices/StationRuntime'
 import { StationStart } from './devices/StationStart'
+import { StationWifi } from './devices/StationWifi'
 import './devices/devices.css'
 
 function isWeighableBatch(b: BatchResponse): boolean {
@@ -126,6 +127,7 @@ function BatchSelectionStep({
           <DeviceList devices={[station]} />
         </OpPanel>
       )}
+      {station && <StationWifi code={station.deviceCode} />}
     </>
   )
 }
@@ -163,6 +165,22 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
     { refetchInterval: 3000 },
   )
 
+  const activeOpen = openSessions.data?.items[0]
+  const readyBatch = !!(batch.data && isWeighableBatch(batch.data))
+  const measured = new Set((recent.data?.items ?? []).filter((s) => s.weightG != null).map((s) => s.crabCode))
+
+  const selectedSession: SessionResponse | undefined =
+    (recent.data?.items ?? []).find((s) => s.sessionNo === sessionNo) ??
+    (recent.data?.items ?? []).find((s) => s.hasWhiteImage || s.hasRedImage || s.weightG != null) ??
+    activeOpen
+
+  const selectedMeasurements = useGet<SessionMeasurementsResponse>(
+    selectedSession && (selectedSession.hasWhiteImage || selectedSession.hasRedImage || selectedSession.weightG != null)
+      ? `/api/measurement-sessions/${encodeURIComponent(selectedSession.sessionNo)}/measurements`
+      : null,
+    undefined,
+    { refetchInterval: 4000 },
+  )
   if (!activeBatchCode) {
     return (
       <QueryView query={batches}>
@@ -181,22 +199,6 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
     )
   }
 
-  const activeOpen = openSessions.data?.items[0]
-  const readyBatch = !!(batch.data && isWeighableBatch(batch.data))
-  const measured = new Set((recent.data?.items ?? []).filter((s) => s.weightG != null).map((s) => s.crabCode))
-
-  const selectedSession: SessionResponse | undefined =
-    (recent.data?.items ?? []).find((s) => s.sessionNo === sessionNo) ??
-    (recent.data?.items ?? []).find((s) => s.hasWhiteImage || s.hasRedImage || s.weightG != null) ??
-    activeOpen
-
-  const selectedMeasurements = useGet<SessionMeasurementsResponse>(
-    selectedSession && (selectedSession.hasWhiteImage || selectedSession.hasRedImage || selectedSession.weightG != null)
-      ? `/api/measurement-sessions/${encodeURIComponent(selectedSession.sessionNo)}/measurements`
-      : null,
-    undefined,
-    { refetchInterval: 4000 },
-  )
   const mValues = selectedMeasurements.data?.values ?? []
   const clVal = mValues.filter((v) => v.metric === 'CarapaceLengthCm').at(-1)?.value
   const cwVal = mValues.filter((v) => v.metric === 'CarapaceWidthCm').at(-1)?.value
@@ -322,6 +324,7 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
               tag={activeOpen.gradeAiTag} runtime={runtimeReport} />
           )}
           <StationRuntime key={station.deviceCode} code={station.deviceCode} onStateChange={setRuntimeReport} />
+          <StationWifi key={`wifi-${station.deviceCode}`} code={station.deviceCode} runtime={runtimeReport} />
         </>
       ) : (
         <OpPanel title="Trạm cân GradeAI">
