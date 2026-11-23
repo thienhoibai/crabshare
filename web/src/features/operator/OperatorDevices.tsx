@@ -169,9 +169,14 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
   const readyBatch = !!(batch.data && isWeighableBatch(batch.data))
   const measured = new Set((recent.data?.items ?? []).filter((s) => s.weightG != null).map((s) => s.crabCode))
 
+  const recentItems = recent.data?.items ?? []
+  const pickedSession = recentItems.find((s) => s.sessionNo === sessionNo)
+  const latestCaptured = recentItems.find((s) => s.hasWhiteImage || s.hasRedImage)
   const selectedSession: SessionResponse | undefined =
-    (recent.data?.items ?? []).find((s) => s.sessionNo === sessionNo) ??
-    (recent.data?.items ?? []).find((s) => s.hasWhiteImage || s.hasRedImage || s.weightG != null) ??
+    (pickedSession && (pickedSession.hasWhiteImage || pickedSession.hasRedImage) ? pickedSession : undefined) ??
+    latestCaptured ??
+    pickedSession ??
+    recentItems.find((s) => s.weightG != null) ??
     activeOpen
 
   const selectedMeasurements = useGet<SessionMeasurementsResponse>(
@@ -181,6 +186,7 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
     undefined,
     { refetchInterval: 4000 },
   )
+
   if (!activeBatchCode) {
     return (
       <QueryView query={batches}>
@@ -214,6 +220,7 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
 
   return (
     <>
+      {/* Thanh gộp Đang làm việc với lô + Chọn trạm cân gọn trên 1 hàng ngang */}
       <div className="ga-active-batch-bar">
         <div className="ga-active-batch-info">
           <span>Đang làm việc với lô:</span>
@@ -224,8 +231,32 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
               <StatusBadge kind="batch" value={batch.data.status} />
             </>
           )}
+          {station && (
+            <span className="ga-bar-station">
+              <span className="ga-bar-sep">|</span>
+              <span>Trạm cân:</span>
+              {stations.length > 1 ? (
+                <Select
+                  value={station.deviceCode}
+                  onChange={(event) => setStationChoice(event.target.value)}
+                  aria-label="Chọn trạm cân"
+                >
+                  {stations.map((d) => (
+                    <option key={d.deviceCode} value={d.deviceCode}>
+                      {d.deviceCode} · {d.source === 'Simulated' ? 'Giả lập' : 'Thiết bị thật'}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <b>
+                  {station.deviceCode} · {station.source === 'Simulated' ? 'Giả lập' : 'Thiết bị thật'}
+                </b>
+              )}
+            </span>
+          )}
         </div>
-        <div className="op-inline">
+        <div className="ga-bar-controls">
+          <OpBtn type="button" sm variant="ghost" onClick={() => document.getElementById('station-wifi')?.scrollIntoView({ behavior: 'smooth' })}>Đổi Wi-Fi</OpBtn>
           {weighableBatches.length > 1 && (
             <Select
               value={weighableBatches.some((b) => b.batchCode === activeBatchCode) ? activeBatchCode : ''}
@@ -257,15 +288,15 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
         </div>
       </div>
 
-      {/* Bắt đầu lượt đo nhỏ gọn nằm ở trên cùng trang trạm cân */}
+      {/* Thanh bắt đầu lượt đo tự động hóa siêu gọn nằm ở đầu trang */}
       <article className="ga-card ga-start-card">
         <div className="ga-start-top">
-          <div className="op-inline" style={{ gap: 10 }}>
+          <div className="op-inline" style={{ gap: 8 }}>
             <h2>Bắt đầu lượt đo · {activeBatchCode}</h2>
             <span className="ga-tag">{station ? `Trạm ${station.deviceCode}` : 'Lưu tại Pi'}</span>
           </div>
           <div className="ga-start-inline-status">
-            <b>{liveTag ? `Mã tại trạm: ${liveTag}` : 'Chưa chọn mã cua'}</b>
+            <b>{liveTag ? `Mã tại trạm: ${liveTag}` : 'Chờ mở lượt'}</b>
             <span>· {liveNote}</span>
             {selectedSession && selectedSession.weightG != null && (
               <span className="ga-tag ga-tag--good">
@@ -292,40 +323,30 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
                 stationCode={station.deviceCode}
                 measured={measured}
                 activeOpen={activeOpen}
-                onOpened={(no) => {
+                busy={!!(runtimeReport?.fresh && runtimeReport.state?.busy)}
+                onOpened={() => {
                   void openSessions.refetch()
                   void recent.refetch()
-                  setSessionNo(no)
                 }}
+                onInspect={setSessionNo}
               />
             )
           }
         </QueryView>
+
+        {station && activeOpen?.gradeAiTag && station.source !== 'Simulated' && (
+          <StationStart
+            key={activeOpen.sessionNo}
+            code={station.deviceCode}
+            sessionNo={activeOpen.sessionNo}
+            tag={activeOpen.gradeAiTag}
+            runtime={runtimeReport}
+          />
+        )}
       </article>
 
       {station ? (
-        <>
-          {stations.length > 1 && (
-            <OpPanel title="Chọn trạm cân">
-              <Field label="Trạm sử dụng">
-                <Select value={station.deviceCode} onChange={(event) => setStationChoice(event.target.value)}>
-                  {stations.map((d) => (
-                    <option key={d.deviceCode} value={d.deviceCode}>
-                      {d.deviceCode}
-                      {d.source === 'Simulated' ? ' · Giả lập' : ' · Thiết bị thật'}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </OpPanel>
-          )}
-          {activeOpen?.gradeAiTag && station.source !== 'Simulated' && (
-            <StationStart key={activeOpen.sessionNo} code={station.deviceCode} sessionNo={activeOpen.sessionNo}
-              tag={activeOpen.gradeAiTag} runtime={runtimeReport} />
-          )}
-          <StationRuntime key={station.deviceCode} code={station.deviceCode} onStateChange={setRuntimeReport} />
-          <StationWifi key={`wifi-${station.deviceCode}`} code={station.deviceCode} runtime={runtimeReport} />
-        </>
+        <StationRuntime key={station.deviceCode} code={station.deviceCode} onStateChange={setRuntimeReport} />
       ) : (
         <OpPanel title="Trạm cân GradeAI">
           <OpEmpty title="Chưa đăng ký trạm cân" icon={<Cpu size={26} />}>
@@ -471,12 +492,15 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
       </div>
 
       {station && (
-        <OpPanel title="Thông tin đăng ký và hiệu chuẩn trạm">
-          <p className="rd-muted">
-            Ngày hiệu chuẩn ghi trên hệ thống: {formatDateTime(station.lastCalibratedAt) || 'chưa có'}.
-          </p>
-          <DeviceList devices={[station]} />
-        </OpPanel>
+        <>
+          <div id="station-wifi"><StationWifi key={`wifi-${station.deviceCode}`} code={station.deviceCode} runtime={runtimeReport} /></div>
+          <OpPanel title="Thông tin đăng ký và hiệu chuẩn trạm">
+            <p className="rd-muted">
+              Ngày hiệu chuẩn ghi trên hệ thống: {formatDateTime(station.lastCalibratedAt) || 'chưa có'}.
+            </p>
+            <DeviceList devices={[station]} />
+          </OpPanel>
+        </>
       )}
 
       {otherDevices.length > 0 && (
