@@ -1,261 +1,91 @@
-import { useEffect, useRef, useState } from 'react'
-import { RotateCcw, Scale } from 'lucide-react'
-import type {
-  BatchResponse, CrabUnitResponse, GradeAiLabelsRequest, GradeAiLabelsResponse,
-  OpenSessionRequest, SessionResponse,
-} from '../../../shared/api/api.gen'
-import { http, errorMessage } from '../../../shared/api/http'
-import { Checkbox, Input, OpBtn, OpNote, Select, useGet, useSend } from '../../../shared/ui/console'
+import { useState } from 'react'
+import type { BatchResponse, CrabUnitResponse, GradeAiLabelsRequest, GradeAiLabelsResponse,
+  OpenSessionRequest, SessionResponse } from '../../../shared/api/api.gen'
+import { Field, Input, OpBtn, OpNote, useGet, useSend } from '../../../shared/ui/console'
 
 function tagNumber(tag: string | null | undefined, prefix: string): number | null {
-  if (!tag?.toUpperCase().startsWith(`${prefix}-`)) return null
+  if (!tag?.startsWith(`${prefix}-`)) return null
   const suffix = tag.slice(prefix.length + 1)
-  return /^\d{1,6}$/.test(suffix) && Number(suffix) > 0 ? Number(suffix) : null
+  return /^\d{3,6}$/.test(suffix) && Number(suffix) > 0 ? Number(suffix) : null
 }
 
-export function GradeAiOpenSessionForm({
-  batch,
-  stationCode,
-  measured,
-  activeOpen,
-  onOpened,
-  onInspect,
-  busy = false,
-}: {
+export function GradeAiOpenSessionForm({ batch, stationCode, measured, activeOpen, onOpened }: {
   batch: BatchResponse
   stationCode: string
   measured: Set<string>
   activeOpen?: SessionResponse
   onOpened: (no: string) => void
-  onInspect?: (no: string) => void
-  busy?: boolean
 }) {
   const batchPath = `/api/batches/${encodeURIComponent(batch.batchCode)}`
-  const crabs = useGet<CrabUnitResponse[]>(`${batchPath}/crab-units`, {
-    status: batch.hasHolding ? 'Holding' : 'Received',
-  })
-
-  const [startFromNumber, setStartFromNumber] = useState<number | null>(null)
-  const [customDraft, setCustomDraft] = useState('')
-  const [autoAdvance, setAutoAdvance] = useState(false)
-  const [jumpError, setJumpError] = useState<unknown>(null)
-  const [switching, setSwitching] = useState(false)
-  const autoLabeledBatchRef = useRef('')
-  const lastAutoOpenedTagRef = useRef('')
-
+  const crabs = useGet<CrabUnitResponse[]>(`${batchPath}/crab-units`, { status: batch.hasHolding ? 'Holding' : 'Received' })
+  const [draftPrefix, setDraftPrefix] = useState<string>()
+  const [number, setNumber] = useState('')
+  const [review, setReview] = useState(false)
   const assign = useSend<GradeAiLabelsResponse, GradeAiLabelsRequest>('post', `${batchPath}/gradeai-labels`, {
-    quietError: true,
-    onSuccess: () => { void crabs.refetch() },
+    success: (result) => `Đã chuẩn bị ${result.assigned} mã cua.`,
+    onSuccess: () => { setReview(false); void crabs.refetch() },
   })
   const open = useSend<SessionResponse, OpenSessionRequest>('post', '/api/measurement-sessions', {
-    onSuccess: (result) => {
-      void crabs.refetch()
-      onOpened(result.sessionNo)
-    },
+    onSuccess: (result) => { setNumber(''); onOpened(result.sessionNo) },
   })
 
-  const units = [...(crabs.data ?? [])].sort((a, b) => a.crabCode.localeCompare(b.crabCode))
-  const prefix = (units.find(unit => unit.gradeAiPrefix)?.gradeAiPrefix ?? batch.batchCode).trim().toUpperCase()
-  const codeFor = (n: number) => `${prefix}-${String(n).padStart(3, '0')}`
-
-  const takenNumbers = new Set(units.map(unit => tagNumber(unit.gradeAiTag, prefix)).filter((n): n is number => n !== null))
-  let nextNumber = 1
-  const entries = units.map((unit) => {
-    const parsed = tagNumber(unit.gradeAiTag, prefix)
-    while (takenNumbers.has(nextNumber)) nextNumber += 1
-    const num = parsed ?? nextNumber++
-    takenNumbers.add(num)
-    const tag = codeFor(num)
-    return { unit, num, tag, isMeasured: measured.has(unit.crabCode) }
-  })
-
-  const allTagged = entries.length > 0 && entries.every((e) => e.isMeasured || e.unit.gradeAiTag?.toUpperCase() === e.tag)
-
-  useEffect(() => {
-    if (!autoAdvance || busy || !crabs.isSuccess || entries.length === 0 || allTagged || activeOpen) return
-    if (assign.isPending || autoLabeledBatchRef.current === prefix) return
-    autoLabeledBatchRef.current = prefix
-    assign.mutate({
-      prefix,
-      labels: entries.filter(e => !e.isMeasured && !e.unit.gradeAiTag).map((e) => ({ crabCode: e.unit.crabCode, crabNumber: e.num })),
+  const units = crabs.data ?? []
+  const fixed = units.find((unit) => unit.gradeAiPrefix)?.gradeAiPrefix
+  const prefix = (fixed ?? draftPrefix ?? batch.batchCode).trim().toUpperCase()
+  const validPrefix = /^[A-Z][A-Z0-9-]{0,15}$/.test(prefix)
+  const taken = new Set(units.flatMap((unit) => tagNumber(unit.gradeAiTag, prefix) ?? []))
+  let next = 1
+  const labels = units.filter((unit) => !unit.gradeAiTag && !measured.has(unit.crabCode))
+    .sort((a, b) => a.crabCode.localeCompare(b.crabCode)).map((unit) => {
+      while (taken.has(next)) next += 1
+      return { crabCode: unit.crabCode, crabNumber: next++ }
     })
-  }, [autoAdvance, busy, crabs.isSuccess, entries, allTagged, activeOpen, assign, prefix])
+  const codeFor = (suffix: number) => `${prefix}-${String(suffix).padStart(3, '0')}`
+  const value = /^\d{1,6}$/.test(number) ? Number(number) : 0
+  const selected = value > 0 ? units.find((unit) => unit.gradeAiTag === codeFor(value)) : undefined
+  const alreadyMeasured = !!selected && measured.has(selected.crabCode)
 
-  const completedNums = entries.filter((e) => e.isMeasured).map((e) => e.num)
-  const lastCompletedNum = completedNums.length > 0 ? Math.max(...completedNums) : 0
-  const unmeasured = entries.filter((e) => !e.isMeasured)
-
-  const defaultNext =
-    unmeasured.find((e) => e.num > lastCompletedNum) ??
-    unmeasured[0] ??
-    null
-
-  const target =
-    (startFromNumber !== null
-      ? unmeasured.find((e) => e.num >= startFromNumber) ?? entries.find((e) => e.num === startFromNumber)
-      : defaultNext) ?? defaultNext
-
-  useEffect(() => {
-    if (!autoAdvance || busy || !stationCode || activeOpen || !target || target.isMeasured) return
-    if (!allTagged || open.isPending || assign.isPending || switching) return
-    if (lastAutoOpenedTagRef.current === target.tag) return
-    lastAutoOpenedTagRef.current = target.tag
-    open.mutate({
-      batchCode: batch.batchCode,
-      gradeAiPrefix: prefix,
-      crabNumber: target.num,
-      stationCode,
-      procedure: 'Station',
-    })
-  }, [autoAdvance, busy, stationCode, activeOpen, target, allTagged, open, assign.isPending, switching, batch.batchCode, prefix])
-
-  async function jumpToPosition(num: number | null) {
-    if (busy || switching || open.isPending) return
-    setStartFromNumber(num)
-    setCustomDraft(num !== null ? String(num) : '')
-
-    const chosen =
-      (num !== null
-        ? unmeasured.find((e) => e.num >= num) ?? entries.find((e) => e.num === num)
-        : defaultNext) ?? defaultNext
-
-    if (!chosen || chosen.isMeasured || !stationCode) return
-    if (activeOpen && activeOpen.gradeAiTag?.toUpperCase() === chosen.tag) return
-
-    try {
-      setJumpError(null)
-      setSwitching(true)
-      if (activeOpen && activeOpen.status === 'Open') {
-        await http.post(`/api/measurement-sessions/${encodeURIComponent(activeOpen.sessionNo)}/cancel`)
-      }
-      lastAutoOpenedTagRef.current = chosen.tag
-      open.mutate({
-        crabCode: allTagged ? null : chosen.unit.crabCode,
-        batchCode: batch.batchCode,
-        gradeAiPrefix: prefix,
-        crabNumber: chosen.num,
-        stationCode,
-        procedure: 'Station',
-      })
-    } catch (error) {
-      setJumpError(error)
-    } finally {
-      setSwitching(false)
-    }
-  }
-
-  if (crabs.isPending) return <OpNote>Đang đồng bộ danh sách cua của lô {prefix}…</OpNote>
-  if (crabs.isError) {
-    return (
-      <OpNote tone="danger">
-        Không đọc được cua trong lô.{' '}
-        <button type="button" className="op-link" onClick={() => void crabs.refetch()}>
-          Thử lại
-        </button>
-      </OpNote>
-    )
-  }
+  if (activeOpen) return <OpNote>Lượt {activeOpen.sessionNo} đang mở cho {activeOpen.gradeAiTag ?? activeOpen.crabCode}.</OpNote>
+  if (crabs.isPending) return <OpNote>Đang đọc danh sách cua…</OpNote>
+  if (crabs.isError) return <OpNote tone="danger">Không đọc được cua trong lô. <button type="button" className="op-link" onClick={() => void crabs.refetch()}>Thử lại</button></OpNote>
   if (!units.length) return <OpNote>Chưa có cua đủ điều kiện để cân trong lô này.</OpNote>
 
-  const activeDisplayTag = activeOpen?.gradeAiTag ?? target?.tag ?? codeFor(1)
-  const canManualOpen = !busy && !activeOpen && !!target && !target.isMeasured && !open.isPending && !assign.isPending && !switching
-
   return (
-    <div className="ga-auto-single">
-      <div className="ga-auto-pill" title={`Tiến độ lô: đã xong ${completedNums.length}/${entries.length} con`}>
-        <b>{activeDisplayTag}</b>
-        <span>{completedNums.length}/{entries.length}</span>
-      </div>
-
-      <Select disabled={busy || switching || open.isPending}
-        className="ga-auto-select"
-        aria-label="Tuỳ chọn bắt đầu từ vị trí"
-        value={startFromNumber === null ? '' : String(startFromNumber)}
-        onChange={(e) => {
-          const val = e.target.value ? Number(e.target.value) : null
-          void jumpToPosition(val)
-        }}
-      >
-        <option value="">
-          Vị trí: Tự tiếp nối (#{String(defaultNext?.num ?? 1).padStart(3, '0')})
-        </option>
-        {entries.map((e) => (
-          <option key={e.unit.crabCode} value={String(e.num)} disabled={e.isMeasured}>
-            Bắt đầu từ #{String(e.num).padStart(3, '0')} ({e.isMeasured ? 'Đã xong' : 'Chưa chụp'})
-          </option>
-        ))}
-      </Select>
-
-      <div className="ga-jump-inline">
-        <Input
-          aria-label="Nhập nhanh số thứ tự bắt đầu"
-          value={customDraft}
-          onChange={(e) => setCustomDraft(e.target.value.replace(/[^0-9]/g, ''))}
-          inputMode="numeric"
-          maxLength={6}
-          placeholder={`#${String(defaultNext?.num ?? 1).padStart(3, '0')}`}
-        />
-        <OpBtn
-          type="button"
-          sm
-          variant="ghost"
-          disabled={busy || !customDraft || switching || open.isPending}
-          onClick={() => {
-            const n = Number(customDraft)
-            if (n >= 1) void jumpToPosition(n)
-          }}
-        >
-          Đặt
+    <div className="ga-label-form">
+      <Field label="Mã đầu lô" hint="Dùng chung cho các mã cua trong lô.">
+        <Input value={fixed ?? draftPrefix ?? batch.batchCode} onChange={(e) => { setDraftPrefix(e.target.value); setReview(false) }}
+          readOnly={!!fixed} maxLength={16} />
+      </Field>
+      {labels.length > 0 && (
+        <div>
+          <OpBtn type="button" variant="outline" disabled={!validPrefix || assign.isPending || labels.length > 2000}
+            onClick={() => setReview(!review)}>{review ? 'Đóng danh sách' : `Xem ${labels.length} mã cần gắn`}</OpBtn>
+          {review && (
+            <div>
+              <p>Đối chiếu mã kiểm kê với mã GradeAI trước khi xác nhận.</p>
+              <ul className="ga-label-list">
+                {labels.map((item) => <li key={item.crabCode}>{item.crabCode} → {codeFor(item.crabNumber)}</li>)}
+              </ul>
+              <OpBtn type="button" disabled={assign.isPending} onClick={() => assign.mutate({ prefix, labels })}>
+                {assign.isPending ? 'Đang lưu…' : 'Xác nhận gắn mã'}
+              </OpBtn>
+            </div>
+          )}
+        </div>
+      )}
+      <form onSubmit={(event) => {
+        event.preventDefault()
+        if (selected && !alreadyMeasured && !open.isPending && !assign.isPending) {
+          open.mutate({ batchCode: batch.batchCode, gradeAiPrefix: prefix, crabNumber: value, stationCode })
+        }
+      }}>
+        <Field label="Số thứ tự cua" hint={alreadyMeasured ? 'Mã đã có kết quả cân.' : selected ? `${selected.gradeAiTag} · kiểm kê ${selected.crabCode}` : 'Nhập số của mã đã gắn, ví dụ 012.'}>
+          <Input value={number} onChange={(e) => setNumber(e.target.value)} inputMode="numeric" maxLength={6} />
+        </Field>
+        <OpBtn type="submit" disabled={!selected || alreadyMeasured || open.isPending || assign.isPending}>
+          {open.isPending ? 'Đang mở lượt…' : 'Mở lượt đo'}
         </OpBtn>
-        {startFromNumber !== null && (
-          <OpBtn
-            type="button"
-            sm
-            variant="ghost"
-            title="Quay về mặc định tự tiếp nối"
-            onClick={() => void jumpToPosition(null)}
-          >
-            <RotateCcw size={13} />
-          </OpBtn>
-        )}
-      </div>
-
-      <label className="ga-auto-check" title="Tự động mở lượt kế tiếp sau mỗi con hoàn thành và khi khởi động lại">
-        <Checkbox checked={autoAdvance} onChange={setAutoAdvance}>
-          Tự nối lượt
-        </Checkbox>
-      </label>
-
-      <div className="ga-auto-action">
-        {activeOpen ? (
-          <OpBtn type="button" sm variant="ghost" onClick={() => (onInspect ?? onOpened)(activeOpen.sessionNo)}>
-            Chi tiết / Huỷ
-          </OpBtn>
-        ) : unmeasured.length === 0 ? (
-          <span className="ga-tag ga-tag--good">Đủ {entries.length}/{entries.length} con</span>
-        ) : (
-          <button
-            type="button"
-            className="ga-btn-grad"
-            disabled={!canManualOpen}
-            onClick={() => {
-              if (!target) return
-              lastAutoOpenedTagRef.current = target.tag
-              open.mutate({
-                crabCode: allTagged ? null : target.unit.crabCode,
-                batchCode: batch.batchCode,
-                gradeAiPrefix: prefix,
-                crabNumber: target.num,
-                stationCode,
-                procedure: 'Station',
-              })
-            }}
-          >
-            <Scale size={14} /> {open.isPending || switching ? 'Đang mở…' : `Mở lượt ${target?.tag}`}
-          </button>
-        )}
-      </div>
-      {!!(assign.error || open.error || jumpError) && <OpNote tone="danger">{errorMessage(jumpError ?? assign.error ?? open.error)}</OpNote>}
+      </form>
     </div>
   )
 }
