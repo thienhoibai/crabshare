@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { OpNote, formatDateTime, useGet } from '../../../shared/ui/console'
+import { StationConnection } from './StationConnection'
 
 export interface StationState {
   hardwareOnline: boolean
@@ -32,6 +33,9 @@ export interface StationState {
   sensorError: string | null
   webStartReady?: boolean
   wifiConfigReady?: boolean
+  connectionType?: 'wifi' | 'ethernet' | 'unknown'
+  networkInterface?: string | null
+  networkIp?: string | null
 }
 
 export interface RuntimeResponse {
@@ -68,9 +72,11 @@ function fmt(v: number | null | undefined, digits = 1): string {
 export function StationRuntime({
   code,
   onStateChange,
+  connectionOnly = false,
 }: {
   code: string
   onStateChange?: (report: RuntimeResponse | undefined) => void
+  connectionOnly?: boolean
 }) {
   const runtime = useGet<RuntimeResponse>(`/api/operators/me/devices/${encodeURIComponent(code)}/station-state`, undefined, {
     refetchInterval: 1500,
@@ -89,17 +95,10 @@ export function StationRuntime({
     }
   }, [runtime.data, runtime.isError, onStateChange])
 
-  if (runtime.isPending) return <p role="status">Đang nhận trạng thái từ trạm…</p>
-  if (runtime.isError) {
-    return (
-      <OpNote tone="danger">
-        Chưa tải được trạng thái trạm.{' '}
-        <button className="op-link" type="button" onClick={() => void runtime.refetch()}>
-          Thử lại
-        </button>
-      </OpNote>
-    )
-  }
+  const connection = <StationConnection key={code} code={code} report={runtime.data}
+    loading={runtime.isPending} error={runtime.isError} fetching={runtime.isFetching}
+    retry={() => void runtime.refetch()} />
+  if (connectionOnly || runtime.isPending || runtime.isError) return connection
 
   const report = runtime.data
   const s = report.state
@@ -151,6 +150,7 @@ export function StationRuntime({
 
   return (
     <div className="ga-shell">
+      {connection}
       <article className="ga-card ga-progress" aria-label="Tiến trình lượt đo">
         <div className="ga-progress-head">
           <div>
