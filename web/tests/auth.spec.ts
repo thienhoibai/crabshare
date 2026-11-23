@@ -84,6 +84,11 @@ test('đăng ký báo lỗi tại ô nhập, hiện mật khẩu và gửi đún
   await expect(page.getByLabel('Tên pháp lý')).toBeVisible()
   await expect(page.getByLabel('Mã số thuế hoặc số đăng ký')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Giấy chứng nhận đăng ký hộ kinh doanh' })).toBeVisible()
+  await page.getByText('Doanh nghiệp', { exact: true }).first().click()
+  await expect(page.getByRole('heading', { name: 'Giấy chứng nhận đăng ký doanh nghiệp' })).toBeVisible()
+  await page.getByText('Hợp tác xã', { exact: true }).first().click()
+  await expect(page.getByRole('heading', { name: 'Giấy chứng nhận đăng ký hợp tác xã' })).toBeVisible()
+  await expect(page.getByText(/Nhiều hộ nuôi cùng bán cua/)).toBeVisible()
   expect(api.sent('POST', '/api/auth/register').map((c) => c.body)).toEqual([{
     email: 'nhadautu@test.local', password: 'mat-khau-thu', fullName: 'Người dùng thử', role: 'Investor', partyType: 'Individual',
   }])
