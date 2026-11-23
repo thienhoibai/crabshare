@@ -1,0 +1,137 @@
+.ga-shell{display:grid;gap:20px;margin-bottom:20px}
+.ga-card{border:1px solid rgba(21,19,15,.1);border-radius:20px;background:#fff;min-width:0;box-shadow:0 16px 44px -32px #281e0a47}
+.ga-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 22px}
+.ga-card-head h2{margin:0;font-size:17px;letter-spacing:-.35px;font-weight:650;color:#15130f}
+.ga-tag{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(21,19,15,.1);background:#f7f5f0;color:#6b655a;border-radius:999px;padding:5px 11px;font-size:11px;white-space:nowrap;font-weight:500}
+.ga-tag--good{color:#1d8a5a;background:#eaf6ef;border-color:#cde7d7}
+
+/* Step 1: Batch picker before entering station workspace */
+.ga-batch-picker{padding:22px;margin-bottom:20px}
+.ga-batch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:16px}
+.ga-batch-item{display:flex;flex-direction:column;justify-content:space-between;gap:14px;padding:18px 20px;border:1px solid rgba(21,19,15,.12);border-radius:16px;background:#fcfbf8;transition:border-color .15s,box-shadow .15s}
+.ga-batch-item:hover{border-color:#ec5a1f;box-shadow:0 10px 26px -18px rgba(236,90,31,.35)}
+.ga-batch-item h3{margin:4px 0;font-size:18px;font-weight:650;color:#15130f;letter-spacing:-.3px}
+.ga-batch-item p{margin:0;font-size:12px;color:#6b655a;line-height:1.5}
+.ga-batch-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+
+/* Active batch top bar in Step 2 */
+.ga-active-batch-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 20px;margin-bottom:18px;border:1px solid rgba(21,19,15,.1);border-radius:16px;background:#fff;box-shadow:0 12px 32px -26px #281e0a47}
+.ga-active-batch-info{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:#6b655a}
+.ga-active-batch-info b{font-size:15px;color:#15130f;font-weight:650}
+
+.ga-progress{padding:19px 22px}
+.ga-progress-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ga-progress-head h2{margin:0;font-size:16px;font-weight:650}
+.ga-message{display:flex;gap:8px 12px;flex-wrap:wrap;margin-top:8px;font-size:13px;line-height:1.5}
+.ga-message b{font-weight:700}
+.ga-message b[data-tone="red"]{color:#c2262c}
+.ga-message b[data-tone="yellow"]{color:#895705}
+.ga-message b[data-tone="purple"]{color:#6f398b}
+.ga-message b[data-tone="green"]{color:#1d8a5a}
+.ga-message b[data-tone="blue"],.ga-message b[data-tone="cyan"]{color:#1b5fab}
+.ga-message span{color:#6b655a}
+.ga-signals{display:flex;flex-wrap:wrap;gap:6px 8px;margin:12px 0;font-size:12px}
+.ga-signals span{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border:1px solid rgba(21,19,15,.1);border-radius:8px;color:#6b655a;background:#f7f5f0}
+.ga-signals .is-on{border-color:#edcc99;color:#895705;background:#fff3dc}
+.ga-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+@keyframes ga-rgb-blink{0%,49%{opacity:1}50%,100%{opacity:.15}}
+.ga-dot.is-blinking{animation:ga-rgb-blink 1s steps(1,end) infinite}
+.ga-steps{list-style:none;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;padding:0;margin:10px 0 0}
+.ga-steps li{min-width:0;padding:8px 10px;border:1px solid rgba(21,19,15,.1);border-radius:10px;background:#f7f5f0;font-size:12px;line-height:1.4}
+.ga-steps li b{display:block;font-weight:600;color:#15130f}
+.ga-steps li small{display:block;font-size:11px;color:#6b655a;margin-top:3px}
+.ga-steps li.is-running{border-color:#edbb9c;background:#fff0e7}
+.ga-steps li.is-running small{color:#985027}
+.ga-steps li.is-done{border-color:#cde7d7;background:#eaf6ef}
+.ga-steps li.is-done small{color:#1d8a5a}
+.ga-steps li.is-error{border-color:#e9c5c0;background:#fff2ef}
+.ga-steps li.is-error small{color:#c2262c}
+
+.ga-metrics{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:16px}
+.ga-metric{position:relative;min-width:0;background:#fff;border:1px solid rgba(21,19,15,.1);border-radius:20px;padding:21px 22px;overflow:hidden;box-shadow:0 16px 44px -32px #281e0a47}
+.ga-metric--weight{background:#15130f;color:#f4f1ea;border-color:#15130f}
+.ga-metric-label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:10px;font-weight:600;letter-spacing:.1em;color:#6b655a;text-transform:uppercase}
+.ga-metric-label span{font-size:9px;color:#9a9385}
+.ga-metric--weight .ga-metric-label,.ga-metric--weight .ga-metric-bottom{color:#c1baad}
+.ga-metric-value{display:flex;gap:9px;align-items:baseline;margin:11px 0 3px}
+.ga-metric-value>span{font-size:54px;line-height:1.1;letter-spacing:-2px;font-weight:550;font-variant-numeric:tabular-nums}
+.ga-metric-value small{font-size:15px;color:#6b655a}
+.ga-metric--weight .ga-metric-value small{color:#aaa395}
+.ga-metric-bottom{display:flex;justify-content:space-between;gap:8px;color:#6b655a;font-size:11px;flex-wrap:wrap}
+.ga-spark{width:100%;height:27px;margin-top:9px;display:block}
+.ga-spark path{fill:none;stroke:#ffae3a;stroke-width:1.8}
+.ga-scale-details{display:flex;gap:5px 12px;flex-wrap:wrap;font-size:10px;margin-top:6px;color:#c1baad}
+.ga-scale-details b{font-weight:600;color:#f4f1ea}
+.ga-ruler{display:flex;justify-content:space-between;align-items:flex-end;height:25px;margin-top:15px;border-bottom:1px solid rgba(21,19,15,.1)}
+.ga-ruler i{height:7px;border-left:1px solid #cbc2b2}
+.ga-ruler i:nth-child(4n+1){height:14px}
+.ga-inputs{display:grid;gap:19px;margin-top:20px}
+.ga-inputs>div{display:flex;align-items:center;gap:11px}
+.ga-inputs small{display:block;font-size:11px;color:#6b655a}
+.ga-inputs b{font-size:13px;font-weight:600;color:#15130f}
+.ga-input-icon{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;background:#f7f5f0;color:#6b655a;flex:none}
+.ga-input-dot{width:7px;height:7px;border-radius:50%;margin-left:auto;background:#cbc2b2;flex:none}
+.ga-input-dot.is-on{background:#1d8a5a}
+.ga-input-dot.is-warn{background:#9a5b00}
+
+/* Compact Top Start Session bar */
+.ga-start-card{padding:12px 18px 14px;margin-bottom:16px}
+.ga-start-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.ga-start-top h2{margin:0;font-size:15px;font-weight:650;color:#15130f}
+.ga-start-inline-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:#6b655a}
+.ga-start-inline-status b{color:#15130f;font-weight:600}
+.ga-start-card .op-form{display:flex!important;flex-direction:row!important;flex-wrap:wrap;align-items:flex-end;gap:10px 12px}
+.ga-start-card .op-field{margin:0!important;flex:0 1 160px;min-width:130px;display:flex;flex-direction:column;gap:4px}
+.ga-start-card .op-label{font-size:11px!important;margin:0!important;line-height:1.2}
+.ga-start-card .op-field__hint{display:none!important}
+.ga-start-card .op-input,.ga-start-card .op-select,.ga-start-card select{min-height:36px!important;height:36px!important;padding:5px 10px!important;font-size:13px!important;border-radius:10px!important}
+.ga-start-card .rd-btn,.ga-start-card .rd-btn--block{width:auto!important;min-height:36px!important;height:36px!important;padding:6px 14px!important;font-size:12px!important;margin:0!important;flex:0 0 auto}
+.ga-start-card p{margin:0;font-size:12px;color:#6b655a;align-self:center;padding-bottom:6px}
+
+/* 3 Equal Camera / Photo cards row */
+.ga-camera-trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:20px}
+.ga-media-card{display:flex;flex-direction:column;justify-content:space-between}
+.ga-media-box{position:relative;margin:0 18px;aspect-ratio:4/3;border-radius:14px;overflow:hidden;display:grid;place-items:center;background:#f7f5f0;border:1px dashed #d8cfbf}
+.ga-media-box--dark{background:#15130f;border:1px solid #15130f}
+.ga-media-box img{width:100%;height:100%;object-fit:contain;display:block}
+.ga-media-placeholder{padding:18px;text-align:center;color:#9a9385;font-size:12px;line-height:1.6}
+.ga-media-placeholder--dark{color:#c1baad}
+.ga-media-placeholder svg{width:34px;height:34px;display:block;margin:0 auto 8px;stroke-width:1.4;color:#ada594}
+.ga-media-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:12px 18px 16px;font-size:11px;color:#6b655a}
+.ga-media-foot b{color:#15130f;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.ga-media-foot .is-live{color:#1d8a5a;font-weight:600}
+
+.ga-btn-grad{display:inline-flex;justify-content:center;align-items:center;gap:8px;min-height:34px;padding:6px 14px;border-radius:999px;background:linear-gradient(115deg,#ffae3a,#ff5b24 48%,#ff2f4e);color:#1a0a04;border:0;font-size:12px;font-weight:650;cursor:pointer;white-space:nowrap}
+.ga-btn-grad:hover:not(:disabled){filter:brightness(1.03)}
+.ga-btn-grad:disabled{opacity:.45;cursor:not-allowed}
+
+.ga-photo-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}
+.ga-photo-dot--white{background:#c7bfab}
+.ga-photo-dot--red{background:#db755f}
+
+.ga-qc-strip{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:18px 22px;margin-bottom:20px}
+.ga-qc-strip h2{margin:0 0 4px;font-size:16px;font-weight:650;color:#15130f}
+.ga-qc-strip p{margin:0;font-size:12px;color:#6b655a}
+.ga-link-accent{display:inline-block;padding:0;background:none;border:0;color:#ec5a1f;font-size:12px;font-weight:650;cursor:pointer}
+.ga-link-accent:hover{text-decoration:underline}
+
+.device-test-links{display:flex;flex-wrap:wrap;gap:.75rem;margin-bottom:1rem}
+.device-history-detail{padding-top:1.25rem;border-top:1px solid var(--line);margin-top:1rem}
+@media(max-width:1080px){
+  .ga-metrics{grid-template-columns:1fr 1fr}
+  .ga-metric--weight{grid-column:1/-1}
+  .ga-camera-trio{grid-template-columns:1fr}
+  .ga-start-layout{grid-template-columns:1fr}
+  .ga-steps{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:650px){
+  .ga-metrics{grid-template-columns:1fr}
+  .ga-steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .device-test-links{flex-direction:column}
+  .device-test-links a{justify-content:center}
+}
+.ga-station-start { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; }
+.ga-station-start > [role="status"] { flex: 1 1 260px; }
+
+.ga-label-form { display: grid; gap: 12px; }
+.ga-label-list { max-height: 13rem; overflow: auto; margin: 10px 0; }
