@@ -13,6 +13,9 @@ namespace CrabShare.Api.Features.Devices;
 public sealed class StationRuntimeState
 {
     public bool HardwareOnline { get; set; }
+    [RegularExpression("^(wifi|ethernet|unknown)$")] public string? ConnectionType { get; set; }
+    [StringLength(32)] public string? NetworkInterface { get; set; }
+    [StringLength(45)] public string? NetworkIp { get; set; }
     public bool Busy { get; set; }
     public bool? DoorClosed { get; set; }
     public bool? ButtonPressed { get; set; }
