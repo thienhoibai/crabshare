@@ -7,6 +7,7 @@ import { Field, Input, OpBtn, QueryView, RadioCards, errorMessage, options, useG
 import { AccountMenu } from '../../shared/layout/SiteShell'
 import { Logo, Shell } from '../../shared/ui/kit/kit'
 import KycVerification from '../accounts/KycVerification'
+import PartyVerificationGuide from './PartyVerificationGuide'
 import './profile-setup.css'
 
 const titles = ['Thông tin hồ sơ', 'Xác minh hồ sơ', 'Thông tin liên hệ']
@@ -40,8 +41,6 @@ function Steps({ party }: { party: PartyResponse }) {
   const verificationReady = org
     ? party.legalDossierVerified || (party.verificationStatus === 'Pending' && !!documents.data?.length)
     : !investorKyc || kyc.data?.verificationStatus === 'Verified'
-  const documentTitle = type === 'Household' ? 'Giấy chứng nhận đăng ký hộ kinh doanh'
-    : type === 'Cooperative' ? 'Giấy chứng nhận đăng ký hợp tác xã' : 'Giấy chứng nhận đăng ký doanh nghiệp'
 
   return <ol className="setup-steps">{titles.map((title, i) => <li key={title} aria-current={i === step ? 'step' : undefined}>
     <span className="setup-marker" aria-label={i < step ? 'Đã hoàn tất bước' : undefined}>{i < step ? '✓' : i + 1}</span>
@@ -58,24 +57,16 @@ function Steps({ party }: { party: PartyResponse }) {
       {i === step && <>
         {i === 0 && <div className="setup-field"><FieldHelp title="Tên trên hồ sơ"><p>Nhập họ tên hoặc tên đơn vị theo giấy tờ dùng để xác minh.</p></FieldHelp><Field label="Tên trên hồ sơ" htmlFor="setup-name"><Input id="setup-name" value={name} maxLength={200} onChange={e => setName(e.target.value)} /></Field></div>}
         {i === 1 && <>
-          <div className="setup-field">{!org && (!investorKyc || !legalSaved) && <FieldHelp title="Tư cách đăng ký"><p>Chọn cá nhân nếu đứng tên bằng giấy tờ tùy thân. Nếu có đăng ký kinh doanh, chọn loại hình ghi trên giấy chứng nhận.</p></FieldHelp>}<fieldset className="auth-roles"><legend>Bạn đăng ký với tư cách nào?</legend>
+          <div className="setup-field"><fieldset className="auth-roles"><legend>Bạn đăng ký với tư cách nào?</legend>
             <RadioCards value={type} onChange={setType} options={options('partyType')} />
           </fieldset></div>
-          {org && <div className="op-form setup-field">{!legalSaved && <FieldHelp title={documentTitle}><p>Điền thông tin theo giấy chứng nhận. Sau khi lưu, bạn có thể tải ảnh giấy tờ để gửi duyệt.</p></FieldHelp>}
+          {org && <div className="op-form setup-field">
             <Field label="Tên pháp lý" htmlFor="setup-legal"><Input id="setup-legal" value={name} maxLength={200} onChange={e => setName(e.target.value)} /></Field>
             <Field label="Mã số thuế hoặc số đăng ký" htmlFor="setup-number"><Input id="setup-number" value={number} maxLength={30} onChange={e => setNumber(e.target.value)} /></Field>
             <Field label="Người đại diện" htmlFor="setup-rep"><Input id="setup-rep" value={representative} maxLength={150} onChange={e => setRepresentative(e.target.value)} /></Field>
           </div>}
           {!legalSaved ? <OpBtn disabled={save.isPending || !name.trim() || (org && !representative.trim())} onClick={() => persist(1)}>Lưu thông tin hồ sơ</OpBtn>
             : org || investorKyc ? <div className="setup-field">
-              <FieldHelp title={org ? documentTitle : "Xác minh danh tính"}>{org ? <ul>
-                <li>Chụp đủ các trang, giữ trọn bốn góc và tránh mờ hoặc lóa.</li>
-                <li>Định dạng JPEG, PNG hoặc WebP. Tối đa 5 MB mỗi ảnh.</li>
-              </ul> : <ul>
-                <li>Chuẩn bị thẻ căn cước và chọn nơi đủ sáng.</li>
-                <li>Dùng ứng dụng CrabShare để chụp hai mặt thẻ và ảnh khuôn mặt.</li>
-                <li>Sau khi xác minh trên điện thoại, kiểm tra kết quả trên trang này.</li>
-              </ul>}</FieldHelp>
               {org ? <PartyDocuments party={party} /> : <KycVerification />}
               {org && party.verificationStatus === 'Rejected' && <p role="status">Hồ sơ bị từ chối. {party.rejectReason} Hãy gửi lại giấy tờ.</p>}
             </div> : <p>Khách hàng cá nhân có thể tiếp tục sang bước liên hệ.</p>}
@@ -91,6 +82,7 @@ function Steps({ party }: { party: PartyResponse }) {
       </>}
       {step === 3 && i === 2 && <Link to={homePathFor(user)}>Vào trang chính</Link>}
     </section>
+    {i === 1 && step === i && <PartyVerificationGuide type={type} investor={investorKyc} />}
   </li>)}</ol>
 }
 
