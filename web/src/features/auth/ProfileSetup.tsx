@@ -7,7 +7,6 @@ import { Field, Input, OpBtn, QueryView, RadioCards, errorMessage, options, useG
 import { AccountMenu } from '../../shared/layout/SiteShell'
 import { Logo, Shell } from '../../shared/ui/kit/kit'
 import KycVerification from '../accounts/KycVerification'
-import { FileUp } from 'lucide-react'
 import PartyVerificationGuide, { organizationGuides } from './PartyVerificationGuide'
 import './profile-setup.css'
 
@@ -75,19 +74,17 @@ function Steps({ party }: { party: PartyResponse }) {
             <Field label="Mã số thuế hoặc số đăng ký" htmlFor="setup-number"><Input id="setup-number" value={number} maxLength={30} onChange={e => setNumber(e.target.value)} /></Field>
             <Field label="Người đại diện" htmlFor="setup-rep"><Input id="setup-rep" value={representative} maxLength={150} onChange={e => setRepresentative(e.target.value)} /></Field>
           </div>}
-          {certificate && !legalSaved && <div className="setup-upload-preview">
-            <h3>Tải giấy tờ</h3>
-            <div className="setup-upload-placeholder"><FileUp aria-hidden="true" /> Thêm ảnh giấy tờ</div>
-            <p>Lưu thông tin hồ sơ để tải {certificate.toLocaleLowerCase("vi-VN")}.</p>
-          </div>}
-          {!legalSaved ? <OpBtn disabled={save.isPending || !name.trim() || (org && !representative.trim())} onClick={() => persist(1)}>Lưu thông tin hồ sơ</OpBtn>
-            : org || investorKyc ? <div className="setup-field">
-              {org ? <PartyDocuments party={party} title={certificate} /> : <KycVerification />}
-              {org && party.verificationStatus === 'Rejected' && <p role="status">Hồ sơ bị từ chối. {party.rejectReason} Hãy gửi lại giấy tờ.</p>}
-            </div> : <p>Khách hàng cá nhân có thể tiếp tục sang bước liên hệ.</p>}
+          {org ? <div className="setup-field">
+            <PartyDocuments key={type} party={party} title={certificate} draft={legalSaved ? undefined : {
+              canSave: !save.isPending && !!body.legalName && !!body.representative,
+              save: () => save.mutateAsync(body),
+            }} />
+            {legalSaved && party.verificationStatus === 'Rejected' && <p role="status">Hồ sơ bị từ chối. {party.rejectReason} Hãy gửi lại giấy tờ.</p>}
+          </div> : !legalSaved ? <OpBtn disabled={save.isPending || !name.trim()} onClick={() => persist(1)}>Lưu thông tin hồ sơ</OpBtn>
+            : investorKyc ? <KycVerification /> : <p>Khách hàng cá nhân có thể tiếp tục sang bước liên hệ.</p>}
         </>}
         {i === 2 && <div className="setup-field"><FieldHelp title="Thông tin liên hệ"><p>Kiểm tra email tài khoản và cập nhật số điện thoại liên hệ của đối tác.</p></FieldHelp><Field label="Email tài khoản" htmlFor="setup-email"><Input id="setup-email" value={user.email} readOnly /></Field><Field label="Số điện thoại liên hệ" htmlFor="setup-phone"><Input id="setup-phone" type="tel" maxLength={15} value={phone} onChange={e => setPhone(e.target.value)} /></Field></div>}
-        {save.isError && <p role="alert">{errorMessage(save.error)}</p>}
+        {save.isError && !(i === 1 && org) && <p role="alert">{errorMessage(save.error)}</p>}
         <div className="setup-actions">
           {i > 0 && <OpBtn variant="ghost" disabled={save.isPending} onClick={() => setStep(i - 1)}>Quay lại</OpBtn>}
           {i === 0 && <OpBtn disabled={!name.trim()} onClick={() => setStep(1)}>Tiếp tục</OpBtn>}

@@ -10,11 +10,17 @@ import {
 
 type UploadBody = { DocType: string; Note: string; File: File }
 
-export function PartyDocuments({ party, title = "Giấy tờ pháp lý" }: { party: PartyResponse; title?: string }) {
-  const documents = useGet<PartyDocumentResponse[]>('/api/me/party/documents', undefined, { enabled: party.partyType !== 'Individual' })
+export function PartyDocuments({ party, title, draft }: {
+  party: PartyResponse
+  title?: string
+  draft?: { canSave: boolean; save: () => Promise<PartyResponse> }
+}) {
+  const documents = useGet<PartyDocumentResponse[]>('/api/me/party/documents', undefined, { enabled: !draft && party.partyType !== 'Individual' })
   const [docType, setDocType] = useState('BusinessRegistration')
   const [note, setNote] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<unknown>(null)
   const [removing, setRemoving] = useState<PartyDocumentResponse | null>(null)
   const upload = useSend<PartyDocumentResponse, UploadBody>('post', '/api/me/party/documents', {
     form: true, quietError: true, success: 'Đã gửi giấy tờ. Admin sẽ xem để xác minh hồ sơ.',
@@ -24,12 +30,26 @@ export function PartyDocuments({ party, title = "Giấy tờ pháp lý" }: { par
     quietError: true, success: 'Đã xoá giấy tờ.', onSuccess: () => setRemoving(null),
   })
 
-  if (party.partyType === 'Individual') return null
-  const locked = party.legalDossierVerified ?? (party.verificationStatus === 'Verified')
+  if (!draft && party.partyType === 'Individual') return null
+  const locked = !draft && (party.legalDossierVerified ?? (party.verificationStatus === 'Verified'))
+
+  async function submit() {
+    if (!file || submitting || (draft && !draft.canSave)) return
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      await draft?.save()
+      await upload.mutateAsync({ DocType: docType, Note: note.trim(), File: file })
+    } catch (error) {
+      setSubmitError(error)
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
-    <OpPanel title={title} subtitle="Ảnh giấy chứng nhận đăng ký, giấy phép hoặc giấy uỷ quyền. Admin đối chiếu với tên pháp lý và mã số thuế trước khi xác minh.">
-      <QueryView query={documents}>
+    <OpPanel title={title ?? 'Giấy tờ pháp lý'} subtitle="Ảnh giấy chứng nhận đăng ký, giấy phép hoặc giấy uỷ quyền. Admin đối chiếu với tên pháp lý và mã số thuế trước khi xác minh.">
+      {!draft && <QueryView query={documents}>
         {(list) => (
           <div className="op-stack">
             {list.length === 0
@@ -52,31 +72,32 @@ export function PartyDocuments({ party, title = "Giấy tờ pháp lý" }: { par
                   ))}
                 </div>
               )}
-
-            {locked
-              ? <small className="rd-muted">Hồ sơ đã được xác minh. Giấy tờ đã gửi được giữ làm căn cứ.</small>
-              : (
-                <form className="op-form" onSubmit={(e) => { e.preventDefault(); if (file) upload.mutate({ DocType: docType, Note: note.trim(), File: file }) }}>
-                  <div className="op-form__row">
-                    <Field label="Loại giấy tờ">
-                      <Select value={docType} onChange={(e) => setDocType(e.target.value)}>
-                        {options('partyDocument').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </Select>
-                    </Field>
-                    <Field label="Ghi chú">
-                      <Input value={note} maxLength={200} placeholder="Ví dụ: bản cập nhật tháng 10" onChange={(e) => setNote(e.target.value)} />
-                    </Field>
-                  </div>
-                  <OpPhoto value={file} onChange={setFile} label="Chụp hoặc chọn ảnh giấy tờ" hint="JPEG, PNG hoặc WebP, tối đa 5 MB" />
-                  {upload.isError && <OpNote tone="danger">{errorMessage(upload.error)}</OpNote>}
-                  <div className="op-formfoot">
-                    <OpBtn type="submit" disabled={!file || upload.isPending}><FileUp size={16} /> {upload.isPending ? 'Đang gửi…' : 'Gửi giấy tờ'}</OpBtn>
-                  </div>
-                </form>
-              )}
           </div>
         )}
-      </QueryView>
+      </QueryView>}
+
+      {locked ? (
+        <small className="rd-muted">Hồ sơ đã được xác minh. Giấy tờ đã gửi được giữ làm căn cứ.</small>
+      ) : (
+        <form className="op-form" onSubmit={(e) => { e.preventDefault(); void submit() }}>
+          <div className="op-form__row">
+            <Field label="Loại giấy tờ">
+              <Select value={docType} onChange={(e) => setDocType(e.target.value)}>
+                {options('partyDocument').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </Select>
+            </Field>
+            <Field label="Ghi chú">
+              <Input value={note} maxLength={200} placeholder="Ví dụ: bản cập nhật tháng 10" onChange={(e) => setNote(e.target.value)} />
+            </Field>
+          </div>
+          <OpPhoto value={file} onChange={setFile} label={title ? 'Thêm ảnh giấy tờ' : 'Chụp hoặc chọn ảnh giấy tờ'} hint="JPEG, PNG hoặc WebP, tối đa 5 MB" />
+          {submitError != null && <OpNote tone="danger">{errorMessage(submitError)}</OpNote>}
+          {draft && !draft.canSave && !submitting && <p>Điền tên pháp lý và người đại diện để gửi giấy tờ.</p>}
+          <div className="op-formfoot">
+            <OpBtn type="submit" disabled={!file || submitting || (draft && !draft.canSave)}><FileUp size={16} /> {submitting ? 'Đang gửi…' : draft ? 'Lưu hồ sơ và gửi giấy tờ' : 'Gửi giấy tờ'}</OpBtn>
+          </div>
+        </form>
+      )}
 
       {removing && (
         <OpConfirm
