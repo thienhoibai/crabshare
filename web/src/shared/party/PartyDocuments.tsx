@@ -10,7 +10,7 @@ import {
 
 type UploadBody = { DocType: string; Note: string; File: File }
 
-export function PartyDocuments({ party }: { party: PartyResponse }) {
+export function PartyDocuments({ party, title = "Giấy tờ pháp lý" }: { party: PartyResponse; title?: string }) {
   const documents = useGet<PartyDocumentResponse[]>('/api/me/party/documents', undefined, { enabled: party.partyType !== 'Individual' })
   const [docType, setDocType] = useState('BusinessRegistration')
   const [note, setNote] = useState('')
@@ -28,7 +28,7 @@ export function PartyDocuments({ party }: { party: PartyResponse }) {
   const locked = party.legalDossierVerified ?? (party.verificationStatus === 'Verified')
 
   return (
-    <OpPanel title="Giấy tờ pháp lý" subtitle="Ảnh giấy chứng nhận đăng ký, giấy phép hoặc giấy uỷ quyền. Admin đối chiếu với tên pháp lý và mã số thuế trước khi xác minh.">
+    <OpPanel title={title} subtitle="Ảnh giấy chứng nhận đăng ký, giấy phép hoặc giấy uỷ quyền. Admin đối chiếu với tên pháp lý và mã số thuế trước khi xác minh.">
       <QueryView query={documents}>
         {(list) => (
           <div className="op-stack">

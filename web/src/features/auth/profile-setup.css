@@ -184,3 +184,25 @@ html:has(.setup-workspace), body:has(.setup-workspace) { overflow-x: clip; }
 .setup-guide-photo-tips { display: flex; flex-wrap: wrap; gap: .5rem .875rem; }
 .setup-guide-photo-tips span { display: inline-flex; align-items: center; gap: .375rem; color: var(--muted); font-size: .875rem; }
 .setup-guide-photo-tips svg { width: 1rem; height: 1rem; color: var(--setup-action); }
+
+.setup-guide-certificate {
+  display: block;
+  width: min(100%, 12rem);
+  height: auto;
+  margin-inline: auto;
+  border: 1px solid var(--line);
+  border-radius: .375rem;
+}
+.setup-upload-preview { display: grid; gap: .5rem; }
+.setup-upload-preview h3 { margin: 0; font-weight: 650; }
+.setup-upload-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: .5rem;
+  border: 1px dashed var(--line);
+  border-radius: .5rem;
+  padding: .85rem;
+  color: var(--muted);
+}
+.setup-upload-preview p { margin: 0; color: var(--muted); font-size: .875rem; }
