@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
 using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Errors;
@@ -22,7 +23,7 @@ public sealed class UploadPartyDocumentRequest
 {
     [Required, RegularExpression("^(BusinessRegistration|License|Authorization|Other)$")] public string DocType { get; set; } = "BusinessRegistration";
     [StringLength(200)] public string? Note { get; set; }
-    /// <summary>Ảnh chụp giấy tờ (JPEG, PNG hoặc WebP, tối đa 5 MB).</summary>
+    /// <summary>Giấy tờ dạng ảnh JPEG, PNG, WebP hoặc PDF, tối đa 5 MB.</summary>
     [Required] public IFormFile? File { get; set; }
 }
 
@@ -34,6 +35,7 @@ public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, Party
     IFileStorage files, TimeProvider clock, IAuditLog audit)
 {
     public const int MaxActiveDocuments = 10;
+    private const int MaxPdfBytes = 5 * 1024 * 1024;
 
     public async Task<IReadOnlyList<PartyDocumentResponse>> ListMineAsync(CancellationToken ct)
         => await ListAsync(await parties.PartyIdOfUserAsync(me.UserId, ct), ct);
@@ -44,11 +46,11 @@ public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, Party
         var partyType = await db.Parties.Where(p => p.PartyId == partyId).Select(p => p.PartyType).SingleAsync(ct);
         RequireOrganization(partyType);
 
-        var image = await images.ReadAsync(req.File!, ct);
+        var (bytes, contentType, extension, sha256) = await ReadDocumentAsync(req.File!, ct);
         var now = clock.GetUtcNow();
         StoredFile stored;
-        await using (var stream = new MemoryStream(image.Bytes))
-            stored = await files.SaveAsync(stream, "document" + image.Extension, image.ContentType, $"party-documents/{now:yyyy/MM}", ct);
+        await using (var stream = new MemoryStream(bytes, writable: false))
+            stored = await files.SaveAsync(stream, "document" + extension, contentType, $"party-documents/{now:yyyy/MM}", ct);
 
         try
         {
@@ -62,7 +64,7 @@ public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, Party
 
                 var doc = new PartyDocument
                 {
-                    PartyId = partyId, DocType = req.DocType, FileUri = stored.Uri, ContentType = image.ContentType, Sha256 = image.Sha256,
+                    PartyId = partyId, DocType = req.DocType, FileUri = stored.Uri, ContentType = contentType, Sha256 = sha256,
                     Note = string.IsNullOrWhiteSpace(req.Note) ? null : req.Note.Trim(), UploadedBy = me.UserId, UploadedAt = now,
                 };
                 db.PartyDocuments.Add(doc);
@@ -83,6 +85,36 @@ public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, Party
             await files.DeleteAsync(stored.Uri, CancellationToken.None);
             throw;
         }
+    }
+
+    private async Task<(byte[] Bytes, string ContentType, string Extension, string Sha256)> ReadDocumentAsync(IFormFile file, CancellationToken ct)
+    {
+        if (!string.Equals(file.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            var image = await images.ReadAsync(file, ct);
+            return (image.Bytes, image.ContentType, image.Extension, image.Sha256);
+        }
+
+        if (file.Length is <= 0 or > MaxPdfBytes)
+            throw new AppException(400, "party.invalid_pdf", "Tệp PDF phải có dung lượng từ 1 byte đến 5 MB.");
+
+        var bytes = new byte[(int)file.Length];
+        await using var input = file.OpenReadStream();
+        try
+        {
+            await input.ReadExactlyAsync(bytes, ct);
+        }
+        catch (EndOfStreamException)
+        {
+            throw new AppException(400, "party.invalid_pdf", "Tệp PDF chưa đầy đủ. Hãy thử tải lại.");
+        }
+
+        var end = bytes.Length;
+        while (end > 0 && bytes[end - 1] is 0 or 9 or 10 or 12 or 13 or 32) end--;
+        if (!bytes.AsSpan().StartsWith("%PDF-"u8) || !bytes.AsSpan(0, end).EndsWith("%%EOF"u8))
+            throw new AppException(400, "party.invalid_pdf", "Tệp đã chọn không phải PDF hợp lệ hoặc bị thiếu dữ liệu.");
+
+        return (bytes, "application/pdf", ".pdf", Convert.ToHexStringLower(SHA256.HashData(bytes)));
     }
 
     public async Task RemoveMineAsync(long documentId, CancellationToken ct)

@@ -21,7 +21,7 @@
 Cách làm:
 - `ContractTemplateDocuments` đọc mẫu từ `Reference/` và so SHA-256 với `content_hash` (mẫu bị sửa → 500 `contract.template_unavailable`).
 - `ContractPdfRenderer` dựng PDF bằng **SkiaSharp có sẵn** (không thêm thư viện), font Plus Jakarta Sans (OFL, đủ dấu tiếng Việt) lấy từ `web/public/assets/fonts`, copy vào `Reference/Fonts`. Trang đầu có khung **"BẢN DEMO — MẪU HỢP ĐỒNG CHƯA ĐƯỢC RÀ SOÁT PHÁP LÝ"**; chân trang có số hợp đồng, mẫu, số trang.
-- `ContractFileStore` lưu từng phiên bản tại `contracts/{số hợp đồng}/{sha256}.pdf` dưới `Storage:RootPath` (Azure: `/home/data/storage`). Tên file là mã băm nên không cần cột mới; không đi qua `IFileStorage` vì Cloudinary chỉ nhận ảnh.
+- `ContractFileStore` lưu từng phiên bản tại `contracts/{số hợp đồng}/{sha256}.pdf` dưới `Storage:RootPath` (Azure: `/home/data/storage`). Tên file là mã băm nên không cần cột mới. Hợp đồng dùng kho riêng do ContractFileStore quản lý.
 - Số hợp đồng `HD{yyyyMMdd}-{contribution_id:6}`. `{{standard_cost.hash}}` = SHA-256 bản JSON các dòng chi phí chuẩn đã khoá (bảng không có cột băm).
 - `ContractVoiding.VoidUnsignedAsync`: hợp đồng chưa đủ chữ ký → `Void` khi giữ chỗ hết hạn (job TH-07), nhà đầu tư huỷ giữ chỗ, hoặc lô huỷ vì thiếu vốn. Bản `FullySigned` giữ nguyên làm hồ sơ.
 - Thả giống cần mọi khoản `Confirmed` có hợp đồng `FullySigned` (`Batches/FundingReadiness`).

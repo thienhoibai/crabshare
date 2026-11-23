@@ -35,6 +35,42 @@ public sealed class PartyDocumentTests(Br15Fixture f) : IClassFixture<Br15Fixtur
         return (userId, partyId);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Pdf_is_downloadable_for_owner_and_admin_and_renamed_images_are_rejected(bool valid)
+    {
+        var (userId, partyId) = await NewCompanyAsync();
+        using var company = f.Client(userId, Roles.Customer, Roles.Investor);
+        using var buffer = new MemoryStream();
+        using (var pdf = SkiaSharp.SKDocument.CreatePdf(buffer))
+        {
+            pdf.BeginPage(200, 200).Clear(SkiaSharp.SKColors.White);
+            pdf.EndPage();
+            pdf.Close();
+        }
+        var bytes = valid ? buffer.ToArray() : Br15Scenario.Jpeg("renamed-photo");
+        var file = new ByteArrayContent(bytes);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        using var form = new MultipartFormDataContent { { file, "File", "certificate.pdf" } };
+        var upload = await company.PostAsync("/api/me/party/documents", form);
+        Assert.Equal(valid ? HttpStatusCode.Created : HttpStatusCode.BadRequest, upload.StatusCode);
+        if (!valid) return;
+
+        var result = await upload.Content.ReadFromJsonAsync<JsonElement>();
+        var id = result.GetProperty("documentId").GetInt64();
+        using var admin = f.Admin();
+        using var ownerFile = await company.GetAsync($"/api/me/party/documents/{id}/file");
+        using var adminFile = await admin.GetAsync($"/api/admin/parties/{partyId}/documents/{id}/file");
+        foreach (var downloaded in new[] { ownerFile, adminFile })
+        {
+            Assert.Equal(HttpStatusCode.OK, downloaded.StatusCode);
+            Assert.Equal("application/pdf", downloaded.Content.Headers.ContentType!.MediaType);
+            Assert.Equal("attachment", downloaded.Content.Headers.ContentDisposition!.DispositionType);
+            Assert.Equal(bytes, await downloaded.Content.ReadAsByteArrayAsync());
+        }
+    }
+
     [Fact]
     public async Task Organization_sends_its_papers_and_the_admin_sees_them_before_deciding()
     {

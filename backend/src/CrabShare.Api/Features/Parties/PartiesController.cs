@@ -22,7 +22,7 @@ public sealed class MyPartyController(PartyService parties, PartyDocumentService
     public async Task<ActionResult<IReadOnlyList<PartyDocumentResponse>>> Documents(CancellationToken ct) => Ok(await documents.ListMineAsync(ct));
 
     [HttpPost("party/documents"), Consumes("multipart/form-data"), RequestSizeLimit(DocumentLimit)]
-    [EndpointSummary("Gửi ảnh giấy tờ pháp lý; đối tác chưa xác minh chuyển sang chờ Admin xem (BR-009)")]
+    [EndpointSummary("Gửi tệp giấy tờ pháp lý; đối tác chưa xác minh chuyển sang chờ Admin xem (BR-009)")]
     public async Task<ActionResult<PartyDocumentResponse>> UploadDocument([FromForm] UploadPartyDocumentRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await documents.UploadMineAsync(req, ct));
 
@@ -31,7 +31,9 @@ public sealed class MyPartyController(PartyService parties, PartyDocumentService
     public async Task<IActionResult> DocumentFile(long documentId, CancellationToken ct)
     {
         var (content, type) = await documents.MyFileAsync(documentId, ct);
-        return File(content, type);
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        return type == "application/pdf" ? File(content, type, $"giay-to-{documentId}.pdf") : File(content, type);
     }
 
     [EndpointSummary("Gỡ tài liệu khỏi hồ sơ")]
@@ -131,7 +133,9 @@ public sealed class AdminPartiesController(PartyService parties, PartyDocumentSe
     public async Task<IActionResult> DocumentFile(long partyId, long documentId, CancellationToken ct)
     {
         var (content, type) = await documents.AdminFileAsync(partyId, documentId, ct);
-        return File(content, type);
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        return type == "application/pdf" ? File(content, type, $"giay-to-{documentId}.pdf") : File(content, type);
     }
 
     [HttpPost]

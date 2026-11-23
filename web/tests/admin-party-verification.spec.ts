@@ -1,5 +1,5 @@
 import type { PartyDocumentResponse, PartyDossierResponse, PartyResponse } from '../src/shared/api/api.gen'
-import { expect, file, PNG, signIn, test } from './support/app'
+import { expect, file, PNG, signIn, test, TOKEN } from './support/app'
 import { mockAdmin } from './support/admin'
 
 test('admin chỉ có thể xác minh tổ chức có tài khoản sau khi tổ chức gửi giấy tờ', async ({ page, api }) => {
@@ -13,6 +13,7 @@ test('admin chỉ có thể xác minh tổ chức có tài khoản sau khi tổ 
   const document: PartyDocumentResponse = {
     documentId: 5, docType: 'BusinessRegistration', contentType: 'image/png', note: null, uploadedAt: '2026-11-18T03:00:00Z',
   }
+  const license: PartyDocumentResponse = { ...document, documentId: 6, docType: 'License', contentType: 'application/pdf' }
   const dossier: PartyDossierResponse = {
     accounts: [{
       userId: 3, fullName: 'Nguyễn An', email: 'dai-dien@example.test', phone: null, status: 'Active',
@@ -24,6 +25,7 @@ test('admin chỉ có thể xác minh tổ chức có tài khoản sau khi tổ 
   api.get(endpoint, () => party)
   api.get(`${endpoint}/dossier`, () => dossier)
   api.get(`${endpoint}/documents/5/file`, file(PNG, 'image/png'))
+  api.get(`${endpoint}/documents/6/file`, file('%PDF-1.4\n%%EOF\n', 'application/pdf'))
   api.post(`${endpoint}/verify`, () => {
     party.verificationStatus = 'Verified'
     party.legalDossierVerified = true
@@ -35,13 +37,19 @@ test('admin chỉ có thể xác minh tổ chức có tài khoản sau khi tổ 
   await expect(page.getByText(/Đối tác chưa gửi giấy tờ pháp lý/)).toBeVisible()
   await expect(verify).toBeDisabled()
 
-  dossier.documents = [document]
+  dossier.documents = [document, license]
   await page.reload()
   await page.getByRole('button', { name: 'Xem lớn: Giấy chứng nhận đăng ký' }).click()
   const preview = page.getByRole('dialog', { name: 'Giấy chứng nhận đăng ký' })
   await expect(preview.getByRole('img', { name: 'Giấy chứng nhận đăng ký' })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(preview).toBeHidden()
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: /Tải PDF/ }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/\.pdf$/)
+  expect(api.sent('GET', `${endpoint}/documents/6/file`)).toMatchObject([{ auth: `Bearer ${TOKEN}` }])
 
   await verify.click()
   await page.getByRole('dialog', { name: 'Xác minh đối tác' }).getByRole('button', { name: 'Xác minh' }).click()

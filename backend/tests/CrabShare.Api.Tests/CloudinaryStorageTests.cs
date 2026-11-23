@@ -83,6 +83,43 @@ public sealed class CloudinaryStorageTests
         await using var stream = await services.GetRequiredService<IFileStorage>().OpenReadAsync("cloudinary:test-cloud/image/authenticated/crabshare/evidence/test.png", default);
         using var result = new MemoryStream(); await stream.CopyToAsync(result); Assert.Equal(new byte[] { 8, 9, 10 }, result.ToArray());
     }
+    [Fact]
+    public async Task Pdf_is_uploaded_and_downloaded_as_an_authenticated_asset()
+    {
+        var bytes = "%PDF-1.7\n%%EOF\n"u8.ToArray();
+        string? publicId = null;
+        using var services = Services(async request =>
+        {
+            if (request.Method == HttpMethod.Post)
+            {
+                Assert.Equal("/v1_1/test-cloud/image/upload", request.RequestUri!.AbsolutePath);
+                var parts = Assert.IsType<MultipartFormDataContent>(request.Content)
+                    .ToDictionary(p => p.Headers.ContentDisposition!.Name!.Trim('"'));
+                Assert.Equal("authenticated", await parts["type"].ReadAsStringAsync());
+                Assert.Equal("application/pdf", parts["file"].Headers.ContentType!.MediaType);
+                Assert.Equal(bytes, await parts["file"].ReadAsByteArrayAsync());
+                publicId = await parts["public_id"].ReadAsStringAsync();
+                return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(
+                    new { public_id = publicId, format = "pdf", resource_type = "image", type = "authenticated" })) };
+            }
+
+            Assert.Equal("/v1_1/test-cloud/image/download", request.RequestUri!.AbsolutePath);
+            var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(request.RequestUri.Query);
+            Assert.Equal(publicId, query["public_id"].ToString());
+            Assert.Equal("pdf", query["format"].ToString());
+            Assert.Equal("authenticated", query["type"].ToString());
+            return new(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) };
+        });
+        var storage = services.GetRequiredService<IFileStorage>();
+        using var input = new MemoryStream(bytes);
+        var saved = await storage.SaveAsync(input, "certificate.pdf", "application/pdf", "party-documents/test", default);
+        Assert.Equal($"cloudinary:test-cloud/image/authenticated/{publicId}.pdf", saved.Uri);
+        await using var read = await storage.OpenReadAsync(saved.Uri, default);
+        using var output = new MemoryStream();
+        await read.CopyToAsync(output);
+        Assert.Equal(bytes, output.ToArray());
+    }
+
     [Theory]
     [InlineData("cloudinary:other-cloud/image/authenticated/crabshare/test.png")]
     [InlineData("https://attacker.invalid/test.png")]

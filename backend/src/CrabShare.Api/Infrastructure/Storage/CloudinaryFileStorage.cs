@@ -32,19 +32,19 @@ public sealed class CloudinaryStorageOptions
     }
 }
 
-/// <summary>New images live in Cloudinary. Stable identifiers keep secrets/signed URLs out of SQL.
+/// <summary>New uploads live in Cloudinary. Stable identifiers keep secrets/signed URLs out of SQL.
 /// Existing relative file paths continue to be read/deleted from the old local store.</summary>
 public sealed class CloudinaryFileStorage(CloudinaryStorageOptions options, LocalFileStorage legacy, HttpClient http, TimeProvider clock) : IFileStorage
 {
-    private const int MaxImageBytes = 10 * 1024 * 1024;
+    private const int MaxAssetBytes = 10 * 1024 * 1024;
     private string Prefix => $"cloudinary:{options.CloudName}/image/authenticated/";
     private string Endpoint(string action) => $"https://api.cloudinary.com/v1_1/{options.CloudName}/image/{action}";
 
     public async Task<StoredFile> SaveAsync(Stream content, string fileName, string contentType, string folder, CancellationToken ct)
     {
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
-        var expected = extension switch { ".jpg" or ".jpeg" => "image/jpeg", ".png" => "image/png", ".webp" => "image/webp", _ => null };
-        if (expected is null || contentType != expected) throw new AppException(400, "storage.image_format", "Ảnh cần đúng định dạng JPEG, PNG hoặc WebP.");
+        var expected = extension switch { ".jpg" or ".jpeg" => "image/jpeg", ".png" => "image/png", ".webp" => "image/webp", ".pdf" => "application/pdf", _ => null };
+        if (expected is null || contentType != expected) throw new AppException(400, "storage.image_format", "Tệp cần đúng định dạng JPEG, PNG, WebP hoặc PDF.");
         if (!Regex.IsMatch(folder, @"\A[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*\z") || folder.Length > 200)
             throw new UnauthorizedAccessException("Thư mục ảnh không hợp lệ.");
         using var buffer = new MemoryStream();
@@ -52,15 +52,16 @@ public sealed class CloudinaryFileStorage(CloudinaryStorageOptions options, Loca
         int read;
         while ((read = await content.ReadAsync(block, ct)) != 0)
         {
-            if (buffer.Length + read > MaxImageBytes) throw new AppException(400, "storage.image_size", "Ảnh vượt dung lượng lưu trữ cho phép.");
+            if (buffer.Length + read > MaxAssetBytes) throw new AppException(400, "storage.image_size", "Tệp vượt dung lượng lưu trữ cho phép.");
             await buffer.WriteAsync(block.AsMemory(0, read), ct);
         }
-        if (buffer.Length == 0) throw new AppException(400, "storage.empty_image", "Ảnh không được rỗng.");
+        if (buffer.Length == 0) throw new AppException(400, "storage.empty_image", "Tệp không được rỗng.");
         var bytes = buffer.ToArray();
         var publicId = $"crabshare/{folder}/{Guid.NewGuid():N}";
         using var multipart = new MultipartFormDataContent();
-        var photo = new ByteArrayContent(bytes); photo.Headers.ContentType = new MediaTypeHeaderValue(contentType);
-        multipart.Add(photo, "file", "capture" + extension);
+        var asset = new ByteArrayContent(bytes);
+        asset.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        multipart.Add(asset, "file", "document" + extension);
         multipart.Add(new StringContent(publicId), "public_id");
         multipart.Add(new StringContent("authenticated"), "type");
         multipart.Add(new StringContent("false"), "overwrite");
@@ -73,7 +74,7 @@ public sealed class CloudinaryFileStorage(CloudinaryStorageOptions options, Loca
             || result.GetProperty("type").GetString() != "authenticated")
             throw Unavailable("Cloudinary trả về định danh ảnh không đúng yêu cầu.");
         var format = result.GetProperty("format").GetString();
-        if (format is not ("jpg" or "jpeg" or "png" or "webp")) throw Unavailable("Cloudinary trả về định dạng ảnh không được hỗ trợ.");
+        if (format is not ("jpg" or "jpeg" or "png" or "webp" or "pdf")) throw Unavailable("Cloudinary trả về định dạng ảnh không được hỗ trợ.");
         return new(Prefix + publicId + "." + format, Convert.ToHexStringLower(SHA256.HashData(bytes)), bytes.Length, contentType);
     }
 
@@ -124,7 +125,7 @@ public sealed class CloudinaryFileStorage(CloudinaryStorageOptions options, Loca
     {
         if (!uri.StartsWith(Prefix, StringComparison.Ordinal)) throw new UnauthorizedAccessException("Ảnh không thuộc kho Cloudinary đã cấu hình.");
         var path = uri[Prefix.Length..];
-        if (!Regex.IsMatch(path, @"\Acrabshare/[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*\.(?:jpg|jpeg|png|webp)\z"))
+        if (!Regex.IsMatch(path, @"\Acrabshare/[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*\.(?:jpg|jpeg|png|webp|pdf)\z"))
             throw new UnauthorizedAccessException("Định danh ảnh không hợp lệ.");
         var dot = path.LastIndexOf('.'); return (path[..dot], path[(dot + 1)..]);
     }
