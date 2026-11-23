@@ -286,6 +286,45 @@ public sealed class DeviceIngestTests(DeviceFixture f) : IClassFixture<DeviceFix
     }
 
     [Fact]
+    public async Task Wifi_credentials_are_protected_delivered_once_and_not_returned_to_the_operator()
+    {
+        var set = await Br15Scenario.CrabsAsync(f, 1);
+        var (code, key) = await RegisterAsync(new { deviceCode = $"ST-{f.Next()}", deviceType = "Station",
+            operatorId = set.Batch.Farmer.OperatorId, siteId = await QcStationSiteAsync(set.Batch.Farmer) });
+        using var farmer = set.Batch.Farmer.Client(f);
+        using var device = Device(key);
+        var path = $"/api/operators/me/devices/{code}/wifi";
+        var reportPath = $"/api/devices/{code}/station-state";
+        const string password = "only-a-fixture-password";
+        var state = new { hardwareOnline = true, busy = false, phase = "ready", wifiConfigReady = true,
+            wifiOutcome = (object?)null };
+        await Br15Fixture.Body(await Br15Fixture.PostJson(device, reportPath, state with { busy = true }));
+        Assert.Equal(HttpStatusCode.Conflict, (await Br15Fixture.PostJson(farmer, path, new { ssid = "Farm wifi", password })).StatusCode);
+        await Br15Fixture.Body(await Br15Fixture.PostJson(device, reportPath, state));
+        var queued = await Br15Fixture.Body(await Br15Fixture.PostJson(farmer, path, new { ssid = "Farm wifi", password }));
+        var id = queued.GetProperty("id").GetInt64();
+        Assert.DoesNotContain(password, queued.ToString());
+        await using (var db = f.OpenDb())
+        {
+            var stored = await db.DeviceCommands.SingleAsync(c => c.DeviceCommandId == id);
+            Assert.NotNull(stored.ProtectedPayload);
+            Assert.DoesNotContain(password, stored.ProtectedPayload!);
+        }
+        var oldPoll = await Br15Fixture.Body(await device.GetAsync($"/api/devices/{code}/commands"));
+        Assert.Empty(oldPoll.EnumerateArray());
+        var delivered = await Br15Fixture.Body(await Br15Fixture.PostJson(device, reportPath, state));
+        Assert.Equal(password, delivered.GetProperty("wifi").GetProperty("password").GetString());
+        var repeated = await Br15Fixture.Body(await Br15Fixture.PostJson(device, reportPath, state));
+        Assert.Equal(JsonValueKind.Null, repeated.GetProperty("wifi").ValueKind);
+        await using (var db = f.OpenDb()) Assert.Null((await db.DeviceCommands.SingleAsync(c => c.DeviceCommandId == id)).ProtectedPayload);
+        await Br15Fixture.Body(await Br15Fixture.PostJson(device, reportPath,
+            state with { wifiOutcome = new { id, connected = true, message = "Đã kết nối" } }));
+        var status = await Br15Fixture.Body(await farmer.GetAsync(path));
+        Assert.Equal("Accepted", status.GetProperty("status").GetString());
+        Assert.DoesNotContain(password, status.ToString());
+    }
+
+    [Fact]
     public async Task Rail_camera_image_must_be_in_its_rack_and_missing_crab_raises_alert_and_capture_request()
     {
         var set = await Br15Scenario.CrabsAsync(f, 2);

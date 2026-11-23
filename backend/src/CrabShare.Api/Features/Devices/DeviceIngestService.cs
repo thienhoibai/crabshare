@@ -379,7 +379,7 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
     public async Task<IReadOnlyList<DeviceCommandResponse>> CommandsAsync(string deviceCode, string? key, CancellationToken ct)
     {
         var device = await AuthenticateAsync(deviceCode, key, ct);
-        return await db.DeviceCommands.AsNoTracking().Where(c => c.DeviceId == device.DeviceId && c.Status == "Pending" && c.CommandType != "StartMeasurement").OrderBy(c => c.DeviceCommandId)
+        return await db.DeviceCommands.AsNoTracking().Where(c => c.DeviceId == device.DeviceId && c.Status == "Pending" && c.CommandType != "StartMeasurement" && c.CommandType != "ConfigureWifi").OrderBy(c => c.DeviceCommandId)
             .Select(c => new DeviceCommandResponse(c.DeviceCommandId, c.CommandType, c.BoxCode, c.CreatedAt)).ToListAsync(ct);
     }
 
@@ -391,7 +391,7 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
         await AuthenticateAsync(deviceCode ?? device.DeviceCode, key, ct);
         if (deviceCode is not null && deviceCode != device.DeviceCode)
             throw new ForbiddenException("device.command_other_device", "Lệnh không thuộc thiết bị này.");
-        if (command.CommandType == "StartMeasurement")
+        if (command.CommandType is "StartMeasurement" or "ConfigureWifi")
             throw new BusinessRuleException("device.station_command_protocol", "Lệnh cân được xác nhận qua trạng thái trạm.");
         if (command.Status != "Pending") return;
         command.Status = "Acked";
