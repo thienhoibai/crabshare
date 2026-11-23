@@ -637,6 +637,8 @@ export interface CrabUnitResponse {
   receivedAt: string
   boxes: BoxHistoryResponse[]
   events: InventoryEventResponse[]
+  gradeAiTag?: string | null
+  gradeAiPrefix?: string | null
 }
 
 export interface CreateBoxRequest {
@@ -947,6 +949,7 @@ export interface FundingCloseResult {
 export interface FundingEligibility {
   kycVerified: boolean
   riskAcknowledged: boolean
+  legalDossierVerified?: boolean | null
 }
 
 export interface GoodsReceiptRequest {
@@ -1217,6 +1220,7 @@ export interface MeasurementValuesRequest {
 }
 
 export interface MeResponse {
+  customerProfileRequired?: boolean
   userId: number
   email: string
   fullName: string
@@ -1289,15 +1293,30 @@ export interface OfferResponse {
 }
 
 export interface OpenSessionRequest {
-  crabCode: string
+  crabCode?: string | null
+  batchCode?: string | null
+  gradeAiPrefix?: string | null
+  crabNumber?: number | null
   stationCode?: string | null
   procedure?: string
+}
+
+export interface GradeAiLabelsRequest {
+  prefix: string
+  labels: { crabCode: string; crabNumber: number }[]
+}
+
+export interface GradeAiLabelsResponse {
+  prefix: string
+  assigned: number
 }
 
 export interface OpenSessionResponse {
   sessionNo: string
   crabTag: string
   openedAt: string
+  batchCode: string
+  bindingVersion: number
 }
 
 export interface OperatorDashboardResponse {
@@ -1572,6 +1591,7 @@ export interface PartyResponse {
   isPlatform: boolean
   roles: PartnerRoleResponse[]
   sites: PartySiteResponse[]
+  legalDossierVerified?: boolean
 }
 
 export interface PartySiteResponse {
@@ -1649,6 +1669,8 @@ export interface PayoutProfileResponse {
   ownerType: string
   expectedHolderName: string
   account: PayoutAccountResponse | null
+  recipientVerified?: boolean
+  verificationMethod?: string
 }
 
 export interface PayoutStatus {
@@ -1769,6 +1791,7 @@ export interface PreorderLineResponse {
 }
 
 export interface PreorderRequest {
+  customerType?: string | null
   batchCode: string
   deliverySiteId?: number
   lines: PreorderLineRequest[]
@@ -2125,6 +2148,7 @@ export interface SessionResponse {
   hasWhiteImage: boolean
   hasRedImage: boolean
   failReason: string | null
+  gradeAiTag?: string | null
 }
 
 export interface SettlementBreakdown {
@@ -2497,6 +2521,7 @@ export interface UpdateBoxRequest {
 }
 
 export interface UpdatePartyRequest {
+  completeCustomerProfile?: boolean
   legalName: string
   partyType: string
   registrationNo?: string | null

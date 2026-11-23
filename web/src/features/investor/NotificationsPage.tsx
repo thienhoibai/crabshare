@@ -24,7 +24,7 @@ export default function NotificationsPage() {
 
   return (
     <>
-      <OpHeading eyebrow="Giấy tờ và tiền" title="Thông báo" />
+      <OpHeading title="Thông báo" description="Các cập nhật về Lô và khoản góp của bạn." />
 
       <QueryView query={feed}>
         {(data) => {
@@ -40,9 +40,11 @@ export default function NotificationsPage() {
                       <article key={n.id} className="inv-notice">
                         <OpIcon tone={tone}><Icon size={20} /></OpIcon>
                         <div>
-                          <b>{n.title}{n.amount !== null ? ` · ${formatVnd(n.amount)}` : ''}</b>
+                          <b>{n.title}{n.amount !== null ? `: ${formatVnd(n.amount)}` : ''}</b>
                           <p>{n.body}</p>
-                          {n.canOpenPortfolio && <a className="op-link" href={portfolioHref(n.batchCode)}>Mở Lô {n.batchCode}</a>}
+                          {n.canOpenPortfolio && <a className="op-link" href={portfolioHref(n.batchCode,
+                            n.type === 'SettlementPublished' || n.type === 'PayoutSucceeded' ? 'quyet-toan'
+                              : n.type === 'ProductionReceived' || n.type === 'AlertRaised' ? 'nhat-trinh' : undefined)}>Mở Lô {n.batchCode}</a>}
                         </div>
                         <time dateTime={n.at}>{formatDateTime(n.at)}</time>
                       </article>

@@ -73,11 +73,11 @@ Mã QR của hệ thống là mã thử nghiệm, không có ngân hàng thật 
 | Nơi | Cấu hình | Tác dụng |
 |---|---|---|
 | API (App Service) | `Demo__Tools=true` | Mở `POST /api/dev/payments/simulate` và `POST /api/dev/settlements/{id}/end-feedback-window`. Tắt thì hai địa chỉ này trả 404 |
-| Web (lúc build) | `VITE_DEMO_TOOLS=true` | Hiện nút "Giả lập đã chuyển khoản" ở bước thanh toán và công cụ kết thúc hạn góp ý ở trang quyết toán |
+| Web (lúc build) | `VITE_DEMO_TOOLS=true` | Hiện nút "Giả lập đã chuyển khoản" ở bước thanh toán của khách hàng, nhà đầu tư và công cụ kết thúc hạn góp ý ở trang quyết toán. `web/vercel.json` bật sẵn cho các bản deploy demo trên Vercel |
 
-Chỉ bật trên môi trường demo hoặc kiểm thử không có tiền thật: khi bật, người đã đăng nhập tự đánh dấu "đã thanh toán" được cho mã chuyển khoản của mình. Muốn tắt thì gỡ `Demo__Tools` trên App Service và build lại web không có `VITE_DEMO_TOOLS`. Nút đăng nhập nhanh bằng tài khoản mẫu vẫn chỉ có khi chạy dev.
+Chỉ bật trên môi trường demo hoặc kiểm thử không có tiền thật: khi bật, người đã đăng nhập tự đánh dấu "đã thanh toán" được cho mã chuyển khoản của mình. Muốn tắt thì gỡ `Demo__Tools` trên App Service, đổi `buildCommand` trong `web/vercel.json` về `npm run build`, gỡ `VITE_DEMO_TOOLS` khỏi biến môi trường Vercel nếu có và deploy lại. Nút đăng nhập nhanh bằng tài khoản mẫu vẫn chỉ có khi chạy dev.
 
-Khi deploy web bằng tay: `vercel deploy --build-env VITE_DEMO_TOOLS=true`. Workflow `deploy-web.yml` lấy biến môi trường từ project Vercel, nên muốn các lần deploy tự động cũng có công cụ demo thì thêm `VITE_DEMO_TOOLS=true` vào Environment Variables của project.
+`web/vercel.json` đặt `buildCommand` là `VITE_DEMO_TOOLS=true npm run build`, nên cả deploy tay và workflow `deploy-web.yml` đều có công cụ demo, không phụ thuộc việc đã khai báo biến này trên dashboard Vercel hay chưa. Build ngoài Vercel vẫn cần tự đặt `VITE_DEMO_TOOLS=true` nếu muốn bật.
 
 ## Optional container on an existing server
 

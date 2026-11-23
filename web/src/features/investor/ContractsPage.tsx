@@ -26,7 +26,7 @@ export default function ContractsPage() {
 
   return (
     <>
-      <OpHeading eyebrow="Giấy tờ và tiền" title="Hợp đồng" description="Người nuôi ký trước, bạn ký sau." />
+      <OpHeading title="Hợp đồng" description="Người nuôi ký trước, bạn ký sau." />
 
       <QueryView query={list}>
         {(rows) => rows.length === 0 ? (

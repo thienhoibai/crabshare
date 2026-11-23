@@ -382,7 +382,7 @@ Kiểu dữ liệu ở `api.gen.ts`. `[form]` là multipart/form-data.
 | GET | `/api/me/party` |  |  | PartyResponse | Hồ sơ đối tác của tôi, các vai trò và địa điểm |
 | GET | `/api/me/related-parties` |  |  | RelatedPartyResponse[] | Bên liên quan của người nuôi (BR-008) |
 | GET | `/api/me/sites` | siteType |  | PartySiteResponse[] | Địa điểm của tôi: trại, trạm kiểm phẩm, kho, địa chỉ giao |
-| POST | `/api/me/party/documents` |  | { DocType?: string Note?: string File?: IFormFile } [form] | PartyDocumentResponse | Gửi ảnh giấy tờ pháp lý; đối tác chưa xác minh chuyển sang chờ Admin xem (BR-009) |
+| POST | `/api/me/party/documents` |  | { DocType?: string Note?: string File?: IFormFile } [form] | PartyDocumentResponse | Gửi tệp giấy tờ pháp lý; đối tác chưa xác minh chuyển sang chờ Admin xem (BR-009) |
 | POST | `/api/me/related-parties` |  | RelatedPartyRequest | RelatedPartyResponse |  |
 | POST | `/api/me/sites` |  | SiteRequest | PartySiteResponse |  |
 | PUT | `/api/me/party` |  | UpdatePartyRequest | PartyResponse | Sửa hồ sơ đối tác; đổi tên pháp lý thì phải xác minh lại |

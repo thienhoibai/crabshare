@@ -26,6 +26,7 @@ public sealed class PartyService(AppDbContext db, ICurrentUser me, PartyDirector
     {
         var id = await db.InTransactionAsync(async () =>
         {
+            await audit.LockAsync(ct);
             var partyId = await parties.PartyIdOfUserAsync(me.UserId, ct);
             var party = await db.Parties.SingleAsync(p => p.PartyId == partyId, ct);
             if (req.PartyType != "Individual" && string.IsNullOrWhiteSpace(req.Representative))
@@ -33,6 +34,7 @@ public sealed class PartyService(AppDbContext db, ICurrentUser me, PartyDirector
             var before = Snapshot(party);
             var legalChanged = party.LegalName != req.LegalName.Trim() || party.RegistrationNo != Clean(req.RegistrationNo) ||
                                party.PartyType != req.PartyType;
+            var personalIdentityChanged = legalChanged && (party.PartyType == "Individual" || req.PartyType == "Individual");
             party.LegalName = req.LegalName.Trim();
             party.PartyType = req.PartyType;
             party.RegistrationNo = Clean(req.RegistrationNo);
@@ -44,7 +46,31 @@ public sealed class PartyService(AppDbContext db, ICurrentUser me, PartyDirector
             {
                 party.VerificationStatus = "Pending";
                 party.VerifiedAt = null;
+                party.VerifiedBy = null;
             }
+            if (personalIdentityChanged)
+            {
+                var investor = await db.Investors.SingleOrDefaultAsync(i => i.UserId == me.UserId, ct);
+                if (investor is not null)
+                {
+                    investor.VerificationStatus = "Unverified";
+                    investor.VerifiedAt = null;
+                }
+            }
+            if (req.CompleteCustomerProfile && me.IsInRole(Roles.Customer))
+            {
+                if (party.PartyType != "Individual")
+                {
+                    var submitted = party.VerificationStatus == "Pending" && await db.PartyDocuments.AnyAsync(
+                        d => d.PartyId == partyId && d.RemovedAt == null, ct);
+                    if (legalChanged || !(party.LegalDossierVerified || submitted))
+                        throw new BusinessRuleException("party.documents_required", "Hãy gửi giấy tờ pháp lý trước khi hoàn tất hồ sơ.");
+                }
+
+                var account = await db.AppUsers.SingleAsync(u => u.UserId == me.UserId, ct);
+                account.CustomerProfileCompletedAt ??= clock.GetUtcNow();
+            }
+
             await db.SaveChangesAsync(ct);
             await audit.WriteAsync("party", party.PartyId, "update", before, Snapshot(party), ct);
             return party.PartyId;
@@ -241,7 +267,8 @@ public sealed class PartyService(AppDbContext db, ICurrentUser me, PartyDirector
             party.Representative, party.Phone, party.VerificationStatus, party.RejectReason, party.IsPlatform,
             party.Roles.OrderBy(r => r.RoleType).ThenByDescending(r => r.ValidFrom)
                 .Select(r => new PartnerRoleResponse(r.RoleType, r.Status, r.ValidFrom, r.ValidTo, r.Note)).ToList(),
-            party.Sites.Where(s => s.Status == "Active").OrderBy(s => s.SiteType).ThenByDescending(s => s.IsDefault).Select(ToSite).ToList());
+            party.Sites.Where(s => s.Status == "Active").OrderBy(s => s.SiteType).ThenByDescending(s => s.IsDefault).Select(ToSite).ToList(),
+            party.LegalDossierVerified);
     }
 
     public async Task<PartyResponse> DecideAsync(long partyId, bool verify, PartyDecisionRequest req, CancellationToken ct)
@@ -254,12 +281,17 @@ public sealed class PartyService(AppDbContext db, ICurrentUser me, PartyDirector
             if (party.IsPlatform) throw new BusinessRuleException("party.platform_fixed", "Không đổi trạng thái đối tác CrabShare.");
             if (!verify && string.IsNullOrWhiteSpace(req.Reason))
                 throw new BusinessRuleException("party.reason_required", "Từ chối phải có lý do.");
+            if (verify && party.PartyType != "Individual" &&
+                await db.AppUsers.AnyAsync(u => u.PartyId == partyId, ct) &&
+                !await db.PartyDocuments.AnyAsync(d => d.PartyId == partyId && d.RemovedAt == null, ct))
+                throw new BusinessRuleException("party.documents_required", "Đối tác cần gửi giấy tờ pháp lý để Admin đối chiếu trước khi xác minh.");
+
             var before = Snapshot(party);
             var now = clock.GetUtcNow();
             party.VerificationStatus = verify ? "Verified" : "Rejected";
             party.RejectReason = verify ? null : req.Reason!.Trim();
             party.VerifiedAt = verify ? now : null;
-            party.VerifiedBy = me.UserId;
+            party.VerifiedBy = verify ? me.UserId : null;
             party.UpdatedAt = now;
             // Vai trò nhà cung cấp/bên thu mua do người nuôi khai thì có hiệu lực khi đối tác được xác minh.
             var pending = await db.PartnerRoles.Where(r => r.PartyId == partyId && r.ValidTo == null && r.Status == "Pending" &&

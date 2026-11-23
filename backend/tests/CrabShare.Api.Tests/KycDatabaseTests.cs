@@ -43,12 +43,28 @@ public class KycDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<KycDat
         Assert.Null(result.LastCheck);
     }
 
+    [Theory]
+    [InlineData("Someone Else")]
+    [InlineData(null)]
+    public async Task Passing_provider_result_requires_a_matching_name(string? cardName)
+    {
+        var userId = await fixture.CreateInvestorAsync();
+        using var factory = WithProvider(new RecordingProvider(new(true, "NAME-CHECK", cardName, null)));
+        using var client = Client(factory, userId);
+        using var images = KycControllerTests.Images();
+        var response = await client.PostAsync("/api/kyc/ekyc", images);
+        var result = (await response.Content.ReadFromJsonAsync<KycStatusResponse>())!;
+        Assert.Equal("Rejected", result.VerificationStatus);
+        Assert.Equal("Failed", result.LastCheck!.Result);
+        Assert.NotNull(result.LastCheck.FailureReason);
+    }
+
     [Fact]
     public async Task Passing_ekyc_persists_only_result_and_verifies_the_current_investor()
     {
         var userId = await fixture.CreateInvestorAsync();
         var otherUserId = await fixture.CreateInvestorAsync();
-        var provider = new RecordingProvider(new(true, "TEST-PASS", "Do not persist this card name", null),
+        var provider = new RecordingProvider(new(true, "TEST-PASS", "KYC Test", null),
             () => Assert.Empty(Directory.EnumerateFileSystemEntries(fixture.UploadTempRoot)));
         using var factory = WithProvider(provider);
         using var client = Client(factory, userId);
@@ -79,7 +95,7 @@ public class KycDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<KycDat
         Assert.Equal("EkycIdFace", check.CheckType);
         Assert.Equal("Passed", check.Result);
         var audit = Assert.Single(await db.AuditLogs.Where(a => a.ActorUserId == userId).ToListAsync());
-        Assert.DoesNotContain("Do not persist", audit.NewValue!);
+        Assert.DoesNotContain("KYC Test", audit.NewValue!);
         AssertAuditHash(audit);
         var read = await client.GetFromJsonAsync<KycStatusResponse>("/api/me/kyc");
         Assert.Equal(check.KycCheckId, read!.LastCheck!.Id);
@@ -246,7 +262,7 @@ public class KycDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<KycDat
         public List<byte[]> Received { get; } = [];
         public List<Stream> Streams { get; } = [];
 
-        public async Task<EkycResult> VerifyAsync(Stream front, Stream back, Stream selfie, CancellationToken ct)
+        public async Task<EkycResult> VerifyAsync(Stream front, Stream back, Stream selfie, string expectedName, CancellationToken ct)
         {
             Calls++;
             onVerify?.Invoke();

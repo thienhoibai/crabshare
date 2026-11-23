@@ -1,0 +1,14 @@
+--- a/app.py
++++ b/app.py
+@@ -26,2 +26,3 @@
+ from gradeai_link import CrabShareLink, LinkError
++from network_status import NetworkStatus
+ import wifi_control
+@@ -159,2 +160,3 @@
+         last_error = None
++        network = NetworkStatus()
+         while not self.shutdown.is_set():
+@@ -192,2 +194,3 @@
+                 "wifiOutcome": s.get('wifi_outcome'),
++                **network.read(link.base),
+             }

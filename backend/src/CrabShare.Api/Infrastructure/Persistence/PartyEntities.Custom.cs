@@ -10,6 +10,7 @@ public partial class AppUser
 {
     /// <summary>Đối tác sở hữu tài khoản (BR-003). Tài khoản cũ có thể chưa có, PartyDirectory tạo khi cần.</summary>
     [Column("party_id")] public long? PartyId { get; set; }
+    [Column("customer_profile_completed_at"), Precision(3)] public DateTimeOffset? CustomerProfileCompletedAt { get; set; }
 }
 
 public partial class Operator
@@ -53,6 +54,8 @@ public sealed class Party
     [Column("created_by")] public long? CreatedBy { get; set; }
     [Column("created_at"), Precision(3)] public DateTimeOffset CreatedAt { get; set; }
     [Column("updated_at"), Precision(3)] public DateTimeOffset UpdatedAt { get; set; }
+    [NotMapped] public bool LegalDossierVerified =>
+        PartyType != "Individual" && VerificationStatus == "Verified" && VerifiedBy.HasValue;
     public List<PartnerRole> Roles { get; set; } = [];
     public List<PartySite> Sites { get; set; } = [];
 }

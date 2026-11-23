@@ -471,7 +471,7 @@ export const INVESTOR_PAGES: PageUnderTest[] = [
   { role: 'Investor', path: '/nha-dau-tu/lo', ready: fundingNew.title },
   { role: 'Investor', path: `/nha-dau-tu/lo/${NEW}`, ready: 'Mua cua nguồn' },
   { role: 'Investor', path: `/nha-dau-tu/gop-von/${NEW}`, ready: 'Giữ chỗ 15 phút' },
-  { role: 'Investor', path: '/nha-dau-tu/danh-muc', ready: 'Vốn đã xác nhận' },
+  { role: 'Investor', path: '/nha-dau-tu/danh-muc', ready: /^Vốn đã xác nhận$/ },
   { role: 'Investor', path: lot(RUN), ready: 'Khoản góp của tôi' },
   { role: 'Investor', path: lot(RUN, 'nhat-trinh'), ready: 'Kiểm tra nước buổi sáng' },
   { role: 'Investor', path: lot(RUN, 'thiet-bi'), ready: /6 lượt đo/ },

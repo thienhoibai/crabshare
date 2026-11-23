@@ -24,18 +24,20 @@ export default function FundingDetailPage() {
     <QueryView query={funding}>
       {(f) => {
         const reservation = f.myActiveReservation
+        const verified = f.me.legalDossierVerified ?? f.me.kycVerified
+        const verificationTitle = f.me.legalDossierVerified != null ? 'Xác minh hồ sơ pháp lý' : 'Xác minh danh tính'
         return (
           <>
             <OpHeading
               crumb={<OpBack href="/nha-dau-tu/lo"><ArrowLeft size={16} /> Lô đang gọi vốn</OpBack>}
-              eyebrow={`${f.batchCode} · ${label('crabType', f.crabType)} · ${f.operatorName}`}
+              description={`${f.batchCode}, ${label('crabType', f.crabType)}, ${f.operatorName}`}
               title={f.title}
               action={<StatusBadge kind="batch" value={f.status} />}
             />
 
             <div className="op-split">
               <div>
-                <OpPanel title="Gọi vốn" subtitle={`Tới hạn mà chưa đủ ${formatVnd(f.minViableCapital)} thì Lô huỷ và hoàn toàn bộ khoản đã góp.`}>
+                <OpPanel title="Gọi vốn" subtitle="Tới hạn mà Lô không đạt điều kiện mở thì huỷ và hoàn toàn bộ khoản đã góp.">
                   <OpMeter label={`${f.investorCount} nhà đầu tư đã góp`} value={f.confirmedCapital} max={f.targetCapital}
                     display={`${formatVnd(f.confirmedCapital)} / ${formatVnd(f.targetCapital)}`} />
                   <OpFacts items={[
@@ -46,7 +48,6 @@ export default function FundingDetailPage() {
                   <OpMore label="Chi tiết gọi vốn">
                     <OpKv items={[
                       { label: 'Đang giữ chỗ', value: formatVnd(f.reservedCapital) },
-                      { label: 'Vốn tối thiểu để Lô chạy', value: formatVnd(f.minViableCapital) },
                       { label: 'Trần vốn', value: formatVnd(f.maxCapital) },
                       { label: 'Mở gọi vốn', value: formatDateTime(f.fundingOpenAt) },
                       { label: 'Hạn góp vốn', value: formatDateTime(f.fundingDeadline) },
@@ -69,36 +70,46 @@ export default function FundingDetailPage() {
                         { label: 'Ngày nhận cua dự kiến', value: formatDate(batch.expectedReceiptDate) },
                         { label: 'Bên cam kết thu mua', value: batch.offtakeBuyerName },
                         { label: 'Giá sàn đơn hàng cuối', value: batch.floorPricePerKg ? `${formatVnd(batch.floorPricePerKg)} / kg` : null },
-                        { label: 'Phí nền tảng', value: batch.platformFeeRatePct !== null ? `${batch.platformFeeRatePct}% doanh thu` : null },
-                        { label: 'Trừ chi phí khi quyết toán', value: BASIS[batch.settlementBasis] ?? batch.settlementBasis },
                       ]} />
                     </OpMore>
                   </OpPanel>
                 )}
               </div>
 
-              <OpAside>
-                <OpFlow steps={[
-                  { title: 'Xác minh danh tính', state: f.me.kycVerified ? 'done' : 'now' },
-                  { title: 'Xác nhận công bố rủi ro', state: f.me.riskAcknowledged ? 'done' : f.me.kycVerified ? 'now' : 'todo' },
-                  { title: 'Giữ chỗ và chuyển khoản', sub: reservation ? `Đang giữ ${formatVnd(reservation.amount)}` : undefined, state: reservation ? 'now' : 'todo' },
-                  { title: 'Ký hợp đồng' },
-                ]} />
+              <div className="op-stack">
+                <OpPanel title="Trước khi góp vốn" className="inv-funding-terms">
+                  <p>Lô chỉ mở khi đạt cả vốn tối thiểu và tỷ lệ đặt trước tối thiểu.</p>
+                  <OpDl items={[
+                    { label: 'Vốn tối thiểu để Lô chạy', value: formatVnd(f.minViableCapital) },
+                    { label: 'Tỷ lệ đặt trước hiện tại', value: batch ? `${batch.preorderRatioPct.toLocaleString('vi-VN')}%` : 'Chưa có dữ liệu' },
+                    { label: 'Phí nền tảng', value: batch?.platformFeeRatePct != null ? `${batch.platformFeeRatePct.toLocaleString('vi-VN')}% doanh thu thực thu` : 'Chưa có dữ liệu' },
+                    { label: 'Trừ chi phí khi quyết toán', value: batch ? BASIS[batch.settlementBasis] ?? batch.settlementBasis : 'Chưa có dữ liệu' },
+                  ]} />
+                  <p className="rd-muted">Chưa có dữ liệu ngưỡng đặt trước tối thiểu.</p>
+                </OpPanel>
+                <OpAside>
+                  <OpFlow steps={[
+                    { title: verificationTitle, state: verified ? 'done' : 'now' },
+                    { title: 'Xác nhận công bố rủi ro', state: f.me.riskAcknowledged ? 'done' : verified ? 'now' : 'todo' },
+                    { title: 'Giữ chỗ và chuyển khoản', sub: reservation ? `Đang giữ ${formatVnd(reservation.amount)}` : undefined, state: reservation ? 'now' : 'todo' },
+                    { title: 'Ký hợp đồng', sub: 'Có thể ký trong lúc chờ chuyển khoản' },
+                  ]} />
 
-                {reservation && (
-                  <OpDl items={[{ label: 'Hết hạn giữ chỗ', value: formatDateTime(reservation.expiresAt) }]} />
-                )}
+                  {reservation && (
+                    <OpDl items={[{ label: 'Hết hạn giữ chỗ', value: formatDateTime(reservation.expiresAt) }]} />
+                  )}
 
-                {f.isOpen || reservation ? (
-                  <a className="rd-btn rd-btn--primary rd-btn--block" href={contributeHref(f.batchCode)}>
-                    <HandCoins size={17} /> {reservation ? 'Tiếp tục chuyển khoản' : 'Góp vốn vào Lô'}
-                  </a>
-                ) : (
-                  <OpNote tone="info">Lô đã hết hạn hoặc đã chốt vốn.</OpNote>
-                )}
-                <p className="rd-muted" style={{ fontSize: 13 }}>Bạn có thể mất toàn bộ số tiền đã góp.</p>
-                <a className="op-link" href={`/lo/${enc(f.batchCode)}`}>Trang công khai của Lô</a>
-              </OpAside>
+                  {f.isOpen || reservation ? (
+                    <a className="rd-btn rd-btn--primary rd-btn--block" href={contributeHref(f.batchCode)}>
+                      <HandCoins size={17} /> {reservation ? 'Tiếp tục chuyển khoản' : 'Góp vốn vào Lô'}
+                    </a>
+                  ) : (
+                    <OpNote tone="info">Lô đã hết hạn hoặc đã chốt vốn.</OpNote>
+                  )}
+                  <p className="rd-muted" style={{ fontSize: 13 }}>Bạn có thể mất toàn bộ số tiền đã góp.</p>
+                  <a className="op-link" href={`/lo/${enc(f.batchCode)}`}>Trang công khai của Lô</a>
+                </OpAside>
+              </div>
             </div>
           </>
         )

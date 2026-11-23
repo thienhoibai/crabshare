@@ -17,6 +17,7 @@ public sealed class BatchesController(BatchService batches, BatchExploreService 
     }
 
     /// <summary>Người nuôi và Admin xem bản soạn thảo; người khác xem trang gọi vốn hoặc đặt trước.</summary>
+    [EndpointSummary("Xem thông tin lô theo mã")]
     [HttpGet("{code}"), AllowAnonymous]
     public async Task<IActionResult> Get(string code, CancellationToken ct)
         => me.IsAuthenticated && (me.IsInRole(Roles.OperatorMember) || me.IsInRole(Roles.PlatformAdmin))
@@ -28,6 +29,7 @@ public sealed class BatchesController(BatchService batches, BatchExploreService 
     public async Task<ActionResult<PagedResult<ExploreBatchResponse>>> List([FromQuery] ExploreBatchQuery query, [FromQuery] PageQuery paging, CancellationToken ct)
         => Ok(await explore.ListAsync(query, paging, ct));
 
+    [EndpointSummary("Cập nhật thông tin lô")]
     [HttpPut("{code}")]
     public async Task<ActionResult<BatchResponse>> Update(string code, BatchRequest req, CancellationToken ct) => Ok(await batches.UpdateAsync(code, req, ct));
 
@@ -35,6 +37,7 @@ public sealed class BatchesController(BatchService batches, BatchExploreService 
     [EndpointSummary("Kế hoạch chi phí và mốc giải ngân (BR-030…036, BR-145)")]
     public async Task<ActionResult<BatchResponse>> SaveCost(string code, CostPlanRequest req, CancellationToken ct) => Ok(await batches.SaveCostPlanAsync(code, req, ct));
 
+    [EndpointSummary("Gửi lô để thẩm định")]
     [HttpPost("{code}/submit")]
     public async Task<ActionResult<BatchResponse>> Submit(string code, CancellationToken ct) => Ok(await batches.SubmitAsync(code, ct));
 
@@ -52,10 +55,12 @@ public sealed class BatchesController(BatchService batches, BatchExploreService 
     public async Task<ActionResult<IReadOnlyList<SpecResponse>>> Specs([FromQuery] string? crabType, CancellationToken ct)
         => Ok(await batches.SpecsAsync(crabType, ct));
 
+    [EndpointSummary("Liệt kê các lô của hộ nuôi")]
     [HttpGet("/api/operators/me/batches")]
     public async Task<ActionResult<PagedResult<BatchResponse>>> Mine([FromQuery] BatchListQuery query, [FromQuery] PageQuery paging, CancellationToken ct)
         => Ok(await batches.ListMineAsync(query, paging, ct));
 
+    [EndpointSummary("Xem chi tiết một lô của hộ nuôi")]
     [HttpGet("/api/operators/me/batches/{code}")]
     public async Task<ActionResult<BatchResponse>> MineByCode(string code, CancellationToken ct)
         => Ok(await batches.GetAsync(code, ct));
@@ -64,6 +69,7 @@ public sealed class BatchesController(BatchService batches, BatchExploreService 
 [ApiController, Route("api/admin/batches"), Authorize(Policy = Policies.Admin)]
 public sealed class AdminBatchesController(BatchReviewService reviews, BatchService batches) : ControllerBase
 {
+    [EndpointSummary("Liệt kê các lô dành cho quản trị viên")]
     [HttpGet]
     public async Task<ActionResult<PagedResult<AdminBatchResponse>>> List([FromQuery] BatchListQuery query, [FromQuery] PageQuery paging, CancellationToken ct)
         => Ok(await reviews.ListAsync(query, paging, ct));
@@ -73,15 +79,19 @@ public sealed class AdminBatchesController(BatchReviewService reviews, BatchServ
     public async Task<ActionResult<BatchResponse>> Create(AdminBatchRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await batches.CreateForAdminAsync(req, ct));
 
+    [EndpointSummary("Xem hồ sơ lô để quản trị")]
     [HttpGet("{code}")]
     public async Task<ActionResult<AdminBatchResponse>> Get(string code, CancellationToken ct) => Ok(await reviews.GetAsync(code, ct));
 
+    [EndpointSummary("Phê duyệt lô")]
     [HttpPost("{code}/approve")]
     public async Task<ActionResult<AdminBatchResponse>> Approve(string code, ApproveBatchRequest req, CancellationToken ct) => Ok(await reviews.ApproveAsync(code, req, ct));
 
+    [EndpointSummary("Từ chối lô")]
     [HttpPost("{code}/reject")]
     public async Task<ActionResult<AdminBatchResponse>> Reject(string code, RejectBatchRequest req, CancellationToken ct) => Ok(await reviews.RejectAsync(code, req, ct));
 
+    [EndpointSummary("Yêu cầu chỉnh sửa hồ sơ lô")]
     [HttpPost("{code}/request-revision")]
     public async Task<ActionResult<AdminBatchResponse>> RequestRevision(string code, RejectBatchRequest req, CancellationToken ct) => Ok(await reviews.RequestRevisionAsync(code, req, ct));
 }

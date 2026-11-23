@@ -146,6 +146,185 @@ public sealed class DeviceIngestTests(DeviceFixture f) : IClassFixture<DeviceFix
     }
 
     [Fact]
+    public async Task Numbered_station_result_cannot_move_to_another_crab_and_exact_retry_keeps_its_first_session()
+    {
+        var set = await Br15Scenario.CrabsAsync(f, 3);
+        var prefix = $"LA{f.Next()}";
+        var tag = prefix + "-001";
+        var (code, key) = await RegisterAsync(new { deviceCode = $"ST-{f.Next()}", deviceType = "Station",
+            operatorId = set.Batch.Farmer.OperatorId, siteId = await QcStationSiteAsync(set.Batch.Farmer), cameraHeightMm = 370 });
+        using var device = Device(key);
+        using var farmer = set.Batch.Farmer.Client(f);
+        await Br15Fixture.Body(await farmer.PostAsync($"/api/batches/{set.Batch.Code}/start-harvest", null));
+        var initial = await Br15Fixture.Body(await Br15Fixture.PostJson(farmer, "/api/measurement-sessions",
+            new { crabCode = set.CrabCodes[0], stationCode = code, batchCode = set.Batch.Code, gradeAiPrefix = prefix, crabNumber = 1 }));
+        var initialNo = initial.GetProperty("sessionNo").GetString();
+        var open = await Br15Fixture.Body(await device.GetAsync($"/api/devices/{code}/open-session"));
+        Assert.Equal(tag, open.GetProperty("crabTag").GetString());
+        Assert.Equal(1, open.GetProperty("bindingVersion").GetInt32());
+        var binding = new
+        {
+            messageId = Guid.NewGuid(), deviceCode = code, sessionNo = initialNo, crabTag = tag, capturedAt = DateTimeOffset.UtcNow,
+            doorClosed = true, lastCalibratedAt = DateTimeOffset.UtcNow, weightG = 412.3m, weightSamples = 10, weightRangeG = 0.12m,
+            tofMm = 318, cameraHeightMm = 370,
+        };
+        Task<HttpResponseMessage> Upload(object meta, string red = "r") => device.PostAsync("/api/devices/ingest/measurements",
+            Multipart(meta, ("white", Br15Scenario.Jpeg("w")), ("red", Br15Scenario.Jpeg(red))));
+        Assert.Equal("device.session_mismatch", await Br15Fixture.ErrorCode(await Upload(binding with { crabTag = prefix + "-002" })));
+        Assert.Equal("device.session_mismatch", await Br15Fixture.ErrorCode(await Upload(StationMeta(Guid.NewGuid(), code))));
+        Assert.Equal(HttpStatusCode.Accepted, (await Upload(binding)).StatusCode);
+        var duplicateTag = await Br15Fixture.PostJson(farmer, "/api/measurement-sessions",
+            new { crabCode = set.CrabCodes[1], stationCode = code, batchCode = set.Batch.Code, gradeAiPrefix = prefix, crabNumber = 1 });
+        Assert.Equal("grading.gradeai_duplicate_tag", await Br15Fixture.ErrorCode(duplicateTag));
+        var next = await Br15Fixture.Body(await Br15Fixture.PostJson(farmer, "/api/measurement-sessions",
+            new { crabCode = set.CrabCodes[1], stationCode = code, batchCode = set.Batch.Code, gradeAiPrefix = prefix, crabNumber = 2 }));
+        Assert.Equal("device.session_mismatch", await Br15Fixture.ErrorCode(await Upload(binding with { messageId = Guid.NewGuid() })));
+        var retry = await Br15Fixture.Body(await Upload(binding));
+        Assert.Equal(initialNo, retry.GetProperty("sessionNo").GetString());
+        Assert.Equal("device.duplicate_message", await Br15Fixture.ErrorCode(await Upload(binding, "changed")));
+        var stillOpen = await Br15Fixture.Body(await device.GetAsync($"/api/devices/{code}/open-session"));
+        Assert.Equal(next.GetProperty("sessionNo").GetString(), stillOpen.GetProperty("sessionNo").GetString());
+        var history = await Br15Fixture.Body(await farmer.GetAsync($"/api/batches/{set.Batch.Code}/measurement-sessions?pageSize=1"));
+        Assert.Equal(2, history.GetProperty("total").GetInt32());
+        Assert.Single(history.GetProperty("items").EnumerateArray());
+        var filtered = await Br15Fixture.Body(await farmer.GetAsync($"/api/batches/{set.Batch.Code}/measurement-sessions?search={prefix}-001"));
+        Assert.Equal(1, filtered.GetProperty("total").GetInt32());
+        Assert.Equal(initialNo, filtered.GetProperty("items")[0].GetProperty("sessionNo").GetString());
+    }
+
+    [Fact]
+    public async Task Lot_labels_are_assigned_in_one_request_and_open_by_number()
+    {
+        var set = await Br15Scenario.CrabsAsync(f, 3);
+        var prefix = $"LB{f.Next()}";
+        var (code, key) = await RegisterAsync(new { deviceCode = $"ST-{f.Next()}", deviceType = "Station",
+            operatorId = set.Batch.Farmer.OperatorId, siteId = await QcStationSiteAsync(set.Batch.Farmer) });
+        using var device = Device(key);
+        using var farmer = set.Batch.Farmer.Client(f);
+        await Br15Fixture.Body(await farmer.PostAsync($"/api/batches/{set.Batch.Code}/start-harvest", null));
+        var path = $"/api/batches/{set.Batch.Code}/gradeai-labels";
+        var duplicate = await Br15Fixture.PostJson(farmer, path,
+            new { prefix, labels = set.CrabCodes.Select(c => new { crabCode = c, crabNumber = 1 }) });
+        Assert.Equal("grading.gradeai_invalid_labels", await Br15Fixture.ErrorCode(duplicate));
+        var assigned = await Br15Fixture.Body(await Br15Fixture.PostJson(farmer, path,
+            new { prefix, labels = set.CrabCodes.Select((c, i) => new { crabCode = c, crabNumber = i + 1 }) }));
+        Assert.Equal(3, assigned.GetProperty("assigned").GetInt32());
+        var session = await Br15Fixture.Body(await Br15Fixture.PostJson(farmer, "/api/measurement-sessions",
+            new { stationCode = code, batchCode = set.Batch.Code, gradeAiPrefix = prefix, crabNumber = 2 }));
+        Assert.Equal(set.CrabCodes[1], session.GetProperty("crabCode").GetString());
+        var open = await Br15Fixture.Body(await device.GetAsync($"/api/devices/{code}/open-session"));
+        Assert.Equal(prefix + "-002", open.GetProperty("crabTag").GetString());
+    }
+
+    [Fact]
+    public async Task Station_runtime_is_authenticated_scoped_and_marks_stale_samples()
+    {
+        var set = await Br15Scenario.CrabsAsync(f, 1);
+        var (code, key) = await RegisterAsync(new { deviceCode = $"ST-{f.Next()}", deviceType = "Station",
+            operatorId = set.Batch.Farmer.OperatorId, siteId = await QcStationSiteAsync(set.Batch.Farmer) });
+        using var farmer = set.Batch.Farmer.Client(f);
+        using var anonymous = f.Factory.CreateClient();
+        var path = $"/api/operators/me/devices/{code}/station-state";
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(path)).StatusCode);
+        var empty = await Br15Fixture.Body(await farmer.GetAsync(path));
+        Assert.Equal(JsonValueKind.Null, empty.GetProperty("state").ValueKind);
+        var message = new { hardwareOnline = true, busy = false, doorClosed = true, phase = "ready",
+            rgb = "blue", blinking = true, crabTag = "LA-001", weightG = 227.6m, completed = Array.Empty<string>() };
+        Assert.Equal(HttpStatusCode.Forbidden, (await Br15Fixture.PostJson(anonymous, $"/api/devices/{code}/station-state", message)).StatusCode);
+        using var device = Device(key);
+        await Br15Fixture.Body(await Br15Fixture.PostJson(device, $"/api/devices/{code}/station-state", message));
+        var current = await Br15Fixture.Body(await farmer.GetAsync(path));
+        Assert.True(current.GetProperty("fresh").GetBoolean());
+        Assert.Equal("LA-001", current.GetProperty("state").GetProperty("crabTag").GetString());
+        var other = await Br15Scenario.CrabsAsync(f, 1);
+        using var outsider = other.Batch.Farmer.Client(f);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await outsider.GetAsync($"/api/batches/{set.Batch.Code}/measurement-sessions")).StatusCode);
+        await using var db = f.OpenDb();
+        var row = await db.Devices.SingleAsync(d => d.DeviceCode == code);
+        row.StationStateReceivedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        await db.SaveChangesAsync();
+        var stale = await Br15Fixture.Body(await farmer.GetAsync(path));
+        Assert.False(stale.GetProperty("fresh").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Web_start_is_delivered_once_to_its_open_station_session_and_acknowledged_by_pi()
+    {
+        var set = await Br15Scenario.CrabsAsync(f, 1);
+        var prefix = $"WEB{f.Next()}";
+        var (code, key) = await RegisterAsync(new { deviceCode = $"ST-{f.Next()}", deviceType = "Station",
+            operatorId = set.Batch.Farmer.OperatorId, siteId = await QcStationSiteAsync(set.Batch.Farmer) });
+        using var farmer = set.Batch.Farmer.Client(f);
+        using var device = Device(key);
+        await Br15Fixture.Body(await farmer.PostAsync($"/api/batches/{set.Batch.Code}/start-harvest", null));
+        var session = await Br15Fixture.Body(await Br15Fixture.PostJson(farmer, "/api/measurement-sessions",
+            new { crabCode = set.CrabCodes[0], stationCode = code, batchCode = set.Batch.Code, gradeAiPrefix = prefix, crabNumber = 1 }));
+        var sessionNo = session.GetProperty("sessionNo").GetString();
+        var tag = prefix + "-001";
+        var path = $"/api/operators/me/devices/{code}/measurement-sessions/{sessionNo}/start";
+        var reportPath = $"/api/devices/{code}/station-state";
+        var state = new { hardwareOnline = true, calibrationValid = true, busy = false, doorClosed = true,
+            phase = "ready", rgb = "blue", blinking = true, webStartReady = true, sessionNo, crabTag = tag, startOutcome = (object?)null };
+        async Task<JsonElement> Report(object report) => await Br15Fixture.Body(await Br15Fixture.PostJson(device, reportPath, report));
+
+        await Report(state with { doorClosed = false });
+        Assert.Equal(HttpStatusCode.Conflict, (await farmer.PostAsync(path, null)).StatusCode);
+        await Report(state);
+        var issued = await Br15Fixture.Body(await farmer.PostAsync(path, null));
+        var id = issued.GetProperty("id").GetInt64();
+        Assert.Equal("Pending", issued.GetProperty("status").GetString());
+        Assert.Equal(id, (await Br15Fixture.Body(await farmer.PostAsync(path, null))).GetProperty("id").GetInt64());
+        Assert.Equal(JsonValueKind.Null, (await Report(state with { crabTag = prefix + "-002" })).GetProperty("start").ValueKind);
+        var claimed = (await Report(state)).GetProperty("start");
+        Assert.Equal(id, claimed.GetProperty("id").GetInt64());
+        Assert.Equal(sessionNo, claimed.GetProperty("sessionNo").GetString());
+        Assert.Equal(tag, claimed.GetProperty("crabTag").GetString());
+        Assert.Equal(JsonValueKind.Null, (await Report(state)).GetProperty("start").ValueKind);
+        await Report(state with { busy = true, webStartReady = false, startOutcome = new { id, accepted = true } });
+        Assert.Equal("Accepted", (await Br15Fixture.Body(await farmer.GetAsync(path))).GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Wifi_credentials_are_protected_delivered_once_and_not_returned_to_the_operator()
+    {
+        var set = await Br15Scenario.CrabsAsync(f, 1);
+        var (code, key) = await RegisterAsync(new { deviceCode = $"ST-{f.Next()}", deviceType = "Station",
+            operatorId = set.Batch.Farmer.OperatorId, siteId = await QcStationSiteAsync(set.Batch.Farmer) });
+        using var farmer = set.Batch.Farmer.Client(f);
+        using var device = Device(key);
+        var path = $"/api/operators/me/devices/{code}/wifi";
+        var reportPath = $"/api/devices/{code}/station-state";
+        const string password = "only-a-fixture-password";
+        var state = new { hardwareOnline = true, busy = false, phase = "ready", wifiConfigReady = true,
+            wifiOutcome = (object?)null };
+        await Br15Fixture.Body(await Br15Fixture.PostJson(device, reportPath, state with { busy = true }));
+        Assert.Equal(HttpStatusCode.Conflict, (await Br15Fixture.PostJson(farmer, path, new { ssid = "Farm wifi", password })).StatusCode);
+        await Br15Fixture.Body(await Br15Fixture.PostJson(device, reportPath, state));
+        var queued = await Br15Fixture.Body(await Br15Fixture.PostJson(farmer, path, new { ssid = "Farm wifi", password }));
+        var id = queued.GetProperty("id").GetInt64();
+        Assert.DoesNotContain(password, queued.ToString());
+        await using (var db = f.OpenDb())
+        {
+            var stored = await db.DeviceCommands.SingleAsync(c => c.DeviceCommandId == id);
+            Assert.NotNull(stored.ProtectedPayload);
+            Assert.DoesNotContain(password, stored.ProtectedPayload!);
+        }
+        var oldPoll = await Br15Fixture.Body(await device.GetAsync($"/api/devices/{code}/commands"));
+        Assert.Empty(oldPoll.EnumerateArray());
+        var delivered = await Br15Fixture.Body(await Br15Fixture.PostJson(device, reportPath, state));
+        Assert.Equal(password, delivered.GetProperty("wifi").GetProperty("password").GetString());
+        var repeated = await Br15Fixture.Body(await Br15Fixture.PostJson(device, reportPath, state));
+        Assert.Equal(JsonValueKind.Null, repeated.GetProperty("wifi").ValueKind);
+        await using (var db = f.OpenDb()) Assert.Null((await db.DeviceCommands.SingleAsync(c => c.DeviceCommandId == id)).ProtectedPayload);
+        await Br15Fixture.Body(await Br15Fixture.PostJson(device, reportPath,
+            state with { wifiOutcome = new { id, connected = true, message = "Đã kết nối" } }));
+        var status = await Br15Fixture.Body(await farmer.GetAsync(path));
+        Assert.Equal("Accepted", status.GetProperty("status").GetString());
+        Assert.DoesNotContain(password, status.ToString());
+    }
+
+    [Fact]
     public async Task Rail_camera_image_must_be_in_its_rack_and_missing_crab_raises_alert_and_capture_request()
     {
         var set = await Br15Scenario.CrabsAsync(f, 2);

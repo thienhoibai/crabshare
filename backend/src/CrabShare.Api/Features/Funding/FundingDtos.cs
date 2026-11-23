@@ -44,7 +44,7 @@ public sealed record ContributionResponse(
     DateTimeOffset ReservedAt, DateTimeOffset ExpiresAt, DateTimeOffset? ConfirmedAt);
 
 /// <summary>Người đang đăng nhập đã đủ điều kiện góp vốn chưa (TL-09).</summary>
-public sealed record FundingEligibility(bool KycVerified, bool RiskAcknowledged);
+public sealed record FundingEligibility(bool KycVerified, bool RiskAcknowledged, bool? LegalDossierVerified = null);
 
 /// <summary>Số liệu cho màn "Số tiền & giữ chỗ": tối thiểu, còn lại trước trần, hạn gọi vốn.</summary>
 public sealed record FundingBatchResponse(

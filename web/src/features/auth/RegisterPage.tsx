@@ -3,8 +3,7 @@ import { isAxiosError } from 'axios'
 import { ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { errorMessage, type ApiProblem } from '../../shared/api/http'
-import { homePathFor } from '../../shared/auth/authStore'
-import { Checkbox, Field, Input, OpBtn, OpNote, RadioCards, Select, options } from '../../shared/ui/console'
+import { Checkbox, Field, Input, OpBtn, OpNote, RadioCards } from '../../shared/ui/console'
 import AuthLayout from './AuthLayout'
 import PasswordInput from './PasswordInput'
 import { useRegister } from './authApi'
@@ -20,20 +19,14 @@ function isPhoneConflict(error: unknown) {
 
 /**
  * UC01 — Đăng ký tài khoản khách hàng hoặc nhà đầu tư (POST /api/auth/register). Đăng ký xong tự đăng nhập.
- * Mỗi tài khoản gắn một hồ sơ đối tác (BR-001): cá nhân lấy họ tên, tổ chức khai tên pháp lý và mã số đăng ký.
  * Người nuôi đăng ký tài khoản trước rồi nộp hồ sơ hộ nuôi ở cổng người nuôi.
- * Phần tổ chức mở ra khi người dùng chọn đăng ký cho tổ chức.
+ * Thông tin pháp lý được khai ở bước xác minh sau khi tạo tài khoản.
  */
 export default function RegisterPage() {
   const navigate = useNavigate()
   const register = useRegister()
   const [role, setRole] = useState<RoleChoice>('Customer')
-  const [organisation, setOrganisation] = useState(false)
-  const [partyType, setPartyType] = useState('Company')
-  const [customerType, setCustomerType] = useState('Restaurant')
   const [fullName, setFullName] = useState('')
-  const [legalName, setLegalName] = useState('')
-  const [registrationNo, setRegistrationNo] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [rejectedPhone, setRejectedPhone] = useState<string | null>(null)
@@ -46,7 +39,6 @@ export default function RegisterPage() {
     fullName: fullName.trim() ? '' : 'Nhập họ và tên của bạn.',
     email: /^[^\s@]+@[^\s@]+$/.test(email.trim()) ? '' : 'Nhập địa chỉ email hợp lệ.',
     password: password.length >= 8 ? '' : 'Mật khẩu cần ít nhất 8 ký tự.',
-    legalName: organisation && !legalName.trim() ? 'Nhập tên pháp lý của tổ chức.' : '',
     terms: terms ? '' : 'Bạn cần đồng ý điều khoản sử dụng.',
   }
 
@@ -62,7 +54,6 @@ export default function RegisterPage() {
   const nameInput = fieldDetails('fullName')
   const emailInput = fieldDetails('email')
   const passwordInput = fieldDetails('password', 'Từ 8 ký tự')
-  const legalNameInput = fieldDetails('legalName', 'Sau khi đăng ký, gửi ảnh giấy tờ ở trang Hồ sơ để được xác minh.')
   const termsError = attempted ? errors.terms : ''
   const phoneError = phone.trim() === rejectedPhone ? PHONE_TAKEN : ''
 
@@ -86,13 +77,10 @@ export default function RegisterPage() {
         fullName: fullName.trim(),
         phone: submittedPhone || undefined,
         role,
-        partyType: organisation ? partyType : 'Individual',
-        legalName: organisation ? legalName.trim() : undefined,
-        registrationNo: organisation ? registrationNo.trim() || undefined : undefined,
-        customerType: role === 'Customer' ? customerType : undefined,
+        partyType: 'Individual',
       },
       {
-        onSuccess: (res) => navigate(homePathFor(res.user), { replace: true }),
+        onSuccess: () => navigate('/hoan-thien-ho-so', { replace: true }),
         onError: (e) => {
           if (!isPhoneConflict(e)) return setMessage(errorMessage(e))
           setRejectedPhone(submittedPhone)
@@ -142,31 +130,6 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)} />
           </Field>
         </div>
-
-        {role === 'Customer' && (
-          <Field label="Bạn mua cho">
-            <Select value={customerType} onChange={(e) => setCustomerType(e.target.value)}>
-              {options('customerType').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </Select>
-          </Field>
-        )}
-
-        <Checkbox checked={organisation} onChange={setOrganisation}>Đăng ký cho doanh nghiệp, hộ kinh doanh hoặc hợp tác xã</Checkbox>
-        {organisation && (
-          <div className="op-subform">
-            <Field label="Loại hình">
-              <Select value={partyType} onChange={(e) => setPartyType(e.target.value)}>
-                {options('partyType').filter((o) => o.value !== 'Individual').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </Select>
-            </Field>
-            <Field label="Mã số thuế">
-              <Input value={registrationNo} onChange={(e) => setRegistrationNo(e.target.value)} inputMode="numeric" />
-            </Field>
-            <Field {...legalNameInput.field} label="Tên pháp lý" className="is-wide" required>
-              <Input {...legalNameInput.input} autoComplete="organization" required value={legalName} onChange={(e) => setLegalName(e.target.value)} />
-            </Field>
-          </div>
-        )}
 
         <div className="auth-consent">
           <Checkbox name="terms" checked={terms} onChange={setTerms} required

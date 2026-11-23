@@ -28,13 +28,15 @@ export default function SettlementDetailPage() {
     <QueryView query={settlement}>
       {(s) => {
         const mine = s.lines.find((l) => l.isMine)
+        const paid = mine?.payoutStatus === 'Succeeded'
+        const approved = s.status === 'Approved' || s.status === 'PaidOut' || s.status === 'Closed'
         const inWindow = (s.status === 'Proposed' || s.status === 'Disputed') && !!s.feedbackDeadline && Date.parse(s.feedbackDeadline) > Date.now()
         return (
           <>
             <OpHeading
               crumb={<OpBack href="/nha-dau-tu/quyet-toan"><ArrowLeft size={16} /> Quyết toán</OpBack>}
-              eyebrow={`${s.batchCode} · lần tính ${s.revisionNo}`}
               title={s.batchTitle}
+              description={`${s.batchCode}, lần tính ${s.revisionNo}`}
               action={
                 <>
                   {inWindow && <OpBadge tone="gold">Góp ý tới {formatDateTime(s.feedbackDeadline)}</OpBadge>}
@@ -47,7 +49,7 @@ export default function SettlementDetailPage() {
               <OpFacts items={[
                 { label: 'Vốn hoàn', value: formatVnd(mine.capitalReturn) },
                 { label: 'Phần chia', value: formatVnd(mine.profitShare), tone: mine.profitShare < 0 ? 'danger' : undefined },
-                { label: 'Tôi thực nhận', value: formatVnd(mine.netPayout), tone: 'ok' },
+                { label: paid ? 'Tôi thực nhận' : approved ? 'Số được nhận đã duyệt' : 'Phần của tôi theo bảng', value: formatVnd(mine.netPayout), tone: paid ? 'ok' : undefined },
                 { label: 'Chi trả', value: mine.payoutStatus ? label('instruction', mine.payoutStatus) : 'Chưa chi' },
               ]} />
             )}
@@ -68,7 +70,7 @@ export default function SettlementDetailPage() {
             {writing && (
               <OpConfirm
                 title="Gửi góp ý"
-                sub={`Lô ${s.batchCode} · lần tính ${s.revisionNo}`}
+                sub={`Lô ${s.batchCode}, lần tính ${s.revisionNo}`}
                 confirmLabel="Gửi góp ý"
                 pending={send.isPending}
                 error={send.error}

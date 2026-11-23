@@ -16,6 +16,7 @@ public sealed record CaptureRequestResponse(long Id, string BatchCode, string Sl
 [ApiController, Route("api/operators/me/capture-requests"), Authorize(Policy = Policies.Operator)]
 public sealed class CaptureRequestsController(CaptureRequestService requests) : ControllerBase
 {
+    [EndpointSummary("Liệt kê yêu cầu chụp ảnh minh chứng")]
     [HttpGet]
     public async Task<ActionResult<PagedResult<CaptureRequestResponse>>> List([FromQuery] CaptureRequestQuery query,
         [FromQuery] PageQuery paging, CancellationToken ct) => Ok(await requests.ListAsync(query, paging, ct));

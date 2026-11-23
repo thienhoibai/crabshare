@@ -45,7 +45,8 @@ public sealed record InventoryEventResponse(string EventType, DateTimeOffset Occ
 public sealed record BoxHistoryResponse(string SlotCode, DateTimeOffset AssignedAt, DateTimeOffset? LeftAt, string Reason, string? LeaveReason, long? EvidenceId);
 public sealed record CrabUnitResponse(string CrabCode, string BatchCode, string LotCode, string OriginRegion, DateOnly HarvestedOn, string Species, string Sex,
     string Maturity, decimal ReceivedWeightG, string Condition, string InventoryStatus, string? CurrentSlotCode, string? ReplacesCrabCode,
-    DateTimeOffset ReceivedAt, IReadOnlyList<BoxHistoryResponse> Boxes, IReadOnlyList<InventoryEventResponse> Events);
+    DateTimeOffset ReceivedAt, IReadOnlyList<BoxHistoryResponse> Boxes, IReadOnlyList<InventoryEventResponse> Events,
+    string? GradeAiTag = null, string? GradeAiPrefix = null);
 public sealed record BoxStateResponse(string SlotCode, string SlotStatus, short? RackNo, short? TierNo, short? ColumnNo, string? CrabCode, string? CrabCondition,
     DateTimeOffset? AssignedAt);
 public sealed record HoldingResponse(string HoldingCode, string BatchCode, string Method, DateTimeOffset StockedAt, DateOnly ExpectedEndDate,
@@ -253,7 +254,7 @@ public sealed class HoldingService(AppDbContext db, ICurrentUser me, TimeProvide
             boxes.Where(b => b.LeftAt == null).Select(b => slots.GetValueOrDefault(b.SlotId)).FirstOrDefault(), replaces, crab.ReceivedAt,
             boxes.Select(b => new BoxHistoryResponse(slots.GetValueOrDefault(b.SlotId, ""), b.AssignedAt, b.LeftAt, b.Reason, b.LeaveReason, b.EvidenceId)).ToList(),
             events.Select(e => new InventoryEventResponse(e.EventType, e.OccurredAt, e.SlotId is { } s ? slots.GetValueOrDefault(s) : null, e.WeightG,
-                e.Reason, e.Source, e.EvidenceId)).ToList());
+                e.Reason, e.Source, e.EvidenceId)).ToList(), crab.GradeAiTag, batch.GradeAiPrefix);
     }
 
     public async Task<IReadOnlyList<CrabUnitResponse>> CrabsAsync(string code, string? status, CancellationToken ct)

@@ -153,10 +153,11 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
         var device = await AuthenticateAsync(deviceCode, key, ct);
         if (device.DeviceType != "Station") throw new ForbiddenException("device.not_station", "Thiết bị không phải trạm đo.");
         var session = await db.MeasurementSessions.AsNoTracking().Where(s => s.StationDeviceId == device.DeviceId && s.Status == "Open")
-                          .Join(db.CrabUnits, s => s.CrabUnitId, c => c.CrabUnitId, (s, c) => new { s.SessionNo, c.CrabCode, s.OpenedAt })
+                          .Join(db.CrabUnits, s => s.CrabUnitId, c => c.CrabUnitId, (s, c) => new { s.SessionNo, c.CrabCode, c.GradeAiTag, s.OpenedAt, s.BatchId })
+                          .Join(db.Batches, s => s.BatchId, b => b.BatchId, (s, b) => new { s.SessionNo, s.CrabCode, s.GradeAiTag, s.OpenedAt, b.BatchCode })
                           .SingleOrDefaultAsync(ct)
                       ?? throw new NotFoundException("measurement.no_open_session", "Chưa mở lượt đo cho trạm này (BR-224).");
-        return new OpenSessionResponse(session.SessionNo, session.CrabCode, session.OpenedAt);
+        return new OpenSessionResponse(session.SessionNo, session.GradeAiTag ?? session.CrabCode, session.OpenedAt, session.BatchCode);
     }
 
     public async Task<IngestAccepted> MeasurementAsync(string metaJson, IFormFile? white, IFormFile? red, string? key, string? idempotencyKey, CancellationToken ct)
@@ -164,7 +165,7 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
         var meta = Parse<StationMeta>(metaJson);
         var hash = Sha(metaJson);
         long sessionId = 0;
-        var result = await HandleAsync("Measurement", meta.DeviceCode, key, meta.MessageId, idempotencyKey, meta.CapturedAt, hash, async (device, now) =>
+        Task<IngestAccepted> SaveMeasurementAsync() => HandleAsync("Measurement", meta.DeviceCode, key, meta.MessageId, idempotencyKey, meta.CapturedAt, hash, async (device, now) =>
         {
             if (device.DeviceType != "Station") throw new ForbiddenException("device.not_station", "Thiết bị không phải trạm đo.");
             if (meta.WeightG is null || meta.CapturedAt is null || white is null || red is null)
@@ -183,6 +184,10 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
                                   $"SELECT * FROM dbo.measurement_session WITH (UPDLOCK, HOLDLOCK) WHERE station_device_id = {device.DeviceId} AND status = 'Open'")
                               .SingleOrDefaultAsync(ct)
                           ?? throw new NotFoundException("measurement.no_open_session", "Chưa mở lượt đo cho trạm này (BR-224).");
+            var crab = await db.CrabUnits.AsNoTracking().SingleAsync(c => c.CrabUnitId == session.CrabUnitId, ct);
+            if ((crab.GradeAiTag is not null || meta.SessionNo is not null || meta.CrabTag is not null) &&
+                (meta.SessionNo != session.SessionNo || meta.CrabTag != (crab.GradeAiTag ?? crab.CrabCode)))
+                throw new ConflictException("device.session_mismatch", "Bản tin không khớp phiên và mã cua đang mở trên trạm.");
             var whiteFile = await SaveImageAsync(white, $"stations/{device.DeviceCode}/{now:yyyy/MM}", ct);
             var redFile = await SaveImageAsync(red, $"stations/{device.DeviceCode}/{now:yyyy/MM}", ct);
             session.Status = "Received";
@@ -208,6 +213,27 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
             sessionId = session.MeasurementSessionId;
             return new IngestAccepted("Received", session.SessionNo, session.MeasurementSessionId);
         }, ct);
+        IngestAccepted result;
+        try { result = await SaveMeasurementAsync(); }
+        catch (AppException exc) when (meta.SessionNo is not null && meta.CrabTag is not null &&
+            exc.Code is "device.duplicate_message" or "measurement.no_open_session" or "device.session_mismatch")
+        {
+            var device = await AuthenticateAsync(meta.DeviceCode, key, ct);
+            var prior = await db.MeasurementSessions.AsNoTracking()
+                .Where(s => s.StationDeviceId == device.DeviceId && s.SessionNo == meta.SessionNo && s.MessageId == meta.MessageId)
+                .Join(db.CrabUnits, s => s.CrabUnitId, c => c.CrabUnitId,
+                    (s, c) => new { Session = s, CrabTag = c.GradeAiTag ?? c.CrabCode })
+                .SingleOrDefaultAsync(ct);
+            if (prior is null || prior.CrabTag != meta.CrabTag || !await db.DeviceMessages.AnyAsync(m =>
+                m.DeviceId == device.DeviceId && m.MessageId == meta.MessageId && m.Kind == "Measurement" &&
+                m.Status == "Accepted" && m.PayloadSha256 == hash, ct))
+                throw;
+            if (white is null || red is null ||
+                !await SameImageAsync(white, prior.Session.WhiteSha256, ct) ||
+                !await SameImageAsync(red, prior.Session.RedSha256, ct))
+                throw new ConflictException("device.duplicate_message", "Bản tin dùng lại mã nhưng ảnh khác lượt đã nhận.");
+            return new IngestAccepted("Received", prior.Session.SessionNo, prior.Session.MeasurementSessionId);
+        }
         // Xử lý ảnh (G5) chạy sau khi bản tin đã ghi; lỗi xử lý không làm mất bản tin.
         try { await processor.ProcessAsync(sessionId, ct); }
         catch (Exception e) { log.LogError(e, "Xử lý lượt đo {SessionId} lỗi; bản tin vẫn được giữ", sessionId); }
@@ -353,7 +379,7 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
     public async Task<IReadOnlyList<DeviceCommandResponse>> CommandsAsync(string deviceCode, string? key, CancellationToken ct)
     {
         var device = await AuthenticateAsync(deviceCode, key, ct);
-        return await db.DeviceCommands.AsNoTracking().Where(c => c.DeviceId == device.DeviceId && c.Status == "Pending").OrderBy(c => c.DeviceCommandId)
+        return await db.DeviceCommands.AsNoTracking().Where(c => c.DeviceId == device.DeviceId && c.Status == "Pending" && c.CommandType != "StartMeasurement" && c.CommandType != "ConfigureWifi").OrderBy(c => c.DeviceCommandId)
             .Select(c => new DeviceCommandResponse(c.DeviceCommandId, c.CommandType, c.BoxCode, c.CreatedAt)).ToListAsync(ct);
     }
 
@@ -365,6 +391,8 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
         await AuthenticateAsync(deviceCode ?? device.DeviceCode, key, ct);
         if (deviceCode is not null && deviceCode != device.DeviceCode)
             throw new ForbiddenException("device.command_other_device", "Lệnh không thuộc thiết bị này.");
+        if (command.CommandType is "StartMeasurement" or "ConfigureWifi")
+            throw new BusinessRuleException("device.station_command_protocol", "Lệnh cân được xác nhận qua trạng thái trạm.");
         if (command.Status != "Pending") return;
         command.Status = "Acked";
         command.AckedAt = clock.GetUtcNow();
@@ -415,6 +443,14 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
     }
 
     private static string Sha(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+
+    private static async Task<bool> SameImageAsync(IFormFile file, string? expected, CancellationToken ct)
+    {
+        if (expected is null || file.Length > MaxImageBytes) return false;
+        await using var stream = file.OpenReadStream();
+        var hash = await SHA256.HashDataAsync(stream, ct);
+        return string.Equals(expected, Convert.ToHexStringLower(hash), StringComparison.OrdinalIgnoreCase);
+    }
 
     private static DateTimeOffset? Max(DateTimeOffset? a, DateTimeOffset? b) => a is null ? b : b is null ? a : a > b ? a : b;
 

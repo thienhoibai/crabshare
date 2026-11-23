@@ -1,6 +1,7 @@
 /* Đăng nhập (/dang-nhap) và chuyển hướng theo vai trò; chặn trang theo vai trò (RequireRole). */
-import type { AuthResponse, LoginRequest } from '../src/shared/api/api.gen'
-import { expect, reply, signIn, test, userOf, type Api, type Role } from './support/app'
+import { kycUnverified, party } from './support/investor'
+import type { AuthResponse, LoginRequest, PartyDocumentResponse } from '../src/shared/api/api.gen'
+import { expect, file, photo, reply, signIn, test, TOKEN, userOf, type Api, type Role } from './support/app'
 
 const session = (role: Role): AuthResponse => ({ accessToken: `token-${role}`, expiresAt: '2099-01-01T00:00:00Z', user: userOf(role) })
 
@@ -35,10 +36,12 @@ test('các ô đăng ký thẳng hàng và cùng chiều cao khi có gợi ý m�
 })
 
 test('đăng ký báo lỗi tại ô nhập, hiện mật khẩu và gửi đúng loại tài khoản', async ({ page, api }) => {
-  noData(api)
+  api.get('/api/me/kyc', kycUnverified)
+  api.get('/api/me/party', party)
   api.post('/api/auth/register', session('Investor'))
   await page.goto('/dang-ky')
   const submit = page.getByRole('button', { name: 'Tạo tài khoản' })
+  await expect(page.getByText('Bạn đăng ký với tư cách nào?')).toHaveCount(0)
   const fullName = page.getByRole('textbox', { name: 'Họ và tên', exact: true })
   const password = page.getByLabel(/^Mật khẩu/)
 
@@ -61,10 +64,121 @@ test('đăng ký báo lỗi tại ô nhập, hiện mật khẩu và gửi đún
   await page.getByRole('checkbox', { name: 'Tôi đồng ý điều khoản sử dụng' }).check()
   await submit.click()
 
-  await expect(page).toHaveURL(/\/nha-dau-tu$/)
+  await expect(page).toHaveURL(/\/hoan-thien-ho-so$/)
+  await expect(page.getByRole('heading', { name: 'Thông tin hồ sơ' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Thông tin liên hệ' })).toBeVisible()
+  const household = page.getByRole('radio', { name: 'Hộ kinh doanh' })
+  const contact = page.getByLabel('Số điện thoại liên hệ')
+  await expect(household).toBeDisabled()
+  await expect(contact).toBeDisabled()
+  await page.getByRole('button', { name: 'Tiếp tục' }).focus()
+  await page.keyboard.press('Tab')
+  await expect(contact).not.toBeFocused()
+  await page.getByRole('button', { name: 'Tiếp tục' }).click()
+  await expect(household).toBeEnabled()
+  await expect(page.getByRole('heading', { name: 'Xác minh danh tính', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Hướng dẫn/ })).toHaveCount(0)
+  await expect(contact).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Tiếp tục' })).toBeDisabled()
+  await page.getByText('Hộ kinh doanh', { exact: true }).click()
+  await expect(page.getByLabel('Tên pháp lý')).toBeVisible()
+  await expect(page.getByLabel('Mã số thuế hoặc số đăng ký')).toBeVisible()
+  await expect(page.getByRole('complementary').getByRole('heading', { name: 'Giấy chứng nhận đăng ký hộ kinh doanh' })).toBeVisible()
+  await expect(page.getByRole('img', { name: 'Giấy chứng nhận đăng ký hộ kinh doanh, ảnh mẫu' })).toHaveAttribute('src', '/profile-samples/household.jpg')
+  await page.getByText('Doanh nghiệp', { exact: true }).first().click()
+  await expect(page.getByRole('complementary').getByRole('heading', { name: 'Giấy chứng nhận đăng ký doanh nghiệp' })).toBeVisible()
+  await expect(page.getByRole('img', { name: 'Giấy chứng nhận đăng ký doanh nghiệp, ảnh mẫu' })).toHaveAttribute('src', '/profile-samples/company.jpg')
+  await page.getByText('Hợp tác xã', { exact: true }).first().click()
+  await expect(page.getByRole('complementary').getByRole('heading', { name: 'Giấy chứng nhận đăng ký hợp tác xã' })).toBeVisible()
+  await expect(page.getByRole('img', { name: 'Giấy chứng nhận đăng ký hợp tác xã, ảnh mẫu' })).toHaveAttribute('src', '/profile-samples/cooperative.jpg')
+  await expect(page.getByText(/Nhiều hộ nuôi cùng bán cua/)).toBeVisible()
   expect(api.sent('POST', '/api/auth/register').map((c) => c.body)).toEqual([{
     email: 'nhadautu@test.local', password: 'mat-khau-thu', fullName: 'Người dùng thử', role: 'Investor', partyType: 'Individual',
   }])
+})
+
+test('chọn giấy tờ trước khi lưu, gửi lại ảnh nếu tải lên lỗi', async ({ page, api }) => {
+  let profile = { ...party, verificationStatus: 'Unverified' }
+  const document = { documentId: 500, docType: 'BusinessRegistration', contentType: 'image/png', uploadedAt: '2026-11-23T07:00:00Z' }
+  let documents: typeof document[] = []
+  let attempts = 0
+  api.get('/api/me/party', () => profile)
+  api.put('/api/me/party', () => (profile = { ...profile, partyType: 'Cooperative', legalName: 'HTX Mẫu', representative: 'Đại diện' }))
+  api.get('/api/me/party/documents', () => documents)
+  api.get('/api/me/party/documents/500/file', () => reply(404))
+  api.post('/api/me/party/documents', () => {
+    attempts += 1
+    if (attempts === 1) return reply(503, { detail: 'Không thể tải ảnh lên. Hãy thử lại.' })
+    documents = [document]
+    profile = { ...profile, verificationStatus: 'Pending' }
+    return document
+  })
+  await signIn(page, 'Customer')
+  await page.goto('/hoan-thien-ho-so')
+  await page.getByRole('button', { name: 'Tiếp tục' }).click()
+  await page.getByText('Hợp tác xã', { exact: true }).first().click()
+  await page.getByLabel('Thêm ảnh giấy tờ').setInputFiles(photo('giay-htx.png'))
+  await page.getByLabel('Tên pháp lý').fill('HTX Mẫu')
+  await page.getByLabel('Người đại diện').fill('Đại diện')
+  await page.getByRole('button', { name: 'Lưu hồ sơ và gửi giấy tờ' }).click()
+  await expect(page.getByText('Không thể tải ảnh lên. Hãy thử lại.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Tiếp tục' })).toBeDisabled()
+  await page.getByRole('button', { name: 'Gửi giấy tờ', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Tiếp tục' })).toBeEnabled()
+  expect(api.calls.filter(({ method }) => method === 'PUT' || method === 'POST').map(({ method }) => method)).toEqual(['PUT', 'POST', 'POST'])
+  expect(api.sent('POST', '/api/me/party/documents').every(({ multipart }) => multipart)).toBe(true)
+})
+
+test('hồ sơ tổ chức đã bị từ chối không mở bước liên hệ dù còn giấy tờ cũ', async ({ page, api }) => {
+  api.get('/api/me/party', {
+    ...party, partyType: 'Company', representative: 'Người đại diện', verificationStatus: 'Rejected',
+    rejectReason: 'Ảnh bị mờ', legalDossierVerified: false,
+  })
+  api.get('/api/me/party/documents', [
+    { documentId: 1, docType: 'BusinessRegistration', contentType: 'image/png', uploadedAt: '2026-11-22T07:00:00Z' },
+  ])
+  api.get('/api/me/party/documents/1/file', () => reply(404))
+  await signIn(page, 'Investor')
+  await page.goto('/hoan-thien-ho-so')
+  await page.getByRole('button', { name: 'Tiếp tục' }).click()
+  await expect(page.getByText(/Hồ sơ bị từ chối.*Ảnh bị mờ/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Tiếp tục' })).toBeDisabled()
+  await expect(page.getByLabel('Số điện thoại liên hệ')).toBeDisabled()
+})
+
+test('tổ chức gửi giấy đăng ký dạng PDF trong bước xác minh rồi tải lại bản đã gửi', async ({ page, api }) => {
+  const path = '/api/me/party/documents'
+  const pdf = Buffer.from('%PDF-1.4\n%%EOF\n')
+  const document: PartyDocumentResponse = {
+    documentId: 501, docType: 'BusinessRegistration', contentType: 'application/pdf', note: null, uploadedAt: '2026-11-23T07:00:00Z',
+  }
+  let uploaded = false
+  api.get('/api/me/party', () => ({
+    ...party, partyType: 'Company', representative: 'Người đại diện', verificationStatus: uploaded ? 'Pending' : 'Unverified',
+  }))
+  api.get(path, () => uploaded ? [document] : [])
+  api.post(path, () => { uploaded = true; return document })
+  api.get(`${path}/501/file`, file(pdf, 'application/pdf'))
+
+  await signIn(page, 'Customer')
+  await page.goto('/hoan-thien-ho-so')
+  await page.getByRole('button', { name: 'Tiếp tục' }).click()
+  const [picker] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.getByRole('button', { name: 'Chọn tệp PDF', exact: true }).click(),
+  ])
+  expect(await picker.element().getAttribute('accept')).toMatch(/application\/pdf/)
+  await picker.setFiles({ name: 'giay-dang-ky.pdf', mimeType: 'application/pdf', buffer: pdf })
+  await expect(page.getByText('giay-dang-ky.pdf', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Gửi giấy tờ', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Tiếp tục' })).toBeEnabled()
+  expect(api.sent('POST', path)).toMatchObject([{ multipart: true, body: { DocType: 'BusinessRegistration', File: 'file:giay-dang-ky.pdf' } }])
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: /Tải PDF/ }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/\.pdf$/)
+  expect(api.sent('GET', `${path}/501/file`)).toMatchObject([{ auth: `Bearer ${TOKEN}` }])
 })
 
 test('đăng ký với số điện thoại đã dùng báo lỗi ngay tại ô số điện thoại', async ({ page, api }) => {
@@ -143,6 +257,39 @@ test('sai mật khẩu thì hiện lỗi của máy chủ và ở lại trang đ
   await expect(page.getByText('Email hoặc mật khẩu không đúng.')).toBeVisible()
   await expect(page).toHaveURL(/\/dang-nhap$/)
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('crabshare-auth') ?? '{"state":{}}').state.token ?? null)).toBeNull()
+})
+
+test('khách chưa hoàn tất quay lại hồ sơ khi đăng nhập và chỉ vào cổng sau khi lưu', async ({ page, api }) => {
+  noData(api)
+  const customer = session('Customer')
+  let complete = false
+  api.post('/api/auth/login', () => ({ ...customer, user: { ...customer.user, customerProfileRequired: !complete } }))
+  api.get('/api/me/party', party)
+  api.put('/api/me/party', () => {
+    complete = true
+    return party
+  })
+  await page.goto('/dang-nhap?next=%2Fkhach%2Fdia-diem')
+  await page.getByLabel('Email').fill('customer@test.local')
+  await page.getByLabel('Mật khẩu', { exact: true }).fill('mat-khau-thu')
+  await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click()
+  await expect(page).toHaveURL(/\/hoan-thien-ho-so$/)
+  await page.goto('/khach/dia-diem')
+  await expect(page).toHaveURL(/\/hoan-thien-ho-so$/)
+
+  await page.getByRole('button', { name: 'Tiếp tục' }).click()
+  await page.getByRole('button', { name: 'Tiếp tục' }).click()
+  await page.getByRole('button', { name: 'Hoàn tất' }).click()
+  await expect(page.getByRole('link', { name: 'Vào trang chính' })).toBeVisible()
+  expect(api.sent('PUT', '/api/me/party')[0].body).toMatchObject({ completeCustomerProfile: true })
+
+  await page.getByRole('link', { name: 'Vào trang chính' }).click()
+  await expect(page).toHaveURL(/\/khach$/)
+  await page.goto('/dang-nhap')
+  await page.getByLabel('Email').fill('customer@test.local')
+  await page.getByLabel('Mật khẩu', { exact: true }).fill('mat-khau-thu')
+  await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click()
+  await expect(page).toHaveURL(/\/khach$/)
 })
 
 test('nút hiện mật khẩu đổi kiểu ô nhập', async ({ page }) => {

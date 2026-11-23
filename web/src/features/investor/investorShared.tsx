@@ -41,16 +41,15 @@ export const sumFigures = (list: MoneyFigures[]): MoneyFigures =>
 
 const plain = (n: number) => new Intl.NumberFormat('vi-VN').format(n)
 
-/** Thẻ lớn nền tối với đủ ba số: đã góp (số lớn), đã giải ngân theo mốc và còn giữ (hai số dưới, số 0 vẫn hiện). */
+/** Ba số đã đối soát, với phạm vi vốn được ghi rõ ở tiêu đề và chú thích. */
 export function MoneyStat({ title, figures, sub }: { title: string; figures: MoneyFigures; sub?: string }) {
   const parts = [
     { label: 'Đã giải ngân theo mốc', value: figures.disbursed, tone: 'var(--accent)' },
     { label: 'Còn giữ', value: figures.heldInAccount, tone: 'var(--ok)' },
   ]
   return (
-    <OpStat label={title} value={plain(figures.contributed)} unit="đ" sub={sub}>
-      <span className="op-hero__split">{parts.filter((p) => p.value > 0).map((p) => <i key={p.label} style={{ flex: p.value, background: p.tone }} />)}</span>
-      <ul className="op-hero__legend">{parts.map((p) => <li key={p.label}><i style={{ background: p.tone }} />{p.label}<b>{formatVnd(p.value)}</b></li>)}</ul>
+    <OpStat className="inv-money" label={title} value={plain(figures.contributed)} unit="đ" sub={sub}>
+      <ul className="inv-money__ledger">{parts.map((p) => <li key={p.label}><span>{p.label}</span><b>{formatVnd(p.value)}</b></li>)}</ul>
     </OpStat>
   )
 }

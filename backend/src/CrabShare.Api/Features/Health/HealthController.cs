@@ -9,9 +9,11 @@ namespace CrabShare.Api.Features.Health;
 public sealed class HealthController : ControllerBase
 {
     /// <summary>API còn sống không (không chạm CSDL) — dùng cho kiểm tra triển khai.</summary>
+    [EndpointSummary("Kiểm tra API đang hoạt động")]
     [HttpGet("live")]
     public IActionResult Live() => Ok(new { status = "ok" });
 
+    [EndpointSummary("Xem phiên bản API")]
     [HttpGet("version")]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public IActionResult Version() => Ok(new {
@@ -19,6 +21,7 @@ public sealed class HealthController : ControllerBase
     });
 
     /// <summary>API có kết nối được CSDL không.</summary>
+    [EndpointSummary("Kiểm tra trạng thái sẵn sàng của dịch vụ")]
     [HttpGet("ready")]
     public async Task<IActionResult> Ready([FromServices] AppDbContext db, CancellationToken ct) =>
         await db.Database.CanConnectAsync(ct)

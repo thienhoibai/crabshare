@@ -1,4 +1,5 @@
 using System.Data;
+using CrabShare.Api.Common;
 using CrabShare.Api.Common.Auditing;
 using CrabShare.Api.Common.Auth;
 using CrabShare.Api.Common.Errors;
@@ -9,9 +10,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CrabShare.Api.Features.Accounts;
 
-public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBankNameMatcher matcher, TimeProvider clock)
+public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBankNameMatcher matcher, TimeProvider clock,
+    PayoutRecipientService recipients)
 {
-    private sealed record Owner(string Type, long Id, string Name);
+    private sealed record Owner(string Type, long Id, string Name, bool Verified, string VerificationMethod);
 
     public async Task<PayoutProfileResponse> GetPayoutAsync(string? ownerType, CancellationToken ct)
     {
@@ -24,6 +26,9 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
     public async Task<PayoutProfileResponse> SavePayoutAsync(string? ownerType, PayoutAccountRequest req, CancellationToken ct)
     {
         var owner = await RequireOwnerAsync(ownerType, false, ct);
+        if (!owner.Verified)
+            throw new BusinessRuleException("payout.recipient_unverified",
+                "Cần xác minh hồ sơ chủ sở hữu trước khi đăng ký tài khoản nhận tiền.");
         var result = await matcher.MatchAsync(owner.Name, req.AccountHolderName.Trim(), ct);
         return await TransactionAsync(async () =>
         {
@@ -141,7 +146,8 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
             if (!me.IsInRole(Roles.Investor) || !await db.Investors.AnyAsync(i => i.UserId == me.UserId, ct)) throw Denied();
             var query = forWrite ? db.AppUsers.FromSqlInterpolated($"SELECT * FROM dbo.app_user WITH (UPDLOCK, HOLDLOCK) WHERE user_id = {me.UserId}") : db.AppUsers.AsQueryable();
             var user = await query.AsNoTracking().SingleAsync(u => u.UserId == me.UserId, ct);
-            return new Owner(type, user.UserId, user.FullName);
+            var recipient = await recipients.ForUserAsync(user.UserId, ct);
+            return new Owner(type, user.UserId, recipient.LegalName, recipient.Verified, recipient.VerificationMethod);
         }
         if (!me.IsInRole(Roles.OperatorMember)) throw Denied();
         var member = await db.OperatorMembers.AsNoTracking().SingleOrDefaultAsync(m => m.UserId == me.UserId && m.MemberRole == "Owner", ct)
@@ -149,7 +155,8 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
         if (me.OperatorId is { } claimed && claimed != member.OperatorId) throw Denied();
         var operators = forWrite ? db.Operators.FromSqlInterpolated($"SELECT * FROM dbo.operator WITH (UPDLOCK, HOLDLOCK) WHERE operator_id = {member.OperatorId}") : db.Operators.AsQueryable();
         var op = await operators.AsNoTracking().SingleAsync(o => o.OperatorId == member.OperatorId, ct);
-        return new Owner(type, op.OperatorId, op.LegalName);
+        var farmRecipient = await recipients.ForOperatorAsync(op.OperatorId, ct);
+        return new Owner(type, op.OperatorId, farmRecipient.LegalName, farmRecipient.Verified, farmRecipient.VerificationMethod);
     }
 
     private async Task<long> RequireCustomerAsync(bool forWrite, CancellationToken ct)
@@ -183,6 +190,17 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
     private static ForbiddenException Denied() => new("accounts.access_denied", "Tài khoản không có quyền thao tác.");
     private static NotFoundException MissingAddress() => new("addresses.not_found", "Không tìm thấy địa chỉ của bạn.");
     private static AddressResponse Address(CustomerAddress a) => new(a.AddressId, a.RecipientName, a.RecipientPhone, a.AddressLine, a.Province, a.IsDefault, a.CreatedAt);
-    private static PayoutProfileResponse Profile(Owner owner, PayoutAccount? a) => new(owner.Type, owner.Name,
-        a is null ? null : new(a.PayoutAccountId, a.BankCode, a.AccountNo, a.AccountHolderName, a.NameMatchStatus, a.Status, a.UpdatedAt));
+    private static PayoutProfileResponse Profile(Owner owner, PayoutAccount? account)
+    {
+        PayoutAccountResponse? response = null;
+        if (account is not null)
+        {
+            var match = account.NameMatchStatus == "Matched" && !LegalNames.Match(owner.Name, account.AccountHolderName)
+                ? "Pending" : account.NameMatchStatus;
+            var status = account.Status == "Active" && (!owner.Verified || match != "Matched") ? "Locked" : account.Status;
+            response = new(account.PayoutAccountId, account.BankCode, account.AccountNo, account.AccountHolderName,
+                match, status, account.UpdatedAt);
+        }
+        return new(owner.Type, owner.Name, response, owner.Verified, owner.VerificationMethod);
+    }
 }

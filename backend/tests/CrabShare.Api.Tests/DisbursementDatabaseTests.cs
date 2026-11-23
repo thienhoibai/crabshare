@@ -150,6 +150,70 @@ public class DisbursementDatabaseTests(FundingDatabaseFixture fixture) : IClassF
         Assert.True(batchId > 0);
     }
 
+    [Theory]
+    [InlineData("Locked", "payment.payout_account_unavailable")]
+    [InlineData("Closed", "payment.payout_account_unavailable")]
+    [InlineData("Mismatched", "payment.payout_account_unavailable")]
+    [InlineData("OldName", "payment.payout_name_mismatch")]
+    [InlineData("Unverified", "payment.recipient_unverified")]
+    public async Task Sending_rechecks_an_account_already_attached_to_an_instruction(string change, string errorCode)
+    {
+        var (_, code, _) = await ReadyBatchAsync();
+        var (owner, _) = await OwnerAsync();
+        var (admin, _) = await UserAsync("Admin kiểm tra lại tài khoản", Roles.PlatformAdmin);
+        var saved = await owner.PutAsJsonAsync("/api/me/payout-account?ownerType=Operator", new
+        {
+            bankCode = "VCB", accountNo = Random.Shared.NextInt64(1000000000, 9999999999).ToString(),
+            accountHolderName = "HTX Test góp vốn",
+        });
+        saved.EnsureSuccessStatusCode();
+        (await owner.PostAsync($"/api/batches/{code}/tranches/1/request", null)).EnsureSuccessStatusCode();
+        var tranche = await TrancheOf(owner, code, 1);
+        var released = await admin.PostAsync($"/api/admin/tranches/{tranche.TrancheId}/release", null);
+        released.EnsureSuccessStatusCode();
+        var instructionId = (await released.Content.ReadFromJsonAsync<TrancheResponse>())!.InstructionId;
+
+        long payoutAccountId;
+        string? previousFarmStatus = null;
+        await using (var db = fixture.OpenDb())
+        {
+            var instruction = await db.PaymentInstructions.Include(i => i.PayoutAccount)
+                .SingleAsync(i => i.InstructionId == instructionId);
+            var account = instruction.PayoutAccount!;
+            payoutAccountId = account.PayoutAccountId;
+            if (change is "Locked" or "Closed") account.Status = change;
+            if (change == "Mismatched") account.NameMatchStatus = "Mismatched";
+            if (change == "OldName") account.AccountHolderName = "Tên pháp lý cũ";
+            if (change == "Unverified")
+            {
+                var farm = await db.Operators.SingleAsync(o => o.OperatorId == fixture.OperatorId);
+                previousFarmStatus = farm.Status;
+                farm.Status = "Submitted";
+            }
+            await db.SaveChangesAsync();
+        }
+        try
+        {
+            var sent = await admin.PostAsync($"/api/admin/payment-instructions/{instructionId}/send", null);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, sent.StatusCode);
+            Assert.Equal(errorCode, await ErrorCode(sent));
+            await using var verifyDb = fixture.OpenDb();
+            Assert.Equal("Created", (await verifyDb.PaymentInstructions.SingleAsync(i => i.InstructionId == instructionId)).Status);
+            Assert.False(await verifyDb.ProviderTransactions.AnyAsync(t => t.InstructionId == instructionId));
+        }
+        finally
+        {
+            await using var db = fixture.OpenDb();
+            var account = await db.PayoutAccounts.SingleAsync(p => p.PayoutAccountId == payoutAccountId);
+            account.Status = "Active";
+            account.NameMatchStatus = "Matched";
+            account.AccountHolderName = "HTX Test góp vốn";
+            if (previousFarmStatus is not null)
+                (await db.Operators.SingleAsync(o => o.OperatorId == fixture.OperatorId)).Status = previousFarmStatus;
+            await db.SaveChangesAsync();
+        }
+    }
+
     [Fact]
     public async Task Later_tranches_need_evidence_and_admin_can_ask_for_explanation_or_block()
     {

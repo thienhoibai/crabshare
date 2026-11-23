@@ -162,7 +162,7 @@ test('các bản đã ghi: lọc theo ngày và chuyển trang đều gửi lên
   await expect(page.getByRole('row').filter({ hasText: 'Trang 1 đã lọc' })).toContainText('Không nhất quán')
   await page.getByRole('button', { name: 'Trang sau' }).click()
   await expect(page.getByText('Trang 2 đã lọc')).toBeVisible()
-  await expect(page.getByText(vnDay(dateFromNow(-20)))).toBeVisible()
+  await expect(page.getByRole('row').filter({ hasText: 'Trang 2 đã lọc' }).getByText(vnDay(dateFromNow(-20)), { exact: true })).toBeVisible()
   expect(api.sent('GET', HISTORY).at(-1)!.query).toEqual({ from: dateFromNow(-30), to: dateFromNow(-5), page: '2', pageSize: '20' })
 
   await page.getByRole('button', { name: 'Bỏ lọc' }).click()

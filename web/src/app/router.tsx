@@ -30,6 +30,7 @@ import { qcRoutes } from '../features/qc/routes'
 const Landing = lazy(() => import('../features/landing/Landing'))
 const LoginPage = lazy(() => import('../features/auth/LoginPage'))
 const RegisterPage = lazy(() => import('../features/auth/RegisterPage'))
+const ProfileSetup = lazy(() => import('../features/auth/ProfileSetup'))
 const NotFoundPage = lazy(() => import('../features/public/NotFoundPage'))
 const BatchWorkspace = lazy(() => import('../features/operator/batch/BatchWorkspace'))
 const OperatorRegistration = lazy(() => import('../features/operator/OperatorRegistration'))
@@ -37,7 +38,7 @@ const OperatorRegistration = lazy(() => import('../features/operator/OperatorReg
 /** Một cổng: kiểm tra vai trò rồi dựng khung điều hành quanh các trang con. */
 const area = (name: Area, children: RouteObject[]): RouteObject => ({
   element: (
-    <RequireRole roles={AREAS[name].roles}>
+    <RequireRole roles={AREAS[name].roles} requireCustomerProfile={name === 'customer'}>
       <ConsoleLayout area={name} />
     </RequireRole>
   ),
@@ -90,6 +91,7 @@ export const router = createBrowserRouter([
       { path: '/', element: <Landing /> },
       { path: '/dang-nhap', element: <LoginPage /> },
       { path: '/dang-ky', element: <RegisterPage /> },
+      { path: '/hoan-thien-ho-so', element: <RequireRole roles={['Customer', 'Investor']}><ProfileSetup /></RequireRole> },
       ...publicRoutes,
       // Tài khoản đã đăng nhập nhưng chưa thuộc hộ nuôi nào: nộp hồ sơ hộ nuôi ở đây, được duyệt rồi mới vào cổng người nuôi.
       { path: '/dang-ky-ho-nuoi', element: <RequireRole><SiteShell><OperatorRegistration /></SiteShell></RequireRole> },

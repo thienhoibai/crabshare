@@ -29,7 +29,19 @@ export function ContributionsTab({ detail }: { detail: PortfolioDetail }) {
 
   return (
     <OpPanel title="Khoản góp của tôi">
-      <OpTable columns={columns} rows={contributions} rowKey={(c) => c.id} empty="Chưa có khoản góp nào" />
+      <div className="inv-contribution-table"><OpTable columns={columns} rows={contributions} rowKey={(c) => c.id} empty="Chưa có khoản góp nào" /></div>
+      <ul className="inv-contribution-list" aria-label="Khoản góp của tôi">
+        {contributions.map((c) => (
+          <li key={c.id} className="inv-contribution-record">
+            <header><b><Money value={c.amount} /></b><StatusBadge kind="contribution" value={c.status} /></header>
+            <dl>
+              <div><dt>Tiền về lúc</dt><dd>{formatDateTime(c.confirmedAt) || '—'}</dd></div>
+              <div><dt>Hợp đồng</dt><dd>{columns[3].cell(c, 0)}</dd></div>
+            </dl>
+          </li>
+        ))}
+        {contributions.length === 0 && <li>Chưa có khoản góp nào</li>}
+      </ul>
 
       {money.data && (
         <OpMore label="Tiền của cả Lô">

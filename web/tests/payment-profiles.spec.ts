@@ -2,7 +2,7 @@
    GET / PUT /api/me/payout-account?ownerType=Investor | Operator. Địa chỉ giao hàng của khách đã chuyển sang /khach/dia-diem (spec của cổng khách). */
 import type { OperatorResponse, PayoutAccountRequest, PayoutProfileResponse } from '../src/shared/api/api.gen'
 import { daysFromNow, expect, reply, signIn, test } from './support/app'
-import { HOLDER, mockInvestor, panel, payoutActive, payoutEmpty } from './support/investor'
+import { HOLDER, mockInvestor, panel, party, payoutActive, payoutEmpty } from './support/investor'
 
 const INPUT: PayoutAccountRequest = { bankCode: 'VCB', accountNo: '0071000123456', accountHolderName: HOLDER }
 
@@ -51,6 +51,26 @@ test.describe('nhà đầu tư', () => {
     expect(puts[0].auth).toBe('Bearer test-token')
     expect(api.sent('GET', '/api/me/payout-account').every((c) => c.query.ownerType === 'Investor')).toBe(true)
     expect(api.writes()).toEqual(['PUT /api/me/payout-account'])
+  })
+
+  test('tổ chức chưa được duyệt thấy tên doanh nghiệp và cần duyệt hồ sơ trước khi khai tài khoản', async ({ page, api }) => {
+    api.get('/api/me/party', {
+      ...party, partyType: 'Company', legalName: 'CONG TY CUA VIET', representative: HOLDER,
+      verificationStatus: 'Pending', legalDossierVerified: false,
+    })
+    api.get('/api/me/party/documents', [])
+    api.get('/api/me/payout-account', {
+      ...payoutEmpty, expectedHolderName: 'CONG TY CUA VIET', recipientVerified: false, verificationMethod: 'LegalDossier',
+    })
+    await page.goto('/nha-dau-tu/ho-so')
+    await expect(page.getByRole('tab', { name: 'Hồ sơ đối tác' })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('tab', { name: 'Danh tính người đại diện' })).toBeVisible()
+    await page.getByRole('tab', { name: 'Tài khoản nhận tiền' }).click()
+    const form = panel(page, 'Tài khoản nhận tiền')
+    await expect(form.getByText('Phải khớp: CONG TY CUA VIET')).toBeVisible()
+    await expect(form.getByText('Hồ sơ chủ sở hữu cần được xác minh trước khi đăng ký tài khoản nhận tiền.')).toBeVisible()
+    await expect(form.getByRole('button', { name: 'Lưu tài khoản' })).toBeDisabled()
+    expect(api.writes()).toEqual([])
   })
 
   test('tên không khớp hồ sơ: tài khoản bị khoá, không ghi là đang nhận tiền; sửa tên rồi lưu lại thì mở', async ({ page, api }) => {

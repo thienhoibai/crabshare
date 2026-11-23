@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CrabShare.Api.Common.Auth;
+using CrabShare.Api.Features.Funding;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrabShare.Api.Tests.Br15;
@@ -32,6 +33,42 @@ public sealed class PartyDocumentTests(Br15Fixture f) : IClassFixture<Br15Fixtur
         party.VerifiedAt = null;
         await db.SaveChangesAsync();
         return (userId, partyId);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Pdf_is_downloadable_for_owner_and_admin_and_renamed_images_are_rejected(bool valid)
+    {
+        var (userId, partyId) = await NewCompanyAsync();
+        using var company = f.Client(userId, Roles.Customer, Roles.Investor);
+        using var buffer = new MemoryStream();
+        using (var pdf = SkiaSharp.SKDocument.CreatePdf(buffer))
+        {
+            pdf.BeginPage(200, 200).Clear(SkiaSharp.SKColors.White);
+            pdf.EndPage();
+            pdf.Close();
+        }
+        var bytes = valid ? buffer.ToArray() : Br15Scenario.Jpeg("renamed-photo");
+        var file = new ByteArrayContent(bytes);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        using var form = new MultipartFormDataContent { { file, "File", "certificate.pdf" } };
+        var upload = await company.PostAsync("/api/me/party/documents", form);
+        Assert.Equal(valid ? HttpStatusCode.Created : HttpStatusCode.BadRequest, upload.StatusCode);
+        if (!valid) return;
+
+        var result = await upload.Content.ReadFromJsonAsync<JsonElement>();
+        var id = result.GetProperty("documentId").GetInt64();
+        using var admin = f.Admin();
+        using var ownerFile = await company.GetAsync($"/api/me/party/documents/{id}/file");
+        using var adminFile = await admin.GetAsync($"/api/admin/parties/{partyId}/documents/{id}/file");
+        foreach (var downloaded in new[] { ownerFile, adminFile })
+        {
+            Assert.Equal(HttpStatusCode.OK, downloaded.StatusCode);
+            Assert.Equal("application/pdf", downloaded.Content.Headers.ContentType!.MediaType);
+            Assert.Equal("attachment", downloaded.Content.Headers.ContentDisposition!.DispositionType);
+            Assert.Equal(bytes, await downloaded.Content.ReadAsByteArrayAsync());
+        }
     }
 
     [Fact]
@@ -86,6 +123,9 @@ public sealed class PartyDocumentTests(Br15Fixture f) : IClassFixture<Br15Fixtur
         Assert.Empty(await company.GetFromJsonAsync<JsonElement[]>("/api/me/party/documents") ?? []);
 
         using var admin = f.Admin();
+        var verify = await admin.PostAsync($"/api/admin/parties/{partyId}/verify", null);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, verify.StatusCode);
+        Assert.Equal("party.documents_required", await Br15Fixture.ErrorCode(verify));
         Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync($"/api/admin/parties/{partyId}/reject", new { reason = "Ảnh mờ, không đọc được mã số thuế" })).StatusCode);
 
         Assert.Equal(HttpStatusCode.Created, (await company.PostAsync("/api/me/party/documents", Form("License", "Ảnh chụp lại rõ hơn"))).StatusCode);
@@ -93,6 +133,46 @@ public sealed class PartyDocumentTests(Br15Fixture f) : IClassFixture<Br15Fixtur
         var party = await db.Parties.SingleAsync(p => p.PartyId == partyId);
         Assert.Equal("Pending", party.VerificationStatus);
         Assert.Null(party.RejectReason);
+    }
+
+    [Fact]
+    public async Task Organization_reserves_capital_after_legal_review_even_without_ekyc()
+    {
+        var (userId, partyId) = await NewCompanyAsync();
+        using var company = f.Client(userId, Roles.Customer, Roles.Investor);
+        using var admin = f.Admin();
+        var batch = await Br15Scenario.FundingBatchAsync(f);
+        var detail = $"/api/funding/batches/{batch.Code}";
+        var reserve = $"/api/batches/{batch.Code}/contributions";
+        var risk = (await company.GetFromJsonAsync<RiskDisclosureResponse>("/api/risk-disclosures/active"))!;
+        (await company.PostAsJsonAsync("/api/risk-acknowledgements", new { risk.RiskDisclosureId, scrolledToEnd = true })).EnsureSuccessStatusCode();
+        var amount = (await company.GetFromJsonAsync<FundingBatchResponse>(detail))!.MinContribution;
+
+        var before = (await company.GetFromJsonAsync<FundingBatchResponse>(detail))!.Me;
+        Assert.True(before.KycVerified);
+        Assert.False(before.LegalDossierVerified);
+        var blocked = await company.PostAsJsonAsync(reserve, new { amount });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, blocked.StatusCode);
+        Assert.Equal("funding.legal_dossier_required", await Br15Fixture.ErrorCode(blocked));
+
+        var missing = await admin.PostAsync($"/api/admin/parties/{partyId}/verify", null);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, missing.StatusCode);
+        Assert.Equal("party.documents_required", await Br15Fixture.ErrorCode(missing));
+
+        using var papers = Form();
+        (await company.PostAsync("/api/me/party/documents", papers)).EnsureSuccessStatusCode();
+        var awaitingReview = await company.PostAsJsonAsync(reserve, new { amount });
+        Assert.Equal("funding.legal_dossier_required", await Br15Fixture.ErrorCode(awaitingReview));
+
+        await using (var db = f.OpenDb())
+            await db.Investors.Where(i => i.UserId == userId).ExecuteUpdateAsync(setters => setters
+                .SetProperty(i => i.VerificationStatus, "Unverified").SetProperty(i => i.VerifiedAt, (DateTimeOffset?)null));
+        (await admin.PostAsync($"/api/admin/parties/{partyId}/verify", null)).EnsureSuccessStatusCode();
+
+        var approved = (await company.GetFromJsonAsync<FundingBatchResponse>(detail))!.Me;
+        Assert.False(approved.KycVerified);
+        Assert.True(approved.LegalDossierVerified);
+        Assert.Equal(HttpStatusCode.Created, (await company.PostAsJsonAsync(reserve, new { amount })).StatusCode);
     }
 
     [Fact]

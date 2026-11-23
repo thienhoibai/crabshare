@@ -33,6 +33,8 @@ public sealed class StationMeta
     [Required, StringLength(40)] public string DeviceCode { get; set; } = "";
     [StringLength(20)] public string? DeviceType { get; set; }
     [StringLength(30)] public string? FirmwareVersion { get; set; }
+    [StringLength(64)] public string? SessionNo { get; set; }
+    [StringLength(40)] public string? CrabTag { get; set; }
     public DateTimeOffset? CapturedAt { get; set; }
     [Range(typeof(decimal), "0.1", "5000")] public decimal? WeightG { get; set; }
     [Range(1, 1000)] public int? WeightSamples { get; set; }
@@ -85,7 +87,7 @@ public sealed class CalibrationMessage
 }
 
 public sealed record IngestAccepted(string Status, string? SessionNo = null, long? Id = null);
-public sealed record OpenSessionResponse(string SessionNo, string CrabTag, DateTimeOffset OpenedAt);
+public sealed record OpenSessionResponse(string SessionNo, string CrabTag, DateTimeOffset OpenedAt, string BatchCode, int BindingVersion = 1);
 public sealed record DeviceCommandResponse(long CommandId, string CommandType, string? BoxCode, DateTimeOffset CreatedAt);
 public sealed record HeartbeatResponse(DateTimeOffset ServerTime, string Status, DateTimeOffset? LastCalibratedAt, bool CalibrationDue);
 

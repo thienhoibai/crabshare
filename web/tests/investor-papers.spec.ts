@@ -29,7 +29,7 @@ test.describe('biểu quyết', () => {
     const openTab = page.getByRole('tab', { name: /^Đang mở/ })
     await expect(openTab).toHaveAttribute('aria-selected', 'true')
     await expect(openTab).toContainText('1')
-    const current = panel(page, `Thanh lý sớm · Lô ${RUN}`)
+    const current = panel(page, `Thanh lý sớm, Lô ${RUN}`)
     await expect(current.getByText(decisionOpen.proposal)).toBeVisible()
     await expect(page.getByText('Bán phần dư')).toHaveCount(0)
 
@@ -37,13 +37,13 @@ test.describe('biểu quyết', () => {
     await page.getByRole('dialog', { name: 'Biểu quyết: Không đồng ý' }).getByRole('button', { name: 'Gửi phiếu không đồng ý' }).click()
     await expect(page.getByRole('status').filter({ hasText: 'Đã ghi nhận phiếu của bạn.' })).toBeVisible()
     await expect(current.getByText('Bạn đã chọn: Không đồng ý')).toBeVisible()
-    await expect(current.getByText(`${vnd(50_000_000)} · 25%`)).toBeVisible()
+    await expect(current.getByText(`${vnd(50_000_000)}, 25%`)).toBeVisible()
     await expect(current.getByRole('button')).toHaveCount(0)
     await expect(openTab).toHaveText('Đang mở')
     expect(api.sent('POST', path).map((c) => c.body)).toEqual([expect.objectContaining({ choice: 'No' })])
 
     await page.getByRole('tab', { name: 'Đã kết thúc' }).click()
-    const past = panel(page, `Bán phần dư · Lô ${RUN}`)
+    const past = panel(page, `Bán phần dư, Lô ${RUN}`)
     await expect(past.getByText('Thông qua', { exact: true })).toBeVisible()
     await expect(past.getByText('Bạn đã chọn: Đồng ý')).toBeVisible()
     await expect(page.getByText('Thanh lý sớm')).toHaveCount(0)
@@ -155,7 +155,7 @@ test.describe('quyết toán', () => {
     api.get('/api/me/settlements', [proposedRow, settlementPaid])
     await page.goto('/nha-dau-tu/quyet-toan')
     await expect(page.getByRole('heading', { name: 'Quyết toán', level: 1 })).toBeVisible()
-    await expect(page.getByRole('columnheader')).toHaveText(['Lô', 'Trạng thái', 'Tôi thực nhận', 'Góp ý'])
+    await expect(page.getByRole('columnheader')).toHaveText(['Lô', 'Trạng thái', 'Phần của tôi', 'Góp ý'])
 
     const rows = page.getByRole('row').filter({ has: page.getByRole('cell') })
     await expect(rows).toHaveCount(2)
@@ -181,7 +181,7 @@ test.describe('quyết toán', () => {
   test('sao kê đã chi trả: bốn số của tôi, các bước tính của Lô và dòng của tôi; hết hạn thì không còn góp ý', async ({ page, api }) => {
     await page.goto('/nha-dau-tu/quyet-toan/31')
     await expect(page.getByRole('heading', { name: closed.batch.title, level: 1 })).toBeVisible()
-    await expect(page.getByText(`${DONE} · lần tính 1`)).toBeVisible()
+    await expect(page.getByText(`${DONE}, lần tính 1`)).toBeVisible()
     await expect(page.getByRole('main').getByText('Đã chi trả', { exact: true })).toBeVisible()
 
     await expect(fact(page, 'Vốn hoàn')).toContainText(vnd(20_000_000))
@@ -230,7 +230,7 @@ test.describe('quyết toán', () => {
 
     await mine.getByRole('button', { name: 'Gửi góp ý' }).click()
     const dialog = page.getByRole('dialog', { name: 'Gửi góp ý' })
-    await expect(dialog).toContainText(`Lô ${RUN} · lần tính 1`)
+    await expect(dialog).toContainText(`Lô ${RUN}, lần tính 1`)
     const send = dialog.getByRole('button', { name: 'Gửi góp ý' })
     await expect(send).toBeDisabled()
     await dialog.getByLabel('Nội dung').fill('Thiếu đơn')

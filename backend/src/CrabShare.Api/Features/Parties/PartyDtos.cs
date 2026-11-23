@@ -9,7 +9,7 @@ public sealed record PartySiteResponse(long SiteId, string SiteCode, string Site
 
 public sealed record PartyResponse(long PartyId, string PartyCode, string LegalName, string PartyType, string? RegistrationNo,
     string? Representative, string? Phone, string VerificationStatus, string? RejectReason, bool IsPlatform,
-    IReadOnlyList<PartnerRoleResponse> Roles, IReadOnlyList<PartySiteResponse> Sites);
+    IReadOnlyList<PartnerRoleResponse> Roles, IReadOnlyList<PartySiteResponse> Sites, bool LegalDossierVerified = false);
 
 public sealed class UpdatePartyRequest
 {
@@ -19,6 +19,7 @@ public sealed class UpdatePartyRequest
     [MaxLength(30)] public string? RegistrationNo { get; set; }
     [MaxLength(150)] public string? Representative { get; set; }
     [Phone, MaxLength(15)] public string? Phone { get; set; }
+    public bool CompleteCustomerProfile { get; set; }
 }
 
 public sealed class SiteRequest

@@ -35,6 +35,8 @@ function PartyForm({ party }: { party: PartyResponse }) {
   })
 
   const organisation = partyType !== 'Individual'
+  const dossierStatus = organisation && party.verificationStatus === 'Verified' && party.legalDossierVerified === false
+    ? 'Pending' : party.verificationStatus
   const body: UpdatePartyRequest = { legalName: legalName.trim(), partyType, registrationNo: clean(registrationNo), representative: clean(representative), phone: clean(phone) }
   const legalChanged = body.legalName !== party.legalName || partyType !== party.partyType || body.registrationNo !== (party.registrationNo ?? null)
   const valid = body.legalName.length > 0 && (!organisation || !!body.representative)
@@ -49,7 +51,8 @@ function PartyForm({ party }: { party: PartyResponse }) {
   return (
     <>
       <div className="op-inline">
-        <StatusBadge kind="verification" value={party.verificationStatus} />
+        <span>{organisation ? 'Hồ sơ pháp lý' : 'Hồ sơ đối tác'}</span>
+        <StatusBadge kind="verification" value={dossierStatus} />
         {party.roles.map((r) => <OpBadge key={r.roleType}>{label('roleType', r.roleType)}</OpBadge>)}
       </div>
       {party.rejectReason && <OpNote tone="danger">Hồ sơ bị từ chối: {party.rejectReason}</OpNote>}
@@ -112,18 +115,25 @@ export default function ProfilePage() {
   const [params, setParams] = useSearchParams()
   const party = useGet<PartyResponse>('/api/me/party')
   const kyc = useGet<KycStatusResponse>('/api/me/kyc')
+  const organization = party.data && party.data.partyType !== 'Individual'
+  const identityTitle = organization ? 'Danh tính người đại diện' : 'Xác minh danh tính'
+  const tabs = TABS.map((item) => item.key === 'xac-minh' ? { ...item, label: identityTitle } : item)
   const asked = TABS.find((t) => t.key === params.get('tab'))?.key
   // Chưa chọn mục: người chưa xác minh vào thẳng mục xác minh, người đã xác minh vào tài khoản nhận tiền.
-  const tab = asked ?? (kyc.data && kyc.data.verificationStatus !== 'Verified' ? 'xac-minh' : 'tai-khoan')
+  const tab = asked ?? (organization && !party.data?.legalDossierVerified
+    ? 'ho-so' : kyc.data && kyc.data.verificationStatus !== 'Verified' && !organization ? 'xac-minh' : 'tai-khoan')
 
-  if (!asked && kyc.isPending) return <><OpHeading eyebrow="Giấy tờ và tiền" title="Hồ sơ và xác minh" /><OpLoading /></>
+  if (!asked && (kyc.isPending || party.isPending)) return <><OpHeading title="Hồ sơ và xác minh" /><OpLoading /></>
 
   return (
     <>
-      <OpHeading eyebrow="Giấy tờ và tiền" title="Hồ sơ và xác minh" />
-      <OpTabs<Tab> items={TABS} value={tab} onChange={(key) => setParams({ tab: key }, { replace: true })} label="Các mục của hồ sơ" />
+      <OpHeading title="Hồ sơ và xác minh" />
+      <OpTabs<Tab> items={tabs} value={tab} onChange={(key) => setParams({ tab: key }, { replace: true })} label="Các mục của hồ sơ" />
 
-      {tab === 'xac-minh' && <OpPanel title="Xác minh danh tính"><KycVerification /></OpPanel>}
+      {tab === 'xac-minh' && <OpPanel title={identityTitle}>
+        {organization && <OpNote>Hồ sơ pháp lý của tổ chức được Admin duyệt tại mục Hồ sơ đối tác.</OpNote>}
+        <KycVerification />
+      </OpPanel>}
       {tab === 'tai-khoan' && <OpPanel title="Tài khoản nhận tiền"><PayoutAccountForm owner="Investor" /></OpPanel>}
       {tab === 'ho-so' && (
         <>

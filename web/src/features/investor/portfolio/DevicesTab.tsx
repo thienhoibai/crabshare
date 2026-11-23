@@ -30,7 +30,7 @@ function WaterCharts({ rows }: { rows: WaterReadingResponse[] }) {
       <div className="op-grid">
         {METRICS.map((m) => (
           <div key={m.key} className="op-span-4 op-stack">
-            <p className="rd-eyebrow">{m.label}</p>
+            <h3 className="inv-chart-label">{m.label}</h3>
             <div className="inv-chart" role="img" aria-label={`Biểu đồ ${m.label.toLowerCase()} theo thời gian`}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={points} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
@@ -50,7 +50,7 @@ function WaterCharts({ rows }: { rows: WaterReadingResponse[] }) {
         ))}
       </div>
       <div className="op-inline">
-        <OpBadge>{rows.length} lượt đo · gần nhất {formatDateTime(rows[rows.length - 1].measuredAt)}</OpBadge>
+        <OpBadge>{rows.length} lượt đo, gần nhất {formatDateTime(rows[rows.length - 1].measuredAt)}</OpBadge>
         {doubtful > 0 && <OpBadge tone="warn">{doubtful} lượt chưa hiệu chuẩn hoặc nghi sai</OpBadge>}
       </div>
     </>
@@ -64,7 +64,7 @@ function ImageGrid({ images }: { images: DeviceImageResponse[] }) {
         <figure key={i.deviceImageId}>
           <AuthImage path={`/api/device-images/${i.deviceImageId}/file`} alt={`Ảnh hộp ${i.slotCode} lúc ${formatDateTime(i.capturedAt)}`} />
           <figcaption>
-            <b>Hộp {i.slotCode}</b> · {formatDateTime(i.capturedAt)}{i.crabDetected === false ? ' · không thấy cua' : ''}
+            <b>Hộp {i.slotCode}</b>, {formatDateTime(i.capturedAt)}{i.crabDetected === false ? ', không thấy cua' : ''}
           </figcaption>
         </figure>
       ))}
