@@ -31,6 +31,7 @@ export interface StationState {
   completed: string[]
   sensorError: string | null
   webStartReady?: boolean
+  wifiConfigReady?: boolean
 }
 
 export interface RuntimeResponse {

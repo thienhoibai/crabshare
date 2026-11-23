@@ -13,6 +13,7 @@ test('chọn lô và quay lại danh sách trạm giữ nguyên thứ tự React
   api.get(`/api/batches/${CODE}/measurement-sessions`, paged([]))
   api.get(`/api/batches/${CODE}/crab-units`, [])
   api.get('/api/operators/me/devices/ST-01/station-state', { fresh: false, receivedAt: null, state: null })
+  api.get('/api/operators/me/devices/ST-01/wifi', null)
 
   await page.goto('/operator/devices')
   await page.getByRole('button', { name: 'Chọn lô & vào trạm cân' }).click()
