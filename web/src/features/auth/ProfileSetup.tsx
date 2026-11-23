@@ -32,8 +32,16 @@ function Steps({ party }: { party: PartyResponse }) {
     (!org || (party.registrationNo === body.registrationNo && party.representative === body.representative))
   function persist(next: number) {
     const payload = next === 3 ? { legalName: party.legalName, partyType: party.partyType,
-      registrationNo: party.registrationNo, representative: party.representative, phone: body.phone } : body
-    save.mutate(payload, { onSuccess: () => { if (next === 3) setStep(next) } })
+      registrationNo: party.registrationNo, representative: party.representative, phone: body.phone, completeCustomerProfile: user.customerProfileRequired } : body
+    save.mutate(payload, {
+      onSuccess: () => {
+        if (next !== 3) return
+        useAuthStore.setState(({ user: current }) => current?.userId === user.userId
+          ? { user: { ...current, customerProfileRequired: false } }
+          : {})
+        setStep(next)
+      },
+    })
   }
   const investorKyc = !org && user.roles.includes('Investor')
   const kyc = useGet<KycStatusResponse>(step === 1 && investorKyc ? '/api/me/kyc' : null)

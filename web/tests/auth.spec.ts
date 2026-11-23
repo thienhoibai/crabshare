@@ -189,6 +189,39 @@ test('sai mật khẩu thì hiện lỗi của máy chủ và ở lại trang đ
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('crabshare-auth') ?? '{"state":{}}').state.token ?? null)).toBeNull()
 })
 
+test('khách chưa hoàn tất quay lại hồ sơ khi đăng nhập và chỉ vào cổng sau khi lưu', async ({ page, api }) => {
+  noData(api)
+  const customer = session('Customer')
+  let complete = false
+  api.post('/api/auth/login', () => ({ ...customer, user: { ...customer.user, customerProfileRequired: !complete } }))
+  api.get('/api/me/party', party)
+  api.put('/api/me/party', () => {
+    complete = true
+    return party
+  })
+  await page.goto('/dang-nhap?next=%2Fkhach%2Fdia-diem')
+  await page.getByLabel('Email').fill('customer@test.local')
+  await page.getByLabel('Mật khẩu', { exact: true }).fill('mat-khau-thu')
+  await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click()
+  await expect(page).toHaveURL(/\/hoan-thien-ho-so$/)
+  await page.goto('/khach/dia-diem')
+  await expect(page).toHaveURL(/\/hoan-thien-ho-so$/)
+
+  await page.getByRole('button', { name: 'Tiếp tục' }).click()
+  await page.getByRole('button', { name: 'Tiếp tục' }).click()
+  await page.getByRole('button', { name: 'Hoàn tất' }).click()
+  await expect(page.getByRole('link', { name: 'Vào trang chính' })).toBeVisible()
+  expect(api.sent('PUT', '/api/me/party')[0].body).toMatchObject({ completeCustomerProfile: true })
+
+  await page.getByRole('link', { name: 'Vào trang chính' }).click()
+  await expect(page).toHaveURL(/\/khach$/)
+  await page.goto('/dang-nhap')
+  await page.getByLabel('Email').fill('customer@test.local')
+  await page.getByLabel('Mật khẩu', { exact: true }).fill('mat-khau-thu')
+  await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click()
+  await expect(page).toHaveURL(/\/khach$/)
+})
+
 test('nút hiện mật khẩu đổi kiểu ô nhập', async ({ page }) => {
   await page.goto('/dang-nhap')
   const password = page.getByLabel('Mật khẩu', { exact: true })

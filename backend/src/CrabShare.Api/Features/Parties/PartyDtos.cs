@@ -19,6 +19,7 @@ public sealed class UpdatePartyRequest
     [MaxLength(30)] public string? RegistrationNo { get; set; }
     [MaxLength(150)] public string? Representative { get; set; }
     [Phone, MaxLength(15)] public string? Phone { get; set; }
+    public bool CompleteCustomerProfile { get; set; }
 }
 
 public sealed class SiteRequest

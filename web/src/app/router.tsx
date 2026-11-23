@@ -38,7 +38,7 @@ const OperatorRegistration = lazy(() => import('../features/operator/OperatorReg
 /** Một cổng: kiểm tra vai trò rồi dựng khung điều hành quanh các trang con. */
 const area = (name: Area, children: RouteObject[]): RouteObject => ({
   element: (
-    <RequireRole roles={AREAS[name].roles}>
+    <RequireRole roles={AREAS[name].roles} requireCustomerProfile={name === 'customer'}>
       <ConsoleLayout area={name} />
     </RequireRole>
   ),
