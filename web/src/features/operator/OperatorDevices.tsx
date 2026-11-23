@@ -14,7 +14,6 @@ import { GradeAiOpenSessionForm } from './devices/GradeAiOpenSessionForm'
 import { BatchWeighingHistory, type WeighingHistoryPage } from './devices/BatchWeighingHistory'
 import { StationRuntime, type RuntimeResponse } from './devices/StationRuntime'
 import { StationStart } from './devices/StationStart'
-import { StationWifi } from './devices/StationWifi'
 import './devices/devices.css'
 
 function isWeighableBatch(b: BatchResponse): boolean {
@@ -127,7 +126,6 @@ function BatchSelectionStep({
           <DeviceList devices={[station]} />
         </OpPanel>
       )}
-      {station && <StationWifi code={station.deviceCode} />}
     </>
   )
 }
@@ -324,7 +322,6 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
               tag={activeOpen.gradeAiTag} runtime={runtimeReport} />
           )}
           <StationRuntime key={station.deviceCode} code={station.deviceCode} onStateChange={setRuntimeReport} />
-          <StationWifi key={`wifi-${station.deviceCode}`} code={station.deviceCode} runtime={runtimeReport} />
         </>
       ) : (
         <OpPanel title="Trạm cân GradeAI">
