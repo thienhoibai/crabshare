@@ -132,3 +132,6 @@
 }
 .ga-station-start { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; }
 .ga-station-start > [role="status"] { flex: 1 1 260px; }
+
+.ga-label-form { display: grid; gap: 12px; }
+.ga-label-list { max-height: 13rem; overflow: auto; margin: 10px 0; }

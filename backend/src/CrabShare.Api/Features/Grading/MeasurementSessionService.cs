@@ -87,7 +87,7 @@ public sealed class MeasurementSessionService(AppDbContext db, ICurrentUser me, 
         {
             await audit.LockAsync(ct);
             var batch = await access.OperateAsync(batchCode, ct, lockRow: true);
-            if (batch.GradeAiPrefix is not null && batch.GradeAiPrefix != prefix && !string.Equals(prefix, batch.BatchCode, StringComparison.OrdinalIgnoreCase))
+            if (batch.GradeAiPrefix is not null && batch.GradeAiPrefix != prefix)
                 throw new ConflictException("grading.gradeai_prefix_fixed", $"Lô đã dùng mã đầu {batch.GradeAiPrefix}.");
             if (await db.Batches.AnyAsync(b => b.GradeAiPrefix == prefix && b.BatchId != batch.BatchId, ct))
                 throw new ConflictException("grading.gradeai_prefix_used", "Mã đầu đã thuộc lô khác.");
@@ -101,7 +101,7 @@ public sealed class MeasurementSessionService(AppDbContext db, ICurrentUser me, 
             foreach (var unit in units)
             {
                 var tag = labels[unit.CrabCode.ToUpperInvariant()];
-                if (unit.GradeAiTag is not null && unit.GradeAiTag != tag && !string.Equals(prefix, batch.BatchCode, StringComparison.OrdinalIgnoreCase) ||
+                if (unit.GradeAiTag is not null && unit.GradeAiTag != tag ||
                     existing.TryGetValue(tag, out var owner) && owner != unit.CrabUnitId)
                     throw new ConflictException("grading.gradeai_duplicate_tag", $"Mã {tag} đã được dùng hoặc con cua đã có mã khác.");
                 unit.GradeAiTag = tag;
@@ -187,9 +187,9 @@ public sealed class MeasurementSessionService(AppDbContext db, ICurrentUser me, 
                     throw new ConflictException("grading.gradeai_already_measured", "Mã cua đã có kết quả trạm.");
                 if (tag is not null)
                 {
-                    if (batch.GradeAiPrefix is not null && batch.GradeAiPrefix != prefix && !string.Equals(prefix, batch.BatchCode, StringComparison.OrdinalIgnoreCase))
+                    if (batch.GradeAiPrefix is not null && batch.GradeAiPrefix != prefix)
                         throw new ConflictException("grading.gradeai_prefix_fixed", $"Lô đã dùng mã đầu {batch.GradeAiPrefix}.");
-                    if (crab.GradeAiTag is not null && crab.GradeAiTag != tag && !string.Equals(prefix, batch.BatchCode, StringComparison.OrdinalIgnoreCase) ||
+                    if (crab.GradeAiTag is not null && crab.GradeAiTag != tag ||
                         await db.CrabUnits.AnyAsync(c => c.GradeAiTag == tag && c.CrabUnitId != crab.CrabUnitId, ct))
                         throw new ConflictException("grading.gradeai_duplicate_tag", "Mã đã gắn với con cua khác hoặc cua đã có mã khác.");
                     if (await db.Batches.AnyAsync(b => b.GradeAiPrefix == prefix && b.BatchId != batch.BatchId, ct))
