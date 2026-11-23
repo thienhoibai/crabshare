@@ -9,7 +9,8 @@ import {
   formatDateTime, label, useGet,
 } from '../../shared/ui/console'
 import DeviceList from './DeviceList'
-import { OpenSessionForm, SessionView } from './sales/SessionPanel'
+import { SessionView } from './sales/SessionPanel'
+import { GradeAiOpenSessionForm } from './devices/GradeAiOpenSessionForm'
 import { BatchWeighingHistory, type WeighingHistoryPage } from './devices/BatchWeighingHistory'
 import { StationRuntime, type RuntimeResponse } from './devices/StationRuntime'
 import { StationStart } from './devices/StationStart'
@@ -283,11 +284,10 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
                 sử cân bên dưới, không mở lượt đo mới).
               </OpNote>
             ) : (
-              <OpenSessionForm
+              <GradeAiOpenSessionForm
                 key={`${station.deviceCode}-${value.batchCode}`}
                 batch={value}
-                fixedStationCode={station.deviceCode}
-                allowManual={false}
+                stationCode={station.deviceCode}
                 measured={measured}
                 activeOpen={activeOpen}
                 onOpened={(no) => {
