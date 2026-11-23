@@ -78,6 +78,7 @@ public sealed class CrabUnit
 {
     [Key, Column("crab_unit_id")] public long CrabUnitId { get; set; }
     [Column("crab_code"), MaxLength(12), Unicode(false)] public string CrabCode { get; set; } = "";
+    [Column("gradeai_tag"), MaxLength(23), Unicode(false)] public string? GradeAiTag { get; set; }
     [Column("batch_id")] public long BatchId { get; set; }
     [Column("supply_lot_id")] public long SupplyLotId { get; set; }
     [Column("goods_receipt_id")] public long GoodsReceiptId { get; set; }

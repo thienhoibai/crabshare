@@ -8,6 +8,7 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 
 public partial class Batch
 {
+    [Column("gradeai_prefix"), MaxLength(16), Unicode(false)] public string? GradeAiPrefix { get; set; }
     /// <summary>Bộ quy tắc phân hạng khoá lúc Lô được duyệt, dùng tới khi Lô đóng (BR-038).</summary>
     [Column("grade_rule_set_id")] public long? GradeRuleSetId { get; set; }
 }

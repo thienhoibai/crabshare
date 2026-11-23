@@ -28,6 +28,8 @@ public sealed class Device
     [Column("status"), MaxLength(20), Unicode(false)] public string Status { get; set; } = "Active";
     [Column("firmware_version"), MaxLength(30), Unicode(false)] public string? FirmwareVersion { get; set; }
     [Column("last_seen_at"), Precision(3)] public DateTimeOffset? LastSeenAt { get; set; }
+    [Column("station_state_json"), MaxLength(4000)] public string? StationStateJson { get; set; }
+    [Column("station_state_received_at"), Precision(3)] public DateTimeOffset? StationStateReceivedAt { get; set; }
     [Column("last_calibrated_at"), Precision(3)] public DateTimeOffset? LastCalibratedAt { get; set; }
     [Column("calibration_period_days")] public short CalibrationPeriodDays { get; set; } = 30;
     [Column("queue_length")] public int? QueueLength { get; set; }
@@ -114,9 +116,10 @@ public sealed class DeviceCommand
 {
     [Key, Column("device_command_id")] public long DeviceCommandId { get; set; }
     [Column("device_id")] public long DeviceId { get; set; }
-    /// <summary>ScanRack, ScanBox, Park, Calibrate.</summary>
+    /// <summary>ScanRack, ScanBox, Park, Calibrate, StartMeasurement.</summary>
     [Column("command_type"), MaxLength(20), Unicode(false)] public string CommandType { get; set; } = "";
     [Column("box_code"), MaxLength(30), Unicode(false)] public string? BoxCode { get; set; }
+    [Column("measurement_session_id")] public long? MeasurementSessionId { get; set; }
     [Column("status"), MaxLength(20), Unicode(false)] public string Status { get; set; } = "Pending";
     [Column("reason"), MaxLength(300)] public string? Reason { get; set; }
     [Column("created_by")] public long? CreatedBy { get; set; }
