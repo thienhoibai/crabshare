@@ -5,6 +5,7 @@ import { useState } from 'react'
 import type { BoxStateResponse, DeviceImageResponse, DeviceResponse, HoldingResponse, WaterReadingResponse } from '../../../../shared/api/api.gen'
 import { AuthImage, OpFacts, OpNote, OpPanel, OpTabs, QueryView, Select, formatDateTime, label, useGet } from '../../../../shared/ui/console'
 import DeviceList from '../../DeviceList'
+import { BatchWeighingHistory } from '../../devices/BatchWeighingHistory'
 import { dayMonth, hourMinute, num } from '../../opA'
 import TrendChart from '../../TrendChart'
 import type { BatchTabProps } from '../types'
@@ -43,6 +44,7 @@ export default function DevicesTab({ code }: BatchTabProps) {
 
   return (
     <>
+      <BatchWeighingHistory key={code} code={code} />
       <OpPanel title="Chỉ số nước" action={<OpTabs<Range> value={range} onChange={setRange} items={RANGES} label="Khoảng thời gian" />}>
         <QueryView query={readings}>
           {(data) => !last ? <p className="rd-muted">Chưa có số đo trong khoảng này.</p> : (

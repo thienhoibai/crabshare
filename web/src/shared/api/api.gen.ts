@@ -637,6 +637,8 @@ export interface CrabUnitResponse {
   receivedAt: string
   boxes: BoxHistoryResponse[]
   events: InventoryEventResponse[]
+  gradeAiTag?: string | null
+  gradeAiPrefix?: string | null
 }
 
 export interface CreateBoxRequest {
@@ -1289,15 +1291,30 @@ export interface OfferResponse {
 }
 
 export interface OpenSessionRequest {
-  crabCode: string
+  crabCode?: string | null
+  batchCode?: string | null
+  gradeAiPrefix?: string | null
+  crabNumber?: number | null
   stationCode?: string | null
   procedure?: string
+}
+
+export interface GradeAiLabelsRequest {
+  prefix: string
+  labels: { crabCode: string; crabNumber: number }[]
+}
+
+export interface GradeAiLabelsResponse {
+  prefix: string
+  assigned: number
 }
 
 export interface OpenSessionResponse {
   sessionNo: string
   crabTag: string
   openedAt: string
+  batchCode: string
+  bindingVersion: number
 }
 
 export interface OperatorDashboardResponse {
@@ -2125,6 +2142,7 @@ export interface SessionResponse {
   hasWhiteImage: boolean
   hasRedImage: boolean
   failReason: string | null
+  gradeAiTag?: string | null
 }
 
 export interface SettlementBreakdown {
