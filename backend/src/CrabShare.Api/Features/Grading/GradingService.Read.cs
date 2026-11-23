@@ -24,11 +24,12 @@ public sealed partial class GradingService
                       ?? throw new NotFoundException("grading.session_not_found", "Không tìm thấy lượt đo.");
         var batch = await db.Batches.AsNoTracking().SingleAsync(b => b.BatchId == session.BatchId, ct);
         await access.RequireOperatorOrAdminReadAsync(batch, ct);
-        var crab = await db.CrabUnits.Where(c => c.CrabUnitId == session.CrabUnitId).Select(c => c.CrabCode).SingleAsync(ct);
+        var crab = await db.CrabUnits.Where(c => c.CrabUnitId == session.CrabUnitId)
+            .Select(c => new { c.CrabCode, c.GradeAiTag }).SingleAsync(ct);
         var station = session.StationDeviceId is { } id ? await db.Devices.Where(x => x.DeviceId == id).Select(x => x.DeviceCode).SingleAsync(ct) : null;
-        var sessionResponse = new SessionResponse(session.SessionNo, batch.BatchCode, crab, session.Procedure, station, session.Status, session.OpenedAt,
+        var sessionResponse = new SessionResponse(session.SessionNo, batch.BatchCode, crab.CrabCode, session.Procedure, station, session.Status, session.OpenedAt,
             session.CapturedAt, session.ReceivedAt, session.WeightG, session.TofMm, session.CameraHeightMm, session.WhiteImageUri is not null,
-            session.RedImageUri is not null, session.FailReason);
+            session.RedImageUri is not null, session.FailReason, crab.GradeAiTag);
         var values = await db.MeasurementValues.AsNoTracking().Where(v => v.MeasurementSessionId == session.MeasurementSessionId)
             .OrderBy(v => v.RecordedAt).ThenBy(v => v.MeasurementValueId)
             .Select(v => new MeasurementValueResponse(v.Metric, v.Value, v.Unit, v.Method, v.Confidence, v.VerificationStatus, v.RecordedAt)).ToListAsync(ct);

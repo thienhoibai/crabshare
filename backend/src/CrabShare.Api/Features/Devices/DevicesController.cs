@@ -1,4 +1,5 @@
 using CrabShare.Api.Common.Auth;
+using CrabShare.Api.Common.Paging;
 using CrabShare.Api.Features.Grading;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -137,6 +138,16 @@ public sealed class DeviceManagementController(DeviceAdminService devices, Devic
 [Authorize]
 public sealed class MeasurementSessionsController(MeasurementSessionService sessions) : ControllerBase
 {
+    [HttpGet("api/batches/{code}/measurement-sessions")]
+    public async Task<ActionResult<PagedResult<SessionResponse>>> History(string code, [FromQuery] PageQuery paging,
+        [FromQuery] string? search, [FromQuery] string? status, [FromQuery] string? stationCode, CancellationToken ct)
+        => Ok(await sessions.HistoryAsync(code, paging, search, status, stationCode, ct));
+
+    [HttpPost("api/batches/{code}/gradeai-labels")]
+    [EndpointSummary("Gắn số cua theo lô cho trạm GradeAI")]
+    public async Task<ActionResult<GradeAiLabelsResponse>> GradeAiLabels(string code, GradeAiLabelsRequest req, CancellationToken ct)
+        => Ok(await sessions.AssignLabelsAsync(code, req, ct));
+
     [HttpPost("api/batches/{code}/start-harvest")]
     [EndpointSummary("Bắt đầu thu hoạch: Lô chuyển Harvesting, từng con được đưa qua trạm đo (BR-150)")]
     public async Task<IActionResult> StartHarvest(string code, CancellationToken ct) => Ok(new { status = await sessions.StartHarvestAsync(code, ct) });
