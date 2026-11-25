@@ -186,8 +186,8 @@ void main() {
   Future<void> showPage(
     WidgetTester tester,
     _Repository repository,
-    _Camera camera,
-    {String? handoffRef},
+    _Camera camera, {
+    String? handoffRef,
   ) async {
     tester.view.physicalSize = const Size(360, 780);
     tester.view.devicePixelRatio = 1;
