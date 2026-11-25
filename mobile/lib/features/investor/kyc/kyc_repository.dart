@@ -79,6 +79,7 @@ class KycImage {
 
 abstract interface class KycRepository {
   Future<KycVerification> status();
+  Future<void> claimHandoff(String token);
   Future<KycVerification> verify({
     required List<KycImage> images,
     required bool consent,
@@ -93,6 +94,14 @@ class ApiKycRepository implements KycRepository {
   Future<KycVerification> status() async {
     final response = await _dio.get<Map<String, dynamic>>('/api/me/kyc');
     return KycVerification.fromJson(response.data!);
+  }
+
+  @override
+  Future<void> claimHandoff(String token) async {
+    await _dio.post<Map<String, dynamic>>(
+      '/api/me/kyc/handoffs/claim',
+      data: {'token': token},
+    );
   }
 
   @override

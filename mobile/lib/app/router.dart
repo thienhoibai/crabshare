@@ -31,6 +31,27 @@ List<(String, String)> areasFor(AppUser user) => [
   if (user.isCustomer) ('Khách hàng', Routes.customerOrders),
 ];
 
+/// Giữ mã phiên trên link QR (`?ref=`) khi máy chưa đăng nhập, rồi mở lại đúng màn xác minh.
+String? redirectForUri(SessionState session, Uri uri) {
+  final path = uri.path;
+  final refCode = uri.queryParameters['ref'];
+  String keepRef(String location) {
+    if (refCode == null || refCode.isEmpty) return location;
+    final separator = location.contains('?') ? '&' : '?';
+    return '$location${separator}ref=${Uri.encodeQueryComponent(refCode)}';
+  }
+
+  if (path == Routes.kyc) {
+    if (!session.isSignedIn) return keepRef('${Routes.login}?next=kyc');
+    // Để trang KYC gọi API claim và hiện lỗi mismatch thay vì đẩy tài khoản khác về trang chủ.
+    return null;
+  }
+  if (path == Routes.login && uri.queryParameters['next'] == 'kyc' && session.isSignedIn) {
+    return keepRef(Routes.kyc);
+  }
+  return redirectFor(session, path);
+}
+
 /// Quy tắc chuyển trang, tách riêng để viết unit test (test/router_redirect_test.dart).
 String? redirectFor(SessionState session, String location) {
   final isPublic =
@@ -67,17 +88,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: Routes.onboarding,
     refreshListenable: refresh,
-    redirect: (context, state) {
-      final session = ref.read(sessionProvider);
-      final path = state.uri.path;
-      if (path == Routes.kyc && !session.isSignedIn) {
-        return '${Routes.login}?next=kyc';
-      }
-      if (path == Routes.login && state.uri.queryParameters['next'] == 'kyc' && session.user?.isInvestor == true) {
-        return Routes.kyc;
-      }
-      return redirectFor(session, state.matchedLocation);
-    },
+    redirect: (context, state) => redirectForUri(ref.read(sessionProvider), state.uri),
     routes: [
       GoRoute(path: Routes.onboarding, builder: (context, state) => const OnboardingPage()),
       GoRoute(path: Routes.login, builder: (context, state) => const LoginPage()),
