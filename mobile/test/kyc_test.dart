@@ -22,7 +22,14 @@ final _png = base64Decode(
 class _Repository implements KycRepository {
   int submissions = 0;
   int reads = 0;
+  final claimedHandoffs = <String>[];
   KycVerification value = const KycVerification(status: KycStatus.unverified);
+
+  @override
+  Future<void> claimHandoff(String token) async {
+    claimedHandoffs.add(token);
+  }
+
   @override
   Future<KycVerification> status() async {
     reads++;
@@ -141,6 +148,17 @@ void main() {
     );
   });
 
+  test('claim handoff sends the QR token to the account-bound endpoint', () async {
+    final adapter = _Adapter();
+    final dio = Dio(BaseOptions(baseUrl: 'http://test.local'))
+      ..httpClientAdapter = adapter;
+
+    await ApiKycRepository(dio).claimHandoff('qr-token-123');
+
+    expect(adapter.requests.single.path, '/api/me/kyc/handoffs/claim');
+    expect(adapter.requests.single.data, {'token': 'qr-token-123'});
+  });
+
   test('status refreshes after changing accounts', () async {
     final repository = _Repository()
       ..value = const KycVerification(status: KycStatus.verified);
@@ -169,6 +187,7 @@ void main() {
     WidgetTester tester,
     _Repository repository,
     _Camera camera,
+    {String? handoffRef},
   ) async {
     tester.view.physicalSize = const Size(360, 780);
     tester.view.devicePixelRatio = 1;
@@ -180,7 +199,10 @@ void main() {
           kycRepositoryProvider.overrideWithValue(repository),
           kycCameraProvider.overrideWithValue(camera),
         ],
-        child: MaterialApp(theme: buildAppTheme(), home: const KycPage()),
+        child: MaterialApp(
+          theme: buildAppTheme(),
+          home: KycPage(handoffRef: handoffRef),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -226,6 +248,26 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('QR handoff is claimed before the verification form is shown', (
+    tester,
+  ) async {
+    final repository = _Repository();
+    await showPage(
+      tester,
+      repository,
+      _Camera(),
+      handoffRef: 'qr-token-123',
+    );
+
+    expect(repository.claimedHandoffs, ['qr-token-123']);
+    expect(
+      find.text('Phiên xác minh trên máy tính đã được kết nối với tài khoản này.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('kyc-submit')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('camera denial is displayed and does not submit', (tester) async {
     final repository = _Repository();
