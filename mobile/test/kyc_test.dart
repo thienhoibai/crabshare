@@ -70,7 +70,7 @@ class _Adapter implements HttpClientAdapter {
     RequestOptions options,
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
-  }) async {
+  ) async {
     requests.add(options);
     if (requestStream != null) await requestStream.drain<void>();
     return ResponseBody.fromString(
@@ -188,7 +188,7 @@ void main() {
     _Repository repository,
     _Camera camera, {
     String? handoffRef,
-  ) async {
+  }) async {
     tester.view.physicalSize = const Size(360, 780);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
