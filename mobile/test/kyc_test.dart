@@ -70,7 +70,7 @@ class _Adapter implements HttpClientAdapter {
     RequestOptions options,
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
-  ) async {
+  }) async {
     requests.add(options);
     if (requestStream != null) await requestStream.drain<void>();
     return ResponseBody.fromString(
