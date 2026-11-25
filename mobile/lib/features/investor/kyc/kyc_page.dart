@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:dio/dio.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../../../core/api/api_client.dart';
@@ -12,15 +13,22 @@ import 'kyc_repository.dart';
 /// Xác minh danh tính: đồng ý, chụp ba ảnh bằng camera (hai mặt giấy tờ và khuôn mặt), gửi.
 /// Ảnh chỉ giữ trong bộ nhớ tới khi gửi xong.
 class KycPage extends ConsumerWidget {
-  const KycPage({super.key});
+  const KycPage({super.key, this.handoffRef});
+
+  /// Mã QR từ web; backend phải xác nhận đúng tài khoản trước khi mở form, ảnh vẫn gửi theo tài khoản đó.
+  final String? handoffRef;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) =>
-      _KycForm(key: ValueKey(ref.watch(sessionProvider.select((s) => s.user?.userId))));
+  Widget build(BuildContext context, WidgetRef ref) => _KycForm(
+        key: ValueKey('${ref.watch(sessionProvider.select((s) => s.user?.userId))}:${handoffRef ?? ''}'),
+        handoffRef: handoffRef,
+      );
 }
 
 class _KycForm extends ConsumerStatefulWidget {
-  const _KycForm({super.key});
+  const _KycForm({super.key, this.handoffRef});
+
+  final String? handoffRef;
 
   @override
   ConsumerState<_KycForm> createState() => _KycFormState();
@@ -28,13 +36,34 @@ class _KycForm extends ConsumerStatefulWidget {
 
 class _KycFormState extends ConsumerState<_KycForm> {
   static const _labels = ['Mặt trước', 'Mặt sau', 'Khuôn mặt'];
+  static const _terminalHandoffErrorCodes = {
+    'kyc.handoff_expired',
+    'kyc.handoff_cancelled',
+    'kyc.handoff_not_found',
+    'kyc.handoff_not_pending',
+  };
   final _images = List<KycImage?>.filled(3, null);
   bool _consent = false;
   bool _sending = false;
+  bool _handoffReady = false;
+  bool _claimingHandoff = false;
+  bool _accountMismatch = false;
   int? _capturing;
   String? _error;
+  String? _handoffErrorCode;
 
   bool get _busy => _sending || _capturing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final token = widget.handoffRef;
+    if (token == null || token.isEmpty) {
+      _handoffReady = true;
+    } else {
+      Future.microtask(_claimHandoff);
+    }
+  }
 
   @override
   void dispose() {
@@ -81,6 +110,92 @@ class _KycFormState extends ConsumerState<_KycForm> {
     }
   }
 
+  Future<void> _claimHandoff() async {
+    final token = widget.handoffRef;
+    if (token == null || token.isEmpty || _claimingHandoff) return;
+    setState(() {
+      _claimingHandoff = true;
+      _error = null;
+      _handoffErrorCode = null;
+      _accountMismatch = false;
+    });
+    try {
+      await ref.read(kycRepositoryProvider).claimHandoff(token);
+      if (mounted) setState(() => _handoffReady = true);
+    } catch (error) {
+      if (mounted) {
+        final response = error is DioException ? error.response?.data : null;
+        final code = response is Map ? response['code'] : null;
+        setState(() {
+          _error = apiErrorMessage(error);
+          _handoffErrorCode = code is String ? code : null;
+          _accountMismatch = code == 'kyc.handoff_account_mismatch';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _claimingHandoff = false);
+    }
+  }
+
+  Widget _handoffGate() {
+    final user = ref.read(sessionProvider).user;
+    final isInvestor = user?.isInvestor == true;
+    final needsNewQr = _terminalHandoffErrorCodes.contains(_handoffErrorCode);
+    return Scaffold(
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          children: [
+            const SubPageHeader(title: 'Xác minh danh tính'),
+            const SizedBox(height: 20),
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    _claimingHandoff ? 'Đang kiểm tra mã QR…' : _error ?? 'Đang chuẩn bị xác minh…',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  if (_claimingHandoff) ...[
+                    const SizedBox(height: 16),
+                    const Center(child: CircularProgressIndicator()),
+                  ],
+                  if (_accountMismatch) ...[
+                    const SizedBox(height: 12),
+                    const Text('Phiên đăng nhập hiện tại vẫn được giữ nguyên. Bạn có thể thử bằng tài khoản đã tạo mã QR.'),
+                    const SizedBox(height: 16),
+                    OutlinedButton(
+                      onPressed: () async => ref.read(sessionProvider.notifier).signOut(),
+                      child: const Text('Đăng nhập bằng tài khoản khác'),
+                    ),
+                  ] else if (_error != null && widget.handoffRef != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      needsNewQr
+                          ? 'Mã QR không còn hiệu lực. Hãy quay lại website, tạo mã mới rồi quét lại.'
+                          : 'Nếu lỗi do kết nối, hãy thử lại. Mã QR chỉ dùng được trong thời gian ngắn.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    if (!needsNewQr) ...[
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed: _claimingHandoff ? null : _claimHandoff,
+                        child: const Text('Thử lại'),
+                      ),
+                    ],
+                  ] else if (!isInvestor && widget.handoffRef == null) ...[
+                    const SizedBox(height: 12),
+                    const Text('Xác minh danh tính chỉ dành cho tài khoản nhà đầu tư.'),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (!_consent || _images.any((image) => image == null) || _busy) return;
     setState(() {
@@ -102,6 +217,10 @@ class _KycFormState extends ConsumerState<_KycForm> {
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(sessionProvider).user;
+    if (!_handoffReady || (widget.handoffRef == null && user?.isInvestor != true)) {
+      return _handoffGate();
+    }
     final verification = ref.watch(kycDetailsProvider);
     return PopScope(
       canPop: !_busy,
@@ -136,6 +255,10 @@ class _KycFormState extends ConsumerState<_KycForm> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                if (widget.handoffRef != null && widget.handoffRef!.isNotEmpty) ...[
+                  const Text('Phiên xác minh trên máy tính đã được kết nối với tài khoản này.'),
+                  const SizedBox(height: 12),
+                ],
                 verification.when(
                   skipError: true,
                   loading: () => const LoadingSkeleton(rows: 2),

@@ -47,4 +47,18 @@ void main() {
     expect(redirectFor(both, Routes.investorHome), isNull);
     expect(areasFor(both.user!).map((a) => a.$2), [Routes.investorHome, Routes.customerOrders]);
   });
+
+  test('mã QR xác minh giữ ref qua đăng nhập rồi mở đúng màn', () {
+    final link = Uri.parse('crabshare://app/i/kyc?ref=a1b2c3d4e5f6&next=kyc');
+    expect(redirectForUri(guest, link), '${Routes.login}?next=kyc&ref=a1b2c3d4e5f6');
+    expect(
+      redirectForUri(_as([Roles.investor]), Uri.parse('/login?next=kyc&ref=a1b2c3d4e5f6')),
+      '${Routes.kyc}?ref=a1b2c3d4e5f6',
+    );
+    expect(redirectForUri(_as([Roles.investor]), link), isNull);
+    expect(
+      redirectForUri(_as([Roles.customer]), Uri.parse('/login?next=kyc&ref=a1b2c3d4e5f6')),
+      '${Routes.kyc}?ref=a1b2c3d4e5f6',
+    );
+  });
 }

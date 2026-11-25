@@ -22,6 +22,31 @@ test.beforeEach(async ({ page, api }) => {
   await signIn(page, 'Investor')
 })
 
+test('tạo QR nối sang app, hiện đúng link và huỷ phiên đang chờ', async ({ page, api }) => {
+  const token = 'opaque-one-time-handoff-token'
+  const expiresAt = daysFromNow(0)
+  api.post('/api/me/kyc/handoffs', { id: 73, token, expiresAt })
+  api.get('/api/me/kyc/handoffs/73', { id: 73, status: 'Pending', expiresAt, claimedAt: null })
+  api.post('/api/me/kyc/handoffs/73/cancel', { id: 73, status: 'Cancelled', expiresAt, claimedAt: null })
+
+  await page.goto('/nha-dau-tu/ho-so?tab=xac-minh')
+  const kycPanel = panel(page, 'Xác minh danh tính')
+  await kycPanel.getByRole('button', { name: 'Tạo mã QR xác minh' }).click()
+
+  const qrLink = kycPanel.getByRole('link', { name: 'Mở ứng dụng trên điện thoại này' })
+  await expect(qrLink).toHaveAttribute('href', `crabshare://app/i/kyc?ref=${encodeURIComponent(token)}`)
+  await expect(kycPanel.getByRole('img', { name: 'Mở màn xác minh trên ứng dụng CrabShare' })).toBeVisible()
+  await expect(kycPanel.getByText('Đang chờ ứng dụng quét mã')).toBeVisible()
+
+  await kycPanel.getByRole('button', { name: 'Huỷ mã QR' }).click()
+  await expect(kycPanel.getByText('Mã QR đã được huỷ.')).toBeVisible()
+  await expect(kycPanel.getByRole('button', { name: 'Tạo mã QR mới' })).toBeVisible()
+  expect(api.writes()).toEqual([
+    'POST /api/me/kyc/handoffs',
+    'POST /api/me/kyc/handoffs/73/cancel',
+  ])
+})
+
 test('cần đủ ba ảnh và ô đồng ý; gửi dạng multipart; xác minh xong thì tổng quan hết nhắc', async ({ page, api }) => {
   let kyc: KycStatusResponse = kycUnverified
   api.get('/api/me/kyc', () => kyc)

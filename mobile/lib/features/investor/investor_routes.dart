@@ -56,7 +56,7 @@ List<RouteBase> investorRoutes() => [
       StatefulShellBranch(routes: [GoRoute(path: Routes.investorAccount, builder: (context, state) => const AccountPage())]),
     ],
   ),
-  GoRoute(path: Routes.kyc, builder: (context, state) => const KycPage()),
+  GoRoute(path: Routes.kyc, builder: (context, state) => KycPage(handoffRef: state.uri.queryParameters['ref'])),
   GoRoute(
     path: '/i/portfolio/:code',
     builder: (context, state) => PortfolioDetailPage(

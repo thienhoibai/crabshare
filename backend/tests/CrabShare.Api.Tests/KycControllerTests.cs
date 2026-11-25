@@ -53,6 +53,8 @@ public class KycControllerTests(WebApplicationFactory<Program> factory) : IClass
     [Theory]
     [InlineData("GET", "/api/me/kyc")]
     [InlineData("POST", "/api/kyc/ekyc")]
+    [InlineData("POST", "/api/me/kyc/handoffs")]
+    [InlineData("POST", "/api/me/kyc/handoffs/claim")]
     public async Task Anonymous_requests_are_unauthorized(string method, string path)
     {
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
@@ -72,8 +74,10 @@ public class KycControllerTests(WebApplicationFactory<Program> factory) : IClass
         using var read = await client.GetAsync("/api/me/kyc");
         using var form = Images();
         using var submit = await client.PostAsync("/api/kyc/ekyc", form);
+        using var createHandoff = await client.PostAsync("/api/me/kyc/handoffs", null);
         Assert.Equal(HttpStatusCode.Forbidden, read.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, submit.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, createHandoff.StatusCode);
     }
 
     [Theory]

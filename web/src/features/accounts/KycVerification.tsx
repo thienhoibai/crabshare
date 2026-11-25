@@ -6,8 +6,13 @@ import { ShieldCheck } from 'lucide-react'
 import type { KycStatusResponse } from '../../shared/api/api.gen'
 import { useAuthStore } from '../../shared/auth/authStore'
 import {
-  Checkbox, Field, OpBtn, OpKv, OpMore, OpNote, OpPhoto, QueryView, StatusBadge, formatDateTime, label, useGet, useSend,
+  Checkbox, Field, OpBtn, OpKv, OpMore, OpNote, OpPhoto, QueryView, StatusBadge, errorMessage,
+  formatDateTime, label, useSend,
 } from '../../shared/ui/console'
+import {
+  useCancelKycHandoff, useCreateKycHandoff, useKycHandoffStatus, useKycStatus,
+  type KycHandoff,
+} from './kycApi'
 
 type EkycForm = { IdCardFront: File; IdCardBack: File; Selfie: File; Consent: boolean }
 
@@ -19,17 +24,11 @@ const PHOTOS = [
 type PhotoKey = (typeof PHOTOS)[number]['key']
 
 const ALLOWED = ['image/jpeg', 'image/png', 'image/webp']
-const mobileKycUrl = 'crabshare://app/i/kyc'
 const MAX_BYTES = 5 * 1024 * 1024
-
-const useKyc = () => {
-  const isInvestor = useAuthStore((s) => !!s.user?.roles.includes('Investor'))
-  return useGet<KycStatusResponse>(isInvestor ? '/api/me/kyc' : null)
-}
 
 /** Dòng nhắc xác minh danh tính. Chỉ hiện khi nhà đầu tư chưa xác minh; đã xác minh thì không hiện gì. */
 export function KycStatusCard() {
-  const kyc = useKyc()
+  const kyc = useKycStatus()
   if (!kyc.data || kyc.data.verificationStatus === 'Verified') return null
   return (
     <OpNote tone="danger">
@@ -40,15 +39,23 @@ export function KycStatusCard() {
 }
 
 function InvestorKyc() {
-  const kyc = useKyc()
+  const kyc = useKycStatus()
   const [files, setFiles] = useState<Record<PhotoKey, File | null>>({ front: null, back: null, selfie: null })
   const [consent, setConsent] = useState(false)
   const [problem, setProblem] = useState('')
+  const [handoff, setHandoff] = useState<KycHandoff | null>(null)
+  const [cancelledLocally, setCancelledLocally] = useState(false)
   const verify = useSend<KycStatusResponse, EkycForm>('post', '/api/kyc/ekyc', {
     form: true,
     success: (res) => (res.verificationStatus === 'Verified' ? 'Đã xác minh danh tính.' : 'Xác minh chưa đạt. Gửi lại ảnh rõ hơn.'),
     onSuccess: () => setFiles({ front: null, back: null, selfie: null }),
   })
+  const createHandoff = useCreateKycHandoff((created) => {
+    setHandoff(created)
+    setCancelledLocally(false)
+  })
+  const handoffStatus = useKycHandoffStatus(handoff?.id ?? null)
+  const cancelHandoff = useCancelKycHandoff(handoff?.id ?? null, () => setCancelledLocally(true))
 
   const pick = (key: PhotoKey, file: File | null) => {
     if (file && (!ALLOWED.includes(file.type) || file.size === 0 || file.size > MAX_BYTES)) {
@@ -71,6 +78,9 @@ function InvestorKyc() {
       {(data) => {
         const verified = data.verificationStatus === 'Verified'
         const last = data.lastCheck
+        const status = cancelledLocally ? 'Cancelled' : handoffStatus.data?.status
+        const qrUrl = handoff ? `crabshare://app/i/kyc?ref=${encodeURIComponent(handoff.token)}` : null
+
         return (
           <div className="op-stack">
             <div className="op-inline">
@@ -80,13 +90,42 @@ function InvestorKyc() {
             </div>
 
             {!verified && (
-              <details className="op-more">
-                <summary>Xác minh bằng ứng dụng CrabShare</summary>
-                <p>Quét mã bằng điện thoại có cài CrabShare. Đăng nhập cùng tài khoản đang dùng trên web.</p>
-                <QRCodeSVG value={mobileKycUrl} size={144} marginSize={4} title="Mở màn xác minh trên điện thoại" />
-                <p><a className="op-link" href={mobileKycUrl}>Mở ứng dụng trên điện thoại này</a></p>
-                <OpBtn variant="ghost" onClick={() => void kyc.refetch()}>Kiểm tra kết quả</OpBtn>
-              </details>
+              <section className="op-card" aria-labelledby="kyc-mobile-title">
+                <h3 id="kyc-mobile-title">Xác minh trên ứng dụng CrabShare</h3>
+                <p>Quét mã bằng điện thoại có cài CrabShare. Hãy đăng nhập đúng tài khoản đang dùng trên web; mã có hiệu lực trong 5 phút.</p>
+
+                {qrUrl && status !== 'Claimed' && status !== 'Expired' && status !== 'Cancelled' && (
+                  <div className="op-inline" style={{ alignItems: 'flex-start', gap: 20 }}>
+                    <QRCodeSVG value={qrUrl} size={176} marginSize={4} title="Mở màn xác minh trên ứng dụng CrabShare" />
+                    <div className="op-stack">
+                      <b aria-live="polite">{status === 'Pending' ? 'Đang chờ ứng dụng quét mã' : 'Mã QR đã được tạo'}</b>
+                      <span className="rd-muted">Hết hạn lúc {formatDateTime(handoff!.expiresAt)}</span>
+                      <a className="op-link" href={qrUrl}>Mở ứng dụng trên điện thoại này</a>
+                      <OpBtn variant="ghost" disabled={cancelHandoff.isPending} onClick={() => cancelHandoff.mutate()}>
+                        {cancelHandoff.isPending ? 'Đang huỷ…' : 'Huỷ mã QR'}
+                      </OpBtn>
+                    </div>
+                  </div>
+                )}
+
+                {status === 'Claimed' && <OpNote tone="info">Ứng dụng đã xác nhận đúng tài khoản. Hoàn tất xác minh trên điện thoại; kết quả sẽ tự cập nhật tại đây.</OpNote>}
+                {status === 'Expired' && <OpNote tone="danger">Mã QR đã hết hạn. Hãy tạo mã mới để tiếp tục.</OpNote>}
+                {status === 'Cancelled' && <OpNote tone="info">Mã QR đã được huỷ.</OpNote>}
+                {cancelHandoff.isError && <OpNote tone="info">{errorMessage(cancelHandoff.error)}</OpNote>}
+                {handoffStatus.isError && (
+                  <>
+                    <OpNote tone="danger">Không kiểm tra được phiên QR: {errorMessage(handoffStatus.error)}</OpNote>
+                    <OpBtn variant="ghost" onClick={() => { void handoffStatus.refetch() }}>Thử kiểm tra lại</OpBtn>
+                  </>
+                )}
+                {createHandoff.isError && <OpNote tone="danger">{errorMessage(createHandoff.error)}</OpNote>}
+
+                {(!handoff || status === 'Claimed' || status === 'Expired' || status === 'Cancelled' || createHandoff.isError) && (
+                  <OpBtn disabled={createHandoff.isPending} onClick={() => createHandoff.mutate()}>
+                    {createHandoff.isPending ? 'Đang tạo mã…' : handoff ? 'Tạo mã QR mới' : 'Tạo mã QR xác minh'}
+                  </OpBtn>
+                )}
+              </section>
             )}
 
             {!verified && last?.failureReason && <OpNote tone="danger">{last.failureReason}</OpNote>}
@@ -94,9 +133,9 @@ function InvestorKyc() {
             {!verified && (
               <form className="op-form" onSubmit={submit}>
                 <div className="op-form__row">
-                  {PHOTOS.map((p) => (
-                    <Field key={p.key} label={p.label} required>
-                      <OpPhoto value={files[p.key]} onChange={(file) => pick(p.key, file)} label={p.label} hint={p.hint} capture={p.key === 'selfie' ? 'user' : 'environment'} />
+                  {PHOTOS.map((photo) => (
+                    <Field key={photo.key} label={photo.label} required>
+                      <OpPhoto value={files[photo.key]} onChange={(file) => pick(photo.key, file)} label={photo.label} hint={photo.hint} capture={photo.key === 'selfie' ? 'user' : 'environment'} />
                     </Field>
                   ))}
                 </div>
