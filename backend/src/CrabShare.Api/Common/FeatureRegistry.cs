@@ -68,6 +68,8 @@ public static class FeatureRegistry
         // Viên
         services.AddScoped<OperatorService>();        // Features/Operators
         services.AddScoped<OperatorReviewService>();  // UC05
+        services.AddOptions<PublicFarmProfileOptions>().BindConfiguration(PublicFarmProfileOptions.Section);
+        services.AddScoped<PublicFarmProfileService>(); // opt-in public farm data; no configured profiles by default
         services.AddScoped<BoxService>();            // Features/Boxes
         services.AddScoped<BatchService>();           // Features/Batches — UC07
         services.AddScoped<BatchExploreService>();    // UC09

@@ -1,0 +1,73 @@
+/* Hero, real capture gallery and public trace. Inherits the v3 .ld design tokens. */
+.ldm-hero { position: relative; isolation: isolate; display: flex; align-items: center; min-height: min(900px, 100svh); min-height: min(900px, max(730px, 100svh)); background: var(--forest-900); color: var(--paper); overflow: hidden; }
+.ldm-hero__background, .ldm-hero__veil { position: absolute; z-index: -1; inset: 0; width: 100%; height: 100%; }
+.ldm-hero__background { object-fit: cover; object-position: 50% 38%; }
+.ldm-hero__loop { visibility: hidden; }
+.ldm-hero__loop.is-playing { visibility: visible; }
+.ldm-hero__veil { background: linear-gradient(90deg, rgb(13 24 14 / 96%) 0%, rgb(13 24 14 / 82%) 38%, rgb(13 24 14 / 32%) 75%, rgb(13 24 14 / 15%) 100%), linear-gradient(0deg, rgb(13 24 14 / 50%), transparent 65%); }
+.ldm-hero__content { padding-block: calc(var(--nav-h) + 90px) 90px; }
+.ldm-hero .ld-kicker { color: var(--sun); }
+.ldm-hero h1 { max-width: 880px; margin-block: 22px 26px; font-size: clamp(42px, 5.3vw, 72px); font-weight: 600; line-height: 1.08; letter-spacing: -.045em; text-wrap: balance; }
+.ldm-hero h1 em { font-family: 'Fraunces', Georgia, serif; font-weight: 500; color: var(--sun); }
+.ldm-hero__lead { max-width: 510px; color: rgb(246 242 233 / 86%); font-size: clamp(17px, 1.5vw, 20px); line-height: 1.65; }
+.ldm-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+.ldm-hero__media-controls { display: flex; flex-wrap: wrap; gap: 24px; }
+.ld .ldm-film-button, .ld .ldm-loop-button { margin-top: 24px; padding: 8px 0; color: var(--paper); text-decoration: underline; text-underline-offset: 5px; font-size: 14px; }
+.ldm-film { width: min(1000px, calc(100vw - 32px)); padding: 16px; border: 1px solid rgb(255 255 255 / 25%); border-radius: 18px; background: #101810; color: var(--paper); }
+.ldm-film::backdrop { background: rgb(0 0 0 / 85%); }
+.ldm-film video { display: block; width: 100%; max-height: 76svh; border-radius: 8px; background: #000; }
+.ld .ldm-film__close { display: block; min-height: 44px; margin: 0 0 10px auto; padding: 0 14px; border: 1px solid rgb(255 255 255 / 35%); border-radius: 999px; color: var(--paper); }
+.ldm-section { padding-block: clamp(60px, 7.2vw, 100px); scroll-margin-top: calc(var(--nav-h) + 20px); }
+.ldm-section h2 { max-width: 720px; margin-top: 16px; font-size: clamp(30px, 3.7vw, 48px); font-weight: 600; line-height: 1.14; letter-spacing: -.035em; text-wrap: balance; }
+.ldm-section__heading { margin-bottom: 32px; }
+.ldm-technology { background: var(--paper-2); }
+.ldm-evidence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+.ldm-evidence { min-width: 0; }
+.ldm-evidence__images { overflow: hidden; border-radius: 16px; background: var(--paper); }
+.ldm-evidence__images img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; }
+.ldm-evidence__images--set { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.ldm-evidence__images--set img:last-child { grid-column: 1 / -1; aspect-ratio: 2 / 1; }
+.ldm-evidence figcaption { padding-top: 18px; }
+.ldm-evidence h3 { font-size: 22px; line-height: 1.25; font-weight: 600; letter-spacing: -.02em; }
+.ldm-evidence figcaption p { margin-top: 8px; color: var(--muted); line-height: 1.65; }
+.ldm-trace { background: var(--card); }
+.ldm-trace__layout { max-width: 1180px; }
+.ldm-trace__layout--photo { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 64px; align-items: center; }
+.ldm-trace__intro { max-width: 590px; margin-top: 22px !important; color: var(--muted); font-size: 18px; line-height: 1.7; }
+.ldm-trace__labels { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px !important; }
+.ldm-trace__labels li { padding: 8px 15px; border: 1px solid var(--line); border-radius: 999px; color: var(--forest-800); font-size: 14px; }
+.ldm-trace__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; max-width: 640px; margin-block: 26px; }
+.ldm-trace__facts dt { color: var(--muted); font-size: 13px; }
+.ldm-trace__facts dd { margin: 4px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.ldm-trace__form { max-width: 580px; margin-top: 28px; }
+.ldm-trace__form label { display: block; margin-bottom: 10px; font-size: 14px; font-weight: 600; }
+.ldm-trace__input-row { display: flex; gap: 10px; }
+.ldm-trace__input-row input { min-width: 0; width: 100%; min-height: 50px; padding: 12px 15px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); font: inherit; font-size: 16px; }
+.ldm-trace__input-row .ld-btn { padding-inline: 20px; }
+.ldm-trace__input-row input[aria-invalid=true] { border-color: #a43514; }
+.ldm-trace__error { margin-top: 10px !important; color: #a43514; font-size: 14px; }
+.ldm-trace__photo { width: 100%; max-height: 560px; border-radius: 18px; object-fit: contain; }
+.ldm-trace__demo { display: flex; align-items: center; gap: 20px; width: fit-content; max-width: 100%; margin-top: 28px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; }
+.ldm-trace__demo svg { flex: 0 0 112px; }
+.ldm-trace__demo span { min-width: 0; }
+.ldm-trace__demo b, .ldm-trace__demo small { display: block; overflow-wrap: anywhere; }
+.ldm-trace__demo small { margin-top: 6px; color: var(--muted); }
+@media (max-width: 700px) {
+  .ldm-hero { min-height: 760px; min-height: min(850px, max(720px, 100svh)); }
+  .ldm-hero__background { object-position: 59% center; }
+  .ldm-hero__veil { background: linear-gradient(90deg, rgb(13 24 14 / 90%), rgb(13 24 14 / 63%)), linear-gradient(0deg, rgb(13 24 14 / 60%), transparent); }
+  .ldm-hero__content { padding-block: calc(var(--nav-h) + 68px) 64px; }
+  .ldm-hero h1 { font-size: clamp(38px, 8.2vw, 54px); }
+  .ldm-hero__lead { max-width: 410px; }
+  .ldm-evidence-grid, .ldm-trace__layout--photo { grid-template-columns: 1fr; gap: 36px; }
+  .ldm-trace__photo { max-height: 440px; }
+}
+@media (max-width: 380px) {
+  .ldm-actions { gap: 10px; }
+  .ldm-actions .ld-btn { padding-inline: 17px; }
+  .ldm-trace__input-row { flex-wrap: wrap; }
+  .ldm-trace__input-row button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ldm-hero *, .ldm-section * { scroll-behavior: auto; transition: none !important; animation: none !important; }
+}

@@ -1,293 +1,244 @@
-/* Trang chủ: một trang landing tĩnh, tông xanh rừng đước. Không gọi máy chủ, không WebGL.
-   Mọi liên kết trỏ tới đường dẫn có trong app/router.tsx. Không ghi lời hứa về kết quả tài chính.
-
-   Ba tệp sau thả vào web/public/landing là trang tự dùng, không cần sửa mã. Thiếu tệp nào thì chỗ đó hiện ảnh bìa hoặc ô chờ:
-     gioi-thieu.mp4        video giới thiệu ở mục trên cùng (ngang 16:9)
-     camera-chay-dan.jpg   ảnh thật của camera chạy dàn (ngang 4:3)
-     hop-can-cua.jpg       ảnh thật của hộp cân cua (ngang 4:3) */
-import { useCallback, useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react'
-import { ArrowRight, Camera, Check, Clapperboard, HandCoins, Play, Scale, Sprout, Store, X } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useNavigate } from 'react-router'
+import { ArrowRight, BookOpen, ChevronDown, HandCoins, Search, Sprout, Store } from 'lucide-react'
 import { homePathFor, useAuthStore } from '../../shared/auth/authStore'
-import MangroveScene from './MangroveScene'
+import { LandingBatchSections, useLandingBatches } from './LandingBatches'
+import { HeroSection, TechnologySection } from './LandingMedia'
+import { TwinSection } from './LandingTwin'
+import { LANDING_MEDIA, type LandingMediaContent } from './landingMediaContent'
 import './landing.css'
+import './landing-parts.css'
 
-const VIDEO = '/landing/gioi-thieu.mp4'
+/** Mục Công nghệ có mô hình 3D (LandingTwin.tsx) đang tạm ẩn theo ý trưởng nhóm ngày 26/11; đổi thành true để bật lại. */
+const SHOW_TWIN = false
 
-const PROBLEMS = [
-  { before: 'Mỗi bên giữ một bộ số.', after: 'Chi phí và giá được khoá trước khi góp vốn.' },
-  { before: 'Góp vốn rồi không thấy cua.', after: 'Camera chụp từng hộp, nhà đầu tư tự mở xem.' },
-  { before: 'Doanh thu, hạng cua tự khai.', after: 'Đơn có cọc. Máy cân đo, kiểm phẩm độc lập duyệt.' },
-  { before: 'Chia tiền dễ tranh cãi.', after: 'Một bảng quyết toán chung, tính tới từng đồng.' },
+type RoleKey = 'farmer' | 'investor' | 'buyer'
+const roles: { key: RoleKey; icon: ReactNode; name: string; description: string; action: string; href: string }[] = [
+  { key: 'farmer', icon: <Sprout />, name: 'Người nuôi', description: 'Mở lô, kết nối vốn và ghi nhận quá trình nuôi.', action: 'Đăng ký hộ nuôi', href: '/dang-ky-ho-nuoi' },
+  { key: 'investor', icon: <HandCoins />, name: 'Nhà đầu tư', description: 'Chọn lô, góp vốn và theo dõi quyết toán.', action: 'Tạo tài khoản', href: '/dang-ky' },
+  { key: 'buyer', icon: <Store />, name: 'Khách mua sỉ', description: 'Chọn quy cách cua và đặt trước theo lô.', action: 'Xem các lô', href: '/lo' },
 ]
 
-/* Bước 4 giữ id "chia": chân trang của các trang công khai có liên kết /#chia. */
-const STEPS = [
-  { title: 'Mở lô', text: 'Người nuôi lập lô, chi phí và giá được khoá.' },
-  { title: 'Góp vốn, đặt trước', text: 'Nhà đầu tư góp vốn, khách sỉ đặt cọc.' },
-  { title: 'Nuôi có giám sát', text: 'Camera chụp từng hộp, tiền giải ngân theo mốc.' },
-  { id: 'chia', title: 'Giao hàng, quyết toán', text: 'Cân phân hạng, giao theo đợt, chia tiền theo bảng công khai.' },
-]
-
-const DEVICES = [
-  { src: '/landing/camera-chay-dan.jpg', icon: <Camera size={30} strokeWidth={1.6} />, name: 'Camera chạy dàn', text: 'Chạy dọc dàn hộp, chụp từng con cua rồi gửi ảnh về hệ thống.' },
-  { src: '/landing/hop-can-cua.jpg', icon: <Scale size={30} strokeWidth={1.6} />, name: 'Hộp cân cua', text: 'Cân, chụp và đề xuất hạng. Nhân viên kiểm phẩm quyết định.' },
-]
-
-const ROLES = [
-  { icon: <Sprout size={24} />, name: 'Người nuôi', text: 'Mở lô, gọi vốn, nhận tiền theo mốc.', href: '/dang-ky-ho-nuoi', go: 'Đăng ký hộ nuôi' },
-  { icon: <HandCoins size={24} />, name: 'Nhà đầu tư', text: 'Góp vốn theo lô, tự mở xem từng hộp cua.', href: '/dang-ky', go: 'Tạo tài khoản' },
-  { icon: <Store size={24} />, name: 'Khách mua sỉ', text: 'Đặt trước theo lô, nhận cua đã phân hạng.', href: '/lo', go: 'Xem lô đang mở' },
-]
-
-function Logo({ href }: { href: string }) {
-  return <a className="ld-logo" href={href} aria-label="CrabShare, về đầu trang"><span className="ld-logo__mark" aria-hidden="true" />crabshare</a>
+function Logo() {
+  return <a className="ld-logo" href="#top" aria-label="CrabShare, về đầu trang">
+    <span className="ld-logo__mark" aria-hidden="true"><Sprout /></span>crabshare<span className="ld-logo__dot" aria-hidden="true">.</span>
+  </a>
 }
 
-function Nav() {
-  const user = useAuthStore((s) => s.user)
+/** Mục nào đang hiện trên màn hình, để tô đậm đúng liên kết ở thanh trên. */
+function useActiveSection(ids: string[]) {
+  const [active, setActive] = useState<string | null>(null)
+  const key = ids.join('|')
+  useEffect(() => {
+    const ids = key.split('|')
+    let frame = 0
+    // Mục chứa đường ngang ở 40% chiều cao màn hình là mục đang xem; ở ảnh đầu trang thì không tô mục nào.
+    const update = () => {
+      frame = 0
+      const line = window.innerHeight * 0.4
+      const current = ids.find((id) => {
+        const box = document.getElementById(id)?.getBoundingClientRect()
+        return !!box && box.top <= line && box.bottom > line
+      })
+      setActive(current ?? null)
+    }
+    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(update) }
+    update()
+    window.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+    return () => {
+      window.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
+  }, [key])
+  return active
+}
+
+function Header({ links }: { links: { id: string; label: string }[] }) {
+  const user = useAuthStore((state) => state.user)
+  const active = useActiveSection(links.map((link) => link.id))
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    const update = () => setScrolled(window.scrollY > 12)
+    update()
+    window.addEventListener('scroll', update, { passive: true })
+    return () => window.removeEventListener('scroll', update)
+  }, [])
   return (
-    <header className="ld-nav">
+    <header className={scrolled ? 'ld-nav is-scrolled' : 'ld-nav'}>
       <div className="ld-nav__in">
-        <Logo href="#top" />
+        <Logo />
         <nav className="ld-nav__links" aria-label="Điều hướng chính">
-          <a href="#cach-hoat-dong">Cách hoạt động</a>
-          <a href="#thiet-bi">Thiết bị</a>
-          <a href="/lo">Lô đang mở</a>
-          <a href="/chuan-phan-hang">Chuẩn phân hạng</a>
+          {links.map((link) => <a key={link.id} href={`#${link.id}`} aria-current={active === link.id ? 'true' : undefined}>{link.label}</a>)}
+          <a href="/lo">Lô nuôi</a>
         </nav>
         <div className="ld-nav__acts">
-          {user ? (
-            <a className="ld-btn ld-btn--solid" href={homePathFor(user)}>Vào trang của tôi</a>
-          ) : (
-            <>
-              <a className="ld-btn ld-btn--ghost" href="/dang-nhap">Đăng nhập</a>
-              <a className="ld-btn ld-btn--solid" href="/dang-ky">Đăng ký</a>
-            </>
-          )}
+          {user ? <a className="ld-btn ld-btn--solid" href={homePathFor(user)}>Vào trang của tôi</a> : <>
+            <a className="ld-nav__login" href="/dang-nhap">Đăng nhập</a>
+            <a className="ld-btn ld-btn--solid" href="/dang-ky">Đăng ký</a>
+          </>}
         </div>
       </div>
     </header>
   )
 }
 
-const clock = (seconds: number) =>
-  Number.isFinite(seconds) && seconds > 0 ? `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}` : ''
-
-/**
- * Mục trên cùng: video giới thiệu. Chưa có tệp video thì chỉ hiện ảnh bìa và nhãn "sắp có".
- * Bấm nút phát thì video chiếm cả mục; Esc, nút đóng hoặc hết video thì trở về ảnh bìa.
- */
-function Hero() {
-  const video = useRef<HTMLVideoElement>(null)
-  const [state, setState] = useState<'unknown' | 'ready' | 'missing'>('unknown')
-  const [length, setLength] = useState('')
-  const [playing, setPlaying] = useState(false)
-
-  const onMeta = (event: SyntheticEvent<HTMLVideoElement>) => {
-    setState('ready')
-    setLength(clock(event.currentTarget.duration))
-  }
-  const stop = useCallback(() => {
-    const el = video.current
-    if (el) {
-      el.pause()
-      if (el.readyState > 0) el.currentTime = 0
-    }
-    setPlaying(false)
-  }, [])
-  const play = () => {
-    const el = video.current
-    if (!el) return
-    setPlaying(true)
-    el.play().catch(() => setPlaying(false))
-  }
-
-  // Sự kiện có thể đã xảy ra trước khi React gắn bộ nghe: đọc lại trạng thái của thẻ video một lần.
+/** Hai nút cẩm nang. Bấm mở vài câu hỏi; sau này trợ lý AI dạy nuôi cua và giải đáp góp vốn, hợp đồng sẽ gắn vào đây. */
+function Handbooks({ minimum }: { minimum: string | null }) {
+  const books = [
+    { key: 'nuoi', title: 'Cẩm nang nuôi cua', faq: [
+      ['Một hộp nuôi mấy con cua?', 'Mỗi hộp nuôi một con. Nước chảy qua từng hộp rồi về bể lọc, nên cua không cắn nhau và dễ theo dõi từng con.'],
+      ['Cua chết thì sao?', 'Người nuôi ghi nhận vào nhật trình của lô. Cua chết được loại khỏi hàng bán.'],
+    ] },
+    { key: 'dau-tu', title: 'Cẩm nang đầu tư', faq: [
+      ['Góp tối thiểu bao nhiêu?', minimum ?? 'Mỗi lô công bố mức góp tối thiểu trong điều khoản mở lô.'],
+      ['Lô bị lỗ thì sao?', 'Lỗ chia theo tỷ lệ vốn góp. Mỗi người chịu lỗ tối đa bằng phần vốn đã góp.'],
+    ] },
+  ]
+  // Liên kết "Cách chia tiền" (/#chia) ở các trang khác mở sẵn cẩm nang đầu tư.
+  const [open, setOpen] = useState<string | null>(() => (window.location.hash === '#chia' ? 'dau-tu' : null))
   useEffect(() => {
-    const el = video.current
-    if (!el) return
-    if (el.error) setState('missing')
-    else if (el.readyState > 0) {
-      setState('ready')
-      setLength(clock(el.duration))
-    }
+    const onHash = () => { if (window.location.hash === '#chia') setOpen('dau-tu') }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
   }, [])
-  useEffect(() => {
-    if (!playing) return
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') stop() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [playing, stop])
-
   return (
-    <section id="top" className={`ld-hero${playing ? ' is-playing' : ''}`} aria-labelledby="ld-title">
-      <MangroveScene />
-      <div className="ld-hero__veil" aria-hidden="true" />
-      <video
-        ref={video}
-        className="ld-hero__video"
-        src={VIDEO}
-        preload="metadata"
-        playsInline
-        controls={playing}
-        aria-label="Video giới thiệu CrabShare"
-        onLoadedMetadata={onMeta}
-        onError={() => { setState('missing'); setPlaying(false) }}
-        onEnded={stop}
-      />
-      {playing && <button type="button" className="ld-hero__close" onClick={stop}><X size={18} aria-hidden="true" /> Đóng video</button>}
-
-      <div className="ld-hero__in">
-        <div className="ld-hero__copy">
-          <p className="ld-kicker">Cua nuôi hộp · Cà Mau</p>
-          <h1 id="ld-title">Góp vốn nuôi cua hộp. <em>Thấy từng hộp, rõ từng đồng.</em></h1>
-          <p className="ld-hero__sub">Một nền tảng cho người nuôi, nhà đầu tư và khách mua sỉ.</p>
-          <div className="ld-hero__cta">
-            <a className="ld-btn ld-btn--solid ld-btn--lg" href="/lo">Xem lô đang mở <ArrowRight size={18} aria-hidden="true" /></a>
-            <a className="ld-btn ld-btn--ghost ld-btn--lg" href="#cach-hoat-dong">Cách hoạt động</a>
-          </div>
-        </div>
-
-        {state === 'missing' ? (
-          <p className="ld-play ld-play--soon">
-            <span className="ld-play__disc"><Clapperboard size={28} strokeWidth={1.6} aria-hidden="true" /></span>
-            <span className="ld-play__text"><b>Video giới thiệu</b><small>Sắp có</small></span>
-          </p>
-        ) : (
-          <button type="button" className="ld-play" onClick={play}>
-            <span className="ld-play__disc"><Play size={32} fill="currentColor" strokeWidth={0} aria-hidden="true" /></span>
-            <span className="ld-play__text"><b>Xem video giới thiệu</b>{length && <small>{length}</small>}</span>
+    <section className="ld-sec ld-books" id="hoi-dap" aria-label="Cẩm nang">
+      <div className="ld-wrap">
+        <div className="ld-books__buttons">{books.map((book) => (
+          <button key={book.key} type="button" className="ld-book-btn" aria-expanded={open === book.key} aria-controls={`ld-book-${book.key}`}
+            onClick={() => setOpen(open === book.key ? null : book.key)}>
+            <BookOpen aria-hidden="true" />{book.title}<ChevronDown className="ld-book-btn__chev" aria-hidden="true" />
           </button>
-        )}
+        ))}</div>
+        {books.map((book) => (
+          <div key={book.key} id={`ld-book-${book.key}`} className="ld-book-panel" role="region" aria-label={book.title} hidden={open !== book.key}>
+            {book.faq.map(([question, answer]) => (
+              <details key={question} id={question === 'Lô bị lỗ thì sao?' ? 'chia' : undefined} open={question === 'Lô bị lỗ thì sao?' && window.location.hash === '#chia' ? true : undefined}>
+                <summary>{question}<span aria-hidden="true" /></summary>
+                <p>{answer}</p>
+              </details>
+            ))}
+            <p className="ld-book-panel__note">Trợ lý AI cho cẩm nang này đang được làm.</p>
+          </div>
+        ))}
       </div>
     </section>
   )
 }
 
-function Head({ kicker, title, id }: { kicker: string; title: string; id: string }) {
+function Join({ art }: { art: LandingMediaContent['roles'] }) {
+  const [failed, setFailed] = useState<RoleKey[]>([])
   return (
-    <div className="ld-head">
-      <p className="ld-kicker">{kicker}</p>
-      <h2 id={id}>{title}</h2>
-    </div>
+    <section className="ld-sec ld-join" id="bat-dau" aria-labelledby="ld-join-title">
+      <div className="ld-wrap">
+        <div className="ld-head"><h2 id="ld-join-title">Bạn tham gia với vai nào?</h2></div>
+        <div className="ld-join__grid">{roles.map((role) => {
+          const src = art?.[role.key]
+          const picture = src && /^\/(?!\/)[^?#]+$/.test(src) && !failed.includes(role.key) ? src : null
+          return <a className={`ld-role ld-role--${role.key}`} key={role.href} href={role.href}>
+            <span className={picture ? 'ld-role__stage has-art' : 'ld-role__stage'} aria-hidden="true">
+              {picture
+                ? <img src={picture} alt="" loading="lazy" decoding="async" onError={() => setFailed((list) => [...list, role.key])} />
+                : <span className="ld-role__mascot">{role.icon}</span>}
+            </span>
+            <div className="ld-role__body">
+              <h3>{role.name}</h3>
+              <p>{role.description}</p>
+              <span className="ld-role__go">{role.action}<ArrowRight aria-hidden="true" /></span>
+            </div>
+          </a>
+        })}</div>
+      </div>
+    </section>
   )
 }
 
-/** Ô ảnh thiết bị: có tệp ảnh thì hiện ảnh, chưa có thì hiện ô chờ có nhãn. */
-function Shot({ src, name, icon }: { src: string; name: string; icon: ReactNode }) {
-  const [missing, setMissing] = useState(false)
+/** Ô tra mã nhỏ ở chân trang. Mã in trên đơn hàng mở thẳng trang truy xuất; trang chủ không hiện QR mẫu. */
+function TraceLookup() {
+  const navigate = useNavigate()
+  const [code, setCode] = useState('')
+  const [error, setError] = useState('')
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const trimmed = code.trim()
+    if (!trimmed) { setError('Nhập mã in trên đơn hàng để tra cứu.'); return }
+    navigate(`/truy-xuat/${encodeURIComponent(trimmed)}`)
+  }
   return (
-    <div className="ld-shot">
-      {missing ? (
-        <div className="ld-shot__empty">{icon}<b>Ảnh {name.toLowerCase()}</b><small>Sẽ bổ sung ảnh thật</small></div>
-      ) : (
-        <img src={src} alt={`${name} tại trại`} onError={() => setMissing(true)} />
-      )}
-    </div>
+    <form className="ld-trace" id="truy-xuat" onSubmit={submit} noValidate>
+      <label htmlFor="ld-trace-code">Mã truy xuất</label>
+      <div className="ld-trace__row">
+        <input id="ld-trace-code" name="traceCode" value={code} onChange={(event) => { setCode(event.target.value); setError('') }}
+          placeholder="Mã in trên đơn hàng" autoComplete="off" autoCapitalize="characters" spellCheck={false}
+          aria-invalid={!!error} aria-describedby={error ? 'ld-trace-error' : undefined} />
+        <button type="submit"><Search aria-hidden="true" />Tra cứu</button>
+      </div>
+      {error && <p id="ld-trace-error" className="ld-trace__error" role="alert">{error}</p>}
+    </form>
+  )
+}
+
+function Footer() {
+  const address = import.meta.env.VITE_TEAM_CONTACT_EMAIL?.trim()
+  const contact = address && /^[^\s@<>?&#]+@[^\s@<>?&#]+\.[^\s@<>?&#]+$/.test(address) ? address : null
+  return (
+    <footer className="ld-foot"><div className="ld-wrap">
+      <div className="ld-foot__row">
+        <div className="ld-foot__brand">
+          <Logo />
+          <nav aria-label="Liên kết cuối trang"><a href="/lo">Danh sách lô</a><a href="/chuan-phan-hang">Chuẩn phân hạng</a><a href="#hoi-dap">Cẩm nang</a></nav>
+        </div>
+        <TraceLookup />
+      </div>
+      <div className="ld-foot__bar"><span>CrabShare · Đồ án tốt nghiệp FA26SE229</span>{contact && <a href={`mailto:${contact}`}>Liên hệ nhóm · {contact}</a>}</div>
+      <p className="ld-foot__credit">
+        Ảnh minh hoạ loại cua từ Wikimedia Commons: Wibowo Djatmiko (giấy phép CC BY-SA 4.0, đã cắt và thu nhỏ), Judgefloro (CC0).
+      </p>
+    </div></footer>
   )
 }
 
 export default function Landing() {
+  const data = useLandingBatches()
+  const initialAnchor = useRef(window.location.hash.slice(1))
   useEffect(() => {
-    const title = document.title
-    const background = document.body.style.background
+    const previous = document.title
     document.title = 'CrabShare · Góp vốn nuôi cua hộp'
-    document.body.style.background = '#101810'
-    // Trang được tải lười nên trình duyệt chưa kịp cuộn tới #mục trong đường dẫn (ví dụ /#chia).
-    const anchor = window.location.hash.slice(1)
-    if (anchor) document.getElementById(anchor)?.scrollIntoView()
-    return () => {
-      document.title = title
-      document.body.style.background = background
-    }
+    return () => { document.title = previous }
   }, [])
+  useEffect(() => {
+    const id = initialAnchor.current
+    if (!id || window.location.hash.slice(1) !== id) return
+    const target = document.getElementById(id)
+    if (target) {
+      target.scrollIntoView({ behavior: 'instant' })
+      initialAnchor.current = ''
+    }
+  }, [data.loading, data.farms.length, data.production.length, data.wholesale.length])
 
+  // Chỉ đưa lên thanh trên những mục đang có trên trang; mục cần dữ liệu thì ẩn khi chưa có dữ liệu.
+  const links = [
+    { id: 'gop-von', label: 'Góp vốn' },
+    ...(data.farms.length ? [{ id: 'trai-nuoi', label: 'Hộ nuôi' }] : []),
+    ...(data.wholesale.length ? [{ id: 'gia-si', label: 'Chào giá' }] : []),
+    ...(SHOW_TWIN ? [{ id: 'cong-nghe', label: 'Công nghệ' }] : []),
+    { id: 'hoi-dap', label: 'Cẩm nang' },
+  ]
   return (
     <div className="ld">
-      <a className="ld-skip" href="#noi-dung">Bỏ qua, đến nội dung chính</a>
-      <Nav />
-      <Hero />
-
+      <a className="ld-skip" href="#noi-dung">Đến nội dung chính</a>
+      <Header links={links} />
       <main id="noi-dung">
-        <section className="ld-sec ld-why" aria-labelledby="ld-why">
-          <div className="ld-wrap">
-            <Head id="ld-why" kicker="Vì sao có CrabShare" title="Bốn chỗ dễ mất lòng tin" />
-            <ul className="ld-why__grid">
-              {PROBLEMS.map((p) => (
-                <li key={p.before} className="ld-fix">
-                  <div className="ld-fix__before"><small>Trước đây</small><p>{p.before}</p></div>
-                  <div className="ld-fix__after"><small><Check size={14} strokeWidth={3} aria-hidden="true" /> Với CrabShare</small><p>{p.after}</p></div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
-        <section id="cach-hoat-dong" className="ld-sec ld-how" aria-labelledby="ld-how">
-          <div className="ld-wrap">
-            <Head id="ld-how" kicker="Cách hoạt động" title="Một lô cua đi qua bốn bước" />
-            <ol className="ld-how__steps">
-              {STEPS.map((s, i) => (
-                <li key={s.title} id={s.id} className="ld-step">
-                  <span className="ld-step__n" aria-hidden="true">{i + 1}</span>
-                  <div><h3>{s.title}</h3><p>{s.text}</p></div>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </section>
-
-        <section id="thiet-bi" className="ld-sec ld-gear" aria-labelledby="ld-gear">
-          <div className="ld-wrap">
-            <Head id="ld-gear" kicker="Thiết bị tại trại" title="Máy đo thay cho lời khai" />
-            <div className="ld-gear__grid">
-              <figure className="ld-farm">
-                <img src="/minhbach/crab-ras.webp" width={1122} height={1402} alt="Dàn hộp nuôi cua xếp tầng trong trại" loading="lazy" decoding="async" />
-                <figcaption>Dàn hộp nuôi cua · ảnh minh hoạ</figcaption>
-              </figure>
-              {DEVICES.map((d) => (
-                <article key={d.name} className="ld-device">
-                  <Shot src={d.src} name={d.name} icon={d.icon} />
-                  <div className="ld-device__body"><h3>{d.name}</h3><p>{d.text}</p></div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="bat-dau" className="ld-sec ld-join" aria-labelledby="ld-join">
-          <div className="ld-wrap">
-            <Head id="ld-join" kicker="Bắt đầu" title="Bạn tham gia với vai nào?" />
-            <div className="ld-join__grid">
-              {ROLES.map((r) => (
-                <a key={r.name} className="ld-role" href={r.href}>
-                  <span className="ld-role__icon" aria-hidden="true">{r.icon}</span>
-                  <div className="ld-role__body">
-                    <h3>{r.name}</h3>
-                    <p>{r.text}</p>
-                    <span className="ld-role__go">{r.go} <ArrowRight size={17} aria-hidden="true" /></span>
-                  </div>
-                </a>
-              ))}
-            </div>
-          </div>
-        </section>
+        <HeroSection />
+        <LandingBatchSections data={data} />
+        {SHOW_TWIN && <TwinSection />}
+        <TechnologySection />
+        <Handbooks minimum={data.minimumContributionFaq} />
+        <Join art={LANDING_MEDIA.roles} />
       </main>
-
-      <footer className="ld-foot">
-        <div className="ld-wrap">
-          <div className="ld-foot__row">
-            <Logo href="#top" />
-            <nav aria-label="Liên kết cuối trang">
-              <a href="/lo">Lô đang mở</a>
-              <a href="/chuan-phan-hang">Chuẩn phân hạng</a>
-              <a href="/dang-nhap">Đăng nhập</a>
-              <a href="/dang-ky">Đăng ký</a>
-            </nav>
-          </div>
-          <p className="ld-foot__bar">© 2026 CrabShare · Đồ án tốt nghiệp FA26SE229. Góp vốn có rủi ro, nền tảng không cam kết kết quả tài chính.</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   )
 }
