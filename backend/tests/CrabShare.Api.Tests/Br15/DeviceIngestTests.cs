@@ -146,6 +146,43 @@ public sealed class DeviceIngestTests(DeviceFixture f) : IClassFixture<DeviceFix
     }
 
     [Fact]
+    public async Task Remeasure_preserves_old_result_and_keeps_duplicate_guards()
+    {
+        var set = await Br15Scenario.CrabsAsync(f, 1);
+        var prefix = $"RM{f.Next()}";
+        var tag = prefix + "-001";
+        var (code, key) = await RegisterAsync(new { deviceCode = $"ST-{f.Next()}", deviceType = "Station",
+            operatorId = set.Batch.Farmer.OperatorId, siteId = await QcStationSiteAsync(set.Batch.Farmer), cameraHeightMm = 370 });
+        using var farmer = set.Batch.Farmer.Client(f);
+        using var device = Device(key);
+        await Br15Fixture.Body(await farmer.PostAsync($"/api/batches/{set.Batch.Code}/start-harvest", null));
+        var first = await Br15Fixture.Body(await Br15Fixture.PostJson(farmer, "/api/measurement-sessions",
+            new { crabCode = set.CrabCodes[0], stationCode = code, batchCode = set.Batch.Code, gradeAiPrefix = prefix, crabNumber = 1 }));
+        var oldNo = first.GetProperty("sessionNo").GetString();
+        var path = $"/api/measurement-sessions/{oldNo}/remeasure";
+        Assert.Equal("grading.remeasure_not_ready", await Br15Fixture.ErrorCode(await Br15Fixture.PostJson(farmer, path, new { stationCode = code })));
+        var meta = new { messageId = Guid.NewGuid(), deviceCode = code, sessionNo = oldNo, crabTag = tag,
+            capturedAt = DateTimeOffset.UtcNow, doorClosed = true, lastCalibratedAt = DateTimeOffset.UtcNow,
+            weightG = 412.3m, weightSamples = 10, weightRangeG = 0.12m, tofMm = 318, cameraHeightMm = 370 };
+        Assert.Equal(HttpStatusCode.Accepted, (await device.PostAsync("/api/devices/ingest/measurements",
+            Multipart(meta, ("white", Br15Scenario.Jpeg("old-white")), ("red", Br15Scenario.Jpeg("old-red"))))).StatusCode);
+        Assert.Equal("grading.gradeai_already_measured", await Br15Fixture.ErrorCode(await Br15Fixture.PostJson(farmer,
+            "/api/measurement-sessions", new { crabCode = set.CrabCodes[0], stationCode = code })));
+        var next = await Br15Fixture.Body(await Br15Fixture.PostJson(farmer, path, new { stationCode = code }));
+        Assert.NotEqual(oldNo, next.GetProperty("sessionNo").GetString());
+        Assert.Equal(tag, next.GetProperty("gradeAiTag").GetString());
+        Assert.Equal(set.CrabCodes[0], next.GetProperty("crabCode").GetString());
+        Assert.Equal("Open", next.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, next.GetProperty("weightG").ValueKind);
+        Assert.False(next.GetProperty("hasWhiteImage").GetBoolean());
+        Assert.Equal("grading.crab_session_open", await Br15Fixture.ErrorCode(await Br15Fixture.PostJson(farmer, path, new { stationCode = code })));
+        var old = await Br15Fixture.Body(await farmer.GetAsync($"/api/measurement-sessions/{oldNo}"));
+        Assert.Equal(412.3m, old.GetProperty("weightG").GetDecimal());
+        Assert.True(old.GetProperty("hasWhiteImage").GetBoolean());
+        Assert.True(old.GetProperty("hasRedImage").GetBoolean());
+    }
+
+    [Fact]
     public async Task Numbered_station_result_cannot_move_to_another_crab_and_exact_retry_keeps_its_first_session()
     {
         var set = await Br15Scenario.CrabsAsync(f, 3);
@@ -229,13 +266,15 @@ public sealed class DeviceIngestTests(DeviceFixture f) : IClassFixture<DeviceFix
         var empty = await Br15Fixture.Body(await farmer.GetAsync(path));
         Assert.Equal(JsonValueKind.Null, empty.GetProperty("state").ValueKind);
         var message = new { hardwareOnline = true, busy = false, doorClosed = true, phase = "ready",
-            rgb = "blue", blinking = true, crabTag = "LA-001", weightG = 227.6m, completed = Array.Empty<string>() };
+            rgb = "blue", blinking = true, crabTag = "LA-001", weightG = 227.6m, completed = Array.Empty<string>(),
+            connectionType = "wifi", networkSsid = "HieuNhan Café" };
         Assert.Equal(HttpStatusCode.Forbidden, (await Br15Fixture.PostJson(anonymous, $"/api/devices/{code}/station-state", message)).StatusCode);
         using var device = Device(key);
         await Br15Fixture.Body(await Br15Fixture.PostJson(device, $"/api/devices/{code}/station-state", message));
         var current = await Br15Fixture.Body(await farmer.GetAsync(path));
         Assert.True(current.GetProperty("fresh").GetBoolean());
         Assert.Equal("LA-001", current.GetProperty("state").GetProperty("crabTag").GetString());
+        Assert.Equal("HieuNhan Café", current.GetProperty("state").GetProperty("networkSsid").GetString());
         var other = await Br15Scenario.CrabsAsync(f, 1);
         using var outsider = other.Batch.Farmer.Client(f);
         Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync(path)).StatusCode);

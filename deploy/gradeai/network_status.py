@@ -9,6 +9,20 @@ import time
 from urllib.parse import urlsplit
 
 
+def connected_ssid(interface):
+    try:
+        output = subprocess.run(['iw', 'dev', interface, 'link'], capture_output=True,
+                                text=True, encoding='utf-8', timeout=1, check=True).stdout
+    except (OSError, UnicodeError, subprocess.SubprocessError):
+        return None
+    for line in output.split('\n'):
+        field, separator, name = line.lstrip(' \t').partition(': ')
+        if field == 'SSID' and separator and name.strip() and len(name.encode('utf-8')) <= 32:
+            if name.isprintable():
+                return name
+    return None
+
+
 class NetworkStatus:
     def __init__(self):
         self.checked_at = float('-inf')
@@ -18,7 +32,7 @@ class NetworkStatus:
     def read(self, url):
         if url == self.url and time.monotonic() - self.checked_at < 10:
             return self.cached.copy()
-        result = {'connectionType': 'unknown', 'networkInterface': None, 'networkIp': None}
+        result = {'connectionType': 'unknown', 'networkInterface': None, 'networkIp': None, 'networkSsid': None}
         try:
             host = urlsplit(url).hostname
             try:
@@ -40,6 +54,8 @@ class NetworkStatus:
                 source = route.get('prefsrc') or route.get('src')
                 result.update(connectionType=kind, networkInterface=interface,
                               networkIp=str(ipaddress.ip_address(source)) if source else None)
+                if kind == 'wifi':
+                    result['networkSsid'] = connected_ssid(interface)
         except (OSError, ValueError, TypeError, IndexError, KeyError, subprocess.SubprocessError):
             pass
         self.cached, self.url, self.checked_at = result, url, time.monotonic()

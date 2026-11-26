@@ -1,0 +1,68 @@
+--- a/physical_flow.py
++++ b/physical_flow.py
+@@ -43,9 +43,25 @@
+     return tags
+
+
++def completed_sessions(root):
++    sessions = set()
++    for path in (Path(root) / "data/runs").glob("*/result.json"):
++        try:
++            record = json.loads(path.read_text(encoding="utf-8"))
++        except (ValueError, OSError):
++            continue
++        if not isinstance(record, dict):
++            continue
++        tag, session = record.get("crab_tag"), record.get("session_no")
++        if record.get("complete") is True and record.get("simulated") is False and isinstance(tag, str) and isinstance(session, str) and session:
++            sessions.add((tag.upper(), session))
++    return sessions
++
++
+ class PhysicalFlow:
+-    def __init__(self, complete):
++    def __init__(self, complete, sessions=None):
+         self.complete = complete
++        self.sessions = set() if sessions is None else sessions
+         self.door = self.button = None
+         self.closed_at = 0
+         self.latch = None
+@@ -77,7 +93,8 @@
+         tag = selection.get("crab_tag")
+         if not tag:
+             return "purple", selection.get("reason") or "Chưa nhập mã cua."
+-        if tag.upper() in self.complete:
++        session = selection.get("session_no") if selection.get("crabshare_device_code") else None
++        if (session and (tag.upper(), session) in self.sessions) or (not session and tag.upper() in self.complete):
+             return "purple", f"Mã {tag} đã có lượt hoàn tất."
+         if preflight_error:
+             return "red", preflight_error
+@@ -102,6 +119,8 @@
+     def finished(self, result):
+         if result["complete"]:
+             self.complete.add(result["crab_tag"].upper())
++            if result.get("session_no"):
++                self.sessions.add((result["crab_tag"].upper(), result["session_no"]))
+             self.latch = "green", "Đã lưu lượt đo tại Pi. Mở cửa để lấy cua."
+         else:
+             self.latch = "red", result["error"] + " Mở rồi đóng cửa để thử lại."
+--- a/station.py
++++ b/station.py
+@@ -19,7 +19,7 @@
+ import uuid
+ from scale_filter import ScaleFilter
+ from camera_capture import capture_photo
+-from physical_flow import PhysicalFlow, RGB, completed_tags
++from physical_flow import PhysicalFlow, RGB, completed_tags, completed_sessions
+
+ ROOT = Path(__file__).resolve().parent
+ DEFAULTS = {
+@@ -616,7 +616,7 @@
+             import threading
+             preview_requested=threading.Event()
+         preview=CameraPreview(emit)
+-        flow = PhysicalFlow(completed_tags(root)) if physical_gate is not None else None
++        flow = PhysicalFlow(completed_tags(root), completed_sessions(root)) if physical_gate is not None else None
+         selection_path = root / "data/selection.json"
+         config_path = root / "data/config.json"
+         last_flow = None

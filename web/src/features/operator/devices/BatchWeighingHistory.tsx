@@ -13,7 +13,11 @@ export interface WeighingHistoryPage {
   total: number
 }
 
-export function BatchWeighingHistory({ code, onSelect }: { code: string; onSelect?: (session: string) => void }) {
+export function BatchWeighingHistory({ code, onSelect, onRemeasure, remeasureDisabled = false }: {
+  code: string; onSelect?: (session: string) => void
+  onRemeasure?: (session: SessionResponse) => void
+  remeasureDisabled?: boolean
+}) {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState('')
@@ -50,6 +54,9 @@ export function BatchWeighingHistory({ code, onSelect }: { code: string; onSelec
             { key: 'weight', header: 'Khối lượng', num: true, cell: (row) => row.weightG == null ? 'Chờ số cân' : `${row.weightG.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} g` },
             { key: 'status', header: 'Kết quả', cell: (row) => <><StatusBadge kind="session" value={row.status} />{row.failReason && <small className="os-sub op-danger">{row.failReason}</small>}</> },
             { key: 'view', header: '', cell: (row) => <OpBtn sm variant="ghost" onClick={() => show(row)}>Xem lượt cân</OpBtn> },
+            ...(onRemeasure ? [{ key: 'remeasure', header: '', cell: (row: SessionResponse) => row.status === 'Measured' && row.procedure === 'Station'
+              ? <OpBtn sm variant="ghost" disabled={remeasureDisabled} onClick={() => onRemeasure(row)} aria-label={`Cân lại ${row.gradeAiTag ?? row.crabCode}`}>Cân lại</OpBtn>
+              : null }] : []),
           ]} />
         <Pager page={result.page} pageSize={result.pageSize} total={result.total} unit="lượt cân" onChange={setPage} />
       </>}

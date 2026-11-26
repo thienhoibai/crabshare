@@ -1,29 +1,35 @@
 # Trạng thái kết nối trạm GradeAI
 
 Web hiển thị chờ kết nối, tự kiểm tra mỗi 1,5 giây, hướng dẫn khi chờ trên 30 giây,
-và LAN/Wi-Fi, interface, IP Pi do thiết bị báo về. Dữ liệu cũ được ghi là lần gần nhất.
+và LAN/Wi-Fi, tên Wi-Fi, interface, IP Pi do thiết bị báo về. Dữ liệu cũ được ghi là lần gần nhất.
 SSH là công cụ quản trị, không phải đường truyền riêng của dữ liệu cân.
 
 `network_status.py` đọc route đến API CrabShare rồi xác định interface Wi-Fi/Ethernet
-từ sysfs. Cache 10 giây; lỗi đọc trả `unknown`. Không đổi mạng, không đọc mật khẩu.
+từ sysfs. Trên Wi-Fi, dùng `iw` để đọc SSID đang kết nối. Cache 10 giây.
+Khi Pi chưa gửi SSID, web hiển thị nhãn Wi-Fi.
 
 ## Cập nhật Pi đang chạy GradeAI App 1.2
 
-Chỉ cập nhật khi trạm không chạy lượt đo. Sao lưu `app.py` trước khi thay đổi.
+Chỉ cập nhật khi trạm rảnh. Sao lưu `app.py`, `station.py`, `physical_flow.py` và
+`network_status.py` (nếu có) trước khi thay đổi.
 Chép `network_status.py` cạnh `app.py` trong thư mục ứng dụng Pi.
-Tại thư mục ứng dụng, kiểm tra patch trước khi áp dụng:
+Nếu Pi chưa gửi trạng thái LAN/Wi-Fi, áp dụng `connection-status.patch` tại thư mục ứng dụng.
+Nếu cần cân lại cùng mã cua, áp dụng thêm `remeasure-session.patch` một lần:
 
 ```sh
 git apply --check /path/to/connection-status.patch
 git apply /path/to/connection-status.patch
-python3 -m py_compile app.py network_status.py
+git apply --check /path/to/remeasure-session.patch
+git apply /path/to/remeasure-session.patch
+python3 -m py_compile app.py network_status.py physical_flow.py station.py
 sudo systemctl restart gradeai-demo
 ```
 
-Nếu patch không khớp phiên bản, đối chiếu 3 thay đổi trong patch trước khi cập nhật.
+Nếu một patch không khớp phiên bản, kiểm tra trước xem Pi đã có thay đổi đó chưa.
 Giữ nguyên file cấu hình URL API, mã/khóa thiết bị, hiệu chuẩn và dữ liệu lượt cân.
-Backend phải có các trường `connectionType`, `networkInterface`, `networkIp` trong
-`StationRuntimeState`; không cần migration riêng cho 3 trường này.
+Backend đọc `networkSsid` cùng thông tin kết nối trong heartbeat và mở lượt cân lại
+qua API `POST /api/measurement-sessions/{sessionNo}/remeasure`. Các thay đổi này
+dùng dữ liệu phiên đo và trạng thái thiết bị hiện có.
 
 ## Kiểm tra
 

@@ -28,6 +28,11 @@ public sealed record SessionResponse(string SessionNo, string BatchCode, string 
     DateTimeOffset OpenedAt, DateTimeOffset? CapturedAt, DateTimeOffset? ReceivedAt, decimal? WeightG, int? TofMm, int? CameraHeightMm,
     bool HasWhiteImage, bool HasRedImage, string? FailReason, string? GradeAiTag = null);
 
+public sealed class RemeasureSessionRequest
+{
+    [Required, StringLength(40)] public string StationCode { get; set; } = "";
+}
+
 public sealed record GradeAiLabel(string CrabCode, int CrabNumber);
 public sealed class GradeAiLabelsRequest
 {
@@ -135,7 +140,16 @@ public sealed class MeasurementSessionService(AppDbContext db, ICurrentUser me, 
             return batch.Status;
         }, ct);
 
-    public async Task<SessionResponse> OpenAsync(OpenSessionRequest req, CancellationToken ct)
+    public Task<SessionResponse> OpenAsync(OpenSessionRequest req, CancellationToken ct)
+        => OpenCoreAsync(req, null, ct);
+
+    public Task<SessionResponse> RemeasureAsync(string sourceSessionNo, RemeasureSessionRequest req, CancellationToken ct)
+    {
+        BatchService.Validate(req);
+        return OpenCoreAsync(new OpenSessionRequest { StationCode = req.StationCode }, sourceSessionNo, ct);
+    }
+
+    private async Task<SessionResponse> OpenCoreAsync(OpenSessionRequest req, string? sourceSessionNo, CancellationToken ct)
     {
         BatchService.Validate(req);
         var numbered = req.GradeAiPrefix is not null || req.CrabNumber is not null;
@@ -151,7 +165,12 @@ public sealed class MeasurementSessionService(AppDbContext db, ICurrentUser me, 
             sessionNo = await db.InTransactionAsync(async () =>
             {
                 await audit.LockAsync(ct);
-                var crab = code is not null
+                var source = sourceSessionNo is null ? null :
+                    await db.MeasurementSessions.SingleOrDefaultAsync(s => s.SessionNo == sourceSessionNo, ct)
+                    ?? throw new NotFoundException("grading.session_not_found", "Không tìm thấy lượt đo cũ.");
+                var crab = source is not null
+                    ? await db.CrabUnits.SingleAsync(c => c.CrabUnitId == source.CrabUnitId, ct)
+                    : code is not null
                     ? await db.CrabUnits.SingleOrDefaultAsync(c => c.CrabCode == code, ct)
                     : tag is not null
                         ? await db.CrabUnits.SingleOrDefaultAsync(c => c.GradeAiTag == tag, ct)
@@ -160,6 +179,14 @@ public sealed class MeasurementSessionService(AppDbContext db, ICurrentUser me, 
                     throw new NotFoundException("grading.crab_not_found", "Mã chưa gắn với cua. Chọn mã kiểm kê của đúng con cua để gắn lần đầu.");
                 var batch = await db.Batches.SingleAsync(b => b.BatchId == crab.BatchId, ct);
                 await access.RequireOperatorAsync(batch, ct);
+                if (source is not null)
+                {
+                    if (source.Procedure != "Station" || source.Status != "Measured" || source.MessageId is null)
+                        throw new BusinessRuleException("grading.remeasure_not_ready", "Chỉ cân lại lượt trạm đã xử lý xong. Chờ lượt hiện tại hoàn tất.");
+                    if (await db.GradeDecisions.AnyAsync(d => d.CrabUnitId == crab.CrabUnitId && d.IsCurrent &&
+                        (d.Status == "Approved" || d.Status == "Rejected"), ct))
+                        throw new ConflictException("grading.already_decided", "Cua đã được QC chốt hạng. Liên hệ QC để xử lý trước khi cân lại.");
+                }
                 if (numbered && !string.Equals(batch.BatchCode, req.BatchCode, StringComparison.OrdinalIgnoreCase))
                     throw new BusinessRuleException("grading.crab_other_batch", "Mã cua thuộc lô khác.");
                 // Lô có lưu nuôi đo khi thu hoạch; lô không lưu nuôi đo sau khi nhận (BR-151).
@@ -182,7 +209,7 @@ public sealed class MeasurementSessionService(AppDbContext db, ICurrentUser me, 
                 }
                 if (await db.MeasurementSessions.AnyAsync(s => s.CrabUnitId == crab.CrabUnitId && s.Status == "Open", ct))
                     throw new ConflictException("grading.crab_session_open", "Con cua này đang có lượt đo mở.");
-                if (req.Procedure == "Station" && (numbered || crab.GradeAiTag is not null) &&
+                if (source is null && req.Procedure == "Station" && (numbered || crab.GradeAiTag is not null) &&
                     await db.MeasurementSessions.AnyAsync(s => s.CrabUnitId == crab.CrabUnitId && s.MessageId != null, ct))
                     throw new ConflictException("grading.gradeai_already_measured", "Mã cua đã có kết quả trạm.");
                 if (tag is not null)
@@ -206,7 +233,7 @@ public sealed class MeasurementSessionService(AppDbContext db, ICurrentUser me, 
                 db.MeasurementSessions.Add(session);
                 await db.SaveChangesAsync(ct);
                 await audit.WriteAsync("measurement_session", session.MeasurementSessionId, "open", null,
-                    new { session.SessionNo, crab.CrabCode, crab.GradeAiTag, req.StationCode, req.Procedure }, ct);
+                    new { session.SessionNo, crab.CrabCode, crab.GradeAiTag, req.StationCode, req.Procedure, RemeasureOf = sourceSessionNo }, ct);
                 return session.SessionNo;
             }, ct, IsolationLevel.Serializable);
         }
