@@ -157,6 +157,11 @@ public sealed class MeasurementSessionsController(MeasurementSessionService sess
     public async Task<ActionResult<SessionResponse>> Open(OpenSessionRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await sessions.OpenAsync(req, ct));
 
+    [HttpPost("api/measurement-sessions/{sessionNo}/remeasure")]
+    [EndpointSummary("Mở lượt cân lại cùng mã cua, giữ nguyên kết quả và ảnh của lượt cũ")]
+    public async Task<ActionResult<SessionResponse>> Remeasure(string sessionNo, RemeasureSessionRequest req, CancellationToken ct)
+        => StatusCode(StatusCodes.Status201Created, await sessions.RemeasureAsync(sessionNo, req, ct));
+
     [EndpointSummary("Xem phiên đo theo mã")]
     [HttpGet("api/measurement-sessions/{sessionNo}")]
     public async Task<ActionResult<SessionResponse>> Get(string sessionNo, CancellationToken ct) => Ok(await sessions.GetAsync(sessionNo, ct));

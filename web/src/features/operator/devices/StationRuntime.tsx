@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { OpNote, formatDateTime, useGet } from '../../../shared/ui/console'
 import { StationConnection } from './StationConnection'
 
@@ -36,6 +36,7 @@ export interface StationState {
   connectionType?: 'wifi' | 'ethernet' | 'unknown'
   networkInterface?: string | null
   networkIp?: string | null
+  networkSsid?: string | null
 }
 
 export interface RuntimeResponse {
@@ -73,10 +74,14 @@ export function StationRuntime({
   code,
   onStateChange,
   connectionOnly = false,
+  showConnection = true,
+  controls,
 }: {
   code: string
   onStateChange?: (report: RuntimeResponse | undefined) => void
   connectionOnly?: boolean
+  showConnection?: boolean
+  controls?: ReactNode
 }) {
   const runtime = useGet<RuntimeResponse>(`/api/operators/me/devices/${encodeURIComponent(code)}/station-state`, undefined, {
     refetchInterval: 1500,
@@ -98,15 +103,17 @@ export function StationRuntime({
   const connection = <StationConnection key={code} code={code} report={runtime.data}
     loading={runtime.isPending} error={runtime.isError} fetching={runtime.isFetching}
     retry={() => void runtime.refetch()} />
-  if (connectionOnly || runtime.isPending || runtime.isError) return connection
+  if (connectionOnly) return showConnection ? connection : null
 
   const report = runtime.data
-  const s = report.state
-  const online = !!(s && report.fresh && s.hardwareOnline)
+  const s = report?.state
+  const online = !runtime.isError && !!(s && report?.fresh && s.hardwareOnline)
   const rgbKey = s?.rgb && LED_META[s.rgb] ? s.rgb : 'off'
   const [rgbName, rgbHex] = LED_META[rgbKey]
 
-  const statusTitle = !s
+  const statusTitle = runtime.isError ? 'Chưa liên lạc được với máy chủ'
+    : runtime.isPending ? 'Đang kiểm tra trạm'
+    : !s
     ? 'Trạm chưa gửi trạng thái'
     : !online
       ? 'Trạm chưa có tín hiệu mới'
@@ -124,10 +131,11 @@ export function StationRuntime({
                   ? 'Kiểm tra mã cua'
                   : 'Sẵn sàng'
 
-  const statusNote = !s
-    ? 'Kiểm tra URL API, mã và khóa thiết bị trên Pi.'
+  const statusNote = runtime.isError ? 'Kiểm tra kết nối mạng và thử lại.'
+    : runtime.isPending ? ''
+    : !s ? 'Chờ Pi gửi tín hiệu.'
     : !online
-      ? `Lần nhận gần nhất ${formatDateTime(report.receivedAt) || 'chưa có'}. Kiểm tra nguồn và mạng của Pi.`
+      ? `Lần nhận gần nhất ${formatDateTime(report?.receivedAt ?? null) || 'chưa có'}. Kiểm tra nguồn và mạng của Pi.`
       : s.note || 'Trạm đang kết nối trực tiếp.'
 
   const sparkPath = (() => {
@@ -150,19 +158,21 @@ export function StationRuntime({
 
   return (
     <div className="ga-shell">
-      {connection}
-      <article className="ga-card ga-progress" aria-label="Tiến trình lượt đo">
+      {showConnection && connection}
+      <article className={`ga-card ga-progress ${controls ? 'ga-start-card ga-workstation' : ''}`}
+        aria-label={controls ? 'Điều khiển và tiến trình lượt đo' : 'Tiến trình lượt đo'}>
+        {controls}
         <div className="ga-progress-head">
           <div>
-            <h2>Tiến trình lượt đo</h2>
+            {!controls && <h2>Tiến trình lượt đo</h2>}
             <div className="ga-message" role="status">
               <b data-tone={online ? rgbKey : 'red'}>{statusTitle}</b>
               <span>{statusNote}</span>
             </div>
           </div>
-          <span className={`ga-tag ${online ? 'ga-tag--good' : ''}`}>
+          {!controls && <span className={`ga-tag ${online ? 'ga-tag--good' : ''}`}>
             {online ? `● Pi đang kết nối · ${code}` : `● Mất tín hiệu · ${code}`}
-          </span>
+          </span>}
         </div>
 
         <div className="ga-signals" aria-label="Tín hiệu đèn của Pi">
@@ -186,7 +196,7 @@ export function StationRuntime({
 
         <ol className="ga-steps" aria-label="Các bước cân tại trạm">
           {STEPS.map(([key, title]) => {
-            const done = s?.completed.includes(key)
+            const done = s?.completed?.includes(key)
             const active = s?.runStatus === 'running' && s.step === key
             const failed = ['error', 'cancelled'].includes(s?.runStatus ?? '') && s?.step === key
             const preflightReady = !s?.runStatus && key === 'preflight' && rgbKey === 'blue' && s?.blinking && s?.doorClosed

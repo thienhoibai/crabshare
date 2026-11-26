@@ -5,7 +5,7 @@ import type { RuntimeResponse } from './StationRuntime'
 
 interface WifiStatus { id: number; status: string; message: string | null }
 
-export function StationWifi({ code, runtime }: { code: string; runtime?: RuntimeResponse }) {
+export function StationWifi({ code, runtime, embedded = false }: { code: string; runtime?: RuntimeResponse; embedded?: boolean }) {
   const [ssid, setSsid] = useState('')
   const [password, setPassword] = useState('')
   const path = `/api/operators/me/devices/${encodeURIComponent(code)}/wifi`
@@ -26,9 +26,8 @@ export function StationWifi({ code, runtime }: { code: string; runtime?: Runtime
     : waiting ? 'Đã gửi. Trạm có thể tạm mất kết nối trong khi đổi mạng.'
     : !ready ? 'Trạm cần online và hoàn tất hoặc hủy lượt đo trước khi đổi Wi-Fi.'
     : 'Nhập mạng đang phủ sóng tại Pi. Hỗ trợ WPA2 và chế độ WPA2/WPA3 hỗn hợp.'
-  return (
-    <OpPanel title="Đổi Wi-Fi của thiết bị" lead={`Trạm ${code}`}>
-      <form autoComplete="off" onSubmit={event => {
+  const form = (
+      <form className={embedded ? 'ga-network-form' : undefined} autoComplete="off" onSubmit={event => {
         event.preventDefault()
         if (ready && !waiting && !send.isPending) send.mutate({ ssid, password })
       }}>
@@ -40,6 +39,6 @@ export function StationWifi({ code, runtime }: { code: string; runtime?: Runtime
         </OpBtn>
         <div role="status"><OpNote tone={send.isError || job?.status === 'Rejected' ? 'danger' : undefined}>{note}</OpNote></div>
       </form>
-    </OpPanel>
   )
+  return embedded ? form : <OpPanel title="Đổi Wi-Fi của thiết bị" lead={`Trạm ${code}`}>{form}</OpPanel>
 }

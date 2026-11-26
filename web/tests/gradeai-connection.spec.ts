@@ -1,5 +1,36 @@
-import { expect, reply, signIn, test } from './support/app'
-import { mockOperator } from './support/operator'
+import { expect, paged, reply, signIn, test } from './support/app'
+import { CODE, deviceOf, mockOperator } from './support/operator'
+
+test('thanh trạm hiện đúng SSID, LAN hoặc mất kết nối và mở chi tiết Wi-Fi', async ({ api, page }) => {
+  mockOperator(api)
+  await signIn(page, 'OperatorMember')
+  await page.setViewportSize({ width: 390, height: 844 })
+  api.get('/api/operators/me/devices', [deviceOf()])
+  api.get(`/api/batches/${CODE}/measurement-sessions`, paged([]))
+  api.get('/api/operators/me/devices/ST-01/wifi', null)
+  let report = { receivedAt: new Date().toISOString(), fresh: true, state: {
+    hardwareOnline: true, wifiConfigReady: true, completed: [], connectionType: 'wifi',
+    networkSsid: 'HieuNhan', networkInterface: 'wlan0', networkIp: '192.168.1.94',
+  } }
+  api.get('/api/operators/me/devices/ST-01/station-state', () => report)
+  await page.goto(`/operator/devices?batch=${CODE}`)
+  const wifi = page.getByRole('button', { name: 'Kết nối mạng · HieuNhan', exact: true })
+  await expect(wifi).toHaveClass(/ga-network-button--online/, { timeout: 12000 })
+  await wifi.click()
+  const dialog = page.getByRole('dialog', { name: 'Kết nối mạng của Pi' })
+  await expect(dialog.getByText('IP Pi: 192.168.1.94')).toBeVisible()
+  await expect(dialog.getByText('Wi-Fi: HieuNhan')).toBeVisible()
+  await expect(dialog.getByText('wlan0', { exact: true })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Đổi Wi-Fi', exact: true }).click()
+  await expect(dialog.getByLabel('Tên Wi-Fi (SSID)')).toBeVisible()
+  await expect(dialog.getByLabel('Mật khẩu Wi-Fi')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Đóng', exact: true }).click()
+  report = { ...report, state: { ...report.state, connectionType: 'ethernet', networkInterface: 'eth0' } }
+  await expect(page.getByRole('button', { name: 'Kết nối mạng · LAN', exact: true })).toHaveClass(/ga-network-button--lan/)
+  report = { ...report, fresh: false }
+  await expect(page.getByRole('button', { name: 'Kết nối mạng · Mất kết nối', exact: true })).toHaveClass(/ga-network-button--offline/)
+  expect(api.writes()).toEqual([])
+})
 
 test('chờ Pi tự chuyển sang Wi-Fi và đánh dấu thông tin cũ khi mất mạng', async ({ api, page }) => {
   mockOperator(api)

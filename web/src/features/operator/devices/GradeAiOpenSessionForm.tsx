@@ -20,6 +20,7 @@ export function GradeAiOpenSessionForm({
   activeOpen,
   onOpened,
   onInspect,
+  onChangeBatch,
   busy = false,
 }: {
   batch: BatchResponse
@@ -28,6 +29,7 @@ export function GradeAiOpenSessionForm({
   activeOpen?: SessionResponse
   onOpened: (no: string) => void
   onInspect?: (no: string) => void
+  onChangeBatch?: () => void
   busy?: boolean
 }) {
   const batchPath = `/api/batches/${encodeURIComponent(batch.batchCode)}`
@@ -156,6 +158,15 @@ export function GradeAiOpenSessionForm({
     )
   }
   if (!units.length) return <OpNote>Chưa có cua đủ điều kiện để cân trong lô này.</OpNote>
+  if (unmeasured.length === 0 && !activeOpen) return (
+    <div className="ga-batch-measured" role="status">
+      <div>
+        <strong>Đã cân đủ {entries.length}/{entries.length} con trong lô {batch.batchCode}</strong>
+        <p>Để đo lại cùng con cua, bấm “Cân lại” trong lịch sử bên dưới. Chọn lô khác nếu cần cân mã cua mới.</p>
+      </div>
+      {onChangeBatch && <OpBtn type="button" variant="ghost" onClick={onChangeBatch}>Chọn lô khác để cân</OpBtn>}
+    </div>
+  )
 
   const activeDisplayTag = activeOpen?.gradeAiTag ?? target?.tag ?? codeFor(1)
   const canManualOpen = !busy && !activeOpen && !!target && !target.isMeasured && !open.isPending && !assign.isPending && !switching

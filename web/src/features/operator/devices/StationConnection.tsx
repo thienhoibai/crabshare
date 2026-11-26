@@ -39,6 +39,7 @@ export function StationConnection({ code, report, loading, error, fetching, retr
               : 'Giữ Pi bật nguồn và kết nối mạng. Web tự kiểm tra mỗi 1,5 giây.'}</p>
         {state && <div className="ga-connection-network" aria-label="Đường truyền của Pi">
           <b>{online ? 'Đường truyền' : 'Đường truyền lần gần nhất'}: {network}</b>
+          {kind === 'wifi' && state.networkSsid && <span>Wi-Fi: {state.networkSsid}</span>}
           {state.networkInterface && <span>{state.networkInterface}</span>}
           {state.networkIp && <span>IP Pi: {state.networkIp}</span>}
         </div>}

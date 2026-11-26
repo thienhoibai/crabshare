@@ -5,7 +5,7 @@ import type {
   BatchResponse, DeviceResponse, PagedResultOfBatchResponse, SessionMeasurementsResponse, SessionResponse,
 } from '../../shared/api/api.gen'
 import {
-  AuthImage, Field, OpBtn, OpEmpty, OpHeading, OpMore, OpNote, OpPanel, QueryView, Select, StatusBadge,
+  Field, OpBtn, OpEmpty, OpHeading, OpMore, OpNote, OpPanel, QueryView, Select, StatusBadge,
   formatDateTime, label, useGet,
 } from '../../shared/ui/console'
 import DeviceList from './DeviceList'
@@ -15,6 +15,10 @@ import { BatchWeighingHistory, type WeighingHistoryPage } from './devices/BatchW
 import { StationRuntime, type RuntimeResponse } from './devices/StationRuntime'
 import { StationStart } from './devices/StationStart'
 import { StationWifi } from './devices/StationWifi'
+import { StationNetwork } from './devices/StationNetwork'
+import { StationGrading } from './devices/StationGrading'
+import { StationCompletion } from './devices/StationCompletion'
+import { StationRemeasure } from './devices/StationRemeasure'
 import './devices/devices.css'
 
 function isWeighableBatch(b: BatchResponse): boolean {
@@ -138,6 +142,7 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
   const activeBatchCode = (params.get('batch') ?? '').trim().toUpperCase()
   const [stationChoice, setStationChoice] = useState('')
   const [sessionNo, setSessionNo] = useState('')
+  const [remeasure, setRemeasure] = useState<SessionResponse | null>(null)
   const [cameraOn, setCameraOn] = useState(false)
   const [cameraError, setCameraError] = useState(false)
   const [cameraTick, setCameraTick] = useState(0)
@@ -174,9 +179,8 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
   const pickedSession = recentItems.find((s) => s.sessionNo === sessionNo)
   const latestCaptured = recentItems.find((s) => s.hasWhiteImage || s.hasRedImage)
   const selectedSession: SessionResponse | undefined =
-    (pickedSession && (pickedSession.hasWhiteImage || pickedSession.hasRedImage) ? pickedSession : undefined) ??
-    latestCaptured ??
     pickedSession ??
+    latestCaptured ??
     recentItems.find((s) => s.weightG != null) ??
     activeOpen
 
@@ -206,18 +210,55 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
     )
   }
 
-  const mValues = selectedMeasurements.data?.values ?? []
-  const clVal = mValues.filter((v) => v.metric === 'CarapaceLengthCm').at(-1)?.value
-  const cwVal = mValues.filter((v) => v.metric === 'CarapaceWidthCm').at(-1)?.value
-  const areaVal = mValues.filter((v) => v.metric === 'CarapaceAreaCm2').at(-1)?.value
-  const bandVal = mValues.filter((v) => v.metric === 'EdgeBandMm').at(-1)?.value
+  const latestWeighed = recentItems.find(s => s.weightG != null)
 
-  const liveTag = runtimeReport?.state?.crabTag || activeOpen?.gradeAiTag || activeOpen?.crabCode || null
-  const liveNote =
-    runtimeReport?.state?.note ||
-    (activeOpen
-      ? `Đang chờ đặt cua ${activeOpen.gradeAiTag ?? activeOpen.crabCode} lên trạm.`
-      : 'Chờ mở lượt đo trên CrabShare.')
+  const stationControls = station && <>
+    <div className="ga-start-top">
+      <h2>Bắt đầu lượt đo · {activeBatchCode}</h2>
+      {latestWeighed?.weightG != null && (
+        <span className="ga-tag ga-tag--good">
+          Gần nhất: {latestWeighed.gradeAiTag ?? latestWeighed.crabCode} ·{' '}
+          {latestWeighed.weightG.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} g
+        </span>
+      )}
+    </div>
+
+    <QueryView query={batch}>
+      {(value) =>
+        !readyBatch ? (
+          <OpNote>
+            Lô <b>{value.batchCode}</b> hiện ở trạng thái <b>{label('batch', value.status)}</b> (chỉ xem lại lịch
+            sử cân bên dưới, không mở lượt đo mới).
+          </OpNote>
+        ) : (
+          <GradeAiOpenSessionForm
+            key={`${station.deviceCode}-${value.batchCode}`}
+            batch={value}
+            stationCode={station.deviceCode}
+            measured={measured}
+            activeOpen={activeOpen}
+            onChangeBatch={() => { setSessionNo(''); setParams({}) }}
+            busy={!!(runtimeReport?.fresh && runtimeReport.state?.busy)}
+            onOpened={() => {
+              void openSessions.refetch()
+              void recent.refetch()
+            }}
+            onInspect={setSessionNo}
+          />
+        )
+      }
+    </QueryView>
+
+    {activeOpen?.gradeAiTag && station.source !== 'Simulated' && (
+      <StationStart
+        key={activeOpen.sessionNo}
+        code={station.deviceCode}
+        sessionNo={activeOpen.sessionNo}
+        tag={activeOpen.gradeAiTag}
+        runtime={runtimeReport}
+      />
+    )}
+  </>
 
   return (
     <>
@@ -257,7 +298,7 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
           )}
         </div>
         <div className="ga-bar-controls">
-          <OpBtn type="button" sm variant="ghost" onClick={() => document.getElementById('station-wifi')?.scrollIntoView({ behavior: 'smooth' })}>Đổi Wi-Fi</OpBtn>
+          {station && <StationNetwork key={station.deviceCode} code={station.deviceCode} />}
           {weighableBatches.length > 1 && (
             <Select
               value={weighableBatches.some((b) => b.batchCode === activeBatchCode) ? activeBatchCode : ''}
@@ -289,65 +330,9 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
         </div>
       </div>
 
-      {/* Thanh bắt đầu lượt đo tự động hóa siêu gọn nằm ở đầu trang */}
-      <article className="ga-card ga-start-card">
-        <div className="ga-start-top">
-          <div className="op-inline" style={{ gap: 8 }}>
-            <h2>Bắt đầu lượt đo · {activeBatchCode}</h2>
-            <span className="ga-tag">{station ? `Trạm ${station.deviceCode}` : 'Lưu tại Pi'}</span>
-          </div>
-          <div className="ga-start-inline-status">
-            <b>{liveTag ? `Mã tại trạm: ${liveTag}` : 'Chờ mở lượt'}</b>
-            <span>· {liveNote}</span>
-            {selectedSession && selectedSession.weightG != null && (
-              <span className="ga-tag ga-tag--good">
-                Gần nhất: {selectedSession.gradeAiTag ?? selectedSession.crabCode} ·{' '}
-                {selectedSession.weightG.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} g
-              </span>
-            )}
-          </div>
-        </div>
-
-        <QueryView query={batch}>
-          {(value) =>
-            !station ? (
-              <OpNote>Chưa có trạm được đăng ký. Admin cần đăng ký Pi cho đơn vị trước khi mở lượt.</OpNote>
-            ) : !readyBatch ? (
-              <OpNote>
-                Lô <b>{value.batchCode}</b> hiện ở trạng thái <b>{label('batch', value.status)}</b> (chỉ xem lại lịch
-                sử cân bên dưới, không mở lượt đo mới).
-              </OpNote>
-            ) : (
-              <GradeAiOpenSessionForm
-                key={`${station.deviceCode}-${value.batchCode}`}
-                batch={value}
-                stationCode={station.deviceCode}
-                measured={measured}
-                activeOpen={activeOpen}
-                busy={!!(runtimeReport?.fresh && runtimeReport.state?.busy)}
-                onOpened={() => {
-                  void openSessions.refetch()
-                  void recent.refetch()
-                }}
-                onInspect={setSessionNo}
-              />
-            )
-          }
-        </QueryView>
-
-        {station && activeOpen?.gradeAiTag && station.source !== 'Simulated' && (
-          <StationStart
-            key={activeOpen.sessionNo}
-            code={station.deviceCode}
-            sessionNo={activeOpen.sessionNo}
-            tag={activeOpen.gradeAiTag}
-            runtime={runtimeReport}
-          />
-        )}
-      </article>
-
       {station ? (
-        <StationRuntime key={station.deviceCode} code={station.deviceCode} onStateChange={setRuntimeReport} />
+        <StationRuntime key={station.deviceCode} code={station.deviceCode} onStateChange={setRuntimeReport}
+          showConnection={false} controls={stationControls} />
       ) : (
         <OpPanel title="Trạm cân GradeAI">
           <OpEmpty title="Chưa đăng ký trạm cân" icon={<Cpu size={26} />}>
@@ -356,11 +341,12 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
         </OpPanel>
       )}
 
-      {/* Hàng 3 ô Camera ngang đồng nhất tỷ lệ 4:3 */}
-      <div className="ga-camera-trio">
-        <article className="ga-card ga-media-card">
+      <details className="ga-card ga-live-camera" onToggle={event => {
+        if (!event.currentTarget.open) setCameraOn(false)
+      }}>
+        <summary>Camera trực tiếp</summary>
+        <div className="ga-media-card">
           <div className="ga-card-head">
-            <h2>Camera trực tiếp</h2>
             <button
               type="button"
               className="ga-btn-grad"
@@ -396,88 +382,25 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
             </span>
             <span>Góc xa 4:3 (1640×1232 → 640×480)</span>
           </div>
-        </article>
-
-        <article className="ga-card ga-media-card">
-          <div className="ga-card-head">
-            <h2>Ảnh đèn trắng</h2>
-            <span className="ga-tag">Hình học mai</span>
-          </div>
-          <div className="ga-media-box">
-            {selectedSession?.hasWhiteImage ? (
-              <AuthImage
-                path={`/api/measurement-sessions/${encodeURIComponent(selectedSession.sessionNo)}/images/white`}
-                alt="Ảnh đèn trắng của lượt đo"
-              />
-            ) : (
-              <div className="ga-media-placeholder">
-                <CameraIcon />
-                <small>Chưa có ảnh đèn trắng</small>
-              </div>
-            )}
-          </div>
-          <div className="ga-media-foot">
-            <b>
-              <span className="ga-photo-dot ga-photo-dot--white" /> Đèn trắng
-            </b>
-            <span>
-              {clVal != null || cwVal != null
-                ? `Dọc (CL): ${clVal?.toLocaleString('vi-VN') ?? '—'} cm · Ngang (CW): ${cwVal?.toLocaleString('vi-VN') ?? '—'} cm${areaVal != null ? ` (${areaVal.toLocaleString('vi-VN')} cm²)` : ''}`
-                : selectedSession?.capturedAt
-                  ? `${selectedSession.gradeAiTag ?? selectedSession.crabCode} · ${formatDateTime(selectedSession.capturedAt)}`
-                  : 'Chưa chụp'}
-            </span>
-          </div>
-        </article>
-
-        <article className="ga-card ga-media-card">
-          <div className="ga-card-head">
-            <h2>Ảnh đèn soi</h2>
-            <span className="ga-tag">Dải xuyên sáng</span>
-          </div>
-          <div className="ga-media-box">
-            {selectedSession?.hasRedImage ? (
-              <AuthImage
-                path={`/api/measurement-sessions/${encodeURIComponent(selectedSession.sessionNo)}/images/red`}
-                alt="Ảnh đèn soi của lượt đo"
-              />
-            ) : (
-              <div className="ga-media-placeholder">
-                <CameraIcon />
-                <small>Chưa có ảnh đèn soi</small>
-              </div>
-            )}
-          </div>
-          <div className="ga-media-foot">
-            <b>
-              <span className="ga-photo-dot ga-photo-dot--red" /> Đèn soi
-            </b>
-            <span>
-              {selectedSession && selectedSession.weightG != null
-                ? `${selectedSession.weightG.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} g${bandVal != null ? ` · Dải viền: ${bandVal.toLocaleString('vi-VN')} mm` : selectedSession.tofMm != null ? ` · ${selectedSession.tofMm} mm` : ''}`
-                : 'Chưa có lượt đo'}
-            </span>
-          </div>
-        </article>
-      </div>
-
-      <article className="ga-card ga-qc-strip">
-        <div>
-          <h2>Chuyển sang kiểm phẩm</h2>
-          <p>Operator thu số đo và ảnh. QC kiểm cảm quan, xem đề xuất rồi quyết định hạng cuối.</p>
-          <button
-            type="button"
-            className="ga-link-accent"
-            onClick={() => {
-              if (selectedSession) setSessionNo(selectedSession.sessionNo)
-              document.getElementById('batch-weighing-history')?.scrollIntoView({ behavior: 'smooth' })
-            }}
-          >
-            Kiểm tra dữ liệu kết nối →
-          </button>
         </div>
-        <span className="ga-tag">QC duyệt</span>
-      </article>
+      </details>
+
+      <StationCompletion
+        key={`${activeBatchCode}:${station?.deviceCode ?? ''}`}
+        sessions={recent.data?.items}
+        stationCode={station?.deviceCode}
+        onDetails={setSessionNo}
+      />
+      <StationGrading
+        session={selectedSession}
+        activeOpen={activeOpen}
+        data={selectedMeasurements.data}
+        error={selectedMeasurements.isError}
+        onRetry={() => { void selectedMeasurements.refetch() }}
+        onDetails={() => {
+          if (selectedSession) setSessionNo(selectedSession.sessionNo)
+        }}
+      />
 
       {sessionNo && batch.data && (
         <SessionView
@@ -489,12 +412,16 @@ function DeviceWorkspace({ devices }: { devices: DeviceResponse[] }) {
       )}
 
       <div id="batch-weighing-history">
-        <BatchWeighingHistory key={activeBatchCode} code={activeBatchCode} onSelect={setSessionNo} />
+        <BatchWeighingHistory key={activeBatchCode} code={activeBatchCode} onSelect={setSessionNo}
+          onRemeasure={station && readyBatch ? setRemeasure : undefined}
+          remeasureDisabled={!!activeOpen || !!runtimeReport?.state?.busy} />
       </div>
+      {remeasure && remeasure.batchCode === activeBatchCode && station && <StationRemeasure key={remeasure.sessionNo}
+        session={remeasure} stationCode={station.deviceCode} disabled={!readyBatch || !!activeOpen || !!runtimeReport?.state?.busy}
+        onClose={() => setRemeasure(null)} onOpened={setSessionNo} />}
 
       {station && (
         <>
-          <div id="station-wifi"><StationWifi key={`wifi-${station.deviceCode}`} code={station.deviceCode} runtime={runtimeReport} /></div>
           <OpPanel title="Thông tin đăng ký và hiệu chuẩn trạm">
             <p className="rd-muted">
               Ngày hiệu chuẩn ghi trên hệ thống: {formatDateTime(station.lastCalibratedAt) || 'chưa có'}.
