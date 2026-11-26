@@ -1,0 +1,75 @@
+/* Cẩm nang, thẻ vai có chỗ cho hình chibi, ô tra mã ở chân trang. */
+
+/* ---------- cẩm nang: chỉ hai nút, bấm thì mở vài câu hỏi ---------- */
+.ld-books { padding-block: clamp(40px, 6vw, 72px); background: var(--card); }
+.ld-books__buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.ld .ld-book-btn { display: inline-flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 22px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--forest-800); font-size: 16px; font-weight: 650; cursor: pointer; transition: border-color 180ms, background-color 180ms; }
+.ld .ld-book-btn[aria-expanded='true'] { border-color: var(--forest-800); background: var(--forest-800); color: var(--paper); }
+.ld-book-btn svg { width: 20px; height: 20px; flex: none; }
+.ld-book-btn__chev { transition: transform 200ms; }
+.ld-book-btn[aria-expanded='true'] .ld-book-btn__chev { transform: rotate(180deg); }
+.ld-book-panel { max-width: 720px; margin: 20px auto 0; }
+.ld-book-panel details { border-top: 1px solid var(--line); }
+.ld-book-panel summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 52px; padding: 12px 0; font-size: 16.5px; font-weight: 600; cursor: pointer; list-style: none; }
+.ld-book-panel summary::-webkit-details-marker { display: none; }
+.ld-book-panel summary span::before { content: '+'; font-weight: 500; color: var(--forest-600); }
+.ld-book-panel details[open] summary span::before { content: '−'; }
+.ld-book-panel details p { padding: 0 2rem 14px 0; color: var(--muted); line-height: 1.65; }
+.ld-book-panel__note { padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+
+/* ---------- ba vai: sân khấu màu, hình chibi đứng nhô lên khỏi thẻ ---------- */
+.ld-join { background: var(--paper-2); }
+.ld-join__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding-top: 40px; }
+.ld-role { --tone: #dfe9cf; --deep: var(--forest-800); position: relative; display: flex; flex-direction: column; border-radius: 26px; background: var(--card); border: 1px solid var(--line); transition: translate 260ms var(--ease), box-shadow 260ms var(--ease); }
+.ld-role--investor { --tone: #f6e2c4; --deep: #6b4313; }
+.ld-role--buyer { --tone: #d7e8e6; --deep: #1f5257; }
+.ld-role__stage { position: relative; display: grid; place-items: end center; height: 170px; margin: 10px 10px 0; border-radius: 20px; background: radial-gradient(70% 55% at 50% 100%, rgb(255 255 255 / 70%), transparent 70%), var(--tone); }
+.ld-role__stage::after { content: ''; position: absolute; bottom: 18px; left: 50%; width: 120px; height: 16px; translate: -50% 0; border-radius: 50%; background: rgb(27 36 24 / 12%); }
+.ld-role__stage.has-art { height: 210px; }
+.ld-role__stage.has-art::after { content: none; }
+.ld-role__stage img { position: absolute; z-index: 1; bottom: 0; left: 0; right: 0; margin-inline: auto; width: auto; max-width: 96%; height: 268px; object-fit: contain; object-position: 50% 100%; transform-origin: 50% 100%; transition: transform 320ms var(--ease); }
+.ld-role__mascot { position: relative; z-index: 1; display: grid; place-items: center; width: 108px; height: 108px; margin-bottom: 26px; border-radius: 34px; background: var(--deep); color: var(--tone); box-shadow: 0 18px 30px -18px rgb(0 0 0 / 55%); transition: transform 320ms var(--ease); }
+.ld-role__mascot svg { width: 52px; height: 52px; stroke-width: 1.6; }
+.ld-role__body { display: flex; flex: 1; flex-direction: column; padding: 20px 22px 22px; }
+.ld .ld-role h3 { font-size: 24px; color: var(--deep); }
+.ld-role p { flex: 1; margin-top: 6px; color: var(--muted); line-height: 1.55; }
+.ld-role__go { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; min-height: 44px; margin-top: 18px; padding: 0 18px; border-radius: 999px; background: var(--deep); color: var(--paper); font-size: 14.5px; font-weight: 650; }
+.ld-role__go svg { width: 16px; height: 16px; }
+
+/* ---------- chân trang và ô tra mã ---------- */
+.ld-foot__brand { display: grid; gap: 14px; }
+.ld-trace { display: grid; gap: 8px; width: min(100%, 420px); }
+.ld-trace label { font-size: 13px; font-weight: 600; color: rgb(246 242 233 / 80%); }
+.ld-trace__row { display: flex; gap: 6px; padding: 5px; border-radius: 999px; background: rgb(246 242 233 / 8%); border: 1px solid rgb(246 242 233 / 16%); }
+.ld .ld-trace input { flex: 1; min-width: 0; min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--paper); font: inherit; }
+.ld-trace input::placeholder { color: rgb(246 242 233 / 45%); }
+.ld .ld-trace button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: #e1ee98; color: var(--forest-900); font-weight: 700; cursor: pointer; }
+.ld-trace button svg { width: 16px; height: 16px; }
+.ld-trace__error { font-size: 13px; color: #ffb8a0; }
+
+@media (hover: hover) {
+  .ld-role:hover { translate: 0 -3px; box-shadow: 0 24px 40px -30px rgb(27 36 24 / 60%); }
+  .ld-role:hover .ld-role__mascot, .ld-role:hover .ld-role__stage img { transform: translateY(-4px) rotate(-3deg); }
+}
+@media (max-width: 900px) {
+  .ld-join__grid { grid-template-columns: minmax(0, 1fr); padding-top: 24px; }
+  .ld-role { flex-direction: row; align-items: stretch; }
+  .ld-role__stage { flex: none; width: 128px; height: auto; min-height: 150px; margin: 10px 0 10px 10px; }
+  .ld-role__stage.has-art { height: auto; }
+  .ld-role__stage img { height: 168px; max-width: 120px; }
+  .ld-role__mascot { width: 76px; height: 76px; margin-bottom: 30px; border-radius: 24px; }
+  .ld-role__mascot svg { width: 36px; height: 36px; }
+  .ld-role__stage::after { width: 80px; }
+  .ld-foot__row { flex-direction: column; align-items: flex-start; }
+}
+@media (max-width: 420px) {
+  .ld-role__stage { width: 96px; }
+  .ld-role__body { padding: 16px; }
+  .ld .ld-role h3 { font-size: 21px; }
+  .ld-book-panel details p { padding-right: 0; }
+  .ld .ld-book-btn { width: 100%; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ld-role:hover { translate: none; }
+  .ld-role:hover .ld-role__mascot, .ld-role:hover .ld-role__stage img { transform: none; }
+}

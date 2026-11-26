@@ -30,13 +30,13 @@ public sealed record ExploreBatchResponse(
     long TargetCapital, long ConfirmedCapital, long ReservedCapital, long RemainingCapital, int InvestorCount, long MinContribution,
     int SellableCrabs, int DepositedPreorderCrabs, decimal PreorderRatioPct,
     DateTimeOffset? FundingOpenAt, DateTimeOffset? FundingDeadline, DateTimeOffset? PreorderDeadline,
-    IReadOnlyList<ExploreCostCategory>? CostByCategory);
+    IReadOnlyList<ExploreCostCategory>? CostByCategory, PublicFarmProfile? PublicFarm = null);
 
 /// <summary>
 /// Trang gọi vốn và trang đặt trước (BR-056, BR-084, BR-220). Chỉ số đã phát sinh, giá và rủi ro; không có lợi nhuận hay lợi suất kỳ vọng
 /// (BR-219). Số liệu công khai chỉ gồm số tổng, không có thông tin cá nhân.
 /// </summary>
-public sealed class BatchExploreService(AppDbContext db, TimeProvider clock, IBatchLifecycleHooks hooks)
+public sealed class BatchExploreService(AppDbContext db, TimeProvider clock, IBatchLifecycleHooks hooks, PublicFarmProfileService? publicFarms = null)
 {
     private static readonly string[] PublishedStatuses = ["Funding", "Sourcing", "InProduction", "Harvesting", "Selling", "Settlement", "Closed"];
 
@@ -111,7 +111,8 @@ public sealed class BatchExploreService(AppDbContext db, TimeProvider clock, IBa
             b.BatchMode == "P" ? target : 0, confirmed, reserved, b.BatchMode == "P" ? Math.Max(0, target - confirmed - reserved) : 0,
             contributions.Where(c => c.Status == "Confirmed").Select(c => c.InvestorId).Distinct().Count(), (long)b.MinContribution,
             sellable, deposited, funded > 0 ? decimal.Round(deposited * 100m / funded, 2) : 0,
-            b.FundingOpenAt, b.FundingDeadline, b.PreorderDeadline, categories);
+            b.FundingOpenAt, b.FundingDeadline, b.PreorderDeadline, categories,
+            publicFarms is null ? null : await publicFarms.GetAsync(b.OperatorId, ct));
     }
 
     /// <summary>BR-055: lô P bán trước được số con đã có vốn (phần nguyên của vốn đã xác nhận ÷ Chi phí chuẩn mỗi con);

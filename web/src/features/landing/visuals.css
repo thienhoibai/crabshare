@@ -1,0 +1,115 @@
+/* Hình trực quan cho các mục dữ liệu và sơ đồ của trang chủ: ảnh loại cua trên thẻ, biểu tượng, thanh sản lượng,
+   thẻ giá theo loại cua, sơ đồ công nghệ, hình quét mã. Dùng bảng màu của trang chủ (landing.css). */
+
+/* ---------- ảnh đầu thẻ ---------- */
+.lb-funding-card,
+.lb-production-card { --card-pad: 26px; }
+.lb-card-photo {
+  position: relative; overflow: hidden; height: 168px;
+  margin: calc(-1 * var(--card-pad)) calc(-1 * var(--card-pad)) 22px;
+  border-radius: 17px 17px 0 0; background: var(--forest-800, #22351f);
+}
+.lb-card-photo--short { height: 120px; }
+.lb-card-photo img { width: 100%; height: 100%; object-fit: cover; transition: scale 600ms var(--ease, ease); }
+.lb-card-photo::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(13 24 14 / 50%) 0%, transparent 45%); }
+.lb-card-photo .lb-card-top { position: absolute; inset: 14px 14px auto; z-index: 1; margin: 0; }
+.lb-card-photo .lb-badge { background: rgb(246 242 233 / 92%); }
+.lb-card-photo .lb-code { padding: 4px 9px; border-radius: 99px; background: rgb(13 21 13 / 62%); color: var(--paper, #f6f2e9); }
+
+/* ---------- vốn đã xác nhận ---------- */
+.lb-capital > p:first-child strong { font-size: 22px; letter-spacing: -0.02em; color: var(--forest-800, #22351f); }
+.lb-capital meter, .lb-capital meter::-webkit-meter-bar { height: 10px; }
+.lb-capital meter::-webkit-meter-optimum-value { background: linear-gradient(90deg, #6f9a5c, var(--forest-500, #4a6440)); }
+
+/* ---------- ba ý và bốn bước ---------- */
+.lb-principle-icon {
+  display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 18px; border-radius: 16px;
+  background: var(--tint, #e4ead6); color: var(--forest-800, #22351f);
+}
+.lb-principles .lb-principle-icon svg { width: 26px; height: 26px; margin: 0; color: currentColor; stroke-width: 1.7; }
+.lb-steps li { font-size: 15px; font-weight: 600; }
+.lb-steps span {
+  width: 46px; height: 46px; border: 0; background: var(--forest-800, #22351f); color: var(--sun, #f3cf96);
+  box-shadow: 0 0 0 6px var(--tint, #e4ead6);
+}
+.lb-steps span svg { width: 21px; height: 21px; }
+.lb-steps li::after { height: 0; border-top: 2px dashed var(--line, #ddd); background: none; }
+
+/* ---------- sản lượng ---------- */
+.lb-stat-tiles { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 14px; margin: 0 0 30px; }
+.lb-stat-tiles > div { padding: 22px 24px; border: 1px solid var(--line, #ddd); border-radius: 18px; background: var(--card, #fffdf8); }
+.lb-stat-tiles > .is-main { border-color: transparent; background: var(--forest-800, #22351f); color: var(--paper, #f6f2e9); }
+.lb-stat-tiles > .lb-production-summary { display: block; margin: 0; padding: 22px 24px; border-bottom: 0; }
+.lb-stat-tiles dt { font-size: 13px; color: var(--muted, #5c6654); }
+.lb-stat-tiles .is-main dt { color: var(--leaf, #a9bf93); }
+.lb-stat-tiles dd { margin: 8px 0 0; font-size: clamp(36px, 4.4vw, 58px); font-weight: 550; line-height: 1; letter-spacing: -0.05em; }
+.lb-stat-tiles dd small { font-size: 0.4em; letter-spacing: -0.01em; }
+.lb-kg-bar { position: relative; display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.lb-kg-bar span { flex: none; height: 12px; border-radius: 99px; background: linear-gradient(90deg, #6f9a5c, var(--forest-500, #4a6440)); }
+.lb-kg-bar b { font-size: 14px; font-weight: 650; white-space: nowrap; }
+
+/* ---------- giá chào theo loại cua ---------- */
+.lb-type-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-bottom: 26px; }
+.ld .lb-type-card {
+  display: flex; align-items: stretch; gap: 0; overflow: hidden; min-height: 112px; padding: 0; text-align: left;
+  border: 1px solid var(--line, #ddd); border-radius: 18px; background: var(--card, #fffdf8);
+  transition: border-color 180ms, box-shadow 180ms, translate 220ms var(--ease, ease);
+}
+.lb-type-card img { flex: none; width: 108px; object-fit: cover; }
+.lb-type-card__body { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 14px 16px; min-width: 0; }
+.lb-type-card__body > b { font-size: 16px; font-weight: 650; }
+.lb-type-card__price { font-size: 21px; font-weight: 650; letter-spacing: -0.02em; color: var(--forest-800, #22351f); white-space: nowrap; }
+.lb-type-card__price small, .lb-type-card__body > small { font-size: 12px; font-weight: 500; color: var(--muted, #5c6654); }
+.ld .lb-type-card[aria-pressed='true'] { border-color: var(--forest-500, #4a6440); box-shadow: 0 0 0 2px var(--forest-500, #4a6440) inset; }
+.lb-spec { display: flex; align-items: center; gap: 14px; }
+.lb-row-thumb { flex: none; width: 52px; height: 52px; border-radius: 14px; object-fit: cover; }
+.lb-offers tbody th { min-width: 250px; }
+
+/* ---------- vai và chân trang ---------- */
+.ld-foot__credit { margin-top: 14px; font-size: 12px; color: rgb(246 242 233 / 52%); }
+.ld-foot__credit a { text-decoration: underline; text-underline-offset: 0.2em; }
+
+@media (hover: hover) {
+  .lb-funding-card:hover .lb-card-photo img { scale: 1.04; }
+  .ld .lb-type-card:hover { translate: 0 -2px; border-color: var(--forest-500, #4a6440); box-shadow: 0 16px 30px -24px rgb(34 53 31 / 60%); }
+}
+
+@media (max-width: 900px) {
+  .lb-funding-card, .lb-production-card { --card-pad: 20px; }
+}
+
+@media (max-width: 680px) {
+  .lb-funding-card, .lb-production-card { --card-pad: 24px; }
+  .lb-card-photo { height: 150px; }
+  .lb-stat-tiles { grid-template-columns: 1fr 1fr; }
+  .lb-stat-tiles > .is-main { grid-column: 1 / -1; }
+  .lb-steps span { width: 40px; height: 40px; box-shadow: 0 0 0 4px var(--tint, #e4ead6); }
+  .lb-type-cards { grid-template-columns: 1fr; gap: 10px; }
+  .ld .lb-type-card { min-height: 96px; }
+  .lb-type-card img { width: 96px; }
+
+  /* Bảng giá thành từng thẻ: mỗi ô có nhãn lấy từ data-label. */
+  .lb-table-scroll { overflow: visible; border: 0; border-radius: 0; }
+  .lb-offers { min-width: 0; }
+  .lb-offers caption { display: block; padding: 0 0 12px; background: none; }
+  .lb-offers thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .lb-offers, .lb-offers tbody, .lb-offers tr, .lb-offers th, .lb-offers td { display: block; }
+  .lb-offers tbody { background: none; }
+  .lb-offers tbody tr {
+    position: relative; margin-bottom: 12px; padding: 16px; border: 1px solid var(--line, #ddd); border-radius: 18px;
+    background: var(--card, #fffdf8);
+  }
+  .lb-offers tbody tr + tr { border-top: 1px solid var(--line, #ddd); }
+  .lb-offers tbody th { min-width: 0; padding: 0 52px 12px 0; margin-bottom: 4px; border-bottom: 1px solid var(--line, #ddd); }
+  .lb-offers td { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: 14px; padding: 7px 0; text-align: right; }
+  .lb-offers td::before { content: attr(data-label); grid-row: 1 / span 2; font-size: 13px; color: var(--muted, #5c6654); text-align: left; }
+  .lb-offers td > * { grid-column: 2; justify-self: end; }
+  .lb-offers td.lb-price { font-size: 19px; }
+  .lb-offers td.lb-row-go { position: absolute; top: 16px; right: 16px; padding: 0; }
+  .lb-offers td.lb-row-go::before { content: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lb-card-photo img, .ld .lb-type-card { transition: none; }
+  .lb-funding-card:hover .lb-card-photo img { scale: none; }
+}
