@@ -23,6 +23,16 @@ npm run dev                    # http://localhost:5173
 
 Khi chạy dev, trang Đăng nhập có nút đăng nhập nhanh bằng tài khoản mẫu (`features/auth/demoAccounts.ts`).
 
+## Dữ liệu và tư liệu cho trang chủ
+
+Trang chủ đọc các trang của `GET /api/batches?scope=all&batchMode=P`. Giá chào, tình trạng nhận đơn, tồn có thể đặt theo quy cách và tỷ lệ cọc được đối chiếu với `GET /api/batches/{batchCode}/availability`. Với lô P, dịch vụ đặt trước đóng nhận đơn khi hết hạn gọi vốn. Sản lượng dự kiến của từng lô tính bằng số con kế hoạch nhân gam/con dự kiến rồi chia 1.000 để đổi sang kg.
+
+Phần hộ nuôi gộp các lô theo `publicFarm.id`. Máy chủ nhận tên và vị trí công khai qua `PublicFarmProfiles:Profiles`, ghép `OperatorId` với `PublicName`. Có thể bổ sung xã, huyện, tỉnh, tọa độ và ảnh trại được phép công bố. `OwnerName` và `OwnerPhotoUrl` chỉ điền khi chủ trại đã đồng ý công khai. `PublishRatings` dùng điểm đánh giá đơn hàng và số lượt, còn `PublishProduction` dùng số liệu vận hành của trại và số kg khách đã nghiệm thu. Khi danh sách chỉ công bố tên HTX hoặc công ty đứng tên lô, trang gom các lô theo đơn vị đó và giữ riêng những lô chưa xác định được người nuôi. Khi chưa cấu hình trại nào, mục hộ nuôi và thành tích tự ẩn.
+
+Mục chào giá ghi mỗi lô một hàng: trại nuôi, số ngày đã nuôi (lấy từ `GET /api/batches/{batchCode}/progress`) hoặc ngày dự kiến có cua (ngày nhận cua dự kiến cộng số ngày nuôi), giá từng quy cách, số còn đặt và tỷ lệ cọc của chính lô đó.
+
+Đặt ảnh chụp, clip hoặc ảnh màn hình thiết bị thật trong `public/landing/`, rồi khai báo ở `src/features/landing/landingMediaContent.ts`. Hình chibi của ba vai (người nuôi, nhà đầu tư, khách mua sỉ) nằm trong `public/landing/vai/` và khai báo ở mục `roles` của cùng tệp. Mục Công nghệ có mô hình 3D (CrabShare Twin, địa chỉ trong `VITE_TWIN_URL`) đang tạm ẩn bằng `SHOW_TWIN` trong `Landing.tsx`. Email liên hệ công khai của nhóm đặt trong `VITE_TEAM_CONTACT_EMAIL` khi build.
+
 ## Cấu trúc
 
 ```
