@@ -36,3 +36,13 @@ public sealed record KycStatusResponse(
     string VerificationStatus,
     DateTimeOffset? VerifiedAt,
     KycCheckResponse? LastCheck);
+
+public sealed record KycHandoffCreatedResponse(long Id, string Token, DateTimeOffset ExpiresAt);
+public sealed record KycHandoffStatusResponse(long Id, string Status, DateTimeOffset ExpiresAt, DateTimeOffset? ClaimedAt);
+
+public sealed class KycHandoffClaimRequest
+{
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.MaxLength(64)]
+    public string Token { get; set; } = "";
+}

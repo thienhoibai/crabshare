@@ -64,6 +64,8 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<KycCheck> KycChecks { get; set; }
 
+    public virtual DbSet<KycHandoff> KycHandoffs { get; set; }
+
     public virtual DbSet<OfftakeCommitment> OfftakeCommitments { get; set; }
 
     public virtual DbSet<Operator> Operators { get; set; }
@@ -1559,6 +1561,31 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_kyc_check_user_id");
+        });
+
+        modelBuilder.Entity<KycHandoff>(entity =>
+        {
+            entity.HasKey(e => e.HandoffId).HasName("pk_kyc_handoff");
+
+            entity.ToTable("kyc_handoff", tb => tb.HasComment("Phiên handoff KYC có thời hạn; chỉ lưu hash mã, không lưu ảnh giấy tờ"));
+
+            entity.HasIndex(e => e.TokenHash, "ux_kyc_handoff_token_hash").IsUnique();
+            entity.HasIndex(e => e.UserId, "ux_kyc_handoff_pending_user").IsUnique().HasFilter("[status] = 'Pending'");
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt }, "ix_kyc_handoff_user_id_created_at");
+
+            entity.Property(e => e.HandoffId).UseIdentityColumn().HasColumnName("handoff_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.TokenHash).HasMaxLength(64).IsUnicode(false).IsFixedLength().HasColumnName("token_hash");
+            entity.Property(e => e.Status).HasMaxLength(16).IsUnicode(false).HasColumnName("status");
+            entity.Property(e => e.CreatedAt).HasPrecision(3).HasColumnName("created_at");
+            entity.Property(e => e.ExpiresAt).HasPrecision(3).HasColumnName("expires_at");
+            entity.Property(e => e.ClaimedAt).HasPrecision(3).HasColumnName("claimed_at");
+            entity.Property(e => e.CancelledAt).HasPrecision(3).HasColumnName("cancelled_at");
+
+            entity.HasOne(d => d.User).WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("fk_kyc_handoff_user_id");
         });
 
         modelBuilder.Entity<OfftakeCommitment>(entity =>

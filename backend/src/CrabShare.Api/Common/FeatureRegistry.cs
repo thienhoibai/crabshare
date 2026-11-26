@@ -87,6 +87,7 @@ public static class FeatureRegistry
 
         // Khôi
         services.AddScoped<AccountService>();        // Features/Accounts
+        services.AddScoped<KycHandoffService>();     // Features/Accounts — QR handoff KYC có ràng buộc tài khoản
         services.AddScoped<PaymentProfileService>();
         services.AddScoped<PayoutRecipientService>();
         services.AddScoped<AdminAccountService>();
