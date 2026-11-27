@@ -319,7 +319,7 @@ function DashboardCharts({ dashboard }: { dashboard: AdminDashboardResponse }) {
                     fontSize: 13,
                   }}
                 />
-                <Bar dataKey="amount" name="Vốn đã xác nhận" fill="var(--teal)" radius={[6, 6, 0, 0]} isAnimationActive={false} />
+                <Bar dataKey="amount" name="Vốn đã xác nhận" fill="var(--admin-teal)" radius={[6, 6, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </div>

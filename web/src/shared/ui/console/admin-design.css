@@ -1,36 +1,34 @@
-/* Hallmark · shape: app screen · genre: modern-minimal · theme: coastal-teal · redesign: full · v2.0.0 */
-/* critique: Coastal navy-teal sidebar, crisp sage-tinted paper, tabular Manrope metrics, coral reserved for primary CTA and active alerts. */
-
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: full · v2.0.0 */
+/* critique: Unify admin console with CrabShare warm paper (#f4f1ea), espresso dark (#15130f) sidebar, and orange (#ec5a1f) signal. */
 
 :root {
-  --font-admin: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --admin-bg: #f5f7f5;
+  --admin-bg: #f4f1ea;
   --admin-surface: #ffffff;
-  --admin-surface-2: #edf2f0;
-  --admin-fg: #071d2b;
-  --admin-muted: #5b6b71;
-  --admin-faint: #7d8e94;
-  --admin-line: #dce5e2;
-  --admin-line-soft: #e6edeb;
-  --admin-input: #f5f7f5;
-  --admin-accent: #f07b50;
-  --admin-on-accent: #071d2b;
-  --admin-teal: #146b78;
-  --admin-teal-hover: #0c4a52;
-  --admin-aqua: #55c6c1;
-  --admin-side-bg: #071d2b;
-  --admin-side-active: #12434c;
-  --admin-side-card: #0d3442;
-  --admin-side-ink: #f8faf9;
-  --admin-side-muted: #b5c9cb;
-  --admin-pill-ok-bg: #dff4f0;
-  --admin-pill-ok-ink: #0c4a52;
-  --admin-pill-warn-bg: #fde8dd;
-  --admin-pill-warn-ink: #8a3a16;
-  --admin-pill-mute-bg: #e6eaec;
-  --admin-pill-mute-ink: #33464c;
-  --admin-shadow: 0 1px 3px rgba(7, 29, 43, 0.05);
+  --admin-surface-2: #ebe6db;
+  --admin-fg: #15130f;
+  --admin-muted: #6b655a;
+  --admin-faint: #9a9385;
+  --admin-line: #e2ddd2;
+  --admin-line-soft: #ede9e0;
+  --admin-input: #f7f5f0;
+  --admin-accent: #ec5a1f;
+  --admin-accent-hover: #d44c16;
+  --admin-on-accent: #1a0a04;
+  --admin-teal: #1d8a5a;
+  --admin-teal-hover: #156b45;
+  --admin-aqua: #3b8fd9;
+  --admin-side-bg: #15130f;
+  --admin-side-active: #2a261f;
+  --admin-side-card: #1f1c16;
+  --admin-side-ink: #f3efe7;
+  --admin-side-muted: #b5afa4;
+  --admin-pill-ok-bg: #e3f3eb;
+  --admin-pill-ok-ink: #12603d;
+  --admin-pill-warn-bg: #fcead9;
+  --admin-pill-warn-ink: #9a5b00;
+  --admin-pill-mute-bg: #ebe6db;
+  --admin-pill-mute-ink: #6b655a;
+  --admin-shadow: 0 1px 3px rgba(21, 19, 15, 0.05);
 }
 
 html, body { overflow-x: clip; }
@@ -49,7 +47,7 @@ html, body { overflow-x: clip; }
   --on-accent: var(--admin-on-accent);
   --shadow: var(--admin-shadow);
 
-  font-family: var(--font-admin);
+  font-family: var(--sans);
   background: var(--bg);
   color: var(--fg);
 }
@@ -136,7 +134,7 @@ html, body { overflow-x: clip; }
 }
 
 .o2--admin .o2-nav a:hover {
-  background: color-mix(in srgb, var(--admin-side-active) 55%, transparent);
+  background: color-mix(in srgb, var(--admin-side-active) 70%, transparent);
   color: var(--admin-side-ink);
 }
 
@@ -237,7 +235,7 @@ html, body { overflow-x: clip; }
 }
 
 .o2--admin .rd-btn--primary:hover {
-  background: color-mix(in srgb, var(--accent) 88%, var(--fg));
+  background: var(--admin-accent-hover);
 }
 
 .o2--admin .op-link {
@@ -577,11 +575,6 @@ html, body { overflow-x: clip; }
 }
 
 .o2--admin :is(a, button, input, select, textarea):focus-visible {
-  outline: 2px solid var(--admin-teal);
-  outline-offset: 2px;
-}
-
-.o2--admin .o2-side :is(a, button):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
