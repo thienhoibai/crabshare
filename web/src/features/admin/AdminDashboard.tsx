@@ -3,7 +3,7 @@
    Bảng theo kỳ và báo cáo CSV (GET /api/admin/reports/{capital|batches|orders|payouts}.csv) nằm trong phần gấp lại. */
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { CheckCircle2, Download } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Download } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type {
   AdminDashboardResponse, AdminSettlementSummary, ClaimResponse, PagedResultOfAdminKycResponse, PagedResultOfAdminOperatorResponse,
@@ -11,7 +11,7 @@ import type {
 } from '../../shared/api/api.gen'
 import {
   Input, Money, OpBtn, OpEmpty, OpFacts, OpHeading, OpLoading, OpMore, OpNote, OpPanel, OpStat, OpTable, OpTabs, OpTodo, QueryView, StatusBadge,
-  formatDate, formatVnd, label, openFile, useGet,
+  formatDate, formatDateTime, formatVnd, label, openFile, useGet,
 } from '../../shared/ui/console'
 import { vnDate } from './adminPartA'
 
@@ -60,10 +60,10 @@ export default function AdminDashboard() {
 
   return (
     <>
-      <OpHeading eyebrow="Quản trị nền tảng" title="Bảng điều khiển" />
+      <OpHeading eyebrow="Quản trị nền tảng" title="Bảng điều khiển" description="Ưu tiên các việc cần quyết định trước khi theo dõi số liệu." />
 
-      <div className="op-grid">
-        <OpPanel className="op-span-7" title="Việc đang chờ">
+      <div className="op-grid admin-dashboard__overview">
+        <OpPanel className="op-span-7 admin-dashboard__command" title="Việc đang chờ">
           {active.length > 0
             ? <OpTodo items={active.map((q) => ({ title: q.title, sub: `${q.n} ${q.unit}`, href: q.href, tone: q.danger ? 'danger' as const : 'warn' as const }))} />
             : counting ? <OpLoading /> : <OpEmpty title="Không có việc nào đang chờ" icon={<CheckCircle2 size={30} />} />}
@@ -74,7 +74,7 @@ export default function AdminDashboard() {
           )}
         </OpPanel>
 
-        <div className="op-span-5 op-stack">
+        <div className="op-span-5 op-stack admin-dashboard__metrics">
           {valid && (
             <QueryView query={dash}>
               {(d) => (
@@ -150,7 +150,22 @@ function DashboardCharts({ dashboard }: { dashboard: AdminDashboardResponse }) {
           </div>
         </OpPanel>
       )}
+      {dashboard.latestEscalatedAlerts.length > 0 && <DashboardAlerts alerts={dashboard.latestEscalatedAlerts} />}
     </div>
+  )
+}
+
+function DashboardAlerts({ alerts }: { alerts: AdminDashboardResponse['latestEscalatedAlerts'] }) {
+  return (
+    <OpPanel className="op-span-12 admin-dashboard__alerts" title="Cảnh báo mới nhất" action={<a className="op-link" href="/admin/alerts">Xem tất cả</a>}>
+      {alerts.map((alert) => (
+        <a key={alert.id} href="/admin/alerts" className="admin-alert-row">
+          <AlertTriangle size={18} aria-hidden="true" />
+          <span><b>{alert.message}</b><small>{alert.batchCode} · {alert.farmName}</small></span>
+          <time dateTime={alert.raisedAt}>{formatDateTime(alert.raisedAt)}</time>
+        </a>
+      ))}
+    </OpPanel>
   )
 }
 

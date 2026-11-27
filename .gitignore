@@ -44,3 +44,4 @@ Thumbs.db
 
 # Vercel CLI (deploy-web.yml tạo lúc chạy, không commit)
 .vercel
+copilot-instructions.md
