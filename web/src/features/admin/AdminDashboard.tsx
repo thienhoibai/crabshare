@@ -1,9 +1,9 @@
-/* /admin — Bảng điều khiển của Quản trị.
-   Hiển thị 4 chỉ số tổng quan, biểu đồ vốn góp & phân bố lô, danh sách lô gần đây lọc theo trạng thái,
-   hàng việc & cảnh báo cần xử lý, cùng số liệu theo kỳ và xuất CSV. */
+/* /admin — Bảng điều khiển của Quản trị. Việc chính: mở đúng hàng việc đang có việc chờ.
+   Số việc chờ lấy từ danh sách của từng trang; ba con số của kỳ lấy từ GET /api/admin/dashboard.
+   Bảng theo kỳ và báo cáo CSV (GET /api/admin/reports/{capital|batches|orders|payouts}.csv) nằm trong phần gấp lại. */
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { AlertTriangle, CheckCircle2, Clock, Download, Plus } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Download, Plus } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type {
   AdminDashboardResponse,
@@ -18,13 +18,16 @@ import {
   Money,
   OpBtn,
   OpEmpty,
+  OpFacts,
   OpHeading,
   OpLoading,
   OpMore,
   OpNote,
   OpPanel,
+  OpStat,
   OpTable,
   OpTabs,
+  OpTodo,
   QueryView,
   StatusBadge,
   formatDate,
@@ -34,7 +37,7 @@ import {
   openFile,
   useGet,
 } from '../../shared/ui/console'
-import { type AdminBatchPage, vnDate } from './adminPartA'
+import { vnDate } from './adminPartA'
 
 interface Queue {
   title: string
@@ -53,37 +56,17 @@ const TABLES = [
 ] as const
 type TableKey = (typeof TABLES)[number]['key']
 
-const BATCH_CHIPS = [
-  { key: 'all', label: 'Tất cả' },
-  { key: 'active', label: 'Đang vận hành' },
-  { key: 'pending', label: 'Chờ duyệt' },
-  { key: 'done', label: 'Hoàn thành' },
-] as const
-type BatchChipKey = (typeof BATCH_CHIPS)[number]['key']
-
-const ACTIVE_STATUSES = new Set(['Funding', 'Sourcing', 'Stocked', 'InProduction', 'Harvesting', 'Selling'])
-const PENDING_STATUSES = new Set(['Draft', 'PendingApproval', 'NeedsRevision'])
-const DONE_STATUSES = new Set(['AwaitingSettlement', 'Settling', 'Settlement', 'Closed'])
-
 const validRange = (from: string, to: string) => {
   const span = (Date.parse(to) - Date.parse(from)) / 86_400_000
   return !!from && !!to && span >= 0 && span <= 365
 }
 
-function pillToneClass(status: string) {
-  if (ACTIVE_STATUSES.has(status)) return 'admin-pill admin-pill--ok'
-  if (PENDING_STATUSES.has(status) || status === 'Liquidating' || status === 'Rejected') return 'admin-pill admin-pill--warn'
-  return 'admin-pill admin-pill--mute'
-}
-
 export default function AdminDashboard() {
   const [from, setFrom] = useState(() => vnDate(-29))
   const [to, setTo] = useState(() => vnDate())
-  const [batchChip, setBatchChip] = useState<BatchChipKey>('all')
   const valid = validRange(from, to)
-
   const dash = useGet<AdminDashboardResponse>(valid ? '/api/admin/dashboard' : null, { from, to })
-  const batchesQuery = useGet<AdminBatchPage>('/api/admin/batches', { page: 1, pageSize: 12 })
+
   const parties = useGet<PagedResultOfPartySummaryResponse>('/api/admin/parties', { verificationStatus: 'Pending', pageSize: 1 })
   const farms = useGet<PagedResultOfAdminOperatorResponse>('/api/admin/operators', { status: 'Submitted', pageSize: 1 })
   const kyc = useGet<PagedResultOfAdminKycResponse>('/api/admin/kyc-checks', { pageSize: 1 })
@@ -94,181 +77,70 @@ export default function AdminDashboard() {
   const pendingBatches = dash.data ? dash.data.batchesByStatus.find((s) => s.status === 'PendingApproval')?.count ?? 0 : undefined
   const queues: Queue[] = [
     { title: 'Cảnh báo đã chuyển cấp', href: '/admin/alerts', n: dash.data?.escalatedAlerts, unit: 'cảnh báo', danger: true, failed: dash.isError },
-    { title: 'Lô chờ duyệt', href: '/admin/batches?status=PendingApproval', n: pendingBatches, unit: 'lô', failed: dash.isError },
+    { title: 'Lô chờ duyệt', href: '/admin/batches?status=PendingApproval', n: pendingBatches, unit: 'Lô', failed: dash.isError },
     { title: 'Mốc giải ngân chờ duyệt', href: '/admin/tranches', n: tranches.data?.length, unit: 'mốc', failed: tranches.isError },
     { title: 'Khiếu nại chờ quyết định', href: '/admin/claims', n: claims.data?.length, unit: 'khiếu nại', failed: claims.isError },
-    { title: 'Quyết toán chưa xong', href: '/admin/settlements', n: settlements.data?.filter((s) => s.status !== 'PaidOut' && s.status !== 'Closed').length, unit: 'lô', failed: settlements.isError },
+    { title: 'Quyết toán chưa xong', href: '/admin/settlements', n: settlements.data?.filter((s) => s.status !== 'PaidOut' && s.status !== 'Closed').length, unit: 'Lô', failed: settlements.isError },
     { title: 'Hồ sơ hộ nuôi chờ duyệt', href: '/admin/operators', n: farms.data?.total, unit: 'hồ sơ', failed: farms.isError },
     { title: 'Đối tác chờ xác minh', href: '/admin/parties?verificationStatus=Pending', n: parties.data?.total, unit: 'đối tác', failed: parties.isError },
     { title: 'eKYC không đạt', href: '/admin/users?tab=kyc', n: kyc.data?.total, unit: 'lần kiểm tra', failed: kyc.isError },
   ]
-  const activeQueues = queues.filter((q) => (q.n ?? 0) > 0)
-  const idleQueues = queues.filter((q) => !q.n)
-  const countingQueues = queues.some((q) => q.n === undefined && !q.failed)
-  const totalAttention = activeQueues.reduce((sum, q) => sum + (q.n ?? 0), 0)
-
-  const totalBatches = dash.data ? dash.data.batchesByStatus.reduce((n, s) => n + s.count, 0) : null
-  const activeBatchCount = dash.data
-    ? dash.data.batchesByStatus.filter((s) => ACTIVE_STATUSES.has(s.status)).reduce((n, s) => n + s.count, 0)
-    : null
-
-  const filteredBatches = (batchesQuery.data?.items ?? []).filter((item) => {
-    const st = item.batch.status
-    if (batchChip === 'active') return ACTIVE_STATUSES.has(st)
-    if (batchChip === 'pending') return PENDING_STATUSES.has(st)
-    if (batchChip === 'done') return DONE_STATUSES.has(st)
-    return true
-  }).slice(0, 6)
+  const active = queues.filter((q) => (q.n ?? 0) > 0)
+  const idle = queues.filter((q) => !q.n)
+  const counting = queues.some((q) => q.n === undefined && !q.failed)
 
   return (
     <>
       <OpHeading
-        title="Tổng quan hệ thống"
-        description="Theo dõi lô nuôi, vốn góp, hàng việc và cảnh báo trên toàn nền tảng."
+        title="Bảng điều khiển"
+        description="Ưu tiên các việc cần quyết định trước khi theo dõi số liệu."
         action={
           <a className="rd-btn rd-btn--primary" href="/admin/batches/new">
-            <Plus size={16} aria-hidden="true" /> Tạo lô nuôi mới
+            <Plus size={16} aria-hidden="true" /> Tạo lô mới
           </a>
         }
       />
 
-      <section className="admin-kpis" aria-label="Chỉ số tổng quan">
-        <div className="admin-kpi">
-          <span className="admin-kpi__label">Lô hiện có</span>
-          <span className="admin-kpi__value">{totalBatches ?? '—'}</span>
-          <span className="admin-kpi__sub">
-            {activeBatchCount !== null ? `${activeBatchCount} lô đang vận hành` : 'Đang tải dữ liệu'}
-          </span>
-        </div>
-
-        <div className="admin-kpi">
-          <span className="admin-kpi__label">Vốn góp đã xác nhận</span>
-          <span className="admin-kpi__value">{dash.data ? formatVnd(dash.data.confirmedCapital) : '—'}</span>
-          <span className="admin-kpi__sub">
-            {dash.data ? `${dash.data.confirmedContributions} khoản góp trong kỳ` : 'Đang tải dữ liệu'}
-          </span>
-        </div>
-
-        <div className="admin-kpi">
-          <span className="admin-kpi__label">Doanh thu đơn hoàn tất</span>
-          <span className="admin-kpi__value">{dash.data ? formatVnd(dash.data.completedOrderRevenue) : '—'}</span>
-          <span className="admin-kpi__sub">
-            {dash.data ? `Đã chi trả ${formatVnd(dash.data.succeededPayoutAmount)}` : 'Đang tải dữ liệu'}
-          </span>
-        </div>
-
-        <div className={`admin-kpi ${totalAttention > 0 ? 'admin-kpi--alert' : ''}`}>
-          <span className="admin-kpi__label">Việc cần xử lý</span>
-          <span className="admin-kpi__value">{countingQueues ? '…' : totalAttention}</span>
-          <span className="admin-kpi__sub">
-            <a className="op-link" href="#hang-viec">Xem danh sách bên dưới</a>
-          </span>
-        </div>
-      </section>
-
-      {valid && dash.data && <DashboardCharts dashboard={dash.data} />}
-
-      <section id="hang-viec" className="admin-split">
-        <OpPanel
-          title="Lô nuôi gần đây"
-          subtitle="Lọc nhanh theo nhóm trạng thái"
-          action={<a className="op-link" href="/admin/batches">Xem tất cả lô</a>}
-        >
-          <div className="admin-chips" role="tablist" aria-label="Lọc lô theo trạng thái">
-            {BATCH_CHIPS.map((c) => (
-              <button
-                key={c.key}
-                type="button"
-                role="tab"
-                aria-selected={batchChip === c.key}
-                className={`admin-chip ${batchChip === c.key ? 'is-on' : ''}`}
-                onClick={() => setBatchChip(c.key)}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-
-          <QueryView query={batchesQuery}>
-            {() =>
-              filteredBatches.length === 0 ? (
-                <OpEmpty title="Không có lô phù hợp bộ lọc" />
-              ) : (
-                <div className="admin-table-wrap">
-                  <div className="admin-batch-row admin-batch-row--head" aria-hidden="true">
-                    <span>Mã lô</span>
-                    <span>Hộ nuôi</span>
-                    <span>Phương thức</span>
-                    <span>Quy mô</span>
-                    <span>Trạng thái</span>
-                  </div>
-                  {filteredBatches.map(({ batch, operatorName }) => (
-                    <a
-                      key={batch.batchCode}
-                      href={`/admin/batches/${encodeURIComponent(batch.batchCode)}`}
-                      className="admin-batch-row"
-                    >
-                      <b className="admin-batch-row__num">{batch.batchCode}</b>
-                      <span>{operatorName || batch.title}</span>
-                      <span>{label('batchMode', batch.batchMode)}</span>
-                      <span className="admin-batch-row__num">{batch.plannedQuantity} con</span>
-                      <span className={pillToneClass(batch.status)}>{label('batch', batch.status)}</span>
-                    </a>
-                  ))}
-                </div>
-              )
-            }
-          </QueryView>
-        </OpPanel>
-
-        <OpPanel
-          title="Việc & cảnh báo cần xử lý"
-          subtitle="Từ thiết bị, hồ sơ và hàng việc quản trị"
-          action={<a className="op-link" href="/admin/alerts">Cảnh báo</a>}
-        >
-          {countingQueues ? (
-            <OpLoading />
-          ) : activeQueues.length === 0 && (dash.data?.latestEscalatedAlerts.length ?? 0) === 0 ? (
-            <OpEmpty title="Không có việc nào đang chờ" icon={<CheckCircle2 size={28} />} />
-          ) : (
-            <div className="admin-alert-list">
-              {(dash.data?.latestEscalatedAlerts ?? []).slice(0, 3).map((alert) => (
-                <a key={alert.id} href="/admin/alerts" className="admin-alert-row">
-                  <AlertTriangle size={17} aria-hidden="true" />
-                  <span>
-                    <b>{alert.message}</b>
-                    <small>{alert.batchCode}, {alert.farmName}</small>
-                  </span>
-                  <time dateTime={alert.raisedAt}>{formatDateTime(alert.raisedAt)}</time>
-                </a>
-              ))}
-              {activeQueues.map((q) => (
-                <a key={q.title} href={q.href} className="admin-alert-row">
-                  <Clock size={17} aria-hidden="true" />
-                  <span>
-                    <b>{q.title}</b>
-                    <small>{q.n} {q.unit} đang chờ xử lý</small>
-                  </span>
-                </a>
-              ))}
-            </div>
-          )}
-
-          {idleQueues.length > 0 && (
+      <div className="op-grid admin-dashboard__overview">
+        <OpPanel className="op-span-7 admin-dashboard__command" title="Việc đang chờ">
+          {active.length > 0
+            ? <OpTodo items={active.map((q) => ({ title: q.title, sub: `${q.n} ${q.unit}`, href: q.href, tone: q.danger ? 'danger' as const : 'warn' as const }))} />
+            : counting ? <OpLoading /> : <OpEmpty title="Không có việc nào đang chờ" icon={<CheckCircle2 size={30} />} />}
+          {idle.length > 0 && (
             <OpMore label="Hàng việc khác">
-              <div className="op-inline">
-                {idleQueues.map((q) => (
-                  <a key={q.title} className="op-link" href={q.href}>
-                    {q.title}
-                  </a>
-                ))}
-              </div>
+              <div className="op-inline">{idle.map((q) => <a key={q.title} className="op-link" href={q.href}>{q.title}</a>)}</div>
             </OpMore>
           )}
         </OpPanel>
-      </section>
 
-      <OpPanel title="Số liệu theo kỳ" subtitle={valid ? `Từ ${formatDate(from)} đến ${formatDate(to)}` : undefined}>
+        <div className="op-span-5 op-stack admin-dashboard__metrics">
+          {valid && (
+            <QueryView query={dash}>
+              {(d) => (
+                <>
+                  <OpStat
+                    label={`Vốn góp đã xác nhận · ${formatDate(d.from)} – ${formatDate(d.to)}`}
+                    value={new Intl.NumberFormat('vi-VN').format(d.confirmedCapital)}
+                    unit="đ"
+                    sub={`${d.confirmedContributions} khoản góp`}
+                  />
+                  <OpPanel>
+                    <OpFacts items={[
+                      { label: 'Lô hiện có', value: d.batchesByStatus.reduce((n, s) => n + s.count, 0) },
+                      { label: 'Doanh thu đơn hoàn tất', value: formatVnd(d.completedOrderRevenue), tone: 'ok' },
+                      { label: 'Đã chi trả nhà đầu tư', value: formatVnd(d.succeededPayoutAmount), tone: 'info' },
+                    ]} />
+                  </OpPanel>
+                </>
+              )}
+            </QueryView>
+          )}
+        </div>
+      </div>
+
+      {valid && dash.data && <DashboardCharts dashboard={dash.data} />}
+
+      <OpPanel title="Số liệu theo kỳ">
         <OpMore label="Chọn kỳ, xem bảng, tải CSV">
           <div className="op-toolbar">
             <Input type="date" aria-label="Từ ngày" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
@@ -295,29 +167,19 @@ function DashboardCharts({ dashboard }: { dashboard: AdminDashboardResponse }) {
   }
 
   return (
-    <section className={`admin-split ${capital.length === 0 || batches.length === 0 ? 'admin-split--single' : ''}`}>
+    <div className="op-grid admin-dashboard__charts">
       {capital.length > 0 && (
-        <OpPanel title="Vốn góp đã xác nhận theo ngày" subtitle="Đơn vị: đồng (VND)">
+        <OpPanel className="op-span-7" title="Vốn góp đã xác nhận theo ngày" subtitle="Đơn vị: đồng (VND)">
           <div className="admin-chart" role="img" aria-label="Biểu đồ vốn góp đã xác nhận theo ngày">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={capital} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+              <BarChart data={capital} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
                 <CartesianGrid vertical={false} stroke="var(--line-soft)" />
                 <XAxis dataKey="date" tickFormatter={(date) => formatDate(date)} tickLine={false} axisLine={false} minTickGap={28} />
-                <YAxis
-                  tickFormatter={(amount) => new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(amount)}
-                  tickLine={false}
-                  axisLine={false}
-                  width={52}
-                />
+                <YAxis tickFormatter={(amount) => new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(amount)} tickLine={false} axisLine={false} width={48} />
                 <Tooltip
                   labelFormatter={(date) => formatDate(String(date))}
                   formatter={(amount) => [formatVnd(Number(amount)), 'Vốn đã xác nhận']}
-                  contentStyle={{
-                    borderRadius: 10,
-                    border: '1px solid var(--line)',
-                    background: 'var(--surface)',
-                    fontSize: 13,
-                  }}
+                  contentStyle={{ borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)', fontSize: 13 }}
                 />
                 <Bar dataKey="amount" name="Vốn đã xác nhận" fill="var(--admin-teal)" radius={[6, 6, 0, 0]} isAnimationActive={false} />
               </BarChart>
@@ -325,9 +187,8 @@ function DashboardCharts({ dashboard }: { dashboard: AdminDashboardResponse }) {
           </div>
         </OpPanel>
       )}
-
       {batches.length > 0 && (
-        <OpPanel title="Phân bố lô theo trạng thái" subtitle="Tỷ lệ trên tổng số lô">
+        <OpPanel className={capital.length > 0 ? 'op-span-5' : 'op-span-12'} title="Lô theo trạng thái" subtitle="Tỷ lệ trên tổng số lô">
           <div className="admin-status-bars" aria-label="Phân bố Lô theo trạng thái">
             {batches.map((batch, idx) => {
               const pct = Math.round((batch.count / totalBatchCount) * 100)
@@ -335,7 +196,7 @@ function DashboardCharts({ dashboard }: { dashboard: AdminDashboardResponse }) {
                 <div key={batch.status} className={`admin-status-bars__item ${barTone(idx)}`}>
                   <div className="admin-status-bars__head">
                     <span>{label('batch', batch.status)}</span>
-                    <span>{batch.count} ({pct}%)</span>
+                    <b>{batch.count}</b>
                   </div>
                   <div className="admin-status-bars__track">
                     <i className="admin-status-bars__fill" style={{ width: `${pct}%` }} />
@@ -346,7 +207,22 @@ function DashboardCharts({ dashboard }: { dashboard: AdminDashboardResponse }) {
           </div>
         </OpPanel>
       )}
-    </section>
+      {dashboard.latestEscalatedAlerts.length > 0 && <DashboardAlerts alerts={dashboard.latestEscalatedAlerts} />}
+    </div>
+  )
+}
+
+function DashboardAlerts({ alerts }: { alerts: AdminDashboardResponse['latestEscalatedAlerts'] }) {
+  return (
+    <OpPanel className="op-span-12 admin-dashboard__alerts" title="Cảnh báo mới nhất" action={<a className="op-link" href="/admin/alerts">Xem tất cả</a>}>
+      {alerts.map((alert) => (
+        <a key={alert.id} href="/admin/alerts" className="admin-alert-row">
+          <AlertTriangle size={18} aria-hidden="true" />
+          <span><b>{alert.message}</b><small>{alert.batchCode}, {alert.farmName}</small></span>
+          <time dateTime={alert.raisedAt}>{formatDateTime(alert.raisedAt)}</time>
+        </a>
+      ))}
+    </OpPanel>
   )
 }
 
@@ -357,11 +233,7 @@ function PeriodTables({ d, from, to }: { d: AdminDashboardResponse; from: string
     <>
       <div className="op-between">
         <OpTabs items={TABLES} value={table} onChange={setTable} label="Chọn bảng" />
-        <OpBtn
-          variant="ghost"
-          sm
-          onClick={() => void openFile(`/api/admin/reports/${table}.csv?from=${from}&to=${to}`, `crabshare-${table}-${from}-${to}.csv`)}
-        >
+        <OpBtn variant="ghost" sm onClick={() => void openFile(`/api/admin/reports/${table}.csv?from=${from}&to=${to}`, `crabshare-${table}-${from}-${to}.csv`)}>
           <Download size={15} aria-hidden="true" /> Tải CSV
         </OpBtn>
       </div>

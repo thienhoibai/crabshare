@@ -269,6 +269,39 @@ html, body { overflow-x: clip; }
   color: var(--muted);
 }
 
+.o2--admin .admin-dashboard__overview {
+  align-items: stretch;
+}
+
+.o2--admin .admin-dashboard__command {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.o2--admin .admin-dashboard__metrics {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.o2--admin .admin-dashboard__metrics .op-hero {
+  border-radius: 10px;
+  padding: 20px;
+  background: var(--admin-side-bg);
+  color: var(--admin-side-ink);
+  border: 1px solid var(--admin-side-bg);
+}
+
+.o2--admin .admin-dashboard__metrics .op-hero > small,
+.o2--admin .admin-dashboard__metrics .op-hero__sub,
+.o2--admin .admin-dashboard__metrics .op-hero > b em {
+  color: var(--admin-side-muted);
+}
+
+.o2--admin .op-facts > div {
+  border-radius: 8px;
+  background: var(--input);
+  border-color: var(--line-soft);
+}
+
 /* ---------- Hàng KPI 4 cột ---------- */
 .admin-kpis {
   display: grid;
