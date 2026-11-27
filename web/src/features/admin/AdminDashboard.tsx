@@ -3,19 +3,50 @@
    Bảng theo kỳ và báo cáo CSV (GET /api/admin/reports/{capital|batches|orders|payouts}.csv) nằm trong phần gấp lại. */
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { AlertTriangle, CheckCircle2, Download } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Download, Plus } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type {
-  AdminDashboardResponse, AdminSettlementSummary, ClaimResponse, PagedResultOfAdminKycResponse, PagedResultOfAdminOperatorResponse,
+  AdminDashboardResponse,
+  AdminSettlementSummary,
+  ClaimResponse,
+  PagedResultOfAdminKycResponse,
+  PagedResultOfAdminOperatorResponse,
   PagedResultOfPartySummaryResponse,
 } from '../../shared/api/api.gen'
 import {
-  Input, Money, OpBtn, OpEmpty, OpFacts, OpHeading, OpLoading, OpMore, OpNote, OpPanel, OpStat, OpTable, OpTabs, OpTodo, QueryView, StatusBadge,
-  formatDate, formatDateTime, formatVnd, label, openFile, useGet,
+  Input,
+  Money,
+  OpBtn,
+  OpEmpty,
+  OpFacts,
+  OpHeading,
+  OpLoading,
+  OpMore,
+  OpNote,
+  OpPanel,
+  OpStat,
+  OpTable,
+  OpTabs,
+  OpTodo,
+  QueryView,
+  StatusBadge,
+  formatDate,
+  formatDateTime,
+  formatVnd,
+  label,
+  openFile,
+  useGet,
 } from '../../shared/ui/console'
 import { vnDate } from './adminPartA'
 
-interface Queue { title: string; href: string; n: number | undefined; unit: string; danger?: boolean; failed: boolean }
+interface Queue {
+  title: string
+  href: string
+  n: number | undefined
+  unit: string
+  danger?: boolean
+  failed: boolean
+}
 
 const TABLES = [
   { key: 'batches', label: 'Lô' },
@@ -60,7 +91,15 @@ export default function AdminDashboard() {
 
   return (
     <>
-      <OpHeading eyebrow="Quản trị nền tảng" title="Bảng điều khiển" description="Ưu tiên các việc cần quyết định trước khi theo dõi số liệu." />
+      <OpHeading
+        title="Bảng điều khiển"
+        description="Ưu tiên các việc cần quyết định trước khi theo dõi số liệu."
+        action={
+          <a className="rd-btn rd-btn--primary" href="/admin/batches/new">
+            <Plus size={16} aria-hidden="true" /> Tạo lô mới
+          </a>
+        }
+      />
 
       <div className="op-grid admin-dashboard__overview">
         <OpPanel className="op-span-7 admin-dashboard__command" title="Việc đang chờ">
@@ -120,33 +159,51 @@ function DashboardCharts({ dashboard }: { dashboard: AdminDashboardResponse }) {
   const batches = dashboard.batchesByStatus.filter((batch) => batch.count > 0)
   if (capital.length === 0 && batches.length === 0) return null
 
+  const totalBatchCount = Math.max(1, batches.reduce((sum, item) => sum + item.count, 0))
+  const barTone = (index: number) => {
+    if (index % 3 === 1) return 'admin-status-bars__item--aqua'
+    if (index % 3 === 2) return 'admin-status-bars__item--accent'
+    return ''
+  }
+
   return (
     <div className="op-grid admin-dashboard__charts">
       {capital.length > 0 && (
-        <OpPanel className="op-span-7" title="Vốn góp đã xác nhận theo ngày">
+        <OpPanel className="op-span-7" title="Vốn góp đã xác nhận theo ngày" subtitle="Đơn vị: đồng (VND)">
           <div className="admin-chart" role="img" aria-label="Biểu đồ vốn góp đã xác nhận theo ngày">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={capital} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke="var(--line)" />
+                <CartesianGrid vertical={false} stroke="var(--line-soft)" />
                 <XAxis dataKey="date" tickFormatter={(date) => formatDate(date)} tickLine={false} axisLine={false} minTickGap={28} />
                 <YAxis tickFormatter={(amount) => new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(amount)} tickLine={false} axisLine={false} width={48} />
-                <Tooltip labelFormatter={(date) => formatDate(String(date))} formatter={(amount) => [formatVnd(Number(amount)), 'Vốn đã xác nhận']} contentStyle={{ borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', fontSize: 13 }} />
-                <Bar dataKey="amount" name="Vốn đã xác nhận" fill="var(--accent)" radius={[5, 5, 0, 0]} isAnimationActive={false} />
+                <Tooltip
+                  labelFormatter={(date) => formatDate(String(date))}
+                  formatter={(amount) => [formatVnd(Number(amount)), 'Vốn đã xác nhận']}
+                  contentStyle={{ borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)', fontSize: 13 }}
+                />
+                <Bar dataKey="amount" name="Vốn đã xác nhận" fill="var(--admin-teal)" radius={[6, 6, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </OpPanel>
       )}
       {batches.length > 0 && (
-        <OpPanel className={capital.length > 0 ? 'op-span-5' : 'op-span-12'} title="Lô theo trạng thái">
+        <OpPanel className={capital.length > 0 ? 'op-span-5' : 'op-span-12'} title="Lô theo trạng thái" subtitle="Tỷ lệ trên tổng số lô">
           <div className="admin-status-bars" aria-label="Phân bố Lô theo trạng thái">
-            {batches.map((batch) => (
-              <div key={batch.status}>
-                <span>{label('batch', batch.status)}</span>
-                <b>{batch.count}</b>
-                <i style={{ width: `${(batch.count / Math.max(...batches.map((item) => item.count))) * 100}%` }} />
-              </div>
-            ))}
+            {batches.map((batch, idx) => {
+              const pct = Math.round((batch.count / totalBatchCount) * 100)
+              return (
+                <div key={batch.status} className={`admin-status-bars__item ${barTone(idx)}`}>
+                  <div className="admin-status-bars__head">
+                    <span>{label('batch', batch.status)}</span>
+                    <b>{batch.count}</b>
+                  </div>
+                  <div className="admin-status-bars__track">
+                    <i className="admin-status-bars__fill" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </OpPanel>
       )}
@@ -161,7 +218,7 @@ function DashboardAlerts({ alerts }: { alerts: AdminDashboardResponse['latestEsc
       {alerts.map((alert) => (
         <a key={alert.id} href="/admin/alerts" className="admin-alert-row">
           <AlertTriangle size={18} aria-hidden="true" />
-          <span><b>{alert.message}</b><small>{alert.batchCode} · {alert.farmName}</small></span>
+          <span><b>{alert.message}</b><small>{alert.batchCode}, {alert.farmName}</small></span>
           <time dateTime={alert.raisedAt}>{formatDateTime(alert.raisedAt)}</time>
         </a>
       ))}
@@ -177,7 +234,7 @@ function PeriodTables({ d, from, to }: { d: AdminDashboardResponse; from: string
       <div className="op-between">
         <OpTabs items={TABLES} value={table} onChange={setTable} label="Chọn bảng" />
         <OpBtn variant="ghost" sm onClick={() => void openFile(`/api/admin/reports/${table}.csv?from=${from}&to=${to}`, `crabshare-${table}-${from}-${to}.csv`)}>
-          <Download size={15} /> Tải CSV
+          <Download size={15} aria-hidden="true" /> Tải CSV
         </OpBtn>
       </div>
       {table === 'batches' && (
