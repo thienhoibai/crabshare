@@ -162,6 +162,9 @@ test.describe('bảng điều khiển của Quản trị', () => {
     await expect(fact(page, 'Lô hiện có')).toHaveText('5')
     await expect(fact(page, 'Doanh thu đơn hoàn tất')).toHaveText(vnd(10_000_001))
     await expect(fact(page, 'Đã chi trả nhà đầu tư')).toHaveText(vnd(20_000_001))
+    await expect(page.locator('.admin-dashboard__command')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Cảnh báo mới nhất', level: 2 })).toBeVisible()
+    await expect(page.getByText('Cần phản hồi chất lượng nước')).toBeVisible()
 
     expect(api.sent('GET', '/api/admin/dashboard').map((c) => ({ ...c.query, auth: c.auth }))).toEqual([{ from: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), auth: `Bearer ${TOKEN}` }])
     expect(api.sent('GET', '/api/admin/claims').map((c) => c.query)).toEqual([{ status: 'Escalated' }])

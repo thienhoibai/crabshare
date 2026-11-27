@@ -45,7 +45,7 @@ export function OpHeading({
     <header className="op-heading">
       <div>
         {crumb}
-        {eyebrow && <p className="rd-eyebrow">{eyebrow}</p>}
+        {eyebrow && <p className="op-heading__context">{eyebrow}</p>}
         <h1 className="rd-h2">{title}</h1>
         {description && <p className="rd-muted">{description}</p>}
       </div>

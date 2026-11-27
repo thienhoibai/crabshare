@@ -3,14 +3,15 @@
    Bảng theo kỳ và báo cáo CSV (GET /api/admin/reports/{capital|batches|orders|payouts}.csv) nằm trong phần gấp lại. */
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { CheckCircle2, Download } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Download } from 'lucide-react'
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type {
   AdminDashboardResponse, AdminSettlementSummary, ClaimResponse, PagedResultOfAdminKycResponse, PagedResultOfAdminOperatorResponse,
   PagedResultOfPartySummaryResponse,
 } from '../../shared/api/api.gen'
 import {
   Input, Money, OpBtn, OpEmpty, OpFacts, OpHeading, OpLoading, OpMore, OpNote, OpPanel, OpStat, OpTable, OpTabs, OpTodo, QueryView, StatusBadge,
-  formatDate, formatVnd, openFile, useGet,
+  formatDate, formatDateTime, formatVnd, label, openFile, useGet,
 } from '../../shared/ui/console'
 import { vnDate } from './adminPartA'
 
@@ -59,10 +60,10 @@ export default function AdminDashboard() {
 
   return (
     <>
-      <OpHeading eyebrow="Quản trị nền tảng" title="Bảng điều khiển" />
+      <OpHeading eyebrow="Quản trị nền tảng" title="Bảng điều khiển" description="Ưu tiên các việc cần quyết định trước khi theo dõi số liệu." />
 
-      <div className="op-grid">
-        <OpPanel className="op-span-7" title="Việc đang chờ">
+      <div className="op-grid admin-dashboard__overview">
+        <OpPanel className="op-span-7 admin-dashboard__command" title="Việc đang chờ">
           {active.length > 0
             ? <OpTodo items={active.map((q) => ({ title: q.title, sub: `${q.n} ${q.unit}`, href: q.href, tone: q.danger ? 'danger' as const : 'warn' as const }))} />
             : counting ? <OpLoading /> : <OpEmpty title="Không có việc nào đang chờ" icon={<CheckCircle2 size={30} />} />}
@@ -73,7 +74,7 @@ export default function AdminDashboard() {
           )}
         </OpPanel>
 
-        <div className="op-span-5 op-stack">
+        <div className="op-span-5 op-stack admin-dashboard__metrics">
           {valid && (
             <QueryView query={dash}>
               {(d) => (
@@ -98,6 +99,8 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {valid && dash.data && <DashboardCharts dashboard={dash.data} />}
+
       <OpPanel title="Số liệu theo kỳ">
         <OpMore label="Chọn kỳ, xem bảng, tải CSV">
           <div className="op-toolbar">
@@ -109,6 +112,60 @@ export default function AdminDashboard() {
         </OpMore>
       </OpPanel>
     </>
+  )
+}
+
+function DashboardCharts({ dashboard }: { dashboard: AdminDashboardResponse }) {
+  const capital = dashboard.capitalByDay.filter((day) => day.amount > 0)
+  const batches = dashboard.batchesByStatus.filter((batch) => batch.count > 0)
+  if (capital.length === 0 && batches.length === 0) return null
+
+  return (
+    <div className="op-grid admin-dashboard__charts">
+      {capital.length > 0 && (
+        <OpPanel className="op-span-7" title="Vốn góp đã xác nhận theo ngày">
+          <div className="admin-chart" role="img" aria-label="Biểu đồ vốn góp đã xác nhận theo ngày">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={capital} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                <CartesianGrid vertical={false} stroke="var(--line)" />
+                <XAxis dataKey="date" tickFormatter={(date) => formatDate(date)} tickLine={false} axisLine={false} minTickGap={28} />
+                <YAxis tickFormatter={(amount) => new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(amount)} tickLine={false} axisLine={false} width={48} />
+                <Tooltip labelFormatter={(date) => formatDate(String(date))} formatter={(amount) => [formatVnd(Number(amount)), 'Vốn đã xác nhận']} contentStyle={{ borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', fontSize: 13 }} />
+                <Bar dataKey="amount" name="Vốn đã xác nhận" fill="var(--accent)" radius={[5, 5, 0, 0]} isAnimationActive={false} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </OpPanel>
+      )}
+      {batches.length > 0 && (
+        <OpPanel className={capital.length > 0 ? 'op-span-5' : 'op-span-12'} title="Lô theo trạng thái">
+          <div className="admin-status-bars" aria-label="Phân bố Lô theo trạng thái">
+            {batches.map((batch) => (
+              <div key={batch.status}>
+                <span>{label('batch', batch.status)}</span>
+                <b>{batch.count}</b>
+                <i style={{ width: `${(batch.count / Math.max(...batches.map((item) => item.count))) * 100}%` }} />
+              </div>
+            ))}
+          </div>
+        </OpPanel>
+      )}
+      {dashboard.latestEscalatedAlerts.length > 0 && <DashboardAlerts alerts={dashboard.latestEscalatedAlerts} />}
+    </div>
+  )
+}
+
+function DashboardAlerts({ alerts }: { alerts: AdminDashboardResponse['latestEscalatedAlerts'] }) {
+  return (
+    <OpPanel className="op-span-12 admin-dashboard__alerts" title="Cảnh báo mới nhất" action={<a className="op-link" href="/admin/alerts">Xem tất cả</a>}>
+      {alerts.map((alert) => (
+        <a key={alert.id} href="/admin/alerts" className="admin-alert-row">
+          <AlertTriangle size={18} aria-hidden="true" />
+          <span><b>{alert.message}</b><small>{alert.batchCode} · {alert.farmName}</small></span>
+          <time dateTime={alert.raisedAt}>{formatDateTime(alert.raisedAt)}</time>
+        </a>
+      ))}
+    </OpPanel>
   )
 }
 

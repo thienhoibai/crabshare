@@ -9,6 +9,7 @@ import { Logo, Shell } from '../kit/kit'
 import { AREAS, areasFor, type Area, type NavItem } from './nav'
 import './console.css'
 import './console-v15.css'
+import './admin-design.css'
 import '../../../features/investor/investorPages.css'
 
 const initials = (name: string) =>

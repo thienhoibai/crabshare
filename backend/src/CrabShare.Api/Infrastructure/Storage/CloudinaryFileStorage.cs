@@ -63,6 +63,9 @@ public sealed class CloudinaryFileStorage(CloudinaryStorageOptions options, Loca
         asset.Headers.ContentType = new MediaTypeHeaderValue(contentType);
         multipart.Add(asset, "file", "document" + extension);
         multipart.Add(new StringContent(publicId), "public_id");
+        // Dynamic Folder mode does not infer Media Library folders from public_id slashes.
+        // Keep this aligned with the public ID path while preserving existing asset URIs.
+        multipart.Add(new StringContent($"crabshare/{folder}"), "asset_folder");
         multipart.Add(new StringContent("authenticated"), "type");
         multipart.Add(new StringContent("false"), "overwrite");
         using var request = AuthenticatedRequest("upload", multipart);
