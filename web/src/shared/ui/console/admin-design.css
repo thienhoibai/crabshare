@@ -1,59 +1,619 @@
-/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: full · v2.0.0 */
-/* critique: Preserve CrabShare's warm paper and orange signal; make hierarchy operational, not decorative. */
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: coastal-teal · redesign: full · v2.0.0 */
+/* critique: Coastal navy-teal sidebar, crisp sage-tinted paper, tabular Manrope metrics, coral reserved for primary CTA and active alerts. */
+
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --font-admin: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --admin-bg: #f5f7f5;
+  --admin-surface: #ffffff;
+  --admin-surface-2: #edf2f0;
+  --admin-fg: #071d2b;
+  --admin-muted: #5b6b71;
+  --admin-faint: #7d8e94;
+  --admin-line: #dce5e2;
+  --admin-line-soft: #e6edeb;
+  --admin-input: #f5f7f5;
+  --admin-accent: #f07b50;
+  --admin-on-accent: #071d2b;
+  --admin-teal: #146b78;
+  --admin-teal-hover: #0c4a52;
+  --admin-aqua: #55c6c1;
+  --admin-side-bg: #071d2b;
+  --admin-side-active: #12434c;
+  --admin-side-card: #0d3442;
+  --admin-side-ink: #f8faf9;
+  --admin-side-muted: #b5c9cb;
+  --admin-pill-ok-bg: #dff4f0;
+  --admin-pill-ok-ink: #0c4a52;
+  --admin-pill-warn-bg: #fde8dd;
+  --admin-pill-warn-ink: #8a3a16;
+  --admin-pill-mute-bg: #e6eaec;
+  --admin-pill-mute-ink: #33464c;
+  --admin-shadow: 0 1px 3px rgba(7, 29, 43, 0.05);
+}
 
 html, body { overflow-x: clip; }
 
-.o2--admin .o2-side { width: 272px; padding: 24px 16px 16px; background: var(--surface-2); }
-.o2--admin .o2-main { max-width: 1440px; margin-inline: auto; gap: 28px; padding: 28px clamp(20px, 3vw, 48px) 72px; }
-.o2--admin .o2-top { min-height: 32px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
-.o2--admin .o2-nav { gap: 4px; }
-.o2--admin .o2-nav__label { margin: 20px 12px 8px; font-size: 12px; font-weight: 500; letter-spacing: normal; text-transform: none; }
-.o2--admin .o2-nav a { min-height: 40px; padding: 8px 12px; border-radius: 12px; font-size: 14px; }
-.o2--admin .o2-nav a.is-on { background: var(--fg); color: var(--bg); }
-.o2--admin .o2-nav a:active { transform: translateY(1px); }
-.o2--admin .o2-farm { border-radius: 12px; background: var(--fg); color: var(--bg); }
-.o2--admin .op-heading { align-items: center; padding: 4px 0 8px; }
-.o2--admin .op-heading__context { font-size: 14px; line-height: 1.3; color: var(--muted); }
-.o2--admin .op-heading .rd-h2 { font-size: clamp(28px, 3vw, 40px); line-height: 1.08; letter-spacing: -0.03em; overflow-wrap: break-word; min-width: 0; }
-.o2--admin .op-panel { gap: 20px; padding: clamp(20px, 2vw, 28px); border-radius: 16px; box-shadow: none; }
-.o2--admin .admin-dashboard__overview { align-items: stretch; }
-.o2--admin .admin-dashboard__command { min-height: 392px; padding: clamp(24px, 3vw, 40px); background: var(--fg); color: var(--bg); border-color: transparent; }
-.o2--admin .admin-dashboard__command .op-panel__head p, .o2--admin .admin-dashboard__command .op-more > summary, .o2--admin .admin-dashboard__command .op-todo small { color: color-mix(in srgb, var(--bg) 68%, transparent); }
-.o2--admin .admin-dashboard__command .op-panel__title, .o2--admin .admin-dashboard__command .op-todo a, .o2--admin .admin-dashboard__command .op-more > summary:hover { color: var(--bg); }
-.o2--admin .admin-dashboard__command .op-todo a { min-height: 64px; border-color: color-mix(in srgb, var(--bg) 16%, transparent); background: color-mix(in srgb, var(--bg) 7%, transparent); }
-.o2--admin .admin-dashboard__command .op-todo a:hover { border-color: color-mix(in srgb, var(--bg) 48%, transparent); }
-.o2--admin .admin-dashboard__command .op-more { border-color: color-mix(in srgb, var(--bg) 16%, transparent); }
-.o2--admin .admin-dashboard__metrics { grid-template-rows: minmax(0, 1fr) auto; }
-.o2--admin .admin-dashboard__metrics .op-hero { min-height: 226px; padding: clamp(24px, 3vw, 36px); border-radius: 16px; background: var(--accent); color: var(--on-accent); }
-.o2--admin .admin-dashboard__metrics .op-hero > small, .o2--admin .admin-dashboard__metrics .op-hero__sub, .o2--admin .admin-dashboard__metrics .op-hero > b em { color: color-mix(in srgb, var(--on-accent) 72%, transparent); }
-.o2--admin .op-toolbar { padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
-.o2--admin .op-toolbar > .op-input, .o2--admin .op-toolbar > .op-select { min-height: 40px; border-radius: 12px; background: var(--input); }
-.o2--admin .op-tabs { border-radius: 12px; background: var(--input); }
-.o2--admin .op-tabs > button, .o2--admin .op-tabs > a { border-radius: 8px; }
-.o2--admin .op-tabs > .is-on, .o2--admin .op-tabs > .is-on:hover { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px color-mix(in srgb, var(--fg) 14%, transparent); }
-.o2--admin :is(button, input, select, textarea):disabled { opacity: 0.5; cursor: not-allowed; }
-.admin-chart { height: 248px; }
-.admin-chart .recharts-cartesian-axis-tick-value { fill: var(--muted); font-size: 11px; }
-.admin-status-bars { display: grid; gap: 12px; }
-.admin-status-bars > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; font-size: 14px; }
-.admin-status-bars span { overflow-wrap: anywhere; color: var(--muted); }
-.admin-status-bars b { font-variant-numeric: tabular-nums; }
-.admin-status-bars i { grid-column: 1 / -1; display: block; height: 8px; border-radius: 999px; background: var(--accent); }
-.admin-dashboard__alerts { padding-block: 12px; }
-.admin-dashboard__alerts .op-panel__head { padding: 8px 8px 0; }
-.admin-alert-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 16px 8px; border-top: 1px solid var(--line); color: inherit; }
-.admin-alert-row > svg { color: var(--danger); }
-.admin-alert-row > span { display: grid; gap: 2px; min-width: 0; }
-.admin-alert-row small, .admin-alert-row time { color: var(--muted); font-size: 13px; }
-.admin-alert-row time { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.admin-alert-row:hover b { text-decoration: underline; text-underline-offset: 3px; }
-.o2--admin :is(a, button, input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-@media (max-width: 900px) {
-  .o2--admin .o2-main { padding: 20px 16px 96px; gap: 20px; }
-  .o2--admin .op-heading { align-items: flex-start; }
-  .o2--admin .admin-dashboard__command { min-height: 0; }
-  .admin-chart { height: 208px; }
-  .admin-alert-row { grid-template-columns: 28px minmax(0, 1fr); }
-  .admin-alert-row time { grid-column: 2; }
+.o2--admin {
+  --bg: var(--admin-bg);
+  --surface: var(--admin-surface);
+  --surface-2: var(--admin-surface-2);
+  --fg: var(--admin-fg);
+  --muted: var(--admin-muted);
+  --faint: var(--admin-faint);
+  --line: var(--admin-line);
+  --line-soft: var(--admin-line-soft);
+  --input: var(--admin-input);
+  --accent: var(--admin-accent);
+  --on-accent: var(--admin-on-accent);
+  --shadow: var(--admin-shadow);
+
+  font-family: var(--font-admin);
+  background: var(--bg);
+  color: var(--fg);
 }
-@media (prefers-reduced-motion: reduce) { .o2--admin *, .o2--admin *::before, .o2--admin *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; } }
+
+/* ---------- Thanh bên quản trị ---------- */
+.o2--admin .o2-side {
+  width: 252px;
+  padding: 24px 16px 20px;
+  background: var(--admin-side-bg);
+  border-right: 0;
+  color: var(--admin-side-muted);
+  gap: 16px;
+}
+
+.o2--admin .o2-side .rd-logo {
+  color: var(--admin-side-ink);
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: -0.03em;
+  padding: 0 8px 8px;
+}
+
+.o2--admin .o2-side .rd-logo__mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--accent);
+}
+
+.o2--admin .o2-side .rd-logo__mark::after {
+  background: var(--admin-side-bg);
+  inset: 9px;
+}
+
+.o2--admin .o2-farm {
+  border-radius: 8px;
+  padding: 12px 16px;
+  background: var(--admin-side-card);
+  color: var(--admin-side-muted);
+}
+
+.o2--admin .o2-farm small {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--admin-side-muted);
+}
+
+.o2--admin .o2-farm b {
+  color: var(--admin-side-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.o2--admin .o2-farm span {
+  font-size: 12px;
+  color: var(--admin-side-muted);
+  overflow-wrap: anywhere;
+}
+
+.o2--admin .o2-nav {
+  gap: 4px;
+}
+
+.o2--admin .o2-nav__label {
+  margin: 16px 12px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--admin-side-muted);
+  opacity: 0.72;
+}
+
+.o2--admin .o2-nav a {
+  min-height: 44px;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--admin-side-muted);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.o2--admin .o2-nav a:hover {
+  background: color-mix(in srgb, var(--admin-side-active) 55%, transparent);
+  color: var(--admin-side-ink);
+}
+
+.o2--admin .o2-nav a.is-on {
+  background: var(--admin-side-active);
+  color: var(--admin-side-ink);
+}
+
+.o2--admin .o2-nav a:active {
+  transform: translateY(1px);
+}
+
+.o2--admin .o2-side__foot {
+  border-top: 1px solid color-mix(in srgb, var(--admin-side-muted) 18%, transparent);
+  padding-top: 12px;
+}
+
+.o2--admin .o2-side__foot .op-todo a {
+  background: var(--admin-side-card);
+  border-color: color-mix(in srgb, var(--admin-side-muted) 20%, transparent);
+  color: var(--admin-side-ink);
+  border-radius: 8px;
+}
+
+.o2--admin .o2-me {
+  color: var(--admin-side-ink);
+}
+
+.o2--admin .o2-me small {
+  color: var(--admin-side-muted);
+}
+
+.o2--admin .o2-out {
+  min-height: 40px;
+  border-radius: 8px;
+  color: var(--admin-side-muted);
+}
+
+.o2--admin .o2-out:hover {
+  background: var(--admin-side-card);
+  color: var(--admin-side-ink);
+}
+
+/* ---------- Vùng nội dung chính ---------- */
+.o2--admin .o2-main {
+  max-width: 1440px;
+  margin-inline: auto;
+  gap: 20px;
+  padding: 24px clamp(20px, 3vw, 36px) 64px;
+}
+
+.o2--admin .o2-top {
+  min-height: 36px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.o2--admin .o2-top__where {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.o2--admin .op-heading {
+  align-items: center;
+  gap: 16px;
+}
+
+.o2--admin .op-heading .rd-h2 {
+  font-size: clamp(24px, 2.5vw, 30px);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  font-weight: 800;
+  color: var(--fg);
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.o2--admin .op-heading .rd-muted {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.o2--admin .rd-btn--primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 800;
+  font-size: 14px;
+  padding: 0 20px;
+  min-height: 44px;
+  border-radius: 8px;
+  box-shadow: none;
+  transition: background-color 0.15s ease, transform 0.12s ease;
+}
+
+.o2--admin .rd-btn--primary::before {
+  display: none;
+}
+
+.o2--admin .rd-btn--primary:hover {
+  background: color-mix(in srgb, var(--accent) 88%, var(--fg));
+}
+
+.o2--admin .op-link {
+  color: var(--admin-teal);
+  font-weight: 600;
+}
+
+.o2--admin .op-link:hover {
+  color: var(--admin-teal-hover);
+}
+
+/* ---------- Thẻ và bảng ---------- */
+.o2--admin .op-panel {
+  gap: 16px;
+  padding: 20px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.o2--admin .op-panel__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: -0.015em;
+}
+
+.o2--admin .op-panel__head p {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---------- Hàng KPI 4 cột ---------- */
+.admin-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+}
+
+.admin-kpi {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: var(--shadow);
+}
+
+.admin-kpi--alert {
+  border-color: var(--accent);
+}
+
+.admin-kpi__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.admin-kpi__value {
+  font-size: 30px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-kpi__sub {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* ---------- Lưới 2fr / 1fr cho biểu đồ & hàng việc ---------- */
+.admin-split {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.admin-split--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 1024px) {
+  .admin-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.admin-chart {
+  height: 210px;
+}
+
+.admin-chart .recharts-cartesian-axis-tick-value {
+  fill: var(--muted);
+  font-size: 12px;
+}
+
+.admin-status-bars {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-status-bars__item {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-status-bars__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.admin-status-bars__head span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-status-bars__track {
+  height: 10px;
+  background: var(--line-soft);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.admin-status-bars__fill {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: var(--admin-teal);
+}
+
+.admin-status-bars__item--aqua .admin-status-bars__fill {
+  background: var(--admin-aqua);
+}
+
+.admin-status-bars__item--accent .admin-status-bars__fill {
+  background: var(--accent);
+}
+
+/* ---------- Chip lọc trạng thái ---------- */
+.admin-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-chip {
+  min-height: 40px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-chip:hover {
+  border-color: var(--fg);
+  color: var(--fg);
+}
+
+.admin-chip.is-on {
+  background: var(--fg);
+  border-color: var(--fg);
+  color: var(--surface);
+}
+
+/* ---------- Bảng lô nuôi gần đây ---------- */
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-batch-row {
+  display: grid;
+  grid-template-columns: 100px minmax(160px, 1.5fr) 110px 96px 128px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 4px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 14px;
+  color: var(--fg);
+  min-width: 580px;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+
+.admin-batch-row:hover {
+  background: var(--bg);
+}
+
+.admin-batch-row--head {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  border-top: 0;
+  padding-top: 0;
+}
+
+.admin-batch-row--head:hover {
+  background: transparent;
+}
+
+.admin-batch-row__num {
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  justify-self: start;
+  white-space: nowrap;
+}
+
+.admin-pill--ok {
+  background: var(--admin-pill-ok-bg);
+  color: var(--admin-pill-ok-ink);
+}
+
+.admin-pill--warn {
+  background: var(--admin-pill-warn-bg);
+  color: var(--admin-pill-warn-ink);
+}
+
+.admin-pill--mute {
+  background: var(--admin-pill-mute-bg);
+  color: var(--admin-pill-mute-ink);
+}
+
+/* ---------- Danh sách cảnh báo & việc cần xử lý ---------- */
+.admin-alert-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-alert-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 4px;
+  border-top: 1px solid var(--line-soft);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+
+.admin-alert-row:first-child {
+  border-top: 0;
+  padding-top: 4px;
+}
+
+.admin-alert-row:hover {
+  background: var(--bg);
+}
+
+.admin-alert-row > svg {
+  color: var(--accent);
+  margin-top: 2px;
+}
+
+.admin-alert-row > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-alert-row b {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.admin-alert-row small,
+.admin-alert-row time {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-alert-row time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Điều khiển, tab & focus ---------- */
+.o2--admin .op-toolbar {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.o2--admin .op-toolbar > .op-input,
+.o2--admin .op-toolbar > .op-select {
+  min-height: 40px;
+  border-radius: 8px;
+  background: var(--input);
+  border-color: var(--line);
+}
+
+.o2--admin .op-tabs {
+  border-radius: 10px;
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+.o2--admin .op-tabs > button,
+.o2--admin .op-tabs > a {
+  border-radius: 8px;
+}
+
+.o2--admin .op-tabs > .is-on,
+.o2--admin .op-tabs > .is-on:hover {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--fg) 12%, transparent);
+}
+
+.o2--admin :is(button, input, select, textarea):disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.o2--admin :is(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--admin-teal);
+  outline-offset: 2px;
+}
+
+.o2--admin .o2-side :is(a, button):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .o2--admin .o2-main {
+    padding: 20px 16px 96px;
+    gap: 16px;
+  }
+
+  .o2--admin .op-heading {
+    align-items: flex-start;
+  }
+
+  .admin-chart {
+    height: 190px;
+  }
+
+  .admin-alert-row {
+    grid-template-columns: 22px minmax(0, 1fr);
+  }
+
+  .admin-alert-row time {
+    grid-column: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .o2--admin *,
+  .o2--admin *::before,
+  .o2--admin *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
