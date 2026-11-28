@@ -70,7 +70,7 @@ public sealed class EvidenceReviewService(AppDbContext db, ICurrentUser me, Evid
             await db.SaveChangesAsync(ct);
             writtenReviewId = mine.EvidenceRecordId;
             var audit = new AuditLog { EntityType = "Evidence", EntityId = id, ActionType = "ReviewEvidence", OldValue = old,
-                NewValue = AuditChain.Snapshot(new { evidence.ReviewStatus, mine.EvidenceRecordId, mine.ReviewerId, mine.Verdict, mine.Note, mine.ReviewedAt }),
+                NewValue = AuditChain.Snapshot(new { evidence.ReviewStatus, EvidenceReviewId = mine.EvidenceRecordId, mine.ReviewerId, mine.Verdict, mine.Note, mine.ReviewedAt }),
                 ActorUserId = me.UserId, OccurredAt = now, PrevHash = previous };
             audit.RowHash = AuditChain.Hash(audit); db.AuditLogs.Add(audit); await db.SaveChangesAsync(ct);
             var result = Detail(await Load(id, ct));

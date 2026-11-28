@@ -104,7 +104,7 @@ public sealed class SettlementPayoutService(
         await audit.WriteAsync("settlement", s.SettlementRecordId, "approve", new { status = "Proposed" }, new
         {
             s.Status, approvedBy = me.UserId, approvedAt = now, s.RevisionNo, revenuePool = (long)s.RevenuePool, taxTotal = (long)s.TaxTotal,
-            instructions = instructions.Select(i => new { i.PaymentRecordId, i.InstructionType, amount = (long)i.Amount, i.SettlementLineId }),
+            instructions = instructions.Select(i => new { InstructionId = i.PaymentRecordId, i.InstructionType, amount = (long)i.Amount, i.SettlementLineId }),
         }, now, ct);
         foreach (var i in instructions)
             await audit.WriteAsync("payment_instruction", i.PaymentRecordId, "create", null,

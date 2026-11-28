@@ -110,7 +110,7 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
             contribution.UpdatedAt = now;
             await db.SaveChangesAsync(ct);
             await audit.WriteAsync("contribution", contribution.ContributionId, "refund", new { status = "Confirmed" },
-                new { status = contribution.Status, refundedAt = now, instruction.PaymentRecordId }, now, ct);
+                new { status = contribution.Status, refundedAt = now, InstructionId = instruction.PaymentRecordId }, now, ct);
         }
 
         // Lệnh chi quyết toán cuối cùng đã thành công → bảng quyết toán PaidOut, Lô Closed (BR-209)

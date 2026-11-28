@@ -102,7 +102,7 @@ public sealed class EvidenceService(AppDbContext db, ICurrentUser me, EvidenceAc
                     previous = await AuditChain.LockAndReadTailAsync(db, ct);
                     var capture = evidence.CaptureRequest!;
                     AppendAudit("CaptureRequest", capture.EvidenceRecordId, "FulfillCaptureRequest", requestOld,
-                        AuditChain.Snapshot(new { capture.Status, capture.FulfilledAt, evidence.EvidenceRecordId }), previous, receivedAt);
+                        AuditChain.Snapshot(new { capture.Status, capture.FulfilledAt, EvidenceId = evidence.EvidenceRecordId }), previous, receivedAt);
                     await db.SaveChangesAsync(ct);
                 }
                 await transaction.CommitAsync(ct);

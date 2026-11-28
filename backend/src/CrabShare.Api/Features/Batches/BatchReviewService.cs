@@ -144,7 +144,7 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
         await audit.WriteAsync("batch", b.BatchId, "approve", before, after, now, ct);
         if (accountCreated)
             await audit.WriteAsync("batch_account", account.BatchRecordId, "create", null,
-                new { account.BatchRecordId, account.BatchId, account.ProviderName, account.ProviderAccountNo, account.Status, account.OpenedAt }, now, ct);
+                new { BatchAccountId = account.BatchRecordId, account.BatchId, account.ProviderName, account.ProviderAccountNo, account.Status, account.OpenedAt }, now, ct);
         return after;
     }, ct);
 

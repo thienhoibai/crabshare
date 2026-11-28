@@ -48,6 +48,12 @@ internal static class Br15DemoSeeder
         db.PartySites.Add(Site(buyerParty, "GIAO-KH-01", "DeliveryAddress", "Nhà hàng hải sản Sài Gòn", "12 Nguyễn Huệ, phường Sài Gòn, TP. Hồ Chí Minh",
             10.776900m, 106.700900m, buyer.FullName, buyer.Phone));
         await db.SaveChangesAsync(ct);
+        // Trại mẫu được tạo sẵn ở trạng thái Approved nên chưa qua bước Admin duyệt: đồng bộ đối tác như khi duyệt thật
+        // (tên pháp lý theo hồ sơ hộ nuôi, đã xác minh, vai trò người nuôi). Thiếu bước này thì lệnh chi giải ngân cho trại
+        // bị chặn vì người nhận chưa xác minh (BR-012, BR-013).
+        if (p.Farm.Status == "Approved")
+            await parties.SyncFarmDecisionAsync(p.Farm, "approve", null, ct);
+        await db.SaveChangesAsync(ct);
 
         // 2. Hai Nhân viên kiểm phẩm thuộc pool nền tảng (BR-017).
         foreach (var (email, name) in new[] { ("qc1@crabshare.local", "Đặng Kiểm Phẩm"), ("qc2@crabshare.local", "Mai Thị Kiểm Định") })
