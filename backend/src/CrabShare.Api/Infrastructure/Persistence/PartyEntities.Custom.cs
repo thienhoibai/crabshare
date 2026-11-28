@@ -11,6 +11,7 @@ public partial class AppUser
     /// <summary>Đối tác sở hữu tài khoản (BR-003). Tài khoản cũ có thể chưa có, PartyDirectory tạo khi cần.</summary>
     [Column("party_id")] public long? PartyId { get; set; }
     [Column("customer_profile_completed_at"), Precision(3)] public DateTimeOffset? CustomerProfileCompletedAt { get; set; }
+    [Column("google_subject"), MaxLength(255), Unicode(false)] public string? GoogleSubject { get; set; }
 }
 
 public partial class Operator

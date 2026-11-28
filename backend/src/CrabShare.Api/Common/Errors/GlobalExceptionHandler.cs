@@ -67,6 +67,7 @@ public sealed partial class GlobalExceptionHandler(IProblemDetailsService proble
     private static readonly Dictionary<string, string> DuplicateMessages = new(StringComparer.OrdinalIgnoreCase)
     {
         ["ux_app_user_phone"] = "Số điện thoại này đã được dùng cho một tài khoản khác.",
+        ["ux_app_user_google_subject"] = "Tài khoản Google này đã được gắn với một tài khoản khác.",
         ["ux_party_registration_no"] = "Mã số thuế hoặc số đăng ký này đã có trong hệ thống.",
         ["ux_party_site_code"] = "Mã địa điểm này đã được dùng.",
         ["ux_payout_account_digest"] = "Tài khoản ngân hàng này đã được khai cho một chủ tài khoản khác.",

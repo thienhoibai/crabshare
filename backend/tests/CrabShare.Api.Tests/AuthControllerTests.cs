@@ -40,4 +40,24 @@ public class AuthControllerTests(WebApplicationFactory<Program> factory) : IClas
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Google_login_thieu_token_hoac_sai_vai_tro_tra_ve_400()
+    {
+        var emptyToken = await Client().PostAsJsonAsync("/api/auth/google", new { idToken = "" });
+        Assert.Equal(HttpStatusCode.BadRequest, emptyToken.StatusCode);
+
+        var badRole = await Client().PostAsJsonAsync("/api/auth/google", new { idToken = "abc", role = "PlatformAdmin" });
+        Assert.Equal(HttpStatusCode.BadRequest, badRole.StatusCode);
+    }
+
+    [Fact]
+    public async Task Google_login_chua_cau_hinh_client_id_tra_ve_503()
+    {
+        var response = await Client().PostAsJsonAsync("/api/auth/google", new { idToken = "any-token" });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("auth.google_unconfigured", problem.GetProperty("code").GetString());
+    }
 }

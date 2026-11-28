@@ -51,6 +51,15 @@ public sealed class LoginRequest
     public string Password { get; set; } = "";
 }
 
+public sealed class GoogleLoginRequest
+{
+    [Required, MaxLength(4096)]
+    public string IdToken { get; set; } = "";
+
+    /// <summary>Vai trò khi tạo tài khoản mới lần đầu: "Customer" hoặc "Investor".</summary>
+    public SelfRegisterRole Role { get; set; } = SelfRegisterRole.Customer;
+}
+
 public sealed record AuthResponse(string AccessToken, DateTimeOffset ExpiresAt, MeResponse User);
 
 public sealed record MeResponse(long UserId, string Email, string FullName, string? Phone, string Status, IReadOnlyList<string> Roles, long? OperatorId, bool CustomerProfileRequired = false);
