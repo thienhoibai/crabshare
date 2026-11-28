@@ -107,9 +107,7 @@ public sealed class PartyDirectory(AppDbContext db, TimeProvider clock)
     }
 
     public static string FarmPartyType(string legalName)
-        => legalName.StartsWith("HTX", StringComparison.OrdinalIgnoreCase) ||
-           legalName.StartsWith("Hợp tác xã", StringComparison.OrdinalIgnoreCase) ? "Cooperative"
-         : legalName.StartsWith("Công ty", StringComparison.OrdinalIgnoreCase) ? "Company" : "Household";
+        => legalName.StartsWith("Công ty", StringComparison.OrdinalIgnoreCase) ? "Company" : "Household";
 
     /// <summary>Đồng bộ đối tác và vai trò người nuôi theo quyết định duyệt hồ sơ hộ nuôi (BR-005, BR-006).</summary>
     public async Task SyncFarmDecisionAsync(Operator farm, string action, string? reason, CancellationToken ct)

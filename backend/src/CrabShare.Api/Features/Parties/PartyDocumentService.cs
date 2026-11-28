@@ -28,7 +28,7 @@ public sealed class UploadPartyDocumentRequest
 }
 
 /// <summary>
-/// Giấy tờ pháp lý của đối tác tổ chức (hộ kinh doanh, hợp tác xã, doanh nghiệp) để Admin xác minh hồ sơ (BR-009, BR-016).
+/// Giấy tờ pháp lý của đối tác tổ chức (hộ kinh doanh, doanh nghiệp) để Admin xác minh hồ sơ (BR-009, BR-016).
 /// Cá nhân không gửi giấy tờ ở đây: cá nhân xác minh bằng eKYC và hệ thống không lưu ảnh giấy tờ tuỳ thân (BR-010).
 /// </summary>
 public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, PartyDirectory parties, EvidenceImageProcessor images,
@@ -165,7 +165,7 @@ public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, Party
     {
         if (partyType == "Individual")
             throw new BusinessRuleException("party.documents_org_only",
-                "Chỉ hộ kinh doanh, hợp tác xã hoặc doanh nghiệp mới gửi giấy tờ. Cá nhân xác minh bằng eKYC.");
+                "Chỉ hộ kinh doanh hoặc doanh nghiệp mới gửi giấy tờ. Cá nhân xác minh bằng eKYC.");
     }
 
     private async Task<IReadOnlyList<PartyDocumentResponse>> ListAsync(long partyId, CancellationToken ct)

@@ -1,4 +1,4 @@
-import { Building2, ContactRound, Crop, ScanLine, Store, Sun, UsersRound } from 'lucide-react'
+import { Building2, ContactRound, Crop, ScanLine, Store, Sun } from 'lucide-react'
 
 const individual = {
   label: 'Cá nhân',
@@ -21,13 +21,6 @@ export const organizationGuides = {
     sample: 'company.jpg',
     document: 'Giấy chứng nhận đăng ký doanh nghiệp',
     example: 'Người đại diện đăng ký cho một công ty TNHH kinh doanh hải sản.',
-  },
-  Cooperative: {
-    label: 'Hợp tác xã',
-    icon: UsersRound,
-    sample: 'cooperative.jpg',
-    document: 'Giấy chứng nhận đăng ký hợp tác xã',
-    example: 'Nhiều hộ nuôi cùng bán cua dưới tên một HTX đã đăng ký. Chọn mục này khi giao dịch đứng tên HTX và tài khoản do người đại diện đứng tên.',
   },
 }
 

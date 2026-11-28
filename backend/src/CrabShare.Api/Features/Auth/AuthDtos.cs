@@ -25,8 +25,8 @@ public sealed class RegisterRequest
     /// <summary>Gửi dạng chữ: "Customer" hoặc "Investor".</summary>
     public SelfRegisterRole Role { get; set; } = SelfRegisterRole.Customer;
 
-    /// <summary>Loại đối tác (BR-001): Individual, Household, Company, Cooperative. Mặc định cá nhân.</summary>
-    [RegularExpression("^(Individual|Household|Company|Cooperative)$")]
+    /// <summary>Loại đối tác (BR-001): Individual, Household, Company. Mặc định cá nhân.</summary>
+    [RegularExpression("^(Individual|Household|Company)$")]
     public string PartyType { get; set; } = "Individual";
 
     /// <summary>Tên pháp lý của tổ chức (tên cửa hàng, doanh nghiệp). Bắt buộc khi không phải cá nhân.</summary>

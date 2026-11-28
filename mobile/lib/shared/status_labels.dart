@@ -227,7 +227,6 @@ const Map<String, Map<String, (String, Tone)>> _maps = {
     'Individual': ('Cá nhân', Tone.mute),
     'Household': ('Hộ kinh doanh', Tone.mute),
     'Company': ('Doanh nghiệp', Tone.mute),
-    'Cooperative': ('Hợp tác xã', Tone.mute),
   },
   'customerType': {
     'Restaurant': ('Nhà hàng', Tone.mute),

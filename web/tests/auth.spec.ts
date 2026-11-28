@@ -88,10 +88,7 @@ test('đăng ký báo lỗi tại ô nhập, hiện mật khẩu và gửi đún
   await page.getByText('Doanh nghiệp', { exact: true }).first().click()
   await expect(page.getByRole('complementary').getByRole('heading', { name: 'Giấy chứng nhận đăng ký doanh nghiệp' })).toBeVisible()
   await expect(page.getByRole('img', { name: 'Giấy chứng nhận đăng ký doanh nghiệp, ảnh mẫu' })).toHaveAttribute('src', '/profile-samples/company.jpg')
-  await page.getByText('Hợp tác xã', { exact: true }).first().click()
-  await expect(page.getByRole('complementary').getByRole('heading', { name: 'Giấy chứng nhận đăng ký hợp tác xã' })).toBeVisible()
-  await expect(page.getByRole('img', { name: 'Giấy chứng nhận đăng ký hợp tác xã, ảnh mẫu' })).toHaveAttribute('src', '/profile-samples/cooperative.jpg')
-  await expect(page.getByText(/Nhiều hộ nuôi cùng bán cua/)).toBeVisible()
+  await expect(page.getByText('Hợp tác xã')).toHaveCount(0)
   expect(api.sent('POST', '/api/auth/register').map((c) => c.body)).toEqual([{
     email: 'nhadautu@test.local', password: 'mat-khau-thu', fullName: 'Người dùng thử', role: 'Investor', partyType: 'Individual',
   }])
@@ -103,7 +100,7 @@ test('chọn giấy tờ trước khi lưu, gửi lại ảnh nếu tải lên l
   let documents: typeof document[] = []
   let attempts = 0
   api.get('/api/me/party', () => profile)
-  api.put('/api/me/party', () => (profile = { ...profile, partyType: 'Cooperative', legalName: 'HTX Mẫu', representative: 'Đại diện' }))
+  api.put('/api/me/party', () => (profile = { ...profile, partyType: 'Company', legalName: 'HTX Mẫu', representative: 'Đại diện' }))
   api.get('/api/me/party/documents', () => documents)
   api.get('/api/me/party/documents/500/file', () => reply(404))
   api.post('/api/me/party/documents', () => {
@@ -116,8 +113,8 @@ test('chọn giấy tờ trước khi lưu, gửi lại ảnh nếu tải lên l
   await signIn(page, 'Customer')
   await page.goto('/hoan-thien-ho-so')
   await page.getByRole('button', { name: 'Tiếp tục' }).click()
-  await page.getByText('Hợp tác xã', { exact: true }).first().click()
-  const documentPicker = page.getByLabel('Chọn ảnh hoặc PDF: Giấy chứng nhận đăng ký hợp tác xã')
+  await page.getByText('Doanh nghiệp', { exact: true }).first().click()
+  const documentPicker = page.getByLabel('Chọn ảnh hoặc PDF: Giấy chứng nhận đăng ký doanh nghiệp')
   await expect(page.locator('input[type="file"]')).toHaveCount(1)
   await expect(documentPicker).toHaveAttribute('accept', /image\/png/)
   await expect(documentPicker).toHaveAttribute('accept', /application\/pdf/)
