@@ -138,6 +138,14 @@ public sealed class AuthService(
         return await ToMeAsync(user, ct);
     }
 
+    public async Task<AuthResponse> RefreshAsync(long userId, CancellationToken ct)
+    {
+        var user = await db.AppUsers.Include(u => u.AppUserRoles).FirstOrDefaultAsync(u => u.UserId == userId, ct)
+                   ?? throw new NotFoundException("auth.user_not_found", "Không tìm thấy tài khoản.");
+        EnsureCanSignIn(user);
+        return await IssueTokenAsync(user, ct);
+    }
+
     private static void EnsureCanSignIn(AppUser user)
     {
         if (user.Status == "Locked")

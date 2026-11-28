@@ -19,6 +19,14 @@ public class AuthControllerTests(WebApplicationFactory<Program> factory) : IClas
     }
 
     [Fact]
+    public async Task Refresh_khi_chua_dang_nhap_tra_ve_401()
+    {
+        var response = await Client().PostAsync("/api/auth/refresh", null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Dang_ky_sai_du_lieu_tra_ve_400_kem_loi_tung_truong()
     {
         // role gửi dạng chữ như web đang gửi; lỗi phải nằm ở Email và Password chứ không phải ở role

@@ -4,10 +4,10 @@
 import { useQueries } from '@tanstack/react-query'
 import { NotebookPen, Plus } from 'lucide-react'
 import type {
-  AlertResponse, GoodsReceiptResponse, OperatorDashboardResponse, PagedResultOfBatchResponse, PagedResultOfOperatorEvidenceItem,
+  AlertResponse, GoodsReceiptResponse, OperatorDashboardResponse, OperatorResponse, PagedResultOfBatchResponse, PagedResultOfOperatorEvidenceItem,
 } from '../../shared/api/api.gen'
 import {
-  OpBadge, OpEmpty, OpFacts, OpHeading, OpMore, OpNote, OpPanel, OpRow, OpTodo, QueryView, StatusBadge, crabImg, http, label, tone, useGet, type Todo,
+  OpBadge, OpEmpty, OpFacts, OpHeading, OpLoading, OpMore, OpNote, OpPanel, OpRow, OpTodo, QueryView, StatusBadge, crabImg, errorMessage, http, label, tone, useGet, type Todo,
 } from '../../shared/ui/console'
 import { dayMonth, isEnded, num, type OperatorTrancheBrief } from './opA'
 import TrendChart from './TrendChart'
@@ -15,11 +15,13 @@ import TrendChart from './TrendChart'
 const round = (value: number | null) => (value === null ? null : Math.round(value * 100) / 100)
 
 export default function OperatorDashboard() {
-  const dash = useGet<OperatorDashboardResponse>('/api/operators/me/dashboard', undefined, { retry: false })
-  const batches = useGet<PagedResultOfBatchResponse>('/api/operators/me/batches', { pageSize: 100 })
-  const alerts = useGet<AlertResponse[]>('/api/operators/me/alerts', undefined, { retry: false })
-  const flagged = useGet<PagedResultOfOperatorEvidenceItem>('/api/operators/me/evidence', { status: 'Flagged', pageSize: 50 }, { retry: false })
-  const tranches = useGet<OperatorTrancheBrief[]>('/api/operator/tranches', undefined, { retry: false })
+  const operator = useGet<OperatorResponse>('/api/operators/me', undefined, { retry: false })
+  const canOperate = operator.data?.status === 'Approved' || operator.data?.status === 'Suspended'
+  const dash = useGet<OperatorDashboardResponse>('/api/operators/me/dashboard', undefined, { retry: false, enabled: canOperate })
+  const batches = useGet<PagedResultOfBatchResponse>('/api/operators/me/batches', { pageSize: 100 }, { enabled: canOperate })
+  const alerts = useGet<AlertResponse[]>('/api/operators/me/alerts', undefined, { retry: false, enabled: canOperate })
+  const flagged = useGet<PagedResultOfOperatorEvidenceItem>('/api/operators/me/evidence', { status: 'Flagged', pageSize: 50 }, { retry: false, enabled: canOperate })
+  const tranches = useGet<OperatorTrancheBrief[]>('/api/operator/tranches', undefined, { retry: false, enabled: canOperate })
 
   const active = (batches.data?.items ?? []).filter((b) => !isEnded(b.status))
   // Phiếu nhận hàng đang chờ Nhân viên kiểm phẩm: hỏi từng Lô đang mua nguồn hoặc đang lưu nuôi.
@@ -48,6 +50,29 @@ export default function OperatorDashboard() {
   })
   if (reachable.length) todos.push({ title: `${reachable.length} mốc giải ngân xin được`, sub: reachable.map((t) => `${t.batchCode} mốc ${t.trancheNo}`).join(', '), href: '/operator/disbursements', tone: 'ok' })
 
+  if (operator.isPending) return <OpLoading />
+
+  if (!canOperate) {
+    const status = operator.data?.status
+    return (
+      <>
+        <OpHeading eyebrow="Hôm nay" title={operator.data?.legalName ?? 'Hồ sơ hộ nuôi'} />
+        <OpPanel title="Trạng thái hồ sơ hộ nuôi">
+          {status === 'Submitted' ? (
+            <OpNote tone="info">Hồ sơ đang chờ Admin xét duyệt. Sau khi được duyệt bạn có thể tạo Lô và vận hành trại.</OpNote>
+          ) : status === 'Rejected' ? (
+            <OpNote tone="danger">Hồ sơ hộ nuôi bị từ chối. Vui lòng cập nhật lại hoặc liên hệ Admin.</OpNote>
+          ) : (
+            <OpNote tone="info">Bạn chưa hoàn tất gửi duyệt hồ sơ hộ nuôi. Hãy kiểm tra hồ sơ và bấm gửi xét duyệt.</OpNote>
+          )}
+          <div className="op-formfoot">
+            <a className="rd-btn rd-btn--primary" href="/operator/register">Xem hồ sơ hộ nuôi</a>
+          </div>
+        </OpPanel>
+      </>
+    )
+  }
+
   return (
     <>
       <OpHeading
@@ -61,7 +86,7 @@ export default function OperatorDashboard() {
         }
       />
 
-      {dash.isError && <OpNote tone="danger">Hồ sơ hộ nuôi chưa được duyệt. <a className="op-link" href="/operator/register">Xem hồ sơ</a></OpNote>}
+      {dash.isError && <OpNote tone="danger">{errorMessage(dash.error)} <a className="op-link" href="/operator/register">Xem hồ sơ</a></OpNote>}
 
       <OpFacts items={[
         { label: 'Lô đang chạy', value: batches.isPending ? '…' : active.length },

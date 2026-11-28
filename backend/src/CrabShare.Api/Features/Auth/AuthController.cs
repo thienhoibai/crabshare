@@ -32,6 +32,12 @@ public sealed class AuthController(AuthService auth, ICurrentUser me) : Controll
         => Ok(await auth.LoginWithGoogleAsync(req, ct));
 
     [Authorize]
+    [HttpPost("refresh")]
+    [EndpointSummary("Cấp lại JWT mới theo quyền hiện tại trong CSDL")]
+    public async Task<ActionResult<AuthResponse>> Refresh(CancellationToken ct)
+        => Ok(await auth.RefreshAsync(me.UserId, ct));
+
+    [Authorize]
     [HttpGet("me")]
     [EndpointSummary("Thông tin người đang đăng nhập")]
     public async Task<ActionResult<MeResponse>> Me(CancellationToken ct)
