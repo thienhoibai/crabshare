@@ -1,0 +1,157 @@
+%% Figure 4.33 – Activity Diagram: WF-03 Production data, alerts, evidence review and milestone disbursement
+%% v3.2 · 05/11/2026 · Register v1.4
+%% Business level; generated from gen-activity.js with the same nodes and flows as CrabShare_Activity_Diagrams.drawio.
+%% Lanes = subgraphs (one per actor). «planned» = in Register v1.4, not yet on develop @ 420a379 (dashed).
+%% draw.io splits this figure into 3 parts; the connectors (A, B) join them here into one flow.
+flowchart TB
+  subgraph LANE_op["Operator"]
+    direction TB
+    s((" "))
+    o1("Stock one crab per box in the funded box rows (box rows «planned»)")
+    o2("Record the daily log and box events in the app (feeding, health, mortality, molting)")
+    o3("Acknowledge the alert with a response note")
+    o4("Capture a live photo of the box in the app: server time, location, box number")
+    mF{" "}
+    dX{"explain?"}
+    o5("Submit an explanation for the flagged evidence")
+    mQ{" "}
+    o6("Request the next milestone tranche")
+    o7("Submit the explanation")
+  end
+  subgraph LANE_sys["CrabShare System"]
+    direction TB
+    s1("Register the crabs per box")
+    ob0["Batch [InProduction]"]
+    d0{"data source?"}
+    mD{" "}
+    s2("Record the data per box; check mortality against the policy (device data «planned»)")
+    d1{"mortality over the limit?"}
+    s3("Raise an alert with a deadline to acknowledge")
+    d2{"acknowledged in time?"}
+    m2{" "}
+    s5("Issue a random capture request (one box, time window)")
+    s6("Check the photo is genuine and score its risk (crab detection «planned»)")
+    d3{"risk score?"}
+    mK{" "}
+    ob1["Evidence [Accepted] on the investor timeline"]
+    s7("Check the milestone gate: previous tranche released, accepted evidence, none flagged")
+    d5{"gate passes?"}
+    ff3(("✕"))
+    s8("Create the disbursement instruction")
+  end
+  subgraph LANE_dev["Farm Devices #amp; Cameras (simulated) «planned»"]
+    direction TB
+    m1("«planned» Post box photos, feeding records, box events and logs through the common data channel")
+  end
+  subgraph LANE_adm["Platform Administrator"]
+    direction TB
+    a1("Monitor and resolve the escalated alert")
+    a3("Review the request; re-check the gate")
+    d6{"decision?"}
+    ob3["DisbursementTranche [Blocked]"]
+    ff4(("✕"))
+    a4("Send the disbursement instruction")
+  end
+  subgraph LANE_rev["Platform Administrator (Evidence Reviewer)"]
+    direction TB
+    mV{" "}
+    a2("Review the evidence (never on a Batch they invested in)")
+    d4{"verdict?"}
+    ob2["Evidence [Rejected]"]
+    ff1(("✕"))
+  end
+  subgraph LANE_inv["Investor"]
+    direction TB
+    si((" "))
+    i1("«planned» View box details of own rows: photos, feeding, health (others see Batch-level figures)")
+    ff2(("✕"))
+  end
+  subgraph LANE_psp["Payment Service Provider"]
+    direction TB
+    p1("Pay the tranche to the Operator's payout account")
+    e((("end")))
+  end
+  cA(("A"))
+  cB(("B"))
+  s --> o1
+  o1 --> s1
+  s1 --> ob0
+  ob0 --> d0
+  d0 -->|"[Operator, in the app]"| o2
+  d0 -.->|"[farm devices]"| m1
+  o2 --> mD
+  m1 -.-> mD
+  mD --> s2
+  s2 --> d1
+  d1 -->|"[yes]"| s3
+  d1 -->|"[no]"| m2
+  s3 --> o3
+  o3 --> d2
+  d2 -->|"[yes]"| m2
+  d2 -->|"[no: escalated]"| a1
+  a1 --> m2
+  m2 --> s5
+  s5 --> cA
+  cA --> o4
+  o4 --> s6
+  s6 --> d3
+  d3 -->|"[risk ≥ 70: flagged]"| mF
+  d3 -->|"[20 ≤ risk < 70: watch]"| mV
+  d3 -->|"[risk < 20]"| mK
+  mF --> dX
+  dX -->|"[yes]"| o5
+  dX -->|"[no]"| mV
+  o5 --> mV
+  mV --> a2
+  a2 --> d4
+  d4 -->|"[pass]"| mK
+  d4 -->|"[fail]"| ob2
+  ob2 --> ff1
+  d4 -->|"[need more evidence]"| mF
+  mK --> ob1
+  ob1 --> cB
+  si -.-> i1
+  i1 -.-> ff2
+  cB --> mQ
+  mQ --> o6
+  o6 --> s7
+  s7 --> d5
+  d5 -->|"[no: request refused]"| ff3
+  d5 -->|"[yes]"| a3
+  a3 --> d6
+  d6 -->|"[need explanation]"| o7
+  d6 -->|"[block]"| ob3
+  d6 -->|"[release]"| s8
+  ob3 --> ff4
+  o7 --> mQ
+  s8 --> a4
+  a4 --> p1
+  p1 --> e
+  classDef planned stroke-dasharray:5 5,color:#64748b,stroke:#64748b,fill:#f8fafc
+  classDef bar fill:#1e293b,stroke:#1e293b,color:#1e293b
+  classDef startNode fill:#111111,stroke:#111111,color:#111111
+  classDef object fill:#fff7ed,stroke:#c2410c
+  classDef conn fill:#ffffff,stroke:#1e293b,stroke-width:2px
+  class m1,i1 planned
+  class s,si startNode
+  class ob0,ob1,ob3,ob2 object
+  class cA,cB conn
+
+%% Data come either from the Operator in the app or, «planned», from the simulated farm devices and cameras through one common data channel (no
+%% hardware). Alerts in v1.4: Mortality from box events, MilestoneDelay and DataSilence from the alert job, EvidenceFlag from an expired capture request.
+%% The cycle repeats every day until harvest (WF-04). Connector A continues on part 2. Evidence states (Figure 4.28): risk < 20 Accepted; Watch goes
+%% straight to the Evidence Reviewer; Flagged evidence may get the Operator's explanation first; a NeedMoreEvidence verdict makes it Flagged again. The
+%% crab detection module only checks that a crab is present and adds to the risk score (develop runs a no-op detector); a person decides. Rejected
+%% evidence notifies the Operator. The Investor's view of own box details is a separate flow: it reads the accepted evidence and box data at any time.
+%% Connector B continues on part 3. Milestone gate (Figure 4.13): tranche 1 needs the capital closed and contracts signed; later tranches need stocking
+%% and accepted evidence since the last tranche with none flagged; tranche 3 or later needs a declared harvest date. Release creates a disbursement
+%% instruction (Figure 4.12) that the Administrator sends; after an explanation the Operator requests the tranche again (no direct release); a blocked
+%% tranche stops the later ones. Traceability: UC17, UC52, UC19, UC20, UC45, UC47, UC48, UC21, UC53, UC18, UC40 (TP4 Khôi; ingestion and simulator TP2
+%% Viên; disbursement TP1 Thiện). Precondition: capital closed and every contract FullySigned (WF-02); only the boxes of funded rows are stocked.
+%% Exception branches: mortality over the limit, alert not acknowledged in time (escalated), watch or flagged evidence reviewed by a person, rejected
+%% evidence, more evidence requested, tranche request refused, explanation requested, tranche blocked. «planned» in v1.4: the simulated farm devices and
+%% cameras with one common data channel, the trained crab detection module, box rows and row-scoped box details for investors. Removed in v1.4 (still in
+%% code): per-crab tags and tag photos; WaterQuality alerts with the water thresholds and readings of daily logs (pH, temperature, salinity). States:
+%% Batch Stocked → InProduction (Figure 4.8); alert Open → Acknowledged / Escalated → Resolved (4.30); capture request Open → Fulfilled / Expired (4.29);
+%% evidence Accepted / Watch / Flagged / Rejected (4.28); tranche Planned → Requested → Released / NeedsExplanation / Blocked (4.13). Design decisions of
+%% 05/11/2026 applied here were confirmed by the lead.

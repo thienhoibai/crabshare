@@ -1,0 +1,181 @@
+%% Figure 4.34 – Activity Diagram: WF-04 Bulk pre-order, weighed delivery, invoiced and final orders
+%% v3.2 · 05/11/2026 · Register v1.4
+%% Business level; generated from gen-activity.js with the same nodes and flows as CrabShare_Activity_Diagrams.drawio.
+%% Lanes = subgraphs (one per actor). «planned» = in Register v1.4, not yet on develop @ 420a379 (dashed).
+%% draw.io splits this figure into 5 parts; the connectors (A, B, C) join them here into one flow.
+flowchart TB
+  subgraph LANE_cus["Customer"]
+    direction TB
+    s((" "))
+    c1("«planned» Find farms on the map that deliver to the address; choose a Batch open for pre-order")
+    c2("Pre-order by number of crabs (or kg) from the minimum quantity (crab count, minimum «planned»)")
+    dP{"pays the deposit?"}
+    c3("Pay the deposit by VietQR")
+    dK{"keeps the pre-order?"}
+    cX("Cancel the pre-order after paying the deposit")
+    c4a("Check the crabs at the door")
+    d2{"accept and pay the balance?"}
+    c4("Pay the balance = weighed kg × price per kg − deposit (weighed kg = live crabs received) (weighed kg «planned»)")
+    c5("«planned» Scan the order QR: farm, Batch, harvest record")
+    d3{"problem within the return window?"}
+    c6("Request a return or submit a complaint")
+  end
+  subgraph LANE_sys["CrabShare System"]
+    direction TB
+    s1("Check stock (no overselling) and the minimum; hold the crabs; issue the deposit VietQR (while funding, minimum «planned»)")
+    obX["BulkPreOrder [Cancelled]: hold released, nothing lost"]
+    ffX(("✕"))
+    s2("Confirm the deposit")
+    ob1["BulkPreOrder [DepositPaid]"]
+    mK{" "}
+    d1{"Batch opened? (WF‑02)"}
+    dC{"cancelled by the Customer?"}
+    s4("«planned» Forfeit the deposit as Batch revenue (ForfeitedDeposit)")
+    obF["«planned» BulkPreOrder [Forfeited]"]
+    ffF(("✕"))
+    s5("«planned» Forfeit the deposit as Batch revenue; return the crabs to stock for the Batch's invoiced sale")
+    ob4["«planned» BulkPreOrder [Forfeited]"]
+    ff1(("✕"))
+    s6("Record the delivery; start the 72-hour return window")
+    ob2["BulkPreOrder [Delivered]"]
+    d8{"request type?"}
+    mRf{" "}
+    s9("Create the refund instruction")
+    ob5["BulkPreOrder [Returned]"]
+    ff3(("✕"))
+    m5{" "}
+    t1>"⌛ return window ends"]
+    ob6["BulkPreOrder [Completed]: its revenue counts for settlement"]
+    ob3["«planned» FinalOrder [PendingPayment] with its invoice, one per Batch"]
+    ffB(("✕"))
+  end
+  subgraph LANE_psp["Payment Service Provider"]
+    direction TB
+    p1("Notify the transaction")
+    p2("Execute the refund")
+    ffR(("✕"))
+    p3("Notify the balance payment")
+    p4("Execute the refund")
+  end
+  subgraph LANE_adm["Platform Administrator"]
+    direction TB
+    a1("«planned» Send the deposit refund (cancelled pre-orders included)")
+    a2("Resolve the complaint: refund, compensation, replacement or reject")
+    d7{"outcome?"}
+    a3("Send the refund instruction")
+    ff4(("✕"))
+  end
+  subgraph LANE_op["Operator"]
+    direction TB
+    o2("«planned» Prepare the delivery note: assign crabs of harvested boxes to the order; print the order QR")
+    o3("Deliver; weigh the crabs at the door; record transit losses (weighing «planned»)")
+    o4("Answer the complaint with evidence")
+    sB((" "))
+    h1("Record the harvest per box: weight, grade")
+    t2>"⌛ sales window closed"]
+    o5("«planned» Record the invoiced sales of low-grade crabs and of crabs from forfeited pre-orders (InvoicedSale)")
+    mF{" "}
+    o6("«planned» Record the final order for the leftover crabs to the committed buyer")
+    d5{"price ≥ floor price?"}
+  end
+  cA(("A"))
+  cB(("B"))
+  cC(("C"))
+  s -.-> c1
+  c1 -.-> c2
+  c2 --> s1
+  s1 --> dP
+  dP -->|"[pays]"| c3
+  dP -->|"[cancels or 15 minutes pass]"| obX
+  obX --> ffX
+  c3 --> p1
+  p1 --> s2
+  s2 --> ob1
+  ob1 --> cA
+  cA --> dK
+  dK -->|"[no: cancels]"| cX
+  dK -->|"[yes]"| mK
+  cX --> mK
+  mK --> d1
+  d1 -->|"[yes]"| dC
+  d1 -.->|"[no]"| a1
+  dC -.->|"[yes]"| s4
+  dC -->|"[no]"| cB
+  s4 -.-> obF
+  obF -.-> ffF
+  a1 -.-> p2
+  p2 --> ffR
+  cB -.-> o2
+  o2 -.-> o3
+  o3 --> c4a
+  c4a --> d2
+  d2 -->|"[yes]"| c4
+  d2 -.->|"[no: refuses or does not pay]"| s5
+  s5 -.-> ob4
+  ob4 -.-> ff1
+  c4 --> p3
+  p3 --> s6
+  s6 --> ob2
+  ob2 --> cC
+  cC -.-> c5
+  c5 -.-> d3
+  d3 -->|"[yes]"| c6
+  d3 -->|"[no]"| m5
+  c6 --> d8
+  d8 -->|"[return in the window]"| mRf
+  d8 -->|"[complaint]"| o4
+  o4 --> a2
+  a2 --> d7
+  d7 -->|"[full refund]"| mRf
+  d7 -->|"[else]"| m5
+  mRf --> s9
+  s9 --> ob5
+  ob5 --> a3
+  a3 --> p4
+  p4 --> ff3
+  m5 --> t1
+  t1 --> ob6
+  ob6 --> ff4
+  sB --> h1
+  h1 --> t2
+  t2 -.-> o5
+  o5 -.-> mF
+  mF -.-> o6
+  o6 -.-> d5
+  d5 -.->|"[yes]"| ob3
+  d5 -->|"[no: revise]"| mF
+  ob3 -.-> ffB
+  classDef planned stroke-dasharray:5 5,color:#64748b,stroke:#64748b,fill:#f8fafc
+  classDef bar fill:#1e293b,stroke:#1e293b,color:#1e293b
+  classDef startNode fill:#111111,stroke:#111111,color:#111111
+  classDef object fill:#fff7ed,stroke:#c2410c
+  classDef conn fill:#ffffff,stroke:#1e293b,stroke-width:2px
+  class c1,a1,s4,obF,o2,s5,ob4,c5,o5,o6,ob3 planned
+  class s,sB startNode
+  class obX,ob1,ob2,ob5,ob6 object
+  class cA,cB,cC conn
+
+%% An Investor may pre-order like a Customer (not the Batch's Operator or its members). Cancelling before paying (UC55) or letting the 15-minute QR
+%% expire costs nothing. Connector A continues on part 2. Cancellation after the deposit (UC55): when the Batch does not open every deposit is refunded,
+%% cancelled pre-orders included; when it opens, a pre-order cancelled after paying forfeits the deposit, which becomes Batch revenue (UC54). Connector B
+%% continues the kept pre-order on part 3. Delivery starts once the boxes are harvested (part 5). A refused delivery or an unpaid balance forfeits the
+%% deposit (Batch revenue ForfeitedDeposit) and ends this pre-order; its crabs go back to stock for the Batch's invoiced sale on part 5. Balance =
+%% weighed kg × price per kg − deposit, where weighed kg counts the live crabs received; the transit loss is only recorded, not deducted again, and a
+%% negative balance is refunded. Connector C continues on part 4. A return in the window (Customer, or approved by the Operator) or a complaint resolved
+%% with a full refund returns the order; compensation, replacement or rejection keeps it Delivered until the return window ends (a partial refund also
+%% creates a refund instruction, not drawn). An active complaint blocks completion. Each pre-order ends at its own flow final. This flow runs once per
+%% Batch, separately from the flows of each pre-order (parts 1–4): the harvest per box, then, after the sales window closes, the invoiced sales
+%% (low-grade crabs and crabs of forfeited pre-orders, reasons LowGrade and ForfeitResale) and one final order to the committed buyer, never below the
+%% floor price. Traceability: UC25, UC27, UC55, UC12, UC40, UC22, UC29, UC30, UC54, UC33, UC31, UC32, UC50, UC51 (TP3 Nhân). Exception branches:
+%% pre-order cancelled or unpaid before the deposit → nothing lost; Batch not opened → every deposit refunded, cancelled pre-orders included; cancelled
+%% after paying and the Batch opened, delivery refused or balance unpaid → deposit forfeited (UC54), and in the last two cases the crabs are resold
+%% through an invoiced sale; final-order price below the floor price → revised; return or complaint → refund, or the order completes after the return
+%% window. «planned» in v1.4: farm map with delivery radius, pre-order by crab count from a minimum while the Batch is funding (the code pre-orders by kg
+%% on a listing while InProduction), the forfeit rule on cancellation, the delivery note with the order QR, weighing at the door and the balance on
+%% weighed kg, forfeited Customer deposits, invoiced sales of low-grade or resold crabs (InvoicedSale) and the final order at the floor price; every
+%% delivered order has an invoice. Removed in v1.4 (still in code): product listings, retail cart and checkout, priority offtake claims, per-crab tags
+%% and tag-scan packing, the balance before packing (PreorderBalanceJob). States: BulkPreOrder PendingPayment (crabs held) → DepositPaid → Confirmed
+%% «planned» → Packed → Shipping → Delivered → Completed, or Cancelled, Returned, Refunded «planned», Forfeited «planned» (Figure 4.17); InvoicedSale |
+%% FinalOrder recorded with its invoice (crabs Sold), PendingPayment → Completed when the OrderPayment is paid «planned» (4.18; cancellation or expiry is
+%% an open point); complaint Open → OperatorResponded / Escalated → Resolved / Rejected (4.19). Design decisions of 05/11/2026 applied here were
+%% confirmed by the lead.
