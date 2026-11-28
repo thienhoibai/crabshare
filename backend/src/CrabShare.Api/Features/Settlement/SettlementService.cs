@@ -130,12 +130,12 @@ public sealed class SettlementService(AppDbContext db, ICurrentUser me, IAuditLo
             await db.SaveChangesAsync(ct);
             if (batchBefore != batch.Status)
                 await audit.WriteAsync("batch", batch.BatchId, "start_settlement", new { status = batchBefore }, new { batch.Status, batch.BatchCode }, now, ct);
-            await audit.WriteAsync("settlement", settlement.SettlementId, existing is null ? "calculate" : "recalculate", before, new
+            await audit.WriteAsync("settlement", settlement.SettlementRecordId, existing is null ? "calculate" : "recalculate", before, new
             {
                 Snapshot = Snapshot(settlement), batch.BatchCode, figures.RevenueByType,
                 lines = (result?.Lines ?? []).Select(l => new { l.InvestorId, l.Capital, l.ProfitShare, l.NetPayout }),
             }, now, ct);
-            return (await DescribeAsync(settlement.SettlementId, Viewer.Admin, ct), existing is null);
+            return (await DescribeAsync(settlement.SettlementRecordId, Viewer.Admin, ct), existing is null);
         }, ct);
 
     internal sealed record Figures(long Revenue, IReadOnlyDictionary<string, long> RevenueByType, long SalesRevenue, long Refunds, decimal FeeRatePct,
@@ -148,7 +148,7 @@ public sealed class SettlementService(AppDbContext db, ICurrentUser me, IAuditLo
         var byType = await db.RevenueLines.AsNoTracking().Where(r => r.BatchId == batch.BatchId).GroupBy(r => r.SourceType)
             .Select(g => new { g.Key, Amount = g.Sum(r => r.Amount) }).ToDictionaryAsync(x => x.Key, x => (long)x.Amount, ct);
         var revenue = byType.Values.Sum();
-        var account = await db.BatchAccounts.AsNoTracking().Where(a => a.BatchId == batch.BatchId).Select(a => (long?)a.BatchAccountId).SingleOrDefaultAsync(ct);
+        var account = await db.BatchAccounts.AsNoTracking().Where(a => a.BatchId == batch.BatchId).Select(a => (long?)a.BatchRecordId).SingleOrDefaultAsync(ct);
         var refunds = account is { } accountId
             ? (long)(await db.PaymentInstructions.Where(i => i.BatchAccountId == accountId && i.InstructionType == "Refund" && i.OrderId != null && i.Status != "Failed")
                 .SumAsync(i => (decimal?)i.Amount, ct) ?? 0)
@@ -161,14 +161,14 @@ public sealed class SettlementService(AppDbContext db, ICurrentUser me, IAuditLo
         // BR-187: Chi phí chuẩn trừ = Chi phí chuẩn mỗi con × số con được cấp vốn (không giảm theo cua chết; trừ lỗi người nuôi, BR-126).
         var standard = (long)((batch.StandardCostPerCrab ?? 0) * funded);
         var costRows = await db.CostActuals.AsNoTracking().Where(c => c.BatchId == batch.BatchId)
-            .Join(db.StandardCostItems, c => c.CostItemId, i => i.CostItemId, (c, i) => new { c.Amount, i.Category, Documented = c.DocumentEvidenceId != null || c.DocumentRef != null })
+            .Join(db.StandardCostItems, c => c.CostItemId, i => i.CostRecordId, (c, i) => new { c.Amount, i.Category, Documented = c.DocumentEvidenceId != null || c.DocumentRef != null })
             .ToListAsync(ct);
         var actual = (long)costRows.Where(c => c.Documented).Sum(c => c.Amount);
         var actualExceptSeed = (long)costRows.Where(c => c.Documented && c.Category != "Seed").Sum(c => c.Amount);
         var purchases = await db.ProcurementOrders.AsNoTracking().Where(p => p.BatchId == batch.BatchId && p.Status != "Cancelled")
             .Select(p => new
             {
-                Accepted = db.GoodsReceipts.Where(r => r.Status == "Completed" && db.SupplyLots.Any(l => l.SupplyLotId == r.SupplyLotId && l.ProcurementOrderId == p.ProcurementOrderId))
+                Accepted = db.GoodsReceipts.Where(r => r.Status == "Completed" && db.SupplyLots.Any(l => l.SupplyRecordId == r.SupplyLotId && l.ProcurementOrderId == p.SupplyRecordId))
                     .Sum(r => (int?)r.AcceptedCount) ?? 0,
                 p.UnitPrice,
             }).ToListAsync(ct);
@@ -203,7 +203,7 @@ public sealed class SettlementService(AppDbContext db, ICurrentUser me, IAuditLo
             .OrderBy(b => b.Status == "Settling" ? 0 : b.Status == "AwaitingSettlement" ? 1 : 2).ThenBy(b => b.BatchCode)
             .Select(b => new AdminSettlementSummary(
                 b.BatchCode, b.Title, b.Operator.LegalName, b.Status,
-                b.Settlement == null ? null : b.Settlement.SettlementId,
+                b.Settlement == null ? null : b.Settlement.SettlementRecordId,
                 b.Settlement == null ? null : b.Settlement.Status,
                 b.Settlement == null ? null : b.Settlement.RevisionNo,
                 b.Settlement == null ? null : (long)b.Settlement.ActualRevenue,
@@ -225,18 +225,18 @@ public sealed class SettlementService(AppDbContext db, ICurrentUser me, IAuditLo
             .Include(x => x.SettlementLines).ThenInclude(l => l.Investor).ThenInclude(i => i.User)
             .Include(x => x.SettlementFeedbacks).ThenInclude(f => f.User)
             .AsSplitQuery()
-            .SingleOrDefaultAsync(x => x.SettlementId == settlementId, ct)
+            .SingleOrDefaultAsync(x => x.SettlementRecordId == settlementId, ct)
             ?? throw new NotFoundException("settlement.not_found", "Không tìm thấy bảng quyết toán.");
         var byType = await db.RevenueLines.AsNoTracking().Where(r => r.BatchId == s.BatchId).GroupBy(r => r.SourceType)
             .Select(g => new { g.Key, Amount = g.Sum(r => r.Amount) }).ToDictionaryAsync(x => x.Key, x => (long)x.Amount, ct);
-        var lineIds = s.SettlementLines.Select(l => l.SettlementLineId).ToList();
+        var lineIds = s.SettlementLines.Select(l => l.SettlementRecordId).ToList();
         var payouts = await db.PaymentInstructions.AsNoTracking()
             .Where(i => i.SettlementLineId != null && lineIds.Contains(i.SettlementLineId.Value))
-            .Select(i => new { i.SettlementLineId, i.InstructionId, i.Status })
+            .Select(i => new { i.SettlementLineId, InstructionId = i.PaymentRecordId, i.Status })
             .ToListAsync(ct);
         var anchors = await db.AuditLogs.AsNoTracking()
             .Where(a => (a.EntityType == "batch" && a.EntityId == s.BatchId && (a.ActionType == "close_capital" || a.ActionType == "close"))
-                        || (a.EntityType == "settlement" && a.EntityId == s.SettlementId && a.ActionType == "approve"))
+                        || (a.EntityType == "settlement" && a.EntityId == s.SettlementRecordId && a.ActionType == "approve"))
             .OrderBy(a => a.AuditId)
             .Select(a => new { a.ActionType, a.EntityType, a.OccurredAt, a.AuditId, a.RowHash })
             .ToListAsync(ct);
@@ -249,14 +249,14 @@ public sealed class SettlementService(AppDbContext db, ICurrentUser me, IAuditLo
             .Where(l => viewer != Viewer.Investor || l.InvestorId == userId)
             .OrderBy(l => l.InvestorId)
             .Select(l => new SettlementLineResponse(
-                l.SettlementLineId, l.InvestorId, InvestorName(l.Investor), (long)l.CapitalReturn, (long)l.ProfitShare, 0,
+                l.SettlementRecordId, l.InvestorId, InvestorName(l.Investor), (long)l.CapitalReturn, (long)l.ProfitShare, 0,
                 (long)l.NetPayout, l.InvestorId == userId,
-                payouts.Where(p => p.SettlementLineId == l.SettlementLineId).MaxBy(p => p.InstructionId)?.Status))
+                payouts.Where(p => p.SettlementLineId == l.SettlementRecordId).MaxBy(p => p.InstructionId)?.Status))
             .ToList();
         var feedback = s.SettlementFeedbacks
             .Where(f => viewer != Viewer.Investor || f.UserId == userId)
-            .OrderBy(f => f.FeedbackId)
-            .Select(f => new SettlementFeedbackResponse(f.FeedbackId, f.User.FullName, f.Content, f.Status, f.Response, f.CreatedAt, f.RespondedAt, f.UserId == userId))
+            .OrderBy(f => f.SettlementRecordId)
+            .Select(f => new SettlementFeedbackResponse(f.SettlementRecordId, f.User.FullName, f.Content, f.Status, f.Response, f.CreatedAt, f.RespondedAt, f.UserId == userId))
             .ToList();
         var breakdown = new SettlementBreakdown(s.SettlementMode, s.SettlementBasis, byType.GetValueOrDefault("PreOrderDelivered"),
             byType.GetValueOrDefault("InvoicedSale"), byType.GetValueOrDefault("ForfeitedDeposit"), byType.GetValueOrDefault("FinalOrder"),
@@ -264,7 +264,7 @@ public sealed class SettlementService(AppDbContext db, ICurrentUser me, IAuditLo
             (long)s.DisbursedTotal, (long)s.UndisbursedCost, (long)s.CustomerRefunds, s.ReceivedCount, s.DeadCount, s.SurvivalRatePct,
             s.CommissionPct, (long)s.CommissionAmount, (long)s.SupplierPayout, s.IsLiquidation);
         return new SettlementResponse(
-            s.SettlementId, s.Batch.BatchCode, s.Batch.Title, s.Batch.Operator.LegalName, s.Batch.Status, s.Status, s.RevisionNo,
+            s.SettlementRecordId, s.Batch.BatchCode, s.Batch.Title, s.Batch.Operator.LegalName, s.Batch.Status, s.Status, s.RevisionNo,
             byType.GetValueOrDefault("PreOrderDelivered") + byType.GetValueOrDefault("InvoicedSale") + byType.GetValueOrDefault("FinalOrder"),
             byType.GetValueOrDefault("ForfeitedDeposit"), (long)s.CustomerRefunds,
             (long)s.ActualRevenue, (long)s.LockedStandardCost, pool, s.OperatorSharePct, (long)s.OperatorRemuneration, distributable,

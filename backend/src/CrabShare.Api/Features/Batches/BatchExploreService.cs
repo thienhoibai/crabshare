@@ -68,7 +68,7 @@ public sealed class BatchExploreService(AppDbContext db, TimeProvider clock, IBa
 
     private async Task<ExploreBatchResponse?> ResponseAsync(Batch b, ExploreBatchQuery query, bool detail, CancellationToken ct)
     {
-        var site = b.DispatchSiteId is { } sid ? await db.PartySites.AsNoTracking().SingleOrDefaultAsync(s => s.SiteId == sid, ct) : null;
+        var site = b.DispatchSiteId is { } sid ? await db.PartySites.AsNoTracking().SingleOrDefaultAsync(s => s.PartyRecordId == sid, ct) : null;
         decimal? distance = null;
         if (query.Latitude is { } lat && query.Longitude is { } lng && site?.Latitude is { } sLat && site.Longitude is { } sLng)
         {

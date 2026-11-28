@@ -71,13 +71,13 @@ public sealed class DeviceAdminService(AppDbContext db, ICurrentUser me, TimePro
                     .Select(b => (long?)b.BatchId).SingleOrDefaultAsync(ct);
                 var holding = await db.HoldingOperations.Where(h => h.BatchId == holdingBatchId).SingleOrDefaultAsync(ct);
                 device.ScopeType = "Holding";
-                device.ScopeHoldingId = holding?.HoldingId
+                device.ScopeHoldingId = holding?.BatchRecordId
                                         ?? throw new NotFoundException("device.holding_not_found", "Lô chưa có đợt lưu nuôi để gắn cụm cảm biến nước (BR-229).");
                 break;
             default:
                 if (req.SiteId is not { } siteId) throw new BusinessRuleException("device.site_required", "Trạm đo phải gắn một địa điểm trạm kiểm phẩm.");
                 var partyId = await parties.PartyIdOfOperatorAsync(device.OperatorId, ct);
-                if (!await db.PartySites.AnyAsync(s => s.SiteId == siteId && s.PartyId == partyId && (s.SiteType == "QcStation" || s.SiteType == "Farm"), ct))
+                if (!await db.PartySites.AnyAsync(s => s.PartyRecordId == siteId && s.PartyId == partyId && (s.SiteType == "QcStation" || s.SiteType == "Farm"), ct))
                     throw new NotFoundException("device.site_not_found", "Địa điểm không phải trạm kiểm phẩm hay trại của hộ nuôi.");
                 device.ScopeType = "QcStation";
                 device.ScopeSiteId = siteId;
@@ -144,7 +144,7 @@ public sealed class DeviceAdminService(AppDbContext db, ICurrentUser me, TimePro
             if (passed && DeviceIngestService.RelevantKind(device.DeviceType, req.Kind))
                 device.LastCalibratedAt = device.LastCalibratedAt is { } last && last > performed ? last : performed;
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("device_calibration", row.DeviceCalibrationId, "record_manual", null, new { device.DeviceCode, req.Kind, performed, req.ErrorG, passed }, ct);
+            await audit.WriteAsync("device_calibration", row.DeviceRecordId, "record_manual", null, new { device.DeviceCode, req.Kind, performed, req.ErrorG, passed }, ct);
             return device;
         }, ct);
         return await ResponseAsync(device, ct);
@@ -166,7 +166,7 @@ public sealed class DeviceAdminService(AppDbContext db, ICurrentUser me, TimePro
         };
         db.DeviceCommands.Add(command);
         await db.SaveChangesAsync(ct);
-        return new DeviceCommandResponse(command.DeviceCommandId, command.CommandType, command.BoxCode, command.CreatedAt);
+        return new DeviceCommandResponse(command.DeviceRecordId, command.CommandType, command.BoxCode, command.CreatedAt);
     }
 
     private async Task<Device> DeviceAsync(string code, CancellationToken ct)
@@ -186,8 +186,8 @@ public sealed class DeviceAdminService(AppDbContext db, ICurrentUser me, TimePro
         {
             "Box" => await db.PhysicalSlots.Where(s => s.SlotId == d.ScopeSlotId).Select(s => s.SlotCode).SingleOrDefaultAsync(ct) ?? "",
             "Rack" => d.ScopeRackCode ?? "",
-            "Holding" => await db.HoldingOperations.Where(h => h.HoldingId == d.ScopeHoldingId).Select(h => h.HoldingCode).SingleOrDefaultAsync(ct) ?? "",
-            _ => await db.PartySites.Where(s => s.SiteId == d.ScopeSiteId).Select(s => s.SiteCode).SingleOrDefaultAsync(ct) ?? "",
+            "Holding" => await db.HoldingOperations.Where(h => h.BatchRecordId == d.ScopeHoldingId).Select(h => h.HoldingCode).SingleOrDefaultAsync(ct) ?? "",
+            _ => await db.PartySites.Where(s => s.PartyRecordId == d.ScopeSiteId).Select(s => s.SiteCode).SingleOrDefaultAsync(ct) ?? "",
         };
         var period = Math.Min(d.CalibrationPeriodDays, await parameters.GetIntAsync(ParamKeys.CalibrationPeriodDays, null, ct));
         var due = d.LastCalibratedAt is not { } at || clock.GetUtcNow() - at > TimeSpan.FromDays(period);
@@ -264,7 +264,7 @@ public sealed class DeviceDataService(AppDbContext db, ICurrentUser me, IFileSto
         var query = db.DeviceImages.AsNoTracking().Where(i => i.BatchId == batch.BatchId);
         if (slotCode is not null) query = query.Where(i => db.PhysicalSlots.Any(s => s.SlotId == i.SlotId && s.SlotCode == slotCode));
         return await query.OrderByDescending(i => i.CapturedAt).Take(200)
-            .Select(i => new DeviceImageResponse(i.DeviceImageId, db.PhysicalSlots.Where(s => s.SlotId == i.SlotId).Select(s => s.SlotCode).First(),
+            .Select(i => new DeviceImageResponse(i.DeviceRecordId, db.PhysicalSlots.Where(s => s.SlotId == i.SlotId).Select(s => s.SlotCode).First(),
                 db.CrabUnits.Where(c => c.CrabUnitId == i.CrabUnitId).Select(c => c.CrabCode).FirstOrDefault(), i.CapturedAt, i.ReceivedAt, i.CrabDetected,
                 i.DetectionConfidence, db.Devices.Where(d => d.DeviceId == i.DeviceId).Select(d => d.DeviceCode).First(), i.RunId))
             .ToListAsync(ct);
@@ -272,7 +272,7 @@ public sealed class DeviceDataService(AppDbContext db, ICurrentUser me, IFileSto
 
     public async Task<(Stream Content, string ContentType)> BoxImageFileAsync(long imageId, CancellationToken ct)
     {
-        var image = await db.DeviceImages.AsNoTracking().SingleOrDefaultAsync(i => i.DeviceImageId == imageId, ct)
+        var image = await db.DeviceImages.AsNoTracking().SingleOrDefaultAsync(i => i.DeviceRecordId == imageId, ct)
                     ?? throw new NotFoundException("device.image_not_found", "Không tìm thấy ảnh.");
         if (image.BatchId is not { } batchId) throw new ForbiddenException("device.image_hidden", "Ảnh không thuộc Lô nào.");
         var code = await db.Batches.Where(b => b.BatchId == batchId).Select(b => b.BatchCode).SingleAsync(ct);

@@ -21,10 +21,8 @@ public partial class SalesOrder
     [Column("refunded_at"), Precision(3)] public DateTimeOffset? RefundedAt { get; set; }
 }
 
-[Table("sales_order_line")]
-public sealed class SalesOrderLine
+public sealed class SalesOrderLine : SalesRecord
 {
-    [Key, Column("line_id")] public long LineId { get; set; }
     [Column("order_id")] public long OrderId { get; set; }
     [Column("batch_id")] public long BatchId { get; set; }
     [Column("offer_id")] public long OfferId { get; set; }
@@ -43,10 +41,8 @@ public sealed class SalesOrderLine
     public ProductSpecification Spec { get; set; } = null!;
 }
 
-[Table("delivery_tranche")]
-public sealed class DeliveryTranche
+public sealed class DeliveryTranche : DeliveryRecord
 {
-    [Key, Column("tranche_id")] public long TrancheId { get; set; }
     [Column("order_id")] public long OrderId { get; set; }
     [Column("seq")] public byte Seq { get; set; }
     [Column("due_date")] public DateOnly DueDate { get; set; }
@@ -57,8 +53,7 @@ public sealed class DeliveryTranche
     public List<DeliveryTrancheLine> Lines { get; set; } = [];
 }
 
-[Table("delivery_tranche_line")]
-public sealed class DeliveryTrancheLine
+public sealed class DeliveryTrancheLine : DeliveryRecord
 {
     [Column("tranche_id")] public long TrancheId { get; set; }
     [Column("line_id")] public long LineId { get; set; }

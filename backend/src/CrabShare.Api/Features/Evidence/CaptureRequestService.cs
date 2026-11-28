@@ -11,7 +11,7 @@ public sealed class CaptureRequestService(AppDbContext db, EvidenceAccess access
         var operatorId = await access.RequireOperatorAsync(ct);
         var query = db.CaptureRequests.AsNoTracking().Where(r => r.Batch.OperatorId == operatorId && r.Slot.OperatorId == operatorId);
         if (filter.Status is not null) query = query.Where(r => r.Status == filter.Status);
-        return await query.OrderBy(r => r.DueAt).ThenBy(r => r.CaptureRequestId).Select(r => new CaptureRequestResponse(
-            r.CaptureRequestId, r.Batch.BatchCode, r.Slot.SlotCode, r.RequestedAt, r.DueAt, r.Status, r.FulfilledAt)).ToPagedAsync(paging, ct);
+        return await query.OrderBy(r => r.DueAt).ThenBy(r => r.EvidenceRecordId).Select(r => new CaptureRequestResponse(
+            r.EvidenceRecordId, r.Batch.BatchCode, r.Slot.SlotCode, r.RequestedAt, r.DueAt, r.Status, r.FulfilledAt)).ToPagedAsync(paging, ct);
     }
 }

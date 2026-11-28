@@ -31,8 +31,8 @@ public sealed class DashboardService(AppDbContext db, ICurrentUser me, TimeProvi
         var batches = await db.Batches.AsNoTracking().GroupBy(b => b.Status).OrderBy(g => g.Key).Select(g => new StatusCount(g.Key, g.Count())).ToListAsync(ct);
         var escalated = db.Alerts.AsNoTracking().Where(a => a.Status == "Escalated");
         var alertCount = await escalated.CountAsync(ct);
-        var alerts = await escalated.OrderByDescending(a => a.EscalatedAt).ThenByDescending(a => a.AlertId).Take(5)
-            .Select(a => new DashboardAlert(a.AlertId, a.Batch.BatchCode, a.Batch.Operator.LegalName, a.Severity, a.Message, a.RaisedAt)).ToListAsync(ct);
+        var alerts = await escalated.OrderByDescending(a => a.EscalatedAt).ThenByDescending(a => a.CareRecordId).Take(5)
+            .Select(a => new DashboardAlert(a.CareRecordId, a.Batch.BatchCode, a.Batch.Operator.LegalName, a.Severity, a.Message, a.RaisedAt)).ToListAsync(ct);
         var orders = await db.SalesOrders.AsNoTracking().Where(o => o.PlacedAt >= range.Start && o.PlacedAt < range.End && o.PlacedAt <= now)
             .GroupBy(o => o.Status).OrderBy(g => g.Key).Select(g => new StatusCount(g.Key, g.Count())).ToListAsync(ct);
         var revenue = await db.SalesOrders.AsNoTracking().Where(o => o.Status == "Completed" && o.CompletedAt >= range.Start && o.CompletedAt < range.End && o.CompletedAt <= now).SumAsync(o => (decimal?)o.TotalAmount, ct) ?? 0;
@@ -63,8 +63,8 @@ public sealed class DashboardService(AppDbContext db, ICurrentUser me, TimeProvi
         var scope = farmBatches.Where(b => query.BatchCode == null || b.BatchCode == query.BatchCode).Select(b => b.BatchId);
         var logs = db.ProductionLogs.AsNoTracking().Where(l => scope.Contains(l.BatchId) && l.LogDate >= range.From && l.LogDate <= range.To && l.ReceivedAt <= now);
         var environment = await logs.GroupBy(l => l.LogDate).OrderBy(g => g.Key).Select(g => new EnvironmentDay(g.Key, g.Average(l => l.Ph), g.Average(l => l.WaterTempC))).ToListAsync(ct);
-        var recent = await logs.OrderByDescending(l => l.ReceivedAt).ThenByDescending(l => l.ProductionLogId).Take(5)
-            .Select(l => new DashboardLog(l.ProductionLogId, l.Batch.BatchCode, l.LogDate, l.Ph, l.WaterTempC, l.SalinityPpt, l.FeedKg)).ToListAsync(ct);
+        var recent = await logs.OrderByDescending(l => l.ReceivedAt).ThenByDescending(l => l.CareRecordId).Take(5)
+            .Select(l => new DashboardLog(l.CareRecordId, l.Batch.BatchCode, l.LogDate, l.Ph, l.WaterTempC, l.SalinityPpt, l.FeedKg)).ToListAsync(ct);
         var requests = await db.CaptureRequests.CountAsync(r => scope.Contains(r.BatchId) && r.Status == "Open" && r.DueAt > now, ct);
         var packing = await db.SalesOrders.CountAsync(o => o.Batch.OperatorId == member.OperatorId && (query.BatchCode == null || o.Batch.BatchCode == query.BatchCode) && o.Status == "Paid", ct);
         var shipping = await db.SalesOrders.CountAsync(o => o.Batch.OperatorId == member.OperatorId && (query.BatchCode == null || o.Batch.BatchCode == query.BatchCode) && o.Status == "Packed", ct);

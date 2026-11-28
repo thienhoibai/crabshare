@@ -6,7 +6,7 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Vai trò của tài khoản (một người có thể vừa là nhà đầu tư vừa là khách hàng)
 /// </summary>
-public partial class AppUserRole
+public partial class AppUserRole : UserRecord
 {
     public long UserId { get; set; }
 
@@ -15,9 +15,9 @@ public partial class AppUserRole
     /// </summary>
     public string RoleCode { get; set; } = null!;
 
-    public DateTimeOffset GrantedAt { get; set; }
+    public DateTimeOffset GrantedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual AppUser User { get; set; } = null!;
 }

@@ -23,7 +23,7 @@ public static class ContractVoiding
             var before = contract.Status;
             contract.Status = ContractStatuses.Void;
             contract.UpdatedAt = now;
-            await audit.WriteAsync("investment_contract", contract.ContractId, "void", new { status = before },
+            await audit.WriteAsync("investment_contract", contract.ContractRecordId, "void", new { status = before },
                 new { status = contract.Status, reason, contract.ContributionId }, now, ct);
         }
         return contracts.Count;

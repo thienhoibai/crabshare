@@ -41,7 +41,7 @@ public sealed class SettlementReadinessService(AppDbContext db, TimeProvider clo
         var preorders = await db.SalesOrders.CountAsync(o => o.BatchId == id && o.OrderType == "PreOrder"
             && !(o.Status == "Completed" || o.Status == "Forfeited" || o.Status == "Refunded" || o.Status == "Cancelled" || o.Status == "Returned"), ct);
         var unpaid = await db.SalesOrders.CountAsync(o => o.BatchId == id && (o.OrderType == "InvoicedSale" || o.OrderType == "FinalOrder") && o.Status == "PendingPayment", ct);
-        var account = await db.BatchAccounts.AsNoTracking().Where(a => a.BatchId == id).Select(a => (long?)a.BatchAccountId).SingleOrDefaultAsync(ct) ?? 0;
+        var account = await db.BatchAccounts.AsNoTracking().Where(a => a.BatchId == id).Select(a => (long?)a.BatchRecordId).SingleOrDefaultAsync(ct) ?? 0;
         var refunds = await db.PaymentInstructions.CountAsync(i => i.BatchAccountId == account && i.InstructionType == "Refund" && i.OrderId != null && i.Status != "Succeeded", ct);
         var windows = await db.Shipments.CountAsync(s => s.BatchId == id && s.Status == "Accepted" && s.ReturnWindowEndsAt > now, ct)
             + await db.CustomerClaims.CountAsync(c => db.SalesOrders.Any(o => o.OrderId == c.OrderId && o.BatchId == id)

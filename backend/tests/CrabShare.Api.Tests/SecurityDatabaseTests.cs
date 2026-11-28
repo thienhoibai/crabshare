@@ -27,7 +27,8 @@ public class SecurityDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<K
     [Fact]
     public async Task Raw_sql_is_protected_owner_can_read_and_global_duplicate_is_still_rejected()
     {
-        var one = await fixture.CreateInvestorAsync(); var two = await fixture.CreateInvestorAsync();
+        // Chỉ hồ sơ đã xác minh mới khai được tài khoản nhận tiền (BR-012, BR-013); người thứ hai cũng phải qua bước đó thì mới tới kiểm tra trùng.
+        var one = await fixture.CreateInvestorAsync("Verified"); var two = await fixture.CreateInvestorAsync("Verified");
         using var client = fixture.Factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Test-User", one.ToString()); client.DefaultRequestHeaders.Add("X-Test-Role", Roles.Investor);
         const string number = "009876543210123";
@@ -37,9 +38,9 @@ public class SecurityDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<K
         Assert.Equal(number, response!.Account!.AccountNo);
         await Db(async db =>
         {
-            var raw = await db.Database.SqlQuery<string>($"SELECT account_no AS Value FROM dbo.payout_account WHERE owner_user_id={one}").SingleAsync();
+            var raw = await db.Database.SqlQuery<string>($"SELECT account_no AS Value FROM dbo.user_record WHERE record_type = 'PayoutAccount' AND owner_user_id={one}").SingleAsync();
             Assert.StartsWith(PayoutAccountProtection.Prefix, raw); Assert.DoesNotContain(number, raw);
-            var digest = await db.Database.SqlQuery<string>($"SELECT account_no_digest AS Value FROM dbo.payout_account WHERE owner_user_id={one}").SingleAsync();
+            var digest = await db.Database.SqlQuery<string>($"SELECT account_no_digest AS Value FROM dbo.user_record WHERE record_type = 'PayoutAccount' AND owner_user_id={one}").SingleAsync();
             Assert.Matches("^[0-9a-f]{64}$", digest);
             Assert.DoesNotContain(number, string.Join("", await db.AuditLogs.Select(a => a.NewValue).ToListAsync()));
             return true;
@@ -54,7 +55,7 @@ public class SecurityDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<K
         var id = await fixture.CreateInvestorAsync();
         await Db(async db =>
         {
-            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT dbo.payout_account(owner_user_id,bank_code,account_no,account_holder_name,name_match_status,status) VALUES({id},'ACB','0012','KYC Test','Matched','Active')");
+            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT dbo.user_record(record_type,owner_user_id,bank_code,account_no,account_holder_name,name_match_status,status,created_at,updated_at) VALUES('PayoutAccount',{id},'ACB','0012','KYC Test','Matched','Active',SYSDATETIMEOFFSET(),SYSDATETIMEOFFSET())");
             return true;
         });
         var before = await Db(db => db.AuditLogs.CountAsync());
@@ -65,7 +66,7 @@ public class SecurityDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<K
             var account = await db.PayoutAccounts.SingleAsync(a => a.OwnerUserId == id);
             Assert.Equal("0012", account.AccountNo); Assert.Equal("Active", account.Status);
             Assert.NotNull(account.AccountNoDigest); Assert.Equal(before, await db.AuditLogs.CountAsync());
-            Assert.StartsWith(PayoutAccountProtection.Prefix, await db.Database.SqlQuery<string>($"SELECT account_no AS Value FROM dbo.payout_account WHERE owner_user_id={id}").SingleAsync());
+            Assert.StartsWith(PayoutAccountProtection.Prefix, await db.Database.SqlQuery<string>($"SELECT account_no AS Value FROM dbo.user_record WHERE record_type = 'PayoutAccount' AND owner_user_id={id}").SingleAsync());
             return true;
         });
     }

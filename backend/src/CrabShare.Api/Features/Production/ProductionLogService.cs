@@ -53,7 +53,7 @@ public sealed partial class ProductionLogService(AppDbContext db, ICurrentUser m
             db.ProductionThresholdVersions.Add(version);
             await db.SaveChangesAsync(ct);
             var result = ThresholdResponse(version);
-            await audit.WriteAsync("production_threshold", version.ThresholdVersionId, "configure",
+            await audit.WriteAsync("production_threshold", version.BatchRecordId, "configure",
                 current is null ? null : ThresholdResponse(current), result, version.CreatedAt, ct);
             return result;
         }, ct);
@@ -91,7 +91,7 @@ public sealed partial class ProductionLogService(AppDbContext db, ICurrentUser m
                     Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(),
                     PlausibilityFlag = violations.Count == 0 ? "Ok" : "OutOfRange",
                     ThresholdVersion = threshold,
-                    ThresholdVersionId = threshold?.ThresholdVersionId,
+                    ThresholdVersionId = threshold?.BatchRecordId,
                     RecordedBy = me.UserId,
                     ReceivedAt = now,
                     CreatedAt = now,
@@ -100,7 +100,7 @@ public sealed partial class ProductionLogService(AppDbContext db, ICurrentUser m
                 // DB chặn nhật ký trùng ngày; chỉ tạo cảnh báo sau khi lưu nhật ký thành công.
                 await db.SaveChangesAsync(ct);
                 var result = LogResponse(log);
-                await audit.WriteAsync("production_log", log.ProductionLogId, "record", null, result, now, ct);
+                await audit.WriteAsync("production_log", log.CareRecordId, "record", null, result, now, ct);
                 return result;
             }, ct);
         }
@@ -173,9 +173,9 @@ public sealed partial class ProductionLogService(AppDbContext db, ICurrentUser m
     }
 
     private static ProductionThresholdResponse ThresholdResponse(ProductionThresholdVersion v)
-        => new(v.ThresholdVersionId, v.VersionNo, v.PhMin, v.PhMax, v.WaterTempMinC, v.WaterTempMaxC, v.SalinityMinPpt, v.SalinityMaxPpt, v.CreatedBy, v.CreatedAt);
+        => new(v.BatchRecordId, v.VersionNo, v.PhMin, v.PhMax, v.WaterTempMinC, v.WaterTempMaxC, v.SalinityMinPpt, v.SalinityMaxPpt, v.CreatedBy, v.CreatedAt);
     private static ProductionLogResponse LogResponse(ProductionLog l)
-        => new(l.ProductionLogId, l.Batch.BatchCode, l.LogDate, l.Ph, l.WaterTempC, l.SalinityPpt, l.FeedKg, l.Note, l.Source,
+        => new(l.CareRecordId, l.Batch.BatchCode, l.LogDate, l.Ph, l.WaterTempC, l.SalinityPpt, l.FeedKg, l.Note, l.Source,
             l.PlausibilityFlag, l.RecordedBy, l.CreatedAt, l.ThresholdVersion?.VersionNo,
             l.ThresholdVersion is null ? null : ThresholdResponse(l.ThresholdVersion));
 }

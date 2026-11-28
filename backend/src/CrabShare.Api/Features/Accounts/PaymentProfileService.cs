@@ -19,7 +19,7 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
     {
         var owner = await RequireOwnerAsync(ownerType, false, ct);
         var account = await OwnedAccounts(owner).AsNoTracking().Where(a => a.Status != "Closed")
-            .OrderByDescending(a => a.UpdatedAt).ThenByDescending(a => a.PayoutAccountId).FirstOrDefaultAsync(ct);
+            .OrderByDescending(a => a.UpdatedAt).ThenByDescending(a => a.UserRecordId).FirstOrDefaultAsync(ct);
         return Profile(owner, account);
     }
 
@@ -44,7 +44,7 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
             if (existing is not null && !accounts.Contains(existing))
                 throw new ConflictException("payout.account_taken", "Tài khoản ngân hàng này đã được đăng ký cho chủ sở hữu khác.");
             if (existing is not null && existing.AccountHolderName != req.AccountHolderName.Trim()
-                && await db.PaymentInstructions.AnyAsync(p => p.PayoutAccountId == existing.PayoutAccountId, ct))
+                && await db.PaymentInstructions.AnyAsync(p => p.PayoutAccountId == existing.UserRecordId, ct))
                 throw new ConflictException("payout.holder_immutable", "Tài khoản đã có lệnh chi, không thể thay đổi tên người nhận.");
             var now = Now();
             // Giữ số tài khoản trong lịch sử lệnh chi. Đóng bản cũ trước khi kích hoạt bản mới.
@@ -73,8 +73,8 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
                 CheckedAt = now, CreatedAt = now,
             });
             await db.SaveChangesAsync(ct);
-            AccountAuditWriter.Append(db, me.UserId, "PayoutAccount", account.PayoutAccountId, "MaintainPayoutAccount",
-                null, AuditChain.Snapshot(new { account.PayoutAccountId, OwnerType = owner.Type, account.NameMatchStatus, account.Status }), now, previousHash);
+            AccountAuditWriter.Append(db, me.UserId, "PayoutAccount", account.UserRecordId, "MaintainPayoutAccount",
+                null, AuditChain.Snapshot(new { account.UserRecordId, OwnerType = owner.Type, account.NameMatchStatus, account.Status }), now, previousHash);
             await db.SaveChangesAsync(ct);
             return Profile(owner, account);
         }, ct);
@@ -84,14 +84,14 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
     {
         var id = await RequireCustomerAsync(false, ct);
         return await db.CustomerAddresses.AsNoTracking().Where(a => a.CustomerId == id)
-            .OrderByDescending(a => a.IsDefault).ThenByDescending(a => a.AddressId)
-            .Select(a => new AddressResponse(a.AddressId, a.RecipientName, a.RecipientPhone, a.AddressLine, a.Province, a.IsDefault, a.CreatedAt)).ToListAsync(ct);
+            .OrderByDescending(a => a.IsDefault).ThenByDescending(a => a.UserRecordId)
+            .Select(a => new AddressResponse(a.UserRecordId, a.RecipientName, a.RecipientPhone, a.AddressLine, a.Province, a.IsDefault, a.CreatedAt)).ToListAsync(ct);
     }
 
     public async Task<AddressResponse> GetAddressAsync(long addressId, CancellationToken ct)
     {
         var id = await RequireCustomerAsync(false, ct);
-        var address = await db.CustomerAddresses.AsNoTracking().SingleOrDefaultAsync(a => a.CustomerId == id && a.AddressId == addressId, ct)
+        var address = await db.CustomerAddresses.AsNoTracking().SingleOrDefaultAsync(a => a.CustomerId == id && a.UserRecordId == addressId, ct)
             ?? throw MissingAddress();
         return Address(address);
     }
@@ -102,7 +102,7 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
             var id = await RequireCustomerAsync(true, ct);
             var addresses = await db.CustomerAddresses.Where(a => a.CustomerId == id).ToListAsync(ct);
             var address = addressId is null ? new CustomerAddress { CustomerId = id, CreatedAt = Now() }
-                : addresses.SingleOrDefault(a => a.AddressId == addressId) ?? throw MissingAddress();
+                : addresses.SingleOrDefault(a => a.UserRecordId == addressId) ?? throw MissingAddress();
             var makeDefault = req.IsDefault || addresses.Count == 0 || address.IsDefault;
             if (makeDefault)
             {
@@ -124,10 +124,10 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
         {
             var id = await RequireCustomerAsync(true, ct);
             var addresses = await db.CustomerAddresses.Where(a => a.CustomerId == id).ToListAsync(ct);
-            var address = addresses.SingleOrDefault(a => a.AddressId == addressId) ?? throw MissingAddress();
+            var address = addresses.SingleOrDefault(a => a.UserRecordId == addressId) ?? throw MissingAddress();
             db.CustomerAddresses.Remove(address);
             await db.SaveChangesAsync(ct);
-            if (address.IsDefault && addresses.Where(a => a != address).OrderBy(a => a.AddressId).FirstOrDefault() is { } next)
+            if (address.IsDefault && addresses.Where(a => a != address).OrderBy(a => a.UserRecordId).FirstOrDefault() is { } next)
             {
                 next.IsDefault = true;
                 await db.SaveChangesAsync(ct);
@@ -189,7 +189,7 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
     private DateTimeOffset Now() => AuditChain.Timestamp(clock.GetUtcNow());
     private static ForbiddenException Denied() => new("accounts.access_denied", "Tài khoản không có quyền thao tác.");
     private static NotFoundException MissingAddress() => new("addresses.not_found", "Không tìm thấy địa chỉ của bạn.");
-    private static AddressResponse Address(CustomerAddress a) => new(a.AddressId, a.RecipientName, a.RecipientPhone, a.AddressLine, a.Province, a.IsDefault, a.CreatedAt);
+    private static AddressResponse Address(CustomerAddress a) => new(a.UserRecordId, a.RecipientName, a.RecipientPhone, a.AddressLine, a.Province, a.IsDefault, a.CreatedAt);
     private static PayoutProfileResponse Profile(Owner owner, PayoutAccount? account)
     {
         PayoutAccountResponse? response = null;
@@ -198,7 +198,7 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
             var match = account.NameMatchStatus == "Matched" && !LegalNames.Match(owner.Name, account.AccountHolderName)
                 ? "Pending" : account.NameMatchStatus;
             var status = account.Status == "Active" && (!owner.Verified || match != "Matched") ? "Locked" : account.Status;
-            response = new(account.PayoutAccountId, account.BankCode, account.AccountNo, account.AccountHolderName,
+            response = new(account.UserRecordId, account.BankCode, account.AccountNo, account.AccountHolderName,
                 match, status, account.UpdatedAt);
         }
         return new(owner.Type, owner.Name, response, owner.Verified, owner.VerificationMethod);

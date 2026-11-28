@@ -91,7 +91,7 @@ public partial class AlertDatabaseTests(KycDatabaseFixture fixture) : IClassFixt
     public async Task Late_response_stays_escalated_and_repeated_raise_does_not_create_another_alert()
     {
         var farm = await SetupFarm(); var alert = await Raise(farm);
-        await Db(async db => { (await db.Alerts.SingleAsync(a => a.AlertId == alert.Id)).AckDeadline = DateTimeOffset.UtcNow.AddMinutes(-1); await db.SaveChangesAsync(); return true; });
+        await Db(async db => { (await db.Alerts.SingleAsync(a => a.CareRecordId == alert.Id)).AckDeadline = DateTimeOffset.UtcNow.AddMinutes(-1); await db.SaveChangesAsync(); return true; });
         using var client = Client(farm.UserId);
         var response = await client.PostAsJsonAsync($"/api/alerts/{alert.Id}/acknowledge", new { responseNote = "Late action" }); response.EnsureSuccessStatusCode();
         var result = (await response.Content.ReadFromJsonAsync<AlertResponse>())!;

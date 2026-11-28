@@ -34,7 +34,7 @@ public sealed class CaptureRequestJob(AppDbContext db, AlertService alerts, IOpt
         var dayStart = new DateTimeOffset(local.Date, local.Offset).ToUniversalTime();
         var dayEnd = dayStart.AddDays(1);
         var overdue = await db.CaptureRequests.Include(r => r.Slot).Where(r => r.Status == "Open" && r.DueAt < now)
-            .OrderBy(r => r.CaptureRequestId).ToListAsync(ct);
+            .OrderBy(r => r.EvidenceRecordId).ToListAsync(ct);
         foreach (var group in overdue.GroupBy(r => r.BatchId))
         {
             foreach (var request in group)
@@ -77,7 +77,7 @@ public sealed class CaptureRequestJob(AppDbContext db, AlertService alerts, IOpt
     private async Task AuditAsync(CaptureRequest request, string action, string? old, DateTimeOffset now, CancellationToken ct)
     {
         var previous = await AuditChain.LockAndReadTailAsync(db, ct);
-        var row = new AuditLog { EntityType = "CaptureRequest", EntityId = request.CaptureRequestId, ActionType = action,
+        var row = new AuditLog { EntityType = "CaptureRequest", EntityId = request.EvidenceRecordId, ActionType = action,
             OldValue = old, NewValue = Snapshot(request), ActorUserId = null, OccurredAt = now, PrevHash = previous };
         row.RowHash = AuditChain.Hash(row); db.AuditLogs.Add(row); await db.SaveChangesAsync(ct);
     }

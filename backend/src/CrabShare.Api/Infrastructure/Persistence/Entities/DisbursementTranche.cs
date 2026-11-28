@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Đợt giải ngân theo mốc, suy ra từ Standard Cost đã khoá
 /// </summary>
-public partial class DisbursementTranche
+public partial class DisbursementTranche : PaymentRecord
 {
-    public long TrancheId { get; set; }
-
     public long BatchId { get; set; }
 
     public byte TrancheNo { get; set; }
@@ -23,7 +21,7 @@ public partial class DisbursementTranche
     /// <summary>
     /// Giá trị: Planned, Requested, NeedsExplanation, Released, Blocked
     /// </summary>
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "Planned";
 
     public DateTimeOffset? RequestedAt { get; set; }
 
@@ -31,9 +29,9 @@ public partial class DisbursementTranche
 
     public DateTimeOffset? ReleasedAt { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public string? AnchorCode { get; set; }
 

@@ -9,13 +9,12 @@ public partial class AppDbContext
 
     private static void ConfigureProduction(ModelBuilder model)
     {
+        // care_record gộp nhật ký chăm sóc hằng ngày và cảnh báo (V053).
+        var careRecord = model.Entity<CareRecord>();
+        careRecord.Property<string>("record_type").HasMaxLength(30).IsUnicode(false);
+        careRecord.HasDiscriminator<string>("record_type").HasValue<ProductionLog>("Log").HasValue<Alert>("Alert");
         model.Entity<ProductionThresholdVersion>(e =>
         {
-            e.ToTable("production_threshold_version", t => t.UseSqlOutputClause(false));
-            e.HasKey(v => v.ThresholdVersionId);
-            e.HasAlternateKey(v => new { v.ThresholdVersionId, v.BatchId });
-            e.HasIndex(v => new { v.BatchId, v.VersionNo }).IsUnique();
-            e.Property(v => v.ThresholdVersionId).HasColumnName("threshold_version_id");
             e.Property(v => v.BatchId).HasColumnName("batch_id");
             e.Property(v => v.VersionNo).HasColumnName("version_no");
             e.Property(v => v.PhMin).HasColumnName("ph_min").HasPrecision(3, 1);
@@ -33,8 +32,7 @@ public partial class AppDbContext
         {
             e.Property(l => l.ThresholdVersionId).HasColumnName("threshold_version_id");
             e.HasOne(l => l.ThresholdVersion).WithMany()
-                .HasForeignKey(l => new { l.ThresholdVersionId, l.BatchId })
-                .HasPrincipalKey(v => new { v.ThresholdVersionId, v.BatchId }).OnDelete(DeleteBehavior.NoAction);
+                .HasForeignKey(l => l.ThresholdVersionId).OnDelete(DeleteBehavior.NoAction);
         });
     }
 }

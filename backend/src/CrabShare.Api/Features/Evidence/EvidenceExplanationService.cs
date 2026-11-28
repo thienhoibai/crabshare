@@ -15,9 +15,9 @@ public sealed class EvidenceExplanationService(AppDbContext db, EvidenceAccess a
     EvidenceImageReader images, TimeProvider clock)
 {
     private static readonly Expression<Func<EvidenceEntity, OperatorEvidenceItem>> Projection = e => new(
-        e.EvidenceId, e.Batch.BatchCode, e.Slot == null ? null : e.Slot.SlotCode, e.MediaType, e.ReviewStatus,
+        e.EvidenceRecordId, e.Batch.BatchCode, e.Slot == null ? null : e.Slot.SlotCode, e.MediaType, e.ReviewStatus,
         e.RiskScore, e.CapturedAt, e.ReceivedAt, e.Latitude, e.Longitude, e.Explanation, e.ExplainedAt,
-        e.EvidenceReviews.OrderByDescending(r => r.ReviewedAt).ThenByDescending(r => r.EvidenceReviewId)
+        e.EvidenceReviews.OrderByDescending(r => r.ReviewedAt).ThenByDescending(r => r.EvidenceRecordId)
             .Select(r => new OperatorEvidenceReview(r.Verdict, r.Note, r.ReviewedAt)).FirstOrDefault(),
         e.ReviewStatus == "Flagged");
 
@@ -29,9 +29,9 @@ public sealed class EvidenceExplanationService(AppDbContext db, EvidenceAccess a
         if (!string.IsNullOrWhiteSpace(filter.Q))
         {
             var text = filter.Q.Trim(); var id = long.TryParse(text, out var parsed) ? parsed : -1;
-            rows = rows.Where(e => e.EvidenceId == id || e.Batch.BatchCode.Contains(text) || (e.Slot != null && e.Slot.SlotCode.Contains(text)));
+            rows = rows.Where(e => e.EvidenceRecordId == id || e.Batch.BatchCode.Contains(text) || (e.Slot != null && e.Slot.SlotCode.Contains(text)));
         }
-        return await rows.OrderByDescending(e => e.ReceivedAt).ThenByDescending(e => e.EvidenceId).Select(Projection).ToPagedAsync(paging, ct);
+        return await rows.OrderByDescending(e => e.ReceivedAt).ThenByDescending(e => e.EvidenceRecordId).Select(Projection).ToPagedAsync(paging, ct);
     }
     public async Task<OperatorEvidenceItem> GetAsync(long id, CancellationToken ct)
     {
@@ -41,7 +41,7 @@ public sealed class EvidenceExplanationService(AppDbContext db, EvidenceAccess a
     public async Task<EvidenceImageContent> OpenImageAsync(long id, CancellationToken ct)
     {
         var operatorId = await access.RequireOperatorAsync(ct);
-        var row = await db.Evidences.AsNoTracking().Where(e => e.EvidenceId == id && e.Batch.OperatorId == operatorId)
+        var row = await db.Evidences.AsNoTracking().Where(e => e.EvidenceRecordId == id && e.Batch.OperatorId == operatorId)
             .Select(e => new { e.FileUri, e.MediaType }).SingleOrDefaultAsync(ct) ?? throw Missing();
         return await images.OpenAsync(row.FileUri, row.MediaType, ct);
     }
@@ -57,7 +57,7 @@ public sealed class EvidenceExplanationService(AppDbContext db, EvidenceAccess a
             var previous = await AuditChain.LockAndReadTailAsync(db, ct);
             var operatorId = await access.RequireOperatorAsync(ct);
             var row = await db.Evidences.Include(e => e.EvidenceReviews)
-                .SingleOrDefaultAsync(e => e.EvidenceId == id && e.Batch.OperatorId == operatorId, ct) ?? throw Missing();
+                .SingleOrDefaultAsync(e => e.EvidenceRecordId == id && e.Batch.OperatorId == operatorId, ct) ?? throw Missing();
             if (row.ReviewStatus != "Flagged")
                 throw new ConflictException("evidence.explanation_closed", "Bằng chứng không còn chờ thẩm định. Vui lòng tải lại.");
             // Retrying the same submission does not add audit rows or reopen review eligibility.
@@ -80,7 +80,7 @@ public sealed class EvidenceExplanationService(AppDbContext db, EvidenceAccess a
         });
     }
     private async Task<OperatorEvidenceItem> ReadAsync(long id, long operatorId, CancellationToken ct) =>
-        await db.Evidences.AsNoTracking().Where(e => e.EvidenceId == id && e.Batch.OperatorId == operatorId).Select(Projection).SingleOrDefaultAsync(ct)
+        await db.Evidences.AsNoTracking().Where(e => e.EvidenceRecordId == id && e.Batch.OperatorId == operatorId).Select(Projection).SingleOrDefaultAsync(ct)
         ?? throw Missing();
     private static NotFoundException Missing() => new("evidence.not_found", "Không tìm thấy bằng chứng của hộ nuôi.");
 }

@@ -2,16 +2,11 @@
 namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 
 public partial class Batch { public string? RejectionReason { get; set; } }
-public partial class FeeTier
-{
-    public bool MinInclusive { get; set; } = true;
-    public bool MaxInclusive { get; set; }
-}
 public partial class StandardCostVersion
 {
     public ICollection<StandardCostTranchePlan> TranchePlans { get; set; } = new List<StandardCostTranchePlan>();
 }
-public sealed class StandardCostTranchePlan
+public sealed class StandardCostTranchePlan : CostRecord
 {
     public long CostVersionId { get; set; }
     public byte TrancheNo { get; set; }

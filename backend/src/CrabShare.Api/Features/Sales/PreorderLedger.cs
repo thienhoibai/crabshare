@@ -81,7 +81,7 @@ public sealed class PreorderLedger(AppDbContext db, IAuditLog audit, TimeProvide
             else
             {
                 if (account is not null && o.DepositAmount is > 0)
-                    await refunds.CreateRefundAsync(account.BatchAccountId, o.DepositAmount.Value, null, o.OrderId,
+                    await refunds.CreateRefundAsync(account.BatchRecordId, o.DepositAmount.Value, null, o.OrderId,
                         $"Hoàn cọc đặt trước {o.OrderNo}: {reason}", now, ct);
                 o.Status = PreorderStatus.Refunded;
                 o.RefundedAt = now;
@@ -105,7 +105,7 @@ public sealed class PreorderDepositHandler(AppDbContext db, IAuditLog audit, Par
         var order = request.OrderId is { } id ? await db.SalesOrders.Include(o => o.Batch).SingleOrDefaultAsync(o => o.OrderId == id, ct) : null;
         if (order is null)
         {
-            log.LogError("Khoản cọc {PaymentRequestId} đã Paid nhưng không có đơn #{OrderId}", request.PaymentRequestId, request.OrderId);
+            log.LogError("Khoản cọc {PaymentRequestId} đã Paid nhưng không có đơn #{OrderId}", request.PaymentRecordId, request.OrderId);
             return;
         }
         if (order.Status != PreorderStatus.PendingDeposit)

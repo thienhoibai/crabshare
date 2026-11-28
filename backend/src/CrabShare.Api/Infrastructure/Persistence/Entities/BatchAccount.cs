@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Tài khoản chuyên dùng của lô do tổ chức trung gian thanh toán giữ hộ
 /// </summary>
-public partial class BatchAccount
+public partial class BatchAccount : BatchRecord
 {
-    public long BatchAccountId { get; set; }
-
     public long BatchId { get; set; }
 
     public string ProviderName { get; set; } = null!;
@@ -19,15 +17,15 @@ public partial class BatchAccount
     /// <summary>
     /// Giá trị: Requested, Open, Frozen, Closed
     /// </summary>
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "Requested";
 
     public DateTimeOffset? OpenedAt { get; set; }
 
     public DateTimeOffset? ClosedAt { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual Batch Batch { get; set; } = null!;
 

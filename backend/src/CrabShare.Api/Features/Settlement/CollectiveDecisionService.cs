@@ -62,7 +62,7 @@ public sealed class CollectiveDecisionService(AppDbContext db, ICurrentUser me, 
             };
             db.CollectiveDecisions.Add(decision);
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("collective_decision", decision.DecisionId, "propose", null,
+            await audit.WriteAsync("collective_decision", decision.BatchRecordId, "propose", null,
                 new { decision.DecisionNo, batch.BatchCode, decision.DecisionKind, eligible = (long)decision.EligibleCapital, decision.ClosesAt }, ct);
             return decision.DecisionNo;
         }, ct);
@@ -76,7 +76,7 @@ public sealed class CollectiveDecisionService(AppDbContext db, ICurrentUser me, 
         {
             await audit.LockAsync(ct);
             var decision = await db.CollectiveDecisions.FromSqlInterpolated(
-                    $"SELECT * FROM dbo.collective_decision WITH (UPDLOCK, HOLDLOCK) WHERE decision_no = {decisionNo}").SingleOrDefaultAsync(ct)
+                    $"SELECT * FROM dbo.batch_record WITH (UPDLOCK, HOLDLOCK) WHERE record_type = 'CollectiveDecision' AND decision_no = {decisionNo}").SingleOrDefaultAsync(ct)
                            ?? throw new NotFoundException("decision.not_found", "Không tìm thấy quyết định.");
             var now = clock.GetUtcNow();
             if (decision.Status != "Open" || now >= decision.ClosesAt)
@@ -85,12 +85,12 @@ public sealed class CollectiveDecisionService(AppDbContext db, ICurrentUser me, 
             var eligible = await EligibleSharesAsync(batch, ct);
             if (!eligible.TryGetValue(me.UserId, out var capital))
                 throw new ForbiddenException("decision.not_eligible", "Bạn không có quyền biểu quyết ở Lô này (BR-211).");
-            if (await db.Votes.AnyAsync(v => v.DecisionId == decision.DecisionId && v.InvestorId == me.UserId, ct))
+            if (await db.Votes.AnyAsync(v => v.DecisionId == decision.BatchRecordId && v.InvestorId == me.UserId, ct))
                 throw new ConflictException("decision.already_voted", "Bạn đã biểu quyết.");
-            db.Votes.Add(new Vote { DecisionId = decision.DecisionId, InvestorId = me.UserId, Capital = capital, Choice = req.Choice, VotedAt = now });
+            db.Votes.Add(new Vote { DecisionId = decision.BatchRecordId, InvestorId = me.UserId, Capital = capital, Choice = req.Choice, VotedAt = now });
             if (req.Choice == "Yes") decision.YesCapital += capital; else decision.NoCapital += capital;
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("collective_decision", decision.DecisionId, "vote", null, new { voter = me.UserId, req.Choice, capital = (long)capital }, ct);
+            await audit.WriteAsync("collective_decision", decision.BatchRecordId, "vote", null, new { voter = me.UserId, req.Choice, capital = (long)capital }, ct);
             if (decision.YesCapital * 2 > decision.EligibleCapital) await CloseAsync(decision, batch, "Passed", now, ct);
             else if (decision.NoCapital * 2 >= decision.EligibleCapital) await CloseAsync(decision, batch, "Rejected", now, ct);
         }, ct);
@@ -101,12 +101,12 @@ public sealed class CollectiveDecisionService(AppDbContext db, ICurrentUser me, 
     public async Task<int> CloseExpiredAsync(CancellationToken ct)
     {
         var now = clock.GetUtcNow();
-        var due = await db.CollectiveDecisions.Where(d => d.Status == "Open" && d.ClosesAt <= now).Select(d => d.DecisionId).ToListAsync(ct);
+        var due = await db.CollectiveDecisions.Where(d => d.Status == "Open" && d.ClosesAt <= now).Select(d => d.BatchRecordId).ToListAsync(ct);
         foreach (var id in due)
             await db.InTransactionAsync(async () =>
             {
                 await audit.LockAsync(ct);
-                var d = await db.CollectiveDecisions.SingleAsync(x => x.DecisionId == id, ct);
+                var d = await db.CollectiveDecisions.SingleAsync(x => x.BatchRecordId == id, ct);
                 if (d.Status != "Open") return;
                 var batch = await db.Batches.SingleAsync(b => b.BatchId == d.BatchId, ct);
                 await CloseAsync(d, batch, d.YesCapital > d.NoCapital ? "Passed" : "Rejected", clock.GetUtcNow(), ct);
@@ -131,7 +131,7 @@ public sealed class CollectiveDecisionService(AppDbContext db, ICurrentUser me, 
                 new { batch.Status, decision.DecisionNo, stoppedMilestones = stopped.Select(t => t.TrancheNo) }, now, ct);
         }
         await db.SaveChangesAsync(ct);
-        await audit.WriteAsync("collective_decision", decision.DecisionId, "close", new { status = "Open" },
+        await audit.WriteAsync("collective_decision", decision.BatchRecordId, "close", new { status = "Open" },
             new { decision.Status, yes = (long)decision.YesCapital, no = (long)decision.NoCapital, eligible = (long)decision.EligibleCapital }, now, ct);
     }
 
@@ -162,7 +162,7 @@ public sealed class CollectiveDecisionService(AppDbContext db, ICurrentUser me, 
     private async Task<DecisionResponse> ResponseAsync(CollectiveDecision d, Batch batch, CancellationToken ct)
     {
         var mine = me.IsAuthenticated
-            ? await db.Votes.Where(v => v.DecisionId == d.DecisionId && v.InvestorId == me.UserId).Select(v => v.Choice).SingleOrDefaultAsync(ct) : null;
+            ? await db.Votes.Where(v => v.DecisionId == d.BatchRecordId && v.InvestorId == me.UserId).Select(v => v.Choice).SingleOrDefaultAsync(ct) : null;
         var canVote = me.IsAuthenticated && mine is null && d.Status == "Open" && (await EligibleSharesAsync(batch, ct)).ContainsKey(me.UserId);
         decimal Pct(decimal part) => d.EligibleCapital == 0 ? 0 : decimal.Round(part * 100 / d.EligibleCapital, 2);
         return new DecisionResponse(d.DecisionNo, batch.BatchCode, d.DecisionKind, d.Proposal, d.Status, d.OpenedAt, d.ClosesAt, (long)d.EligibleCapital,
@@ -207,7 +207,7 @@ public sealed class MoneySummaryService(AppDbContext db, ICurrentUser me, BatchA
         var myShare = await db.CapitalShares.AsNoTracking().Where(s => s.BatchId == batch.BatchId && s.InvestorId == me.UserId)
             .Select(s => (decimal?)s.ConfirmedAmount).SingleOrDefaultAsync(ct);
         if (myShare is null && !me.IsInRole(Roles.PlatformAdmin)) await access.RequireOperatorOrAdminReadAsync(batch, ct);
-        var account = await db.BatchAccounts.AsNoTracking().Where(a => a.BatchId == batch.BatchId).Select(a => (long?)a.BatchAccountId).SingleOrDefaultAsync(ct) ?? 0;
+        var account = await db.BatchAccounts.AsNoTracking().Where(a => a.BatchId == batch.BatchId).Select(a => (long?)a.BatchRecordId).SingleOrDefaultAsync(ct) ?? 0;
         var contributed = (long)(await db.CapitalShares.Where(s => s.BatchId == batch.BatchId).SumAsync(s => (decimal?)s.ConfirmedAmount, ct) ?? 0);
         var disbursed = (long)(await db.PaymentInstructions.Where(i => i.BatchAccountId == account && i.InstructionType == "Disbursement" && i.Status == "Succeeded")
             .SumAsync(i => (decimal?)i.Amount, ct) ?? 0);

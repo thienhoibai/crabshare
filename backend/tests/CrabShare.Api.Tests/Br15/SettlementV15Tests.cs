@@ -21,7 +21,7 @@ public sealed class SettlementV15Tests(Br15Fixture f) : IClassFixture<Br15Fixtur
     private async Task<long> QcAsync(long batchId, string kind = "GradingSession")
     {
         await using var db = f.OpenDb();
-        return await db.QcAssignments.Where(a => a.BatchId == batchId && a.AssignmentKind == kind).OrderByDescending(a => a.QcAssignmentId)
+        return await db.QcAssignments.Where(a => a.BatchId == batchId && a.AssignmentKind == kind).OrderByDescending(a => a.QcRecordId)
             .Select(a => a.QcUserId).FirstAsync();
     }
 
@@ -60,13 +60,18 @@ public sealed class SettlementV15Tests(Br15Fixture f) : IClassFixture<Br15Fixtur
         await scope.ServiceProvider.GetRequiredService<SettlementReadinessService>().AdvanceAsync(CancellationToken.None);
     }
 
+    /// <summary>Tài khoản nhận tiền đang dùng, tên chủ tài khoản trùng tên pháp lý của người nhận: lệnh chi đối chiếu lại tên này trước khi gửi (BR-012, BR-013).</summary>
     private async Task PayoutAccountAsync(long? userId, long? operatorId)
     {
         await using var db = f.OpenDb();
         var now = DateTimeOffset.UtcNow;
+        var partyId = userId is { } user
+            ? await db.AppUsers.Where(u => u.UserId == user).Select(u => u.PartyId).SingleAsync()
+            : await db.Operators.Where(o => o.OperatorId == operatorId).Select(o => o.PartyId).SingleAsync();
+        var legalName = await db.Parties.Where(p => p.PartyId == partyId).Select(p => p.LegalName).SingleAsync();
         db.PayoutAccounts.Add(new PayoutAccount
         {
-            OwnerUserId = userId, OwnerOperatorId = operatorId, BankCode = "VCB", AccountNo = $"{f.Next():D10}", AccountHolderName = "NGUYEN VAN A",
+            OwnerUserId = userId, OwnerOperatorId = operatorId, BankCode = "VCB", AccountNo = $"{f.Next():D10}", AccountHolderName = legalName,
             NameMatchStatus = "Matched", Status = "Active", CreatedAt = now, UpdatedAt = now,
         });
         await db.SaveChangesAsync();
@@ -89,14 +94,14 @@ public sealed class SettlementV15Tests(Br15Fixture f) : IClassFixture<Br15Fixtur
         await db.SaveChangesAsync();
         var lot = new SupplyLot
         {
-            LotCode = $"LN{Guid.NewGuid():N}"[..12], ProcurementOrderId = po.ProcurementOrderId, BatchId = batchId, OriginRegion = "Năm Căn, Cà Mau",
+            LotCode = $"LN{Guid.NewGuid():N}"[..12], ProcurementOrderId = po.SupplyRecordId, BatchId = batchId, OriginRegion = "Năm Căn, Cà Mau",
             HarvestedOn = DateOnly.FromDateTime(now.UtcDateTime), DeclaredSpecies = "Scylla paramamosain", DeclaredCount = count, DeclaredWeightKg = count * 0.3m, CreatedAt = now,
         };
         db.SupplyLots.Add(lot);
         await db.SaveChangesAsync();
         var receipt = new GoodsReceipt
         {
-            ReceiptNo = $"GR{Guid.NewGuid():N}"[..12], SupplyLotId = lot.SupplyLotId, BatchId = batchId, ReceivedAt = now, ReceivedBy = farmerUserId,
+            ReceiptNo = $"GR{Guid.NewGuid():N}"[..12], SupplyLotId = lot.SupplyRecordId, BatchId = batchId, ReceivedAt = now, ReceivedBy = farmerUserId,
             AcceptedCount = count, AcceptedWeightG = count * 300, Status = "Completed", CompletedAt = now, CreatedAt = now,
         };
         db.GoodsReceipts.Add(receipt);
@@ -106,7 +111,7 @@ public sealed class SettlementV15Tests(Br15Fixture f) : IClassFixture<Br15Fixtur
         {
             var crab = new CrabUnit
             {
-                CrabCode = $"CU{Guid.NewGuid():N}"[..10].ToUpperInvariant(), BatchId = batchId, SupplyLotId = lot.SupplyLotId, GoodsReceiptId = receipt.GoodsReceiptId,
+                CrabCode = $"CU{Guid.NewGuid():N}"[..10].ToUpperInvariant(), BatchId = batchId, SupplyLotId = lot.SupplyRecordId, GoodsReceiptId = receipt.SupplyRecordId,
                 Species = "Scylla paramamosain", Sex = "Male", Maturity = "Mature", ReceivedWeightG = 300, InventoryStatus = "Received", ReceivedAt = now, CreatedAt = now, UpdatedAt = now,
             };
             db.CrabUnits.Add(crab);
@@ -166,7 +171,7 @@ public sealed class SettlementV15Tests(Br15Fixture f) : IClassFixture<Br15Fixtur
         Assert.Equal("Approved", approved.GetProperty("status").GetString());
         await using (var db = f.OpenDb())
         {
-            var account = await db.BatchAccounts.Where(a => a.BatchId == set.Batch.BatchId).Select(a => a.BatchAccountId).SingleAsync();
+            var account = await db.BatchAccounts.Where(a => a.BatchId == set.Batch.BatchId).Select(a => a.BatchRecordId).SingleAsync();
             var instructions = await db.PaymentInstructions.Where(i => i.BatchAccountId == account).Select(i => new { i.InstructionType, i.Amount }).ToListAsync();
             Assert.Contains(instructions, i => i.InstructionType == "PlatformFee" && i.Amount == 5_248);
             Assert.Contains(instructions, i => i.InstructionType == "Payout" && i.Amount == 100_000_200);
@@ -326,7 +331,7 @@ public sealed class SettlementV15Tests(Br15Fixture f) : IClassFixture<Br15Fixtur
         var assignment = await QcAsync(set.Batch.BatchId, "SiteVisit");
         long assignmentId;
         await using (var db = f.OpenDb())
-            assignmentId = await db.QcAssignments.Where(x => x.BatchId == set.Batch.BatchId && x.AssignmentKind == "SiteVisit").Select(x => x.QcAssignmentId).SingleAsync();
+            assignmentId = await db.QcAssignments.Where(x => x.BatchId == set.Batch.BatchId && x.AssignmentKind == "SiteVisit").Select(x => x.QcRecordId).SingleAsync();
         using var qc = f.Client(assignment, Roles.QcInspector);
         MultipartFormDataContent Report(decimal lat, decimal lng)
         {

@@ -24,7 +24,7 @@ public sealed partial class AlertService(AppDbContext db, ICurrentUser me, TimeP
                 ?? throw new NotFoundException("alerts.batch_not_found", "Không tìm thấy lô nuôi.");
             var kind = type.ToString();
             var alert = await db.Alerts.Where(a => a.BatchId == batchId && a.AlertType == kind && (a.Status == "Open" || a.Status == "Escalated"))
-                .OrderByDescending(a => a.AlertId).FirstOrDefaultAsync(ct);
+                .OrderByDescending(a => a.CareRecordId).FirstOrDefaultAsync(ct);
             var old = alert is null ? null : Snapshot(alert);
             var now = Now();
             var deadline = now.Add(ackWithin);
@@ -75,7 +75,7 @@ public sealed partial class AlertService(AppDbContext db, ICurrentUser me, TimeP
         {
             var operatorId = await RequireOperatorAsync(ct);
             var alert = await db.Alerts.Include(a => a.Batch).ThenInclude(b => b.Operator)
-                .SingleOrDefaultAsync(a => a.AlertId == id && a.Batch.OperatorId == operatorId, ct) ?? throw Missing();
+                .SingleOrDefaultAsync(a => a.CareRecordId == id && a.Batch.OperatorId == operatorId, ct) ?? throw Missing();
             if (alert.Status is not ("Open" or "Escalated") || alert.AcknowledgedAt is not null)
                 throw new ConflictException("alerts.status_changed", "Cảnh báo đã được phản hồi hoặc đóng. Vui lòng tải lại.");
             var old = Snapshot(alert);
@@ -95,7 +95,7 @@ public sealed partial class AlertService(AppDbContext db, ICurrentUser me, TimeP
     {
         if (status is not null) query = query.Where(a => a.Status == status);
         var list = await query.AsNoTracking().Include(a => a.Batch).ThenInclude(b => b.Operator)
-            .OrderByDescending(a => a.RaisedAt).ThenByDescending(a => a.AlertId).ToListAsync(ct);
+            .OrderByDescending(a => a.RaisedAt).ThenByDescending(a => a.CareRecordId).ToListAsync(ct);
         return list.Select(Response).ToList();
     }
 
@@ -132,7 +132,7 @@ public sealed partial class AlertService(AppDbContext db, ICurrentUser me, TimeP
 
     private void AppendAudit(Alert alert, string action, string? old, string? previous, string? resolutionNote = null)
     {
-        var audit = new AuditLog { EntityType = "Alert", EntityId = alert.AlertId, ActionType = action,
+        var audit = new AuditLog { EntityType = "Alert", EntityId = alert.CareRecordId, ActionType = action,
             OldValue = old, NewValue = resolutionNote is null ? Snapshot(alert) : AuditChain.Snapshot(new {
                 alert.BatchId, alert.AlertType, alert.Severity, alert.Message, alert.Status, alert.RaisedAt,
                 alert.AckDeadline, alert.AcknowledgedAt, alert.AcknowledgedBy, alert.ResponseNote, alert.EscalatedAt, ResolutionNote = resolutionNote }),
@@ -143,7 +143,7 @@ public sealed partial class AlertService(AppDbContext db, ICurrentUser me, TimeP
     private DateTimeOffset Now() => AuditChain.Timestamp(clock.GetUtcNow());
     private static string Snapshot(Alert a) => AuditChain.Snapshot(new { a.BatchId, a.AlertType, a.Severity, a.Message, a.Status,
         a.RaisedAt, a.AckDeadline, a.AcknowledgedAt, a.AcknowledgedBy, a.ResponseNote, a.EscalatedAt });
-    private static AlertResponse Response(Alert a) => new(a.AlertId, a.Batch.BatchCode, a.Batch.Operator.LegalName,
+    private static AlertResponse Response(Alert a) => new(a.CareRecordId, a.Batch.BatchCode, a.Batch.Operator.LegalName,
         a.AlertType, a.Severity, a.Message, a.RaisedAt, a.AckDeadline, a.Status, a.AcknowledgedAt, a.AcknowledgedBy, a.ResponseNote, a.EscalatedAt);
     private static ForbiddenException Denied() => new("alerts.access_denied", "Bạn không có quyền truy cập cảnh báo này.");
     private static NotFoundException Missing() => new("alerts.not_found", "Không tìm thấy cảnh báo của hộ nuôi.");

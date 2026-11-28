@@ -75,7 +75,7 @@ public class DisbursementDatabaseTests(FundingDatabaseFixture fixture) : IClassF
             ConfirmedAt = now.AddDays(-15), CreatedAt = now, UpdatedAt = now,
             InvestmentContract = new InvestmentContract
             {
-                ContractNo = "HD-T-" + Guid.NewGuid().ToString("N")[..12], TemplateId = template.TemplateId, Status = "FullySigned",
+                ContractNo = "HD-T-" + Guid.NewGuid().ToString("N")[..12], TemplateId = template.ContractRecordId, Status = "FullySigned",
                 SigningMethod = "DigitalSignature", DraftHash = new string('a', 64), FinalHash = new string('b', 64), FullySignedAt = now.AddDays(-9),
                 CreatedAt = now, UpdatedAt = now,
             },
@@ -90,7 +90,7 @@ public class DisbursementDatabaseTests(FundingDatabaseFixture fixture) : IClassF
             });
         db.Batches.Add(batch);
         await db.SaveChangesAsync();
-        return (batch.BatchId, code, batch.BatchAccount.BatchAccountId);
+        return (batch.BatchId, code, batch.BatchAccount.BatchRecordId);
     }
 
     private static async Task<string?> ErrorCode(HttpResponseMessage response)
@@ -178,9 +178,9 @@ public class DisbursementDatabaseTests(FundingDatabaseFixture fixture) : IClassF
         await using (var db = fixture.OpenDb())
         {
             var instruction = await db.PaymentInstructions.Include(i => i.PayoutAccount)
-                .SingleAsync(i => i.InstructionId == instructionId);
+                .SingleAsync(i => i.PaymentRecordId == instructionId);
             var account = instruction.PayoutAccount!;
-            payoutAccountId = account.PayoutAccountId;
+            payoutAccountId = account.UserRecordId;
             if (change is "Locked" or "Closed") account.Status = change;
             if (change == "Mismatched") account.NameMatchStatus = "Mismatched";
             if (change == "OldName") account.AccountHolderName = "Tên pháp lý cũ";
@@ -198,13 +198,13 @@ public class DisbursementDatabaseTests(FundingDatabaseFixture fixture) : IClassF
             Assert.Equal(HttpStatusCode.UnprocessableEntity, sent.StatusCode);
             Assert.Equal(errorCode, await ErrorCode(sent));
             await using var verifyDb = fixture.OpenDb();
-            Assert.Equal("Created", (await verifyDb.PaymentInstructions.SingleAsync(i => i.InstructionId == instructionId)).Status);
+            Assert.Equal("Created", (await verifyDb.PaymentInstructions.SingleAsync(i => i.PaymentRecordId == instructionId)).Status);
             Assert.False(await verifyDb.ProviderTransactions.AnyAsync(t => t.InstructionId == instructionId));
         }
         finally
         {
             await using var db = fixture.OpenDb();
-            var account = await db.PayoutAccounts.SingleAsync(p => p.PayoutAccountId == payoutAccountId);
+            var account = await db.PayoutAccounts.SingleAsync(p => p.UserRecordId == payoutAccountId);
             account.Status = "Active";
             account.NameMatchStatus = "Matched";
             account.AccountHolderName = "HTX Test góp vốn";
@@ -282,7 +282,7 @@ public class DisbursementDatabaseTests(FundingDatabaseFixture fixture) : IClassF
             };
             db.PaymentInstructions.Add(refund);
             await db.SaveChangesAsync();
-            refundId = refund.InstructionId;
+            refundId = refund.PaymentRecordId;
         }
 
         var unmatched = (await admin.GetFromJsonAsync<List<UnmatchedTransactionResponse>>("/api/admin/payments/unmatched"))!;

@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Từng chữ ký trên hợp đồng (người nuôi ký trước, nhà đầu tư ký sau)
 /// </summary>
-public partial class ContractSignature
+public partial class ContractSignature : ContractRecord
 {
-    public long SignatureId { get; set; }
-
     public long ContractId { get; set; }
 
     /// <summary>
@@ -27,7 +25,7 @@ public partial class ContractSignature
 
     public DateTimeOffset SignedAt { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual InvestmentContract Contract { get; set; } = null!;
 

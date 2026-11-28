@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Ảnh/video bằng chứng nuôi: chụp trực tiếp trong ứng dụng, nhận qua API hệ thống trại, hoặc chứng từ tải lên
 /// </summary>
-public partial class Evidence
+public partial class Evidence : EvidenceRecord
 {
-    public long EvidenceId { get; set; }
-
     public long BatchId { get; set; }
 
     public long? SlotEventId { get; set; }
@@ -41,7 +39,7 @@ public partial class Evidence
 
     public DateTimeOffset? CapturedAt { get; set; }
 
-    public DateTimeOffset ReceivedAt { get; set; }
+    public DateTimeOffset ReceivedAt { get; set; } = DateTimeOffset.UtcNow;
 
     /// <summary>
     /// Vị trí lúc chụp
@@ -65,7 +63,7 @@ public partial class Evidence
     /// <summary>
     /// Giá trị: Accepted, Watch (hiện cảnh báo cho nhà đầu tư), Flagged (chờ Kiểm định viên), Rejected
     /// </summary>
-    public string ReviewStatus { get; set; } = null!;
+    public string ReviewStatus { get; set; } = "Accepted";
 
     /// <summary>
     /// Giải trình của người nuôi khi bằng chứng bị gắn cờ
@@ -74,15 +72,13 @@ public partial class Evidence
 
     public DateTimeOffset? ExplainedAt { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual Batch Batch { get; set; } = null!;
 
     public virtual CaptureRequest? CaptureRequest { get; set; }
 
     public virtual CrabItem? CrabItem { get; set; }
-
-    public virtual ICollection<CrabItemEvent> CrabItemEvents { get; set; } = new List<CrabItemEvent>();
 
     public virtual ICollection<CrabTag> CrabTags { get; set; } = new List<CrabTag>();
 

@@ -49,11 +49,6 @@ public partial class Batch
     public decimal OfftakeDepositPct { get; set; }
 
     /// <summary>
-    /// Bậc phí áp dụng, chốt khi duyệt lô
-    /// </summary>
-    public long? FeeTierId { get; set; }
-
-    /// <summary>
     /// Phí chốt theo bậc; người nuôi trả ngoài tiền của lô
     /// </summary>
     public decimal? PlatformFeeAmount { get; set; }
@@ -113,17 +108,9 @@ public partial class Batch
 
     public virtual ICollection<Evidence> Evidences { get; set; } = new List<Evidence>();
 
-    public virtual FeeTier? FeeTier { get; set; }
-
-    public virtual ICollection<Harvest> Harvests { get; set; } = new List<Harvest>();
-
     public virtual ICollection<OfftakeCommitment> OfftakeCommitments { get; set; } = new List<OfftakeCommitment>();
 
     public virtual Operator Operator { get; set; } = null!;
-
-    public virtual ICollection<OrderLine> OrderLines { get; set; } = new List<OrderLine>();
-
-    public virtual ICollection<ProductListing> ProductListings { get; set; } = new List<ProductListing>();
 
     public virtual ICollection<ProductionLog> ProductionLogs { get; set; } = new List<ProductionLog>();
 

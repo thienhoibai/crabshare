@@ -204,7 +204,7 @@ public sealed class MeasurementSessionService(AppDbContext db, ICurrentUser me, 
                               ?? throw new NotFoundException("grading.station_not_found", "Không tìm thấy trạm đo.");
                     var partyOfFarm = await parties.PartyIdOfOperatorAsync(batch.OperatorId, ct);
                     if (station.OperatorId != batch.OperatorId &&
-                        !await db.PartySites.AnyAsync(s => s.SiteId == station.ScopeSiteId && (s.PartyId == partyOfFarm || s.PartyId == batch.ExecutorPartyId), ct))
+                        !await db.PartySites.AnyAsync(s => s.PartyRecordId == station.ScopeSiteId && (s.PartyId == partyOfFarm || s.PartyId == batch.ExecutorPartyId), ct))
                         throw new ForbiddenException("grading.station_other_farm", "Trạm đo không thuộc đơn vị thực hiện của Lô.");
                 }
                 if (await db.MeasurementSessions.AnyAsync(s => s.CrabUnitId == crab.CrabUnitId && s.Status == "Open", ct))
@@ -232,7 +232,7 @@ public sealed class MeasurementSessionService(AppDbContext db, ICurrentUser me, 
                 };
                 db.MeasurementSessions.Add(session);
                 await db.SaveChangesAsync(ct);
-                await audit.WriteAsync("measurement_session", session.MeasurementSessionId, "open", null,
+                await audit.WriteAsync("measurement_session", session.MeasurementRecordId, "open", null,
                     new { session.SessionNo, crab.CrabCode, crab.GradeAiTag, req.StationCode, req.Procedure, RemeasureOf = sourceSessionNo }, ct);
                 return session.SessionNo;
             }, ct, IsolationLevel.Serializable);

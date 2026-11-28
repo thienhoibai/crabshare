@@ -44,7 +44,7 @@ public sealed partial class PaymentWebhookService(
             .SingleOrDefaultAsync(t => t.ProviderTxnId == txn.ProviderTxnId, ct);
         if (existing is not null)
         {
-            log.LogInformation("Webhook gửi lại giao dịch {ProviderTxnId}, đã ghi ở transaction_id {TransactionId}", txn.ProviderTxnId, existing.TransactionId);
+            log.LogInformation("Webhook gửi lại giao dịch {ProviderTxnId}, đã ghi ở transaction_id {TransactionId}", txn.ProviderTxnId, existing.PaymentRecordId);
             return Duplicate(existing);
         }
 
@@ -55,7 +55,7 @@ public sealed partial class PaymentWebhookService(
         var transaction = new ProviderTransaction
         {
             ProviderTxnId = txn.ProviderTxnId,
-            BatchAccountId = account.BatchAccountId,
+            BatchAccountId = account.BatchRecordId,
             Direction = "In",
             Amount = txn.Amount,
             ReferenceCode = content.Length > ReferenceCodeMaxLength ? content[..ReferenceCodeMaxLength] : (content.Length == 0 ? null : content),
@@ -72,7 +72,7 @@ public sealed partial class PaymentWebhookService(
         {
             reason = "Không tìm thấy mã đối chiếu trong nội dung chuyển khoản.";
         }
-        else if (request.BatchAccountId != account.BatchAccountId)
+        else if (request.BatchAccountId != account.BatchRecordId)
         {
             reason = $"Mã {request.ReferenceCode} thuộc tài khoản lô khác (chuyển nhầm tài khoản).";
             request = null;
@@ -80,7 +80,7 @@ public sealed partial class PaymentWebhookService(
         else if (request.Status != "Pending" || request.ExpiresAt <= now || request.ExpiresAt <= txn.OccurredAt)
         {
             // Tiền đến khi khoản thu đã hết hạn / huỷ / đã trả: ghi nhận trả trễ và lập lệnh hoàn (TL-10 §5.3)
-            transaction.PaymentRequestId = request.PaymentRequestId;
+            transaction.PaymentRequestId = request.PaymentRecordId;
             transaction.MatchStatus = WebhookResult.LatePayment;
             var before = request.Status;
             if (request.Status == "Pending")
@@ -88,22 +88,22 @@ public sealed partial class PaymentWebhookService(
                 request.Status = "Expired";
                 request.UpdatedAt = now;
                 await db.SaveChangesAsync(ct);
-                await audit.WriteAsync("payment_request", request.PaymentRequestId, "expire", new { status = before },
+                await audit.WriteAsync("payment_request", request.PaymentRecordId, "expire", new { status = before },
                     new { status = request.Status, reason = "Tiền đến sau hạn" }, now, ct);
             }
-            var refund = await refunds.CreateRefundAsync(account.BatchAccountId, txn.Amount, request.ContributionId, request.OrderId,
+            var refund = await refunds.CreateRefundAsync(account.BatchRecordId, txn.Amount, request.ContributionId, request.OrderId,
                 $"Hoàn tiền trả trễ: {request.ReferenceCode} (giao dịch {txn.ProviderTxnId})", now, ct);
-            refundInstructionId = refund.InstructionId;
-            reason = $"Khoản thu {request.ReferenceCode} đã {before} khi tiền đến; lập lệnh hoàn #{refund.InstructionId}.";
+            refundInstructionId = refund.PaymentRecordId;
+            reason = $"Khoản thu {request.ReferenceCode} đã {before} khi tiền đến; lập lệnh hoàn #{refund.PaymentRecordId}.";
         }
         else if (request.Amount != txn.Amount)
         {
-            transaction.PaymentRequestId = request.PaymentRequestId;
+            transaction.PaymentRequestId = request.PaymentRecordId;
             reason = $"Số tiền {txn.Amount:N0} khác số tiền yêu cầu {request.Amount:N0} của mã {request.ReferenceCode}; chờ đối soát tay.";
         }
         else
         {
-            transaction.PaymentRequestId = request.PaymentRequestId;
+            transaction.PaymentRequestId = request.PaymentRecordId;
             transaction.MatchStatus = WebhookResult.Matched;
             request.Status = "Paid";
             request.UpdatedAt = now;
@@ -111,30 +111,30 @@ public sealed partial class PaymentWebhookService(
             // BR-068: giao dịch được phân bổ vào đúng nghĩa vụ nó trả; một giao dịch không phân bổ quá số tiền của nó (trigger CSDL).
             db.PaymentApplications.Add(new PaymentApplication
             {
-                TransactionId = transaction.TransactionId, TargetType = ApplicationTarget(request.Purpose),
-                TargetId = request.ContributionId ?? request.OrderId ?? request.OfftakeId ?? request.PaymentRequestId,
+                TransactionId = transaction.PaymentRecordId, TargetType = ApplicationTarget(request.Purpose),
+                TargetId = request.ContributionId ?? request.OrderId ?? request.OfftakeId ?? request.PaymentRecordId,
                 Amount = txn.Amount, Status = "Applied", AppliedAt = now,
             });
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("payment_request", request.PaymentRequestId, "paid", new { status = "Pending" },
+            await audit.WriteAsync("payment_request", request.PaymentRecordId, "paid", new { status = "Pending" },
                 new { status = "Paid", txn.ProviderTxnId, amount = txn.Amount, txn.OccurredAt }, now, ct);
 
             var handler = handlers.FirstOrDefault(h => h.Purpose == request.Purpose);
             if (handler is null)
                 log.LogWarning("Chưa có IPaymentPurposeHandler cho mục đích {Purpose}; khoản thu {PaymentRequestId} đã Paid nhưng module chủ chưa được báo",
-                    request.Purpose, request.PaymentRequestId);
+                    request.Purpose, request.PaymentRecordId);
             else
                 await handler.OnPaidAsync(request, now, ct);
             reason = $"Khớp mã {request.ReferenceCode}, khoản thu chuyển sang Paid.";
         }
 
         await db.SaveChangesAsync(ct);
-        await audit.WriteAsync("provider_transaction", transaction.TransactionId, "receive", null, new
+        await audit.WriteAsync("provider_transaction", transaction.PaymentRecordId, "receive", null, new
         {
             txn.ProviderTxnId, txn.AccountNo, amount = txn.Amount, content, txn.OccurredAt,
             transaction.MatchStatus, transaction.PaymentRequestId, refundInstructionId, reason,
         }, now, ct);
-        return new WebhookResult(transaction.MatchStatus, transaction.TransactionId, request?.ReferenceCode,
+        return new WebhookResult(transaction.MatchStatus, transaction.PaymentRecordId, request?.ReferenceCode,
             transaction.PaymentRequestId, request?.Purpose, refundInstructionId);
     }
 
@@ -151,11 +151,11 @@ public sealed partial class PaymentWebhookService(
             .ToList();
         if (tokens.Count == 0) return null;
         var candidates = await db.PaymentRequests.Where(r => tokens.Contains(r.ReferenceCode)).ToListAsync(ct);
-        return candidates.OrderBy(r => r.Status == "Pending" ? 0 : 1).ThenByDescending(r => r.PaymentRequestId).FirstOrDefault();
+        return candidates.OrderBy(r => r.Status == "Pending" ? 0 : 1).ThenByDescending(r => r.PaymentRecordId).FirstOrDefault();
     }
 
     private static WebhookResult Duplicate(ProviderTransaction existing)
-        => new(WebhookResult.Duplicate, existing.TransactionId, existing.PaymentRequest?.ReferenceCode,
+        => new(WebhookResult.Duplicate, existing.PaymentRecordId, existing.PaymentRequest?.ReferenceCode,
             existing.PaymentRequestId, existing.PaymentRequest?.Purpose, null);
 
     /// <summary>Loại nghĩa vụ mà khoản thu trả (BR-068).</summary>

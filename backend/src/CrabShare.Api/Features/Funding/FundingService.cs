@@ -37,10 +37,10 @@ public sealed class FundingService(
         var investor = await RequireInvestorAsync(ct);
         var rd = await ActiveDisclosureAsync(ct);
         var acknowledgedAt = await db.RiskAcknowledgements.AsNoTracking()
-            .Where(a => a.InvestorId == investor.UserId && a.RiskDisclosureId == rd.RiskDisclosureId)
+            .Where(a => a.InvestorId == investor.UserId && a.RiskDisclosureId == rd.ContractRecordId)
             .Select(a => (DateTimeOffset?)a.AcknowledgedAt)
             .FirstOrDefaultAsync(ct);
-        return new(rd.RiskDisclosureId, rd.VersionCode, rd.EffectiveFrom, rd.ContentHash,
+        return new(rd.ContractRecordId, rd.VersionCode, rd.EffectiveFrom, rd.ContentHash,
             documents.Read(rd.VersionCode, rd.ContentHash), acknowledgedAt);
     }
 
@@ -54,22 +54,22 @@ public sealed class FundingService(
             await audit.LockAsync(ct);
             var investor = await RequireInvestorAsync(ct);
             var rd = await ActiveDisclosureAsync(ct);
-            if (rd.RiskDisclosureId != req.RiskDisclosureId)
+            if (rd.ContractRecordId != req.RiskDisclosureId)
                 throw new BusinessRuleException("funding.disclosure_outdated", "Bản công bố rủi ro vừa có phiên bản mới. Tải lại trang và đọc bản mới.");
 
             var existing = await db.RiskAcknowledgements
-                .SingleOrDefaultAsync(a => a.InvestorId == investor.UserId && a.RiskDisclosureId == rd.RiskDisclosureId, ct);
-            if (existing is not null) return new RiskAcknowledgementResponse(rd.RiskDisclosureId, rd.VersionCode, existing.AcknowledgedAt);
+                .SingleOrDefaultAsync(a => a.InvestorId == investor.UserId && a.RiskDisclosureId == rd.ContractRecordId, ct);
+            if (existing is not null) return new RiskAcknowledgementResponse(rd.ContractRecordId, rd.VersionCode, existing.AcknowledgedAt);
 
             var now = Now();
             db.RiskAcknowledgements.Add(new RiskAcknowledgement
             {
-                InvestorId = investor.UserId, RiskDisclosureId = rd.RiskDisclosureId,
+                InvestorId = investor.UserId, RiskDisclosureId = rd.ContractRecordId,
                 AcknowledgedAt = now, ScrolledToEnd = true, CreatedAt = now,
             });
             await audit.WriteAsync("risk_acknowledgement", investor.UserId, "acknowledge", null,
                 new { rd.VersionCode, rd.ContentHash, scrolledToEnd = true }, now, ct);
-            return new RiskAcknowledgementResponse(rd.RiskDisclosureId, rd.VersionCode, now);
+            return new RiskAcknowledgementResponse(rd.ContractRecordId, rd.VersionCode, now);
         }, ct);
     }
 
@@ -227,16 +227,16 @@ public sealed class FundingService(
 
             var pending = await db.PaymentRequests
                 .Where(r => r.ContributionId == contributionId && r.Status == "Pending" && r.ExpiresAt > now)
-                .OrderByDescending(r => r.PaymentRequestId)
+                .OrderByDescending(r => r.PaymentRecordId)
                 .FirstOrDefaultAsync(ct);
             if (pending is not null)
                 return (await payments.DescribeAsync(pending, account, batch.BatchCode, ct), false);
 
-            var created = await payments.CreateAsync(PaymentPurposes.Contribution, contribution.Amount, account.BatchAccountId,
+            var created = await payments.CreateAsync(PaymentPurposes.Contribution, contribution.Amount, account.BatchRecordId,
                 account.ProviderAccountNo, contribution.ExpiresAt, PaymentTarget.ForContribution(contributionId), null, ct);
             await db.SaveChangesAsync(ct);
             var request = created.Request;
-            await audit.WriteAsync("payment_request", request.PaymentRequestId, "create", null,
+            await audit.WriteAsync("payment_request", request.PaymentRecordId, "create", null,
                 new { request.Purpose, request.ReferenceCode, amount = (long)request.Amount, contributionId, request.ExpiresAt }, now, ct);
             return (payments.Describe(created, account, batch.BatchCode), true);
         }, ct);
@@ -287,7 +287,7 @@ public sealed class FundingService(
     private async Task<bool> HasAcknowledgedActiveAsync(long investorId, CancellationToken ct)
     {
         var rd = await ActiveDisclosureAsync(ct);
-        return await db.RiskAcknowledgements.AnyAsync(a => a.InvestorId == investorId && a.RiskDisclosureId == rd.RiskDisclosureId, ct);
+        return await db.RiskAcknowledgements.AnyAsync(a => a.InvestorId == investorId && a.RiskDisclosureId == rd.ContractRecordId, ct);
     }
 
     /// <summary>Đã chốt vốn (job TH-07, kể cả chốt sớm khi đủ max_capital) thì không nhận giữ chỗ nữa dù chưa tới hạn.</summary>

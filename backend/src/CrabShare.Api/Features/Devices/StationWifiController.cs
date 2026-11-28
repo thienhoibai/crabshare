@@ -31,7 +31,7 @@ public sealed class StationWifiController(AppDbContext db, ICurrentUser me, IDat
     {
         var device = await Device(code, ct);
         var latest = await db.DeviceCommands.AsNoTracking().Where(c => c.DeviceId == device.DeviceId && c.CommandType == "ConfigureWifi")
-            .OrderByDescending(c => c.DeviceCommandId).FirstOrDefaultAsync(ct);
+            .OrderByDescending(c => c.DeviceRecordId).FirstOrDefaultAsync(ct);
         return new JsonResult(latest is null ? null : WifiCommands.View(latest, clock.GetUtcNow()));
     }
 
@@ -80,7 +80,7 @@ internal static class WifiCommands
         => provider.CreateProtector("GradeAI.Wifi.v1", deviceId.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
     internal static WifiStatus View(DeviceCommand job, DateTimeOffset now)
-        => new(job.DeviceCommandId, job.Status is "Pending" or "Claimed" && now - job.CreatedAt > TimeSpan.FromMinutes(3)
+        => new(job.DeviceRecordId, job.Status is "Pending" or "Claimed" && now - job.CreatedAt > TimeSpan.FromMinutes(3)
             ? "Expired" : job.Status, job.Reason);
 
     internal static async Task<WifiDelivery?> Poll(AppDbContext db, Device device, StationRuntimeState state,
@@ -91,22 +91,22 @@ internal static class WifiCommands
             c.CreatedAt < now.AddMinutes(-2) && c.ProtectedPayload != null)
             .ExecuteUpdateAsync(set => set.SetProperty(c => c.ProtectedPayload, (string?)null).SetProperty(c => c.Status, "Cancelled"), ct);
         if (state.WifiOutcome is { } outcome)
-            await db.DeviceCommands.Where(c => c.DeviceId == device.DeviceId && c.DeviceCommandId == outcome.Id && c.CommandType == "ConfigureWifi" && c.Status == "Claimed")
+            await db.DeviceCommands.Where(c => c.DeviceId == device.DeviceId && c.DeviceRecordId == outcome.Id && c.CommandType == "ConfigureWifi" && c.Status == "Claimed")
                 .ExecuteUpdateAsync(set => set.SetProperty(c => c.Status, outcome.Connected ? "Accepted" : "Rejected")
                     .SetProperty(c => c.Reason, outcome.Message), ct);
         if (!state.WifiConfigReady || !state.HardwareOnline || state.Busy || !string.IsNullOrEmpty(state.SessionNo) ||
             await db.MeasurementSessions.AnyAsync(s => s.StationDeviceId == device.DeviceId && s.Status == "Open", ct)) return null;
         var job = await db.DeviceCommands.AsNoTracking().Where(c => c.DeviceId == device.DeviceId && c.CommandType == "ConfigureWifi" &&
             c.Status == "Pending" && c.CreatedAt > now.AddMinutes(-2) && c.ProtectedPayload != null)
-            .OrderBy(c => c.DeviceCommandId).FirstOrDefaultAsync(ct);
+            .OrderBy(c => c.DeviceRecordId).FirstOrDefaultAsync(ct);
         if (job is null) return null;
         WifiRequest request;
         try { request = JsonSerializer.Deserialize<WifiRequest>(Protector(protection, device.DeviceId).Unprotect(job.ProtectedPayload!), DeviceIngestService.Json)!; }
         catch (CryptographicException) { return null; }
-        var changed = await db.DeviceCommands.Where(c => c.DeviceCommandId == job.DeviceCommandId && c.Status == "Pending")
+        var changed = await db.DeviceCommands.Where(c => c.DeviceRecordId == job.DeviceRecordId && c.Status == "Pending")
             .ExecuteUpdateAsync(set => set.SetProperty(c => c.Status, "Claimed").SetProperty(c => c.ProtectedPayload, (string?)null)
                 .SetProperty(c => c.AckedAt, now), ct);
-        return changed == 1 ? new WifiDelivery(job.DeviceCommandId, request.Ssid, request.Password,
+        return changed == 1 ? new WifiDelivery(job.DeviceRecordId, request.Ssid, request.Password,
             Math.Max(0, (int)(job.CreatedAt.AddMinutes(2) - clock.GetUtcNow()).TotalMilliseconds)) : null;
     }
 }

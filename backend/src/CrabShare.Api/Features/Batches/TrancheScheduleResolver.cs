@@ -24,7 +24,7 @@ public sealed class TrancheScheduleResolver(AppDbContext db, IAuditLog audit, Ti
         var now = clock.GetUtcNow();
         var pending = await Pending()
             .Include(t => t.Batch).ThenInclude(b => b.Contributions).ThenInclude(c => c.InvestmentContract)
-            .AsSplitQuery().OrderBy(t => t.TrancheId).ToListAsync(ct);
+            .AsSplitQuery().OrderBy(t => t.PaymentRecordId).ToListAsync(ct);
         var changed = 0;
         foreach (var t in pending)
         {
@@ -39,10 +39,10 @@ public sealed class TrancheScheduleResolver(AppDbContext db, IAuditLog audit, Ti
             if (anchor is null || anchor > now) continue;
             var day = DateOnly.FromDateTime(anchor.Value.ToOffset(TimeSpan.FromHours(7)).DateTime);
             if (t.OffsetDays is not { } offset || offset < 0 || day.DayNumber > DateOnly.MaxValue.DayNumber - offset) continue;
-            var before = new { t.TrancheId, t.PlannedDate, t.AnchorCode, t.OffsetDays };
+            var before = new { t.PaymentRecordId, t.PlannedDate, t.AnchorCode, t.OffsetDays };
             t.PlannedDate = day.AddDays(offset); t.UpdatedAt = now;
-            await audit.WriteAsync("disbursement_tranche", t.TrancheId, "schedule_resolved", before,
-                new { t.TrancheId, t.PlannedDate, t.AnchorCode, t.OffsetDays, anchorOccurredAt = anchor }, now, ct);
+            await audit.WriteAsync("disbursement_tranche", t.PaymentRecordId, "schedule_resolved", before,
+                new { t.PaymentRecordId, t.PlannedDate, t.AnchorCode, t.OffsetDays, anchorOccurredAt = anchor }, now, ct);
             changed++;
         }
         return changed;

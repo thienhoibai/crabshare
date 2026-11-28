@@ -68,17 +68,11 @@ public partial class SalesOrder
 
     public virtual Batch Batch { get; set; } = null!;
 
-    public virtual ICollection<Complaint> Complaints { get; set; } = new List<Complaint>();
-
     public virtual AppUser Customer { get; set; } = null!;
 
     public virtual OfftakeCommitment? Offtake { get; set; }
 
-    public virtual ICollection<OrderLine> OrderLines { get; set; } = new List<OrderLine>();
-
     public virtual ICollection<PaymentInstruction> PaymentInstructions { get; set; } = new List<PaymentInstruction>();
 
     public virtual ICollection<PaymentRequest> PaymentRequests { get; set; } = new List<PaymentRequest>();
-
-    public virtual ProductRating? ProductRating { get; set; }
 }

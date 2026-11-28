@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Tài khoản nhận tiền của nhà đầu tư hoặc người nuôi (đúng một chủ sở hữu)
 /// </summary>
-public partial class PayoutAccount
+public partial class PayoutAccount : UserRecord
 {
-    public long PayoutAccountId { get; set; }
-
     public long? OwnerUserId { get; set; }
 
     public long? OwnerOperatorId { get; set; }
@@ -23,16 +21,16 @@ public partial class PayoutAccount
     /// <summary>
     /// Giá trị: Pending, Matched, Mismatched
     /// </summary>
-    public string NameMatchStatus { get; set; } = null!;
+    public string NameMatchStatus { get; set; } = "Pending";
 
     /// <summary>
     /// Giá trị: Active, Locked, Closed
     /// </summary>
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "Active";
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual Operator? OwnerOperator { get; set; }
 

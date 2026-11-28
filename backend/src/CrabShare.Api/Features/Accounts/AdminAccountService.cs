@@ -35,8 +35,8 @@ public sealed class AdminAccountService(AppDbContext db, ICurrentUser me, TimePr
         var user = await db.AppUsers.AsNoTracking().Include(u => u.AppUserRoles).Include(u => u.Investor)
             .SingleOrDefaultAsync(u => u.UserId == id, ct) ?? throw MissingUser();
         var checks = await db.KycChecks.AsNoTracking().Include(c => c.User).ThenInclude(u => u.Investor)
-            .Where(c => c.UserId == id).OrderByDescending(c => c.CheckedAt).ThenByDescending(c => c.KycCheckId).ToListAsync(ct);
-        var latestId = checks.FirstOrDefault(c => c.CheckType == "EkycIdFace")?.KycCheckId;
+            .Where(c => c.UserId == id).OrderByDescending(c => c.CheckedAt).ThenByDescending(c => c.UserRecordId).ToListAsync(ct);
+        var latestId = checks.FirstOrDefault(c => c.CheckType == "EkycIdFace")?.UserRecordId;
         return new(User(user), user.Investor?.VerifiedAt, checks.Select(c => Check(c, latestId)).ToList());
     }
 
@@ -46,13 +46,13 @@ public sealed class AdminAccountService(AppDbContext db, ICurrentUser me, TimePr
         var query = db.KycChecks.AsNoTracking();
         if (filter.Result is not null) query = query.Where(c => c.Result == filter.Result);
         if (filter.CheckType is not null) query = query.Where(c => c.CheckType == filter.CheckType);
-        return await query.OrderByDescending(c => c.CheckedAt).ThenByDescending(c => c.KycCheckId)
-            .Select(c => new AdminKycResponse(c.KycCheckId, c.UserId, c.User.FullName, c.User.Email, c.CheckType, c.Result,
+        return await query.OrderByDescending(c => c.CheckedAt).ThenByDescending(c => c.UserRecordId)
+            .Select(c => new AdminKycResponse(c.UserRecordId, c.UserId, c.User.FullName, c.User.Email, c.CheckType, c.Result,
                 c.ProviderRef, c.ConsentAt, c.CheckedAt, c.FailureReason, c.ReviewedBy,
                 c.UserId != me.UserId && c.CheckType == "EkycIdFace" && c.Result == "Failed" && c.ConsentAt != null && c.User.Status == "Active"
                 && c.User.Investor != null && c.User.Investor.VerificationStatus != "Verified"
-                && c.KycCheckId == db.KycChecks.Where(k => k.UserId == c.UserId && k.CheckType == "EkycIdFace")
-                    .OrderByDescending(k => k.CheckedAt).ThenByDescending(k => k.KycCheckId).Select(k => k.KycCheckId).First()))
+                && c.UserRecordId == db.KycChecks.Where(k => k.UserId == c.UserId && k.CheckType == "EkycIdFace")
+                    .OrderByDescending(k => k.CheckedAt).ThenByDescending(k => k.UserRecordId).Select(k => k.UserRecordId).First()))
             .ToPagedAsync(paging, ct);
     }
 
@@ -92,16 +92,16 @@ public sealed class AdminAccountService(AppDbContext db, ICurrentUser me, TimePr
         => TransactionAsync(async previousHash =>
         {
             await RequireAdminAsync(ct);
-            var candidate = await db.KycChecks.AsNoTracking().SingleOrDefaultAsync(c => c.KycCheckId == id, ct)
+            var candidate = await db.KycChecks.AsNoTracking().SingleOrDefaultAsync(c => c.UserRecordId == id, ct)
                 ?? throw new NotFoundException("kyc.check_not_found", "Không tìm thấy lần xác minh.");
             if (candidate.UserId == me.UserId) throw new ForbiddenException("kyc.cannot_approve_self", "Không được tự duyệt ngoại lệ danh tính của mình.");
             if (candidate.CheckType != "EkycIdFace") throw InvalidCheck();
             var investor = await db.Investors.FromSqlInterpolated($"SELECT * FROM dbo.investor WITH (UPDLOCK, HOLDLOCK) WHERE user_id = {candidate.UserId}")
                 .Include(i => i.User).SingleOrDefaultAsync(ct) ?? throw InvalidCheck();
             var checks = await db.KycChecks.Include(c => c.User).Where(c => c.UserId == candidate.UserId && c.CheckType == "EkycIdFace")
-                .OrderByDescending(c => c.CheckedAt).ThenByDescending(c => c.KycCheckId).ToListAsync(ct);
+                .OrderByDescending(c => c.CheckedAt).ThenByDescending(c => c.UserRecordId).ToListAsync(ct);
             var check = checks.First();
-            if (check.KycCheckId != id || check.Result != "Failed" || check.ConsentAt is null || investor.VerificationStatus == "Verified" || investor.User.Status != "Active")
+            if (check.UserRecordId != id || check.Result != "Failed" || check.ConsentAt is null || investor.VerificationStatus == "Verified" || investor.User.Status != "Active")
                 throw InvalidCheck();
             var old = AuditChain.Snapshot(new { check.Result, check.ReviewedBy, investor.VerificationStatus, investor.VerifiedAt });
             var now = Now();
@@ -119,7 +119,7 @@ public sealed class AdminAccountService(AppDbContext db, ICurrentUser me, TimePr
             AppendAudit("KycCheck", id, "ApproveKycException", old,
                 AuditChain.Snapshot(new { check.Result, check.ReviewedBy, investor.VerificationStatus, investor.VerifiedAt, Reason = reason.Trim() }), now, previousHash);
             await db.SaveChangesAsync(ct);
-            return Check(check, check.KycCheckId);
+            return Check(check, check.UserRecordId);
         }, ct);
 
     private async Task RequireAdminAsync(CancellationToken ct)
@@ -143,9 +143,9 @@ public sealed class AdminAccountService(AppDbContext db, ICurrentUser me, TimePr
         db.AuditLogs.Add(audit);
     }
     private DateTimeOffset Now() => AuditChain.Timestamp(clock.GetUtcNow());
-    private AdminKycResponse Check(KycCheck c, long? latestId) => new(c.KycCheckId, c.UserId, c.User.FullName, c.User.Email,
+    private AdminKycResponse Check(KycCheck c, long? latestId) => new(c.UserRecordId, c.UserId, c.User.FullName, c.User.Email,
         c.CheckType, c.Result, c.ProviderRef, c.ConsentAt, c.CheckedAt, c.FailureReason, c.ReviewedBy,
-        c.UserId != me.UserId && c.CheckType == "EkycIdFace" && c.Result == "Failed" && c.ConsentAt != null && c.KycCheckId == latestId
+        c.UserId != me.UserId && c.CheckType == "EkycIdFace" && c.Result == "Failed" && c.ConsentAt != null && c.UserRecordId == latestId
         && c.User.Status == "Active" && c.User.Investor is { VerificationStatus: not "Verified" });
     private static AdminUserResponse User(AppUser u) => new(u.UserId, u.FullName, u.Email, u.Phone, u.Status,
         u.AppUserRoles.Select(r => r.RoleCode).Order().ToList(), u.Investor?.VerificationStatus, u.CreatedAt, u.LastLoginAt);

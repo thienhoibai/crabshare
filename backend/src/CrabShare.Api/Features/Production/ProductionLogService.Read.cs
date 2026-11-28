@@ -75,7 +75,7 @@ public sealed partial class ProductionLogService
     {
         BatchService.Validate(filter); BatchService.Validate(paging);
         var page = await FilterLogs(query, filter).AsNoTracking().Include(l => l.Batch).Include(l => l.ThresholdVersion)
-            .OrderByDescending(l => l.LogDate).ThenByDescending(l => l.ProductionLogId).ToPagedAsync(paging, ct);
+            .OrderByDescending(l => l.LogDate).ThenByDescending(l => l.CareRecordId).ToPagedAsync(paging, ct);
         return new(page.Items.Select(LogResponse).ToList(), page.Page, page.PageSize, page.Total);
     }
 
@@ -90,7 +90,7 @@ public sealed partial class ProductionLogService
         var today = Today();
         if (ids.Length == 0) return new([], batches.Page, batches.PageSize, batches.Total);
         var latest = await db.ProductionLogs.AsNoTracking().Where(l => ids.Contains(l.BatchId) &&
-            !db.ProductionLogs.Any(other => other.BatchId == l.BatchId && (other.LogDate > l.LogDate || (other.LogDate == l.LogDate && other.ProductionLogId > l.ProductionLogId))))
+            !db.ProductionLogs.Any(other => other.BatchId == l.BatchId && (other.LogDate > l.LogDate || (other.LogDate == l.LogDate && other.CareRecordId > l.CareRecordId))))
             .Include(l => l.Batch).Include(l => l.ThresholdVersion).ToDictionaryAsync(l => l.BatchId, ct);
         var logged = await db.ProductionLogs.Where(l => ids.Contains(l.BatchId) && l.LogDate == today && l.Source == "Manual").Select(l => l.BatchId).ToListAsync(ct);
         var configured = await db.ProductionThresholdVersions.Where(v => ids.Contains(v.BatchId)).Select(v => v.BatchId).Distinct().ToListAsync(ct);

@@ -37,19 +37,13 @@ public partial class AppUser
 
     public virtual ICollection<Batch> Batches { get; set; } = new List<Batch>();
 
-    public virtual ICollection<Complaint> Complaints { get; set; } = new List<Complaint>();
-
     public virtual ICollection<ContractSignature> ContractSignatures { get; set; } = new List<ContractSignature>();
-
-    public virtual ICollection<CrabItemEvent> CrabItemEvents { get; set; } = new List<CrabItemEvent>();
 
     public virtual ICollection<CrabTag> CrabTags { get; set; } = new List<CrabTag>();
 
     public virtual Customer? Customer { get; set; }
 
     public virtual ICollection<EvidenceReview> EvidenceReviews { get; set; } = new List<EvidenceReview>();
-
-    public virtual ICollection<Harvest> Harvests { get; set; } = new List<Harvest>();
 
     public virtual Investor? Investor { get; set; }
 
@@ -63,10 +57,6 @@ public partial class AppUser
 
     public virtual ICollection<PayoutAccount> PayoutAccounts { get; set; } = new List<PayoutAccount>();
 
-    public virtual ICollection<PriceHistory> PriceHistories { get; set; } = new List<PriceHistory>();
-
-    public virtual ICollection<ProductListing> ProductListings { get; set; } = new List<ProductListing>();
-
     public virtual ICollection<ProductionLog> ProductionLogs { get; set; } = new List<ProductionLog>();
 
     public virtual ICollection<SalesOrder> SalesOrders { get; set; } = new List<SalesOrder>();
@@ -76,6 +66,4 @@ public partial class AppUser
     public virtual ICollection<Settlement> Settlements { get; set; } = new List<Settlement>();
 
     public virtual ICollection<StandardCostVersion> StandardCostVersions { get; set; } = new List<StandardCostVersion>();
-
-    public virtual ICollection<TagScan> TagScans { get; set; } = new List<TagScan>();
 }

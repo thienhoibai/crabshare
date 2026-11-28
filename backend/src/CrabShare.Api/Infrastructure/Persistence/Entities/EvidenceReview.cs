@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Kết luận của Kiểm định viên cho bằng chứng bị gắn cờ; không xét lô mình có góp vốn
 /// </summary>
-public partial class EvidenceReview
+public partial class EvidenceReview : EvidenceRecord
 {
-    public long EvidenceReviewId { get; set; }
-
     public long EvidenceId { get; set; }
 
     public long ReviewerId { get; set; }
@@ -21,7 +19,7 @@ public partial class EvidenceReview
 
     public string? Note { get; set; }
 
-    public DateTimeOffset ReviewedAt { get; set; }
+    public DateTimeOffset ReviewedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual Evidence Evidence { get; set; } = null!;
 

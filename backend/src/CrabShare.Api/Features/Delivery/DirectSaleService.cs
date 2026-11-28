@@ -34,7 +34,7 @@ public sealed class DirectSaleService(AppDbContext db, ICurrentUser me, TimeProv
                       where c.BatchId == batch.BatchId && (c.InventoryStatus == "Graded" || c.InventoryStatus == "Returned") && d.IsCurrent && d.Status == "Approved"
                             && !db.InventoryAllocations.Any(a => a.CrabUnitId == c.CrabUnitId && a.ReleasedAt == null)
                       orderby c.CrabCode
-                      select new SellableCrab(c.CrabCode, d.SpecId == null ? null : db.ProductSpecifications.Where(s => s.SpecId == d.SpecId).Select(s => s.SpecCode).First(),
+                      select new SellableCrab(c.CrabCode, d.SpecId == null ? null : db.ProductSpecifications.Where(s => s.OfferRecordId == d.SpecId).Select(s => s.SpecCode).First(),
                           d.FinalSize!, d.FinalGrade!, d.IsSubstandard, d.WeightG, c.InventoryStatus)).ToListAsync(ct);
     }
 
@@ -178,7 +178,7 @@ public sealed class DirectSaleService(AppDbContext db, ICurrentUser me, TimeProv
         if (order.Status == OrderStatus.PendingPayment)
         {
             var request = await db.PaymentRequests.AsNoTracking().Where(r => r.OrderId == order.OrderId && r.Purpose == PaymentPurposes.OrderPayment)
-                .OrderByDescending(r => r.PaymentRequestId).FirstOrDefaultAsync(ct);
+                .OrderByDescending(r => r.PaymentRecordId).FirstOrDefaultAsync(ct);
             if (request is not null) payment = await delivery.PaymentAsync(request, ct);
         }
         return new DirectSaleResponse(order.OrderNo, order.OrderType, order.SaleReason, order.Status, order.BuyerName ?? order.RecipientName, crabs,
@@ -235,7 +235,7 @@ public sealed class DirectSaleService(AppDbContext db, ICurrentUser me, TimeProv
         await ledger.IssueInvoiceAsync(order, batch, null, total, buyerPartyId, buyerName, now, ct);
         var account = await db.BatchAccounts.SingleAsync(a => a.BatchId == batch.BatchId, ct);
         var hours = await parameters.GetIntAsync(ParamKeys.BalancePaymentHours, now, ct);
-        await payments.CreateAsync(PaymentPurposes.OrderPayment, total, account.BatchAccountId, account.ProviderAccountNo, now.AddHours(hours),
+        await payments.CreateAsync(PaymentPurposes.OrderPayment, total, account.BatchRecordId, account.ProviderAccountNo, now.AddHours(hours),
             PaymentTarget.ForOrder(order), order.OrderNo, ct);
         await db.SaveChangesAsync(ct);
         await audit.WriteAsync("sales_order", order.OrderId, type == "FinalOrder" ? "create_final_order" : "create_invoiced_sale", null,
@@ -294,11 +294,11 @@ public sealed class PreorderBalanceHandler(AppDbContext db, IAuditLog audit, Sal
             return;
         }
         acceptance.BalancePaidAt = acceptance.UpdatedAt = paidAt;
-        var tranche = await db.DeliveryTranches.SingleAsync(x => x.TrancheId == acceptance.TrancheId, ct);
+        var tranche = await db.DeliveryTranches.SingleAsync(x => x.DeliveryRecordId == acceptance.TrancheId, ct);
         tranche.Status = "Completed";
         tranche.UpdatedAt = paidAt;
         await db.SaveChangesAsync(ct);
-        await audit.WriteAsync("delivery_acceptance", acceptance.AcceptanceId, "balance_paid", null, new { request.ReferenceCode, amount = (long)request.Amount }, paidAt, ct);
+        await audit.WriteAsync("delivery_acceptance", acceptance.DeliveryRecordId, "balance_paid", null, new { request.ReferenceCode, amount = (long)request.Amount }, paidAt, ct);
         await ledger.FinalizeIfDoneAsync(order, paidAt, ct);
     }
 }

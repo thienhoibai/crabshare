@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Phiên bản mẫu hợp đồng hợp tác
 /// </summary>
-public partial class ContractTemplate
+public partial class ContractTemplate : ContractRecord
 {
-    public long TemplateId { get; set; }
-
     public string VersionCode { get; set; } = null!;
 
     public string ContentHash { get; set; } = null!;
@@ -17,13 +15,13 @@ public partial class ContractTemplate
     /// <summary>
     /// Giá trị: Draft, Active, Retired
     /// </summary>
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "Draft";
 
     public DateTimeOffset? EffectiveFrom { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual ICollection<InvestmentContract> InvestmentContracts { get; set; } = new List<InvestmentContract>();
 }

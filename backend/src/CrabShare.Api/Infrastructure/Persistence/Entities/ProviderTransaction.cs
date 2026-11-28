@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Giao dịch do tổ chức trung gian báo về (webhook); chống trùng theo mã giao dịch
 /// </summary>
-public partial class ProviderTransaction
+public partial class ProviderTransaction : PaymentRecord
 {
-    public long TransactionId { get; set; }
-
     public string ProviderTxnId { get; set; } = null!;
 
     public long BatchAccountId { get; set; }
@@ -30,11 +28,11 @@ public partial class ProviderTransaction
     /// <summary>
     /// Giá trị: Matched, Unmatched, LatePayment
     /// </summary>
-    public string MatchStatus { get; set; } = null!;
+    public string MatchStatus { get; set; } = "Unmatched";
 
     public DateTimeOffset OccurredAt { get; set; }
 
-    public DateTimeOffset ReceivedAt { get; set; }
+    public DateTimeOffset ReceivedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual BatchAccount BatchAccount { get; set; } = null!;
 

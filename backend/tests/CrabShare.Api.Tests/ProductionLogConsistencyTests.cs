@@ -17,8 +17,8 @@ public partial class ProductionLogTests
         var error = await Assert.ThrowsAsync<SqlException>(() => Db(async db =>
         {
             return delete
-                ? await db.Database.ExecuteSqlAsync($"DELETE FROM dbo.production_threshold_version WHERE threshold_version_id={id}")
-                : await db.Database.ExecuteSqlAsync($"UPDATE dbo.production_threshold_version SET ph_min=7.5 WHERE threshold_version_id={id}");
+                ? await db.Database.ExecuteSqlAsync($"DELETE FROM dbo.batch_record WHERE record_type = 'ThresholdVersion' AND batch_record_id={id}")
+                : await db.Database.ExecuteSqlAsync($"UPDATE dbo.batch_record SET ph_min=7.5 WHERE record_type = 'ThresholdVersion' AND batch_record_id={id}");
         }));
         Assert.Equal(50060, error.Number);
         var current = (await client.GetFromJsonAsync<JsonElement>(ThresholdPath(farm))).GetProperty("current");
@@ -31,7 +31,7 @@ public partial class ProductionLogTests
         var own = await Setup(); var other = await Setup(); using var client = Client(other.UserId);
         var foreign = (await client.GetFromJsonAsync<JsonElement>(ThresholdPath(other))).GetProperty("current").GetProperty("id").GetInt64();
         var day = new DateOnly(2026, 1, 1);
-        var error = await Assert.ThrowsAsync<SqlException>(() => Db(db => db.Database.ExecuteSqlAsync($"INSERT dbo.production_log(batch_id,log_date,source,plausibility_flag,threshold_version_id,recorded_by) VALUES({own.BatchId},{day},'Manual','Ok',{foreign},{own.UserId})")));
+        var error = await Assert.ThrowsAsync<SqlException>(() => Db(db => db.Database.ExecuteSqlAsync($"INSERT dbo.care_record(record_type,batch_id,log_date,source,plausibility_flag,threshold_version_id,recorded_by,received_at,created_at) VALUES('Log',{own.BatchId},{day},'Manual','Ok',{foreign},{own.UserId},SYSDATETIMEOFFSET(),SYSDATETIMEOFFSET())")));
         Assert.Equal(547, error.Number); Assert.Contains("fk_production_log_threshold_batch", error.Message);
         Assert.False(await Db(db => db.ProductionLogs.AnyAsync(l => l.BatchId == own.BatchId)));
     }

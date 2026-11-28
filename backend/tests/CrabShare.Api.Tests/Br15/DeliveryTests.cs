@@ -59,14 +59,14 @@ public sealed class DeliveryTests(Br15Fixture f) : IClassFixture<Br15Fixture>
         await db.SaveChangesAsync();
         var lot = new SupplyLot
         {
-            LotCode = $"LN{Guid.NewGuid():N}"[..12], ProcurementOrderId = po.ProcurementOrderId, BatchId = batch.BatchId, OriginRegion = "Năm Căn, Cà Mau",
+            LotCode = $"LN{Guid.NewGuid():N}"[..12], ProcurementOrderId = po.SupplyRecordId, BatchId = batch.BatchId, OriginRegion = "Năm Căn, Cà Mau",
             HarvestedOn = DateOnly.FromDateTime(now.UtcDateTime.AddDays(-1)), DeclaredSpecies = "Scylla paramamosain", DeclaredCount = count, DeclaredWeightKg = count * 0.3m, CreatedAt = now,
         };
         db.SupplyLots.Add(lot);
         await db.SaveChangesAsync();
         var receipt = new GoodsReceipt
         {
-            ReceiptNo = $"GR{Guid.NewGuid():N}"[..12], SupplyLotId = lot.SupplyLotId, BatchId = batch.BatchId, ReceivedAt = now, ReceivedBy = batch.Farmer.UserId,
+            ReceiptNo = $"GR{Guid.NewGuid():N}"[..12], SupplyLotId = lot.SupplyRecordId, BatchId = batch.BatchId, ReceivedAt = now, ReceivedBy = batch.Farmer.UserId,
             AcceptedCount = count, AcceptedWeightG = count * 300, Status = "Completed", CompletedAt = now, CreatedAt = now,
         };
         db.GoodsReceipts.Add(receipt);
@@ -76,7 +76,7 @@ public sealed class DeliveryTests(Br15Fixture f) : IClassFixture<Br15Fixture>
         {
             var crab = new CrabUnit
             {
-                CrabCode = $"CU{Guid.NewGuid():N}"[..10].ToUpperInvariant(), BatchId = batch.BatchId, SupplyLotId = lot.SupplyLotId, GoodsReceiptId = receipt.GoodsReceiptId,
+                CrabCode = $"CU{Guid.NewGuid():N}"[..10].ToUpperInvariant(), BatchId = batch.BatchId, SupplyLotId = lot.SupplyRecordId, GoodsReceiptId = receipt.SupplyRecordId,
                 Species = "Scylla paramamosain", Sex = "Male", Maturity = "Mature", ReceivedWeightG = 300, InventoryStatus = "Received", ReceivedAt = now, CreatedAt = now, UpdatedAt = now,
             };
             db.CrabUnits.Add(crab);
@@ -102,7 +102,7 @@ public sealed class DeliveryTests(Br15Fixture f) : IClassFixture<Br15Fixture>
     {
         await using var db = f.OpenDb();
         return await db.QcAssignments.Where(a => a.BatchId == batchId && a.AssignmentKind == "GradingSession")
-            .OrderByDescending(a => a.QcAssignmentId).Select(a => a.QcUserId).FirstAsync();
+            .OrderByDescending(a => a.QcRecordId).Select(a => a.QcUserId).FirstAsync();
     }
 
     private static object Lines(JsonElement tranche, params (decimal Kg, int? Crabs)[] values)

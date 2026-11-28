@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Dòng chi phí theo hạng mục trong một phiên bản Standard Cost
 /// </summary>
-public partial class StandardCostItem
+public partial class StandardCostItem : CostRecord
 {
-    public long CostItemId { get; set; }
-
     public long CostVersionId { get; set; }
 
     /// <summary>
@@ -30,7 +28,7 @@ public partial class StandardCostItem
     /// </summary>
     public byte? TrancheNo { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual StandardCostVersion CostVersion { get; set; } = null!;
 }

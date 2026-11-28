@@ -49,7 +49,7 @@ public sealed class EvidenceService(AppDbContext db, ICurrentUser me, EvidenceAc
                 {
                     var actualDetection = committed.EvidenceDetections.Single();
                     var persistedDetection = new CrabDetectionResult(actualDetection.CrabDetected, actualDetection.Confidence, actualDetection.ModelVersion);
-                    var originalAudit = await db.AuditLogs.AsNoTracking().Where(a => a.EntityType == "Evidence" && a.EntityId == committed.EvidenceId && a.ActionType == "UploadEvidence")
+                    var originalAudit = await db.AuditLogs.AsNoTracking().Where(a => a.EntityType == "Evidence" && a.EntityId == committed.EvidenceRecordId && a.ActionType == "UploadEvidence")
                         .Select(a => a.NewValue).FirstAsync(ct);
                     using var content = System.Text.Json.JsonDocument.Parse(originalAudit!);
                     await transaction.CommitAsync(ct);
@@ -82,7 +82,7 @@ public sealed class EvidenceService(AppDbContext db, ICurrentUser me, EvidenceAc
                 string? requestOld = null;
                 if (request.CaptureRequestId is { } requestId)
                 {
-                    var capture = await db.CaptureRequests.SingleAsync(r => r.CaptureRequestId == requestId, ct);
+                    var capture = await db.CaptureRequests.SingleAsync(r => r.EvidenceRecordId == requestId, ct);
                     evidence.CaptureRequest = capture;
                     if (status != "Flagged")
                     {
@@ -91,7 +91,7 @@ public sealed class EvidenceService(AppDbContext db, ICurrentUser me, EvidenceAc
                     }
                 }
                 await db.SaveChangesAsync(ct);
-                AppendAudit("Evidence", evidence.EvidenceId, "UploadEvidence", null,
+                AppendAudit("Evidence", evidence.EvidenceRecordId, "UploadEvidence", null,
                     AuditChain.Snapshot(new { evidence.BatchId, evidence.SlotId, evidence.CrabItemId, evidence.CaptureRequestId, evidence.Source,
                         evidence.Sha256, evidence.PerceptualHash, evidence.CapturedAt, evidence.ReceivedAt,
                         evidence.Latitude, evidence.Longitude, evidence.RiskScore, evidence.ReviewStatus,
@@ -101,8 +101,8 @@ public sealed class EvidenceService(AppDbContext db, ICurrentUser me, EvidenceAc
                 {
                     previous = await AuditChain.LockAndReadTailAsync(db, ct);
                     var capture = evidence.CaptureRequest!;
-                    AppendAudit("CaptureRequest", capture.CaptureRequestId, "FulfillCaptureRequest", requestOld,
-                        AuditChain.Snapshot(new { capture.Status, capture.FulfilledAt, evidence.EvidenceId }), previous, receivedAt);
+                    AppendAudit("CaptureRequest", capture.EvidenceRecordId, "FulfillCaptureRequest", requestOld,
+                        AuditChain.Snapshot(new { capture.Status, capture.FulfilledAt, evidence.EvidenceRecordId }), previous, receivedAt);
                     await db.SaveChangesAsync(ct);
                 }
                 await transaction.CommitAsync(ct);
@@ -178,7 +178,7 @@ public sealed class EvidenceService(AppDbContext db, ICurrentUser me, EvidenceAc
             throw new BusinessRuleException("evidence.slot_not_allocated", "Hộp không còn được gán cho lô này. Vui lòng tải lại danh sách hộp.");
         if (request.CaptureRequestId is { } id)
         {
-            var capture = await db.CaptureRequests.AsNoTracking().SingleOrDefaultAsync(r => r.CaptureRequestId == id && r.BatchId == batch.BatchId && r.SlotId == slot.SlotId, ct)
+            var capture = await db.CaptureRequests.AsNoTracking().SingleOrDefaultAsync(r => r.EvidenceRecordId == id && r.BatchId == batch.BatchId && r.SlotId == slot.SlotId, ct)
                 ?? throw new NotFoundException("evidence.capture_request_not_found", "Yêu cầu chụp không thuộc hộp và lô đã chọn.");
             if (capture.Status != "Open" || capture.DueAt < receivedAt || request.CapturedAt < capture.RequestedAt || request.CapturedAt > capture.DueAt)
                 throw new BusinessRuleException("evidence.capture_request_invalid", "Yêu cầu đã hết hạn, hoàn thành hoặc ảnh được chụp ngoài thời hạn yêu cầu.");
@@ -221,7 +221,7 @@ public sealed class EvidenceService(AppDbContext db, ICurrentUser me, EvidenceAc
     }
     private DateTimeOffset Now() => AuditChain.Timestamp(clock.GetUtcNow());
     private static EvidenceResponse Response(Infrastructure.Persistence.Entities.Evidence e, CaptureContext context, CrabDetectionResult detection, string match)
-        => new(e.EvidenceId, context.BatchCode, context.SlotCode, e.CapturedAt!.Value, e.ReceivedAt, e.Latitude!.Value, e.Longitude!.Value,
+        => new(e.EvidenceRecordId, context.BatchCode, context.SlotCode, e.CapturedAt!.Value, e.ReceivedAt, e.Latitude!.Value, e.Longitude!.Value,
             e.Sha256, e.PerceptualHash!, e.RiskScore!.Value, e.ReviewStatus, match,
             new(detection.CrabDetected, detection.Confidence, detection.ModelVersion), e.CaptureRequestId, e.CaptureRequest?.Status);
     private static void Validate(UploadEvidenceRequest request)

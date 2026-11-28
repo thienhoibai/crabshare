@@ -17,10 +17,10 @@ public sealed partial class AlertService
         if (!string.IsNullOrWhiteSpace(filter.Q))
         {
             var text = filter.Q.Trim(); var id = long.TryParse(text, out var parsed) ? parsed : -1;
-            query = query.Where(a => a.AlertId == id || a.Batch.BatchCode.Contains(text) || a.Batch.Operator.LegalName.Contains(text) || a.Message.Contains(text));
+            query = query.Where(a => a.CareRecordId == id || a.Batch.BatchCode.Contains(text) || a.Batch.Operator.LegalName.Contains(text) || a.Message.Contains(text));
         }
-        var page = await query.OrderByDescending(a => a.EscalatedAt).ThenByDescending(a => a.AlertId)
-            .Select(a => new AlertResponse(a.AlertId, a.Batch.BatchCode, a.Batch.Operator.LegalName, a.AlertType, a.Severity,
+        var page = await query.OrderByDescending(a => a.EscalatedAt).ThenByDescending(a => a.CareRecordId)
+            .Select(a => new AlertResponse(a.CareRecordId, a.Batch.BatchCode, a.Batch.Operator.LegalName, a.AlertType, a.Severity,
                 a.Message, a.RaisedAt, a.AckDeadline, a.Status, a.AcknowledgedAt, a.AcknowledgedBy, a.ResponseNote, a.EscalatedAt, null))
             .ToPagedAsync(paging, ct);
         // Không ghi đè phản hồi hộ nuôi. Kết quả xử lý quản trị được lưu bền trong audit.
@@ -37,7 +37,7 @@ public sealed partial class AlertService
         return TransactionAsync(async previous =>
         {
             await RequireRoleAsync(Roles.PlatformAdmin, ct);
-            var alert = await db.Alerts.Include(a => a.Batch).ThenInclude(b => b.Operator).SingleOrDefaultAsync(a => a.AlertId == id, ct) ?? throw Missing();
+            var alert = await db.Alerts.Include(a => a.Batch).ThenInclude(b => b.Operator).SingleOrDefaultAsync(a => a.CareRecordId == id, ct) ?? throw Missing();
             if (alert.Status == "Resolved") throw new ConflictException("alerts.status_changed", "Cảnh báo đã được đóng. Vui lòng tải lại.");
             var old = Snapshot(alert); alert.Status = "Resolved"; alert.UpdatedAt = Now();
             AppendAudit(alert, "ResolveAlert", old, previous, note.Trim());

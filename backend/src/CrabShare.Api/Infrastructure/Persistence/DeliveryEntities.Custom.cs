@@ -22,13 +22,11 @@ public partial class SalesOrder
 public partial class PaymentRequest
 {
     /// <summary>Đợt giao của phần còn lại (PreOrderBalance, BR-164).</summary>
-    [Column("tranche_id")] public long? TrancheId { get; set; }
+    [Column("delivery_tranche_id")] public long? TrancheId { get; set; }
 }
 
-[Table("inventory_allocation")]
-public sealed class InventoryAllocation
+public sealed class InventoryAllocation : InventoryRecord
 {
-    [Key, Column("allocation_id")] public long AllocationId { get; set; }
     [Column("crab_unit_id")] public long CrabUnitId { get; set; }
     [Column("batch_id")] public long BatchId { get; set; }
     [Column("order_id")] public long OrderId { get; set; }
@@ -46,10 +44,15 @@ public sealed class InventoryAllocation
     [Column("created_at"), Precision(3)] public DateTimeOffset CreatedAt { get; set; }
 }
 
-[Table("shipment")]
-public sealed class Shipment
+/// <summary>Bảng gộp delivery_record (V039): đợt giao (Tranche), dòng đợt giao (TrancheLine), chuyến hàng (Shipment), dòng chuyến hàng (ShipmentLine), biên bản nhận (Acceptance) và hoá đơn (Invoice) nằm chung một bảng, phân biệt bằng cột record_type.</summary>
+[Table("delivery_record")]
+public abstract class DeliveryRecord
 {
-    [Key, Column("shipment_id")] public long ShipmentId { get; set; }
+    [Key, Column("delivery_record_id")] public long DeliveryRecordId { get; set; }
+}
+
+public sealed class Shipment : DeliveryRecord
+{
     [Column("shipment_no"), MaxLength(20), Unicode(false)] public string ShipmentNo { get; set; } = "";
     [Column("order_id")] public long OrderId { get; set; }
     [Column("tranche_id")] public long TrancheId { get; set; }
@@ -67,10 +70,8 @@ public sealed class Shipment
     public List<ShipmentLine> Lines { get; set; } = [];
 }
 
-[Table("shipment_line")]
-public sealed class ShipmentLine
+public sealed class ShipmentLine : DeliveryRecord
 {
-    [Key, Column("shipment_line_id")] public long ShipmentLineId { get; set; }
     [Column("shipment_id")] public long ShipmentId { get; set; }
     [Column("line_id")] public long LineId { get; set; }
     [Column("dispatched_crabs")] public int? DispatchedCrabs { get; set; }
@@ -84,10 +85,8 @@ public sealed class ShipmentLine
     [Column("goods_value"), Precision(18, 0)] public decimal? GoodsValue { get; set; }
 }
 
-[Table("delivery_acceptance")]
-public sealed class DeliveryAcceptance
+public sealed class DeliveryAcceptance : DeliveryRecord
 {
-    [Key, Column("acceptance_id")] public long AcceptanceId { get; set; }
     [Column("shipment_id")] public long ShipmentId { get; set; }
     [Column("order_id")] public long OrderId { get; set; }
     [Column("tranche_id")] public long TrancheId { get; set; }
@@ -110,10 +109,8 @@ public sealed class DeliveryAcceptance
     [Column("updated_at"), Precision(3)] public DateTimeOffset UpdatedAt { get; set; }
 }
 
-[Table("invoice")]
-public sealed class Invoice
+public sealed class Invoice : DeliveryRecord
 {
-    [Key, Column("invoice_id")] public long InvoiceId { get; set; }
     [Column("invoice_no"), MaxLength(20), Unicode(false)] public string InvoiceNo { get; set; } = "";
     [Column("order_id")] public long OrderId { get; set; }
     [Column("tranche_id")] public long? TrancheId { get; set; }
@@ -129,10 +126,15 @@ public sealed class Invoice
     [Column("cancel_reason"), MaxLength(300)] public string? CancelReason { get; set; }
 }
 
-[Table("claim")]
-public sealed class CustomerClaim
+/// <summary>Bảng gộp sales_record (V050): dòng đơn hàng (Line), khiếu nại (Claim), đánh giá đơn (Rating) và dòng doanh thu (Revenue) nằm chung một bảng, phân biệt bằng cột record_type.</summary>
+[Table("sales_record")]
+public abstract class SalesRecord
 {
-    [Key, Column("claim_id")] public long ClaimId { get; set; }
+    [Key, Column("sales_record_id")] public long SalesRecordId { get; set; }
+}
+
+public sealed class CustomerClaim : SalesRecord
+{
     [Column("claim_no"), MaxLength(20), Unicode(false)] public string ClaimNo { get; set; } = "";
     [Column("order_id")] public long OrderId { get; set; }
     [Column("shipment_id")] public long ShipmentId { get; set; }
@@ -164,21 +166,18 @@ public sealed class CustomerClaim
     [Column("updated_at"), Precision(3)] public DateTimeOffset UpdatedAt { get; set; }
 }
 
-[Table("order_rating")]
-public sealed class OrderRating
+public sealed class OrderRating : SalesRecord
 {
-    [Key, Column("order_id")] public long OrderId { get; set; }
+    [Column("order_id")] public long OrderId { get; set; }
     [Column("stars")] public byte Stars { get; set; }
     [Column("comment"), MaxLength(1000)] public string? Comment { get; set; }
     [Column("created_by")] public long CreatedBy { get; set; }
     [Column("created_at"), Precision(3)] public DateTimeOffset CreatedAt { get; set; }
 }
 
-[Table("revenue_line")]
-public sealed class RevenueLine
+public sealed class RevenueLine : SalesRecord
 {
-    [Key, Column("revenue_line_id")] public long RevenueLineId { get; set; }
-    [Column("batch_id")] public long BatchId { get; set; }
+    [Column("revenue_batch_id")] public long BatchId { get; set; }
     /// <summary>PreOrderDelivered, InvoicedSale, ForfeitedDeposit, FinalOrder (BR-185).</summary>
     [Column("source_type"), MaxLength(20), Unicode(false)] public string SourceType { get; set; } = "";
     [Column("order_id")] public long OrderId { get; set; }

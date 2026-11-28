@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Kết quả mô hình nhận diện cua trên một ảnh; chỉ là một tín hiệu trong điểm rủi ro, không tự từ chối bằng chứng
 /// </summary>
-public partial class EvidenceDetection
+public partial class EvidenceDetection : EvidenceRecord
 {
-    public long DetectionId { get; set; }
-
     public long EvidenceId { get; set; }
 
     /// <summary>
@@ -26,7 +24,7 @@ public partial class EvidenceDetection
 
     public string? BboxJson { get; set; }
 
-    public DateTimeOffset DetectedAt { get; set; }
+    public DateTimeOffset DetectedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual Evidence Evidence { get; set; } = null!;
 }

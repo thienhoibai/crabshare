@@ -161,12 +161,12 @@ public class PaymentWebhookDatabaseTests(FundingDatabaseFixture fixture) : IClas
         Assert.Null(result.RefundInstructionId);
 
         await using var db = fixture.OpenDb();
-        var request = await db.PaymentRequests.SingleAsync(r => r.PaymentRequestId == payment.PaymentRequestId);
+        var request = await db.PaymentRequests.SingleAsync(r => r.PaymentRecordId == payment.PaymentRequestId);
         Assert.Equal("Paid", request.Status);
         var row = await db.Contributions.SingleAsync(c => c.ContributionId == contribution.ContributionId);
         Assert.Equal("Confirmed", row.Status);
         Assert.NotNull(row.ConfirmedAt);
-        var txn = await db.ProviderTransactions.SingleAsync(t => t.TransactionId == result.TransactionId);
+        var txn = await db.ProviderTransactions.SingleAsync(t => t.PaymentRecordId == result.TransactionId);
         Assert.Equal(("In", WebhookResult.Matched, payment.PaymentRequestId, 3_000_000m), (txn.Direction, txn.MatchStatus, txn.PaymentRequestId, txn.Amount));
         Assert.Contains(payment.ReferenceCode, txn.ReferenceCode);
 
@@ -235,7 +235,7 @@ public class PaymentWebhookDatabaseTests(FundingDatabaseFixture fixture) : IClas
         var past = DateTimeOffset.UtcNow.AddMinutes(-5);
         await using (var db = fixture.OpenDb())
         {
-            await db.PaymentRequests.Where(r => r.PaymentRequestId == payment.PaymentRequestId).ExecuteUpdateAsync(s => s.SetProperty(r => r.ExpiresAt, past));
+            await db.PaymentRequests.Where(r => r.PaymentRecordId == payment.PaymentRequestId).ExecuteUpdateAsync(s => s.SetProperty(r => r.ExpiresAt, past));
             await db.Contributions.Where(c => c.ContributionId == contribution.ContributionId).ExecuteUpdateAsync(s => s.SetProperty(c => c.ExpiresAt, past));
         }
 
@@ -245,17 +245,17 @@ public class PaymentWebhookDatabaseTests(FundingDatabaseFixture fixture) : IClas
         Assert.Equal(payment.PaymentRequestId, result.PaymentRequestId);
         Assert.NotNull(result.RefundInstructionId);
         await using var check = fixture.OpenDb();
-        var txn = await check.ProviderTransactions.SingleAsync(t => t.TransactionId == result.TransactionId);
+        var txn = await check.ProviderTransactions.SingleAsync(t => t.PaymentRecordId == result.TransactionId);
         Assert.Equal((WebhookResult.LatePayment, payment.PaymentRequestId), (txn.MatchStatus, txn.PaymentRequestId));
-        var refund = await check.PaymentInstructions.SingleAsync(i => i.InstructionId == result.RefundInstructionId);
+        var refund = await check.PaymentInstructions.SingleAsync(i => i.PaymentRecordId == result.RefundInstructionId);
         Assert.Equal(("Refund", "Created", 2_000_000m, contribution.ContributionId, (long?)null),
             (refund.InstructionType, refund.Status, refund.Amount, refund.ContributionId, refund.OrderId));
         Assert.Equal(txn.BatchAccountId, refund.BatchAccountId);
-        Assert.Equal("Expired", (await check.PaymentRequests.SingleAsync(r => r.PaymentRequestId == payment.PaymentRequestId)).Status);
+        Assert.Equal("Expired", (await check.PaymentRequests.SingleAsync(r => r.PaymentRecordId == payment.PaymentRequestId)).Status);
         var row = await check.Contributions.SingleAsync(c => c.ContributionId == contribution.ContributionId);
         Assert.NotEqual("Confirmed", row.Status);
         Assert.Null(row.ConfirmedAt);
-        Assert.True(await check.AuditLogs.AnyAsync(a => a.EntityType == "payment_instruction" && a.EntityId == refund.InstructionId && a.ActionType == "create"));
+        Assert.True(await check.AuditLogs.AnyAsync(a => a.EntityType == "payment_instruction" && a.EntityId == refund.PaymentRecordId && a.ActionType == "create"));
         Assert.True(AuditChainVerifier.Verify(await check.AuditLogs.OrderBy(a => a.AuditId).ToListAsync()).IsValid);
     }
 
@@ -269,9 +269,9 @@ public class PaymentWebhookDatabaseTests(FundingDatabaseFixture fixture) : IClas
         Assert.Equal(WebhookResult.Unmatched, result.Outcome);
         Assert.Equal(payment.PaymentRequestId, result.PaymentRequestId); // vẫn gắn để admin đối soát tay
         await using var db = fixture.OpenDb();
-        Assert.Equal("Pending", (await db.PaymentRequests.SingleAsync(r => r.PaymentRequestId == payment.PaymentRequestId)).Status);
+        Assert.Equal("Pending", (await db.PaymentRequests.SingleAsync(r => r.PaymentRecordId == payment.PaymentRequestId)).Status);
         Assert.Equal("Reserved", (await db.Contributions.SingleAsync(c => c.ContributionId == contribution.ContributionId)).Status);
-        var txn = await db.ProviderTransactions.SingleAsync(t => t.TransactionId == result.TransactionId);
+        var txn = await db.ProviderTransactions.SingleAsync(t => t.PaymentRecordId == result.TransactionId);
         Assert.Equal((WebhookResult.Unmatched, 2_999_000m), (txn.MatchStatus, txn.Amount));
         Assert.False(await db.PaymentInstructions.AnyAsync(i => i.ContributionId == contribution.ContributionId));
     }
@@ -286,9 +286,9 @@ public class PaymentWebhookDatabaseTests(FundingDatabaseFixture fixture) : IClas
         Assert.Equal(WebhookResult.Unmatched, result.Outcome);
         Assert.Null(result.PaymentRequestId);
         await using var db = fixture.OpenDb();
-        var txn = await db.ProviderTransactions.SingleAsync(t => t.TransactionId == result.TransactionId);
+        var txn = await db.ProviderTransactions.SingleAsync(t => t.PaymentRecordId == result.TransactionId);
         Assert.Equal((WebhookResult.Unmatched, (long?)null, "chuyen tien nuoi cua"), (txn.MatchStatus, txn.PaymentRequestId, txn.ReferenceCode));
-        Assert.Equal("Pending", (await db.PaymentRequests.SingleAsync(r => r.PaymentRequestId == payment.PaymentRequestId)).Status);
+        Assert.Equal("Pending", (await db.PaymentRequests.SingleAsync(r => r.PaymentRecordId == payment.PaymentRequestId)).Status);
     }
 
     [Fact]
@@ -318,7 +318,7 @@ public class PaymentWebhookDatabaseTests(FundingDatabaseFixture fixture) : IClas
         var result = (await response.Content.ReadFromJsonAsync<WebhookResult>())!;
         Assert.Equal(WebhookResult.Matched, result.Outcome);
         await using var db = fixture.OpenDb();
-        var txn = await db.ProviderTransactions.SingleAsync(t => t.TransactionId == result.TransactionId);
+        var txn = await db.ProviderTransactions.SingleAsync(t => t.PaymentRecordId == result.TransactionId);
         Assert.StartsWith("SIM-", txn.ProviderTxnId);
         Assert.Equal(4_000_000m, txn.Amount);
         Assert.Equal("Confirmed", (await db.Contributions.SingleAsync(c => c.ContributionId == contribution.ContributionId)).Status);

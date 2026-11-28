@@ -181,7 +181,7 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
             if (meta.WeightRangeG is > 0.2m)
                 throw new BusinessRuleException("device.scale_unstable", "Cân không ổn định (dao động quá 0,2 g); trạm phải đo lại (BR-231).");
             var session = await db.MeasurementSessions.FromSqlInterpolated(
-                                  $"SELECT * FROM dbo.measurement_session WITH (UPDLOCK, HOLDLOCK) WHERE station_device_id = {device.DeviceId} AND status = 'Open'")
+                                  $"SELECT * FROM dbo.measurement_record WITH (UPDLOCK, HOLDLOCK) WHERE record_type = 'Session' AND station_device_id = {device.DeviceId} AND status = 'Open'")
                               .SingleOrDefaultAsync(ct)
                           ?? throw new NotFoundException("measurement.no_open_session", "Chưa mở lượt đo cho trạm này (BR-224).");
             var crab = await db.CrabUnits.AsNoTracking().SingleAsync(c => c.CrabUnitId == session.CrabUnitId, ct);
@@ -210,8 +210,8 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
             session.PresetsJson = meta.Presets is null ? null : JsonSerializer.Serialize(meta.Presets, Json);
             session.UpdatedAt = now;
             await db.SaveChangesAsync(ct);
-            sessionId = session.MeasurementSessionId;
-            return new IngestAccepted("Received", session.SessionNo, session.MeasurementSessionId);
+            sessionId = session.MeasurementRecordId;
+            return new IngestAccepted("Received", session.SessionNo, session.MeasurementRecordId);
         }, ct);
         IngestAccepted result;
         try { result = await SaveMeasurementAsync(); }
@@ -232,7 +232,7 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
                 !await SameImageAsync(white, prior.Session.WhiteSha256, ct) ||
                 !await SameImageAsync(red, prior.Session.RedSha256, ct))
                 throw new ConflictException("device.duplicate_message", "Bản tin dùng lại mã nhưng ảnh khác lượt đã nhận.");
-            return new IngestAccepted("Received", prior.Session.SessionNo, prior.Session.MeasurementSessionId);
+            return new IngestAccepted("Received", prior.Session.SessionNo, prior.Session.MeasurementRecordId);
         }
         // Xử lý ảnh (G5) chạy sau khi bản tin đã ghi; lỗi xử lý không làm mất bản tin.
         try { await processor.ProcessAsync(sessionId, ct); }
@@ -289,7 +289,7 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
                 alertBox = slot.SlotCode;
                 alertSlot = slot.SlotId;
             }
-            return new IngestAccepted("Received", Id: row.DeviceImageId);
+            return new IngestAccepted("Received", Id: row.DeviceRecordId);
         }, ct);
         // BR-119, BR-134: ảnh không thấy cua trong khi hộp đang có cua sống → cảnh báo và yêu cầu chụp hộp đó.
         if (alertBatch is { } b)
@@ -322,7 +322,7 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
             if (device.DeviceType != "WaterSensor") throw new ForbiddenException("device.not_water_sensor", "Thiết bị không phải cụm cảm biến nước.");
             if (msg.MeasuredAt is null || (msg.TemperatureC is null && msg.Ph is null && msg.SalinityPpt is null))
                 throw new BusinessRuleException("device.missing_fields", "Bản tin chỉ số nước thiếu thời điểm đo hoặc mọi chỉ số.");
-            var holding = await db.HoldingOperations.AsNoTracking().SingleOrDefaultAsync(h => h.HoldingId == device.ScopeHoldingId, ct)
+            var holding = await db.HoldingOperations.AsNoTracking().SingleOrDefaultAsync(h => h.BatchRecordId == device.ScopeHoldingId, ct)
                           ?? throw new ForbiddenException("device.scope_missing", "Cụm cảm biến chưa gắn đợt lưu nuôi.");
             var calibratedAt = Max(device.LastCalibratedAt, msg.LastCalibratedAt);
             var period = await PeriodDaysAsync(device, ct);
@@ -331,13 +331,13 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
                 : calibratedAt is null || now - calibratedAt > TimeSpan.FromDays(period) ? "Uncalibrated" : "Calibrated";
             var row = new WaterReading
             {
-                DeviceId = device.DeviceId, HoldingId = holding.HoldingId, BatchId = holding.BatchId, MessageId = msg.MessageId,
+                DeviceId = device.DeviceId, HoldingId = holding.BatchRecordId, BatchId = holding.BatchId, MessageId = msg.MessageId,
                 MeasuredAt = msg.MeasuredAt.Value, ReceivedAt = now, TemperatureC = msg.TemperatureC, SalinityPpt = msg.SalinityPpt, Ph = msg.Ph,
                 DeviceQualityFlag = msg.QualityFlag, Quality = quality,
             };
             db.WaterReadings.Add(row);
             await db.SaveChangesAsync(ct);
-            return new IngestAccepted("Received", Id: row.WaterReadingId);
+            return new IngestAccepted("Received", Id: row.DeviceRecordId);
         }, ct);
     }
 
@@ -361,9 +361,9 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
             db.DeviceCalibrations.Add(row);
             if (passed && RelevantKind(device.DeviceType, msg.Kind)) device.LastCalibratedAt = Max(device.LastCalibratedAt, performed);
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("device_calibration", row.DeviceCalibrationId, "record", null,
+            await audit.WriteAsync("device_calibration", row.DeviceRecordId, "record", null,
                 new { device.DeviceCode, msg.Kind, performed, errorG = error, passed }, ct);
-            return new IngestAccepted(passed ? "Received" : "Rejected", Id: row.DeviceCalibrationId);
+            return new IngestAccepted(passed ? "Received" : "Rejected", Id: row.DeviceRecordId);
         }, ct);
     }
 
@@ -379,13 +379,13 @@ public sealed class DeviceIngestService(AppDbContext db, IFileStorage files, ICr
     public async Task<IReadOnlyList<DeviceCommandResponse>> CommandsAsync(string deviceCode, string? key, CancellationToken ct)
     {
         var device = await AuthenticateAsync(deviceCode, key, ct);
-        return await db.DeviceCommands.AsNoTracking().Where(c => c.DeviceId == device.DeviceId && c.Status == "Pending" && c.CommandType != "StartMeasurement" && c.CommandType != "ConfigureWifi").OrderBy(c => c.DeviceCommandId)
-            .Select(c => new DeviceCommandResponse(c.DeviceCommandId, c.CommandType, c.BoxCode, c.CreatedAt)).ToListAsync(ct);
+        return await db.DeviceCommands.AsNoTracking().Where(c => c.DeviceId == device.DeviceId && c.Status == "Pending" && c.CommandType != "StartMeasurement" && c.CommandType != "ConfigureWifi").OrderBy(c => c.DeviceRecordId)
+            .Select(c => new DeviceCommandResponse(c.DeviceRecordId, c.CommandType, c.BoxCode, c.CreatedAt)).ToListAsync(ct);
     }
 
     public async Task AckCommandAsync(long commandId, string? deviceCode, string? key, CancellationToken ct)
     {
-        var command = await db.DeviceCommands.SingleOrDefaultAsync(c => c.DeviceCommandId == commandId, ct)
+        var command = await db.DeviceCommands.SingleOrDefaultAsync(c => c.DeviceRecordId == commandId, ct)
                       ?? throw new NotFoundException("device.command_not_found", "Không tìm thấy lệnh.");
         var device = await db.Devices.AsNoTracking().SingleAsync(d => d.DeviceId == command.DeviceId, ct);
         await AuthenticateAsync(deviceCode ?? device.DeviceCode, key, ct);
@@ -487,7 +487,7 @@ public static class DeviceScope
                 return await db.SlotAllocations.Where(a => a.ReleasedAt == null && a.Slot.OperatorId == device.OperatorId && a.Slot.RackNo == rack)
                     .Select(a => a.BatchId).Distinct().ToListAsync(ct);
             case "WaterSensor":
-                return await db.HoldingOperations.Where(h => h.HoldingId == device.ScopeHoldingId).Select(h => h.BatchId).ToListAsync(ct);
+                return await db.HoldingOperations.Where(h => h.BatchRecordId == device.ScopeHoldingId).Select(h => h.BatchId).ToListAsync(ct);
             default:
                 return [];
         }

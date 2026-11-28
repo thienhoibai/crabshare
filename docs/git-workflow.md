@@ -69,7 +69,7 @@ git push -u origin feature/CS-21-batch-create
 ## Khi bị xung đột (conflict)
 
 - Hay gặp ở `FeatureRegistry.cs`, `web/src/app/router.tsx`, `mobile/lib/app/router.dart`: giữ **cả hai** phần (của mình và của người kia).
-- File sinh tự động (`Infrastructure/Persistence/Entities/*`, `AppDbContext.cs`): không sửa tay — chạy lại `backend/scripts/scaffold-db.ps1` sau khi pull.
+- `Infrastructure/Persistence/Entities/*` và `AppDbContext.cs`: từ V036 (gộp bảng) sửa tay, không chạy `backend/scripts/scaffold-db.ps1` nữa. Sau khi pull chỉ cần chạy DbMigrator.
 - Không chắc thì hỏi người kia trước khi chọn.
 
 ## Trạng thái task trên Jira

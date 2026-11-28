@@ -52,8 +52,14 @@ public partial class DisbursementTranche
     [Column("pct"), Precision(5, 2)] public decimal? Pct { get; set; }
 }
 
-[Table("remuneration_tier")]
-public sealed class RemunerationTier
+/// <summary>Bảng gộp batch_record (V043): các bản ghi phụ của lô nằm chung một bảng, phân biệt bằng cột record_type: tài khoản lô (Account), bên tham gia (Participant), bậc thù lao (RemunerationTier), phiên bản ngưỡng nước (ThresholdVersion), đợt lưu nuôi (HoldingOperation), biểu quyết (CollectiveDecision) và phiếu biểu quyết (Vote).</summary>
+[Table("batch_record")]
+public abstract class BatchRecord
+{
+    [Key, Column("batch_record_id")] public long BatchRecordId { get; set; }
+}
+
+public sealed class RemunerationTier : BatchRecord
 {
     [Column("batch_id")] public long BatchId { get; set; }
     [Column("tier_no")] public byte TierNo { get; set; }
@@ -63,10 +69,15 @@ public sealed class RemunerationTier
     [Column("created_at"), Precision(3)] public DateTimeOffset CreatedAt { get; set; }
 }
 
-[Table("product_specification")]
-public sealed class ProductSpecification
+/// <summary>Bảng gộp offer_record (V052): quy cách sản phẩm (Specification) và chào bán của lô (Offer) nằm chung một bảng, phân biệt bằng cột record_type.</summary>
+[Table("offer_record")]
+public abstract class OfferRecord
 {
-    [Key, Column("spec_id")] public long SpecId { get; set; }
+    [Key, Column("offer_record_id")] public long OfferRecordId { get; set; }
+}
+
+public sealed class ProductSpecification : OfferRecord
+{
     [Column("spec_code"), MaxLength(40), Unicode(false)] public string SpecCode { get; set; } = "";
     [Column("species"), MaxLength(60)] public string Species { get; set; } = "";
     [Column("crab_type"), MaxLength(20), Unicode(false)] public string CrabType { get; set; } = "";
@@ -80,10 +91,8 @@ public sealed class ProductSpecification
     [Column("created_at"), Precision(3)] public DateTimeOffset CreatedAt { get; set; }
 }
 
-[Table("offer")]
-public sealed class Offer
+public sealed class Offer : OfferRecord
 {
-    [Key, Column("offer_id")] public long OfferId { get; set; }
     [Column("batch_id")] public long BatchId { get; set; }
     [Column("spec_id")] public long SpecId { get; set; }
     [Column("price_per_kg"), Precision(18, 0)] public decimal PricePerKg { get; set; }
@@ -95,13 +104,18 @@ public sealed class Offer
     public ProductSpecification Spec { get; set; } = null!;
 }
 
-[Table("cost_actual")]
-public sealed class CostActual
+/// <summary>Bảng gộp cost_record (V046): phiên bản chi phí chuẩn (Version), khoản chi (Item), lịch giải ngân dự kiến (TranchePlan) và chi phí thực tế (Actual) nằm chung một bảng, phân biệt bằng cột record_type.</summary>
+[Table("cost_record")]
+public abstract class CostRecord
 {
-    [Key, Column("cost_actual_id")] public long CostActualId { get; set; }
+    [Key, Column("cost_record_id")] public long CostRecordId { get; set; }
+}
+
+public sealed class CostActual : CostRecord
+{
     [Column("batch_id")] public long BatchId { get; set; }
     [Column("cost_item_id")] public long CostItemId { get; set; }
-    [Column("amount"), Precision(18, 0)] public decimal Amount { get; set; }
+    [Column("amount", TypeName = "decimal(18, 0)")] public decimal Amount { get; set; }
     [Column("document_evidence_id")] public long? DocumentEvidenceId { get; set; }
     [Column("document_ref"), MaxLength(100)] public string? DocumentRef { get; set; }
     [Column("note"), MaxLength(300)] public string? Note { get; set; }
@@ -110,14 +124,19 @@ public sealed class CostActual
     [Column("recorded_at"), Precision(3)] public DateTimeOffset RecordedAt { get; set; }
 }
 
-[Table("payment_application")]
-public sealed class PaymentApplication
+/// <summary>Bảng gộp payment_record (V047): yêu cầu thanh toán (Request), lệnh chi (Instruction), giao dịch của tổ chức thanh toán (Transaction), phân bổ giao dịch (Application) và đợt giải ngân (Disbursement) nằm chung một bảng, phân biệt bằng cột record_type.</summary>
+[Table("payment_record")]
+public abstract class PaymentRecord
 {
-    [Key, Column("application_id")] public long ApplicationId { get; set; }
+    [Key, Column("payment_record_id")] public long PaymentRecordId { get; set; }
+}
+
+public sealed class PaymentApplication : PaymentRecord
+{
     [Column("transaction_id")] public long TransactionId { get; set; }
     [Column("target_type"), MaxLength(30), Unicode(false)] public string TargetType { get; set; } = "";
     [Column("target_id")] public long TargetId { get; set; }
-    [Column("amount"), Precision(18, 0)] public decimal Amount { get; set; }
+    [Column("amount", TypeName = "decimal(18, 0)")] public decimal Amount { get; set; }
     [Column("status"), MaxLength(20), Unicode(false)] public string Status { get; set; } = "Applied";
     [Column("applied_at"), Precision(3)] public DateTimeOffset AppliedAt { get; set; }
 }

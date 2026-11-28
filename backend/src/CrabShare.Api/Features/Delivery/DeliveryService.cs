@@ -33,8 +33,8 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
         var orderIds = orders.Select(o => o.OrderId).ToList();
         var tranches = await db.DeliveryTranches.AsNoTracking().Include(t => t.Lines).Where(t => orderIds.Contains(t.OrderId))
             .OrderBy(t => t.DueDate).ThenBy(t => t.Seq).ToListAsync(ct);
-        var lines = await db.SalesOrderLines.AsNoTracking().Include(l => l.Spec).Where(l => orderIds.Contains(l.OrderId)).ToDictionaryAsync(l => l.LineId, ct);
-        var trancheIds = tranches.Select(t => t.TrancheId).ToList();
+        var lines = await db.SalesOrderLines.AsNoTracking().Include(l => l.Spec).Where(l => orderIds.Contains(l.OrderId)).ToDictionaryAsync(l => l.SalesRecordId, ct);
+        var trancheIds = tranches.Select(t => t.DeliveryRecordId).ToList();
         var counts = await db.InventoryAllocations.AsNoTracking().Where(a => a.TrancheId != null && trancheIds.Contains(a.TrancheId.Value) && a.ReleasedAt == null)
             .GroupBy(a => new { a.TrancheId, a.LineId }).Select(g => new { g.Key.TrancheId, g.Key.LineId, Count = g.Count(), Subs = g.Count(a => a.IsSubstitution) })
             .ToListAsync(ct);
@@ -44,11 +44,11 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
         return tranches.Select(t =>
         {
             var o = byOrder[t.OrderId];
-            var ship = shipments.GetValueOrDefault(t.TrancheId);
-            return new TrancheStatusResponse(t.TrancheId, o.OrderNo, o.Status, t.Seq, t.DueDate, t.Status, o.RecipientName, o.RecipientPhone, o.ShippingAddress,
+            var ship = shipments.GetValueOrDefault(t.DeliveryRecordId);
+            return new TrancheStatusResponse(t.DeliveryRecordId, o.OrderNo, o.Status, t.Seq, t.DueDate, t.Status, o.RecipientName, o.RecipientPhone, o.ShippingAddress,
                 t.Lines.Select(l =>
                 {
-                    var c = counts.FirstOrDefault(x => x.TrancheId == t.TrancheId && x.LineId == l.LineId);
+                    var c = counts.FirstOrDefault(x => x.TrancheId == t.DeliveryRecordId && x.LineId == l.LineId);
                     return new TrancheLineStatus(l.LineId, lines[l.LineId].Spec.SpecCode, l.ConvertedCrabs, c?.Count ?? 0, c?.Subs ?? 0, lines[l.LineId].PricePerKg);
                 }).ToList(), ship?.ShipmentNo, ship?.Status);
         }).ToList();
@@ -77,7 +77,7 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
             if (!await db.InventoryAllocations.AnyAsync(a => a.TrancheId == trancheId && a.ReleasedAt == null, ct))
                 throw new BusinessRuleException("delivery.nothing_allocated", "Chưa có con cua nào đã duyệt hạng được phân bổ cho đợt này.");
             var now = clock.GetUtcNow();
-            var prices = await db.SalesOrderLines.Where(l => l.OrderId == order.OrderId).ToDictionaryAsync(l => l.LineId, l => l.PricePerKg, ct);
+            var prices = await db.SalesOrderLines.Where(l => l.OrderId == order.OrderId).ToDictionaryAsync(l => l.SalesRecordId, l => l.PricePerKg, ct);
             var shipment = new Shipment
             {
                 ShipmentNo = Codes.New("CG", 10), OrderId = order.OrderId, TrancheId = trancheId, BatchId = batch.BatchId,
@@ -89,7 +89,7 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
             order.TraceCode ??= Codes.New("QR", 10);
             order.UpdatedAt = now;
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("shipment", shipment.ShipmentId, "create", null, new { shipment.ShipmentNo, order.OrderNo, tranche.Seq, order.TraceCode }, ct);
+            await audit.WriteAsync("shipment", shipment.DeliveryRecordId, "create", null, new { shipment.ShipmentNo, order.OrderNo, tranche.Seq, order.TraceCode }, ct);
             return shipment.ShipmentNo;
         }, ct, IsolationLevel.Serializable);
         return await ShipmentAsync(no, ct);
@@ -163,7 +163,7 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
             shipment.Status = "Dispatched";
             shipment.DispatchedAt = shipment.UpdatedAt = now;
             if (req.TransportCondition is { } condition) shipment.TransportCondition = condition.Trim();
-            var tranche = await db.DeliveryTranches.SingleAsync(t => t.TrancheId == shipment.TrancheId, ct);
+            var tranche = await db.DeliveryTranches.SingleAsync(t => t.DeliveryRecordId == shipment.TrancheId, ct);
             tranche.Status = "Dispatched";
             tranche.UpdatedAt = now;
             var previous = order.Status;
@@ -174,7 +174,7 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
             }
             order.UpdatedAt = now;
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("shipment", shipment.ShipmentId, "dispatch", new { orderStatus = previous },
+            await audit.WriteAsync("shipment", shipment.DeliveryRecordId, "dispatch", new { orderStatus = previous },
                 new { shipment.Status, crabs = allocated.Count, kg = shipment.Lines.Sum(l => l.DispatchedKg), orderStatus = order.Status }, ct);
         }, ct, IsolationLevel.Serializable);
         return await ShipmentAsync(shipmentNo, ct);
@@ -192,7 +192,7 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
             await access.RequireOperatorAsync(batch, ct);
             if (shipment.Status != "Dispatched")
                 throw new BusinessRuleException("delivery.not_dispatched", "Chuyến giao chưa xuất hoặc đã nghiệm thu.");
-            var acceptance = await db.DeliveryAcceptances.SingleOrDefaultAsync(a => a.ShipmentId == shipment.ShipmentId, ct);
+            var acceptance = await db.DeliveryAcceptances.SingleOrDefaultAsync(a => a.ShipmentId == shipment.DeliveryRecordId, ct);
             if (acceptance is { Status: not "Pending" })
                 throw new ConflictException("delivery.acceptance_closed", "Biên bản nghiệm thu đã chốt.");
             var discrepancy = false;
@@ -241,7 +241,7 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
             }
             acceptance ??= db.DeliveryAcceptances.Add(new DeliveryAcceptance
             {
-                ShipmentId = shipment.ShipmentId, OrderId = order.OrderId, TrancheId = shipment.TrancheId, CreatedAt = now,
+                ShipmentId = shipment.DeliveryRecordId, OrderId = order.OrderId, TrancheId = shipment.TrancheId, CreatedAt = now,
             }).Entity;
             acceptance.AcceptedCrabs = shipment.Lines.Sum(l => l.AcceptedCrabs ?? 0);
             acceptance.AcceptedKg = shipment.Lines.Sum(l => l.AcceptedKg ?? 0);
@@ -254,7 +254,7 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
             acceptance.OperatorRecordedAt = acceptance.UpdatedAt = now;
             shipment.UpdatedAt = now;
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("shipment", shipment.ShipmentId, "record_receipt", null,
+            await audit.WriteAsync("shipment", shipment.DeliveryRecordId, "record_receipt", null,
                 new { acceptance.AcceptedCrabs, acceptance.AcceptedKg, acceptance.RejectedCrabs, rejected = rejectedCodes }, ct);
         }, ct, IsolationLevel.Serializable);
         return await ShipmentAsync(shipmentNo, ct);
@@ -274,7 +274,7 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
             var (shipment, order, batch) = await LoadShipmentAsync(shipmentNo, ct);
             if (order.CustomerId != me.UserId)
                 throw new ForbiddenException("delivery.not_customer", "Chỉ khách của đơn xác nhận nghiệm thu.");
-            var acceptance = await db.DeliveryAcceptances.SingleOrDefaultAsync(a => a.ShipmentId == shipment.ShipmentId, ct);
+            var acceptance = await db.DeliveryAcceptances.SingleOrDefaultAsync(a => a.ShipmentId == shipment.DeliveryRecordId, ct);
             if (shipment.Status != "Dispatched" || acceptance is not { Status: "Pending" })
                 throw new BusinessRuleException("delivery.acceptance_not_ready", "Chưa có biên bản nghiệm thu chờ xác nhận.");
             var now = clock.GetUtcNow();
@@ -290,12 +290,12 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
             shipment.Status = "Accepted";
             shipment.DeliveredAt = shipment.UpdatedAt = now;
             shipment.ReturnWindowEndsAt = await ledger.ReturnWindowEndAsync(now, ct);
-            var tranche = await db.DeliveryTranches.SingleAsync(t => t.TrancheId == shipment.TrancheId, ct);
+            var tranche = await db.DeliveryTranches.SingleAsync(t => t.DeliveryRecordId == shipment.TrancheId, ct);
             tranche.UpdatedAt = now;
             await db.SaveChangesAsync(ct);
 
             // Cua còn trong chuyến (không bị từ chối lúc cân lần hai) chuyển Delivered.
-            foreach (var a in await db.InventoryAllocations.Where(a => a.TrancheId == tranche.TrancheId && a.Status == "Shipped").ToListAsync(ct))
+            foreach (var a in await db.InventoryAllocations.Where(a => a.TrancheId == tranche.DeliveryRecordId && a.Status == "Shipped").ToListAsync(ct))
             {
                 var crab = await db.CrabUnits.SingleAsync(c => c.CrabUnitId == a.CrabUnitId, ct);
                 a.Status = "Delivered";
@@ -307,16 +307,16 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
                     ActorId = me.UserId, Reason = shipment.ShipmentNo, CreatedAt = now,
                 });
             }
-            await ledger.IssueInvoiceAsync(order, batch, tranche.TrancheId, goods, order.CustomerPartyId, order.RecipientName, now, ct);
+            await ledger.IssueInvoiceAsync(order, batch, tranche.DeliveryRecordId, goods, order.CustomerPartyId, order.RecipientName, now, ct);
             if (acceptance.BalanceDue > 0)
             {
                 tranche.Status = "Accepted";
                 var hours = await parameters.GetIntAsync(ParamKeys.BalancePaymentHours, now, ct);
                 acceptance.BalanceDueAt = now.AddHours(hours);
                 var account = await db.BatchAccounts.SingleAsync(a => a.BatchId == batch.BatchId, ct);
-                var created = await payments.CreateAsync(PaymentPurposes.PreOrderBalance, acceptance.BalanceDue.Value, account.BatchAccountId,
+                var created = await payments.CreateAsync(PaymentPurposes.PreOrderBalance, acceptance.BalanceDue.Value, account.BatchRecordId,
                     account.ProviderAccountNo, acceptance.BalanceDueAt.Value, PaymentTarget.ForOrder(order), null, ct);
-                created.Request.TrancheId = tranche.TrancheId;
+                created.Request.TrancheId = tranche.DeliveryRecordId;
             }
             else
             {
@@ -324,7 +324,7 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
                 acceptance.BalancePaidAt = now;
             }
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("delivery_acceptance", acceptance.AcceptanceId, "confirm", new { status = "Pending" },
+            await audit.WriteAsync("delivery_acceptance", acceptance.DeliveryRecordId, "confirm", new { status = "Pending" },
                 new { goods = (long)goods, applied = (long)applied, balance = (long)acceptance.BalanceDue!.Value, tranche.Status }, ct);
             await ledger.FinalizeIfDoneAsync(order, now, ct);
         }, ct, IsolationLevel.Serializable);
@@ -344,7 +344,7 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
             if (shipment.Status != "Dispatched")
                 throw new BusinessRuleException("delivery.not_dispatched", "Chỉ từ chối được chuyến đang giao.");
             var now = clock.GetUtcNow();
-            var acceptance = await db.DeliveryAcceptances.SingleOrDefaultAsync(a => a.ShipmentId == shipment.ShipmentId, ct);
+            var acceptance = await db.DeliveryAcceptances.SingleOrDefaultAsync(a => a.ShipmentId == shipment.DeliveryRecordId, ct);
             if (acceptance is not null) { acceptance.Status = "Refused"; acceptance.UpdatedAt = now; }
             await ledger.ForfeitAsync(order, $"Khách từ chối nhận chuyến {shipment.ShipmentNo}: {req.Reason.Trim()}", now, ct);
         }, ct, IsolationLevel.Serializable);
@@ -370,7 +370,7 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
         var shipments = await db.Shipments.AsNoTracking().Include(s => s.Lines).Where(s => s.OrderId == order.OrderId).OrderBy(s => s.CreatedAt).ToListAsync(ct);
         var list = new List<ShipmentResponse>();
         foreach (var s in shipments) list.Add(await ShipmentResponseAsync(s, order, ct));
-        var seqs = await db.DeliveryTranches.Where(t => t.OrderId == order.OrderId).ToDictionaryAsync(t => t.TrancheId, t => (int)t.Seq, ct);
+        var seqs = await db.DeliveryTranches.Where(t => t.OrderId == order.OrderId).ToDictionaryAsync(t => t.DeliveryRecordId, t => (int)t.Seq, ct);
         var batch = await db.Batches.AsNoTracking().SingleAsync(b => b.BatchId == order.BatchId, ct);
         var invoices = await InvoicesAsync(order.OrderId, seqs, ct);
         var applied = await db.DeliveryAcceptances.Where(a => a.OrderId == order.OrderId && a.Status == "Confirmed").SumAsync(a => (decimal?)a.DepositApplied, ct) ?? 0;
@@ -390,23 +390,23 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
                       where a.BatchId == batch.BatchId
                       orderby a.AllocatedAt
                       select new AllocationResponse(c.CrabCode, o.OrderNo, o.OrderType,
-                          a.TrancheId == null ? null : (int?)db.DeliveryTranches.Where(t => t.TrancheId == a.TrancheId).Select(t => (int)t.Seq).First(),
-                          a.LineId == null ? null : db.SalesOrderLines.Where(l => l.LineId == a.LineId).Select(l => l.Spec.SpecCode).First(),
-                          a.CrabSpecId == null ? null : db.ProductSpecifications.Where(s => s.SpecId == a.CrabSpecId).Select(s => s.SpecCode).First(),
+                          a.TrancheId == null ? null : (int?)db.DeliveryTranches.Where(t => t.DeliveryRecordId == a.TrancheId).Select(t => (int)t.Seq).First(),
+                          a.LineId == null ? null : db.SalesOrderLines.Where(l => l.SalesRecordId == a.LineId).Select(l => l.Spec.SpecCode).First(),
+                          a.CrabSpecId == null ? null : db.ProductSpecifications.Where(s => s.OfferRecordId == a.CrabSpecId).Select(s => s.SpecCode).First(),
                           a.IsSubstitution, a.Status, a.AllocatedAt, a.ReleasedAt, a.ReleaseReason)).Take(2000).ToListAsync(ct);
     }
 
     private async Task<ShipmentResponse> ShipmentResponseAsync(Shipment s, SalesOrder order, CancellationToken ct)
     {
-        var specs = await db.SalesOrderLines.Where(l => l.OrderId == order.OrderId).Select(l => new { l.LineId, l.Spec.SpecCode })
+        var specs = await db.SalesOrderLines.Where(l => l.OrderId == order.OrderId).Select(l => new { LineId = l.SalesRecordId, l.Spec.SpecCode })
             .ToDictionaryAsync(l => l.LineId, l => l.SpecCode, ct);
-        var seq = await db.DeliveryTranches.Where(t => t.TrancheId == s.TrancheId).Select(t => (int)t.Seq).SingleAsync(ct);
-        var a = await db.DeliveryAcceptances.AsNoTracking().SingleOrDefaultAsync(x => x.ShipmentId == s.ShipmentId, ct);
+        var seq = await db.DeliveryTranches.Where(t => t.DeliveryRecordId == s.TrancheId).Select(t => (int)t.Seq).SingleAsync(ct);
+        var a = await db.DeliveryAcceptances.AsNoTracking().SingleOrDefaultAsync(x => x.ShipmentId == s.DeliveryRecordId, ct);
         BalancePaymentResponse? balance = null;
         if (a is { Status: "Confirmed", BalanceDue: > 0 })
         {
             var request = await db.PaymentRequests.AsNoTracking().Where(r => r.TrancheId == s.TrancheId && r.Purpose == PaymentPurposes.PreOrderBalance)
-                .OrderByDescending(r => r.PaymentRequestId).FirstOrDefaultAsync(ct);
+                .OrderByDescending(r => r.PaymentRecordId).FirstOrDefaultAsync(ct);
             if (request is not null) balance = await PaymentAsync(request, ct);
         }
         return new ShipmentResponse(s.ShipmentNo, order.OrderNo, seq, s.Status, s.ScheduledAt, s.DispatchedAt, s.DeliveredAt, s.ReturnWindowEndsAt,
@@ -422,9 +422,9 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
 
     internal async Task<BalancePaymentResponse> PaymentAsync(PaymentRequest request, CancellationToken ct)
     {
-        var account = await db.BatchAccounts.AsNoTracking().SingleAsync(x => x.BatchAccountId == request.BatchAccountId, ct);
+        var account = await db.BatchAccounts.AsNoTracking().SingleAsync(x => x.BatchRecordId == request.BatchAccountId, ct);
         var described = await payments.DescribeAsync(request, account, "", ct);
-        return new BalancePaymentResponse(request.PaymentRequestId, request.ReferenceCode, (long)request.Amount, described.QrContent ?? "", request.ExpiresAt,
+        return new BalancePaymentResponse(request.PaymentRecordId, request.ReferenceCode, (long)request.Amount, described.QrContent ?? "", request.ExpiresAt,
             account.ProviderAccountNo, described.Status);
     }
 
@@ -447,7 +447,7 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
 
     private async Task<(DeliveryTranche Tranche, SalesOrder Order, Batch Batch)> LoadTrancheAsync(long trancheId, CancellationToken ct)
     {
-        var tranche = await db.DeliveryTranches.FromSqlInterpolated($"SELECT * FROM dbo.delivery_tranche WITH (UPDLOCK, HOLDLOCK) WHERE tranche_id = {trancheId}")
+        var tranche = await db.DeliveryTranches.FromSqlInterpolated($"SELECT * FROM dbo.delivery_record WITH (UPDLOCK, HOLDLOCK) WHERE record_type = 'Tranche' AND delivery_record_id = {trancheId}")
                           .SingleOrDefaultAsync(ct)
                       ?? throw new NotFoundException("delivery.tranche_not_found", "Không tìm thấy đợt giao.");
         var order = await db.SalesOrders.SingleAsync(o => o.OrderId == tranche.OrderId, ct);
@@ -457,7 +457,7 @@ public sealed class DeliveryService(AppDbContext db, ICurrentUser me, TimeProvid
 
     private async Task<(Shipment Shipment, SalesOrder Order, Batch Batch)> LoadShipmentAsync(string shipmentNo, CancellationToken ct)
     {
-        var shipment = await db.Shipments.FromSqlInterpolated($"SELECT * FROM dbo.shipment WITH (UPDLOCK, HOLDLOCK) WHERE shipment_no = {shipmentNo}")
+        var shipment = await db.Shipments.FromSqlInterpolated($"SELECT * FROM dbo.delivery_record WITH (UPDLOCK, HOLDLOCK) WHERE record_type = 'Shipment' AND shipment_no = {shipmentNo}")
                            .Include(s => s.Lines).SingleOrDefaultAsync(ct)
                        ?? throw new NotFoundException("delivery.shipment_not_found", "Không tìm thấy chuyến giao.");
         var order = await db.SalesOrders.SingleAsync(o => o.OrderId == shipment.OrderId, ct);

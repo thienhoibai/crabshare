@@ -6,13 +6,11 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Bảng quyết toán của lô; bất biến sau khi được duyệt
 /// </summary>
-public partial class Settlement
+public partial class Settlement : SettlementRecord
 {
-    public long SettlementId { get; set; }
-
     public long BatchId { get; set; }
 
-    public short RevisionNo { get; set; }
+    public short RevisionNo { get; set; } = (short)1;
 
     public decimal ActualRevenue { get; set; }
 
@@ -34,7 +32,7 @@ public partial class Settlement
     /// <summary>
     /// Giá trị: Draft, Proposed, Disputed, Approved, PaidOut, Closed
     /// </summary>
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "Draft";
 
     public DateTimeOffset? ProposedAt { get; set; }
 
@@ -44,9 +42,9 @@ public partial class Settlement
 
     public DateTimeOffset? ApprovedAt { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual AppUser? ApprovedByNavigation { get; set; }
 

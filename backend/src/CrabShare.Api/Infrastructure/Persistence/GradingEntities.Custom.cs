@@ -13,23 +13,26 @@ public partial class Batch
     [Column("grade_rule_set_id")] public long? GradeRuleSetId { get; set; }
 }
 
-[Table("grading_standard")]
-public sealed class GradingStandard
+/// <summary>Bảng gộp grading_rule (V038): chuẩn phân hạng (Standard), bộ quy tắc (RuleSet) và từng quy tắc (Rule) nằm chung một bảng, phân biệt bằng cột record_type.</summary>
+[Table("grading_rule")]
+public abstract class GradingRuleRecord
 {
-    [Key, Column("standard_id")] public long StandardId { get; set; }
+    [Key, Column("grading_rule_id")] public long GradingRuleId { get; set; }
+}
+
+public sealed class GradingStandard : GradingRuleRecord
+{
     [Column("standard_code"), MaxLength(40)] public string StandardCode { get; set; } = "";
     [Column("revision"), MaxLength(60)] public string Revision { get; set; } = "";
     [Column("issuer"), MaxLength(200)] public string Issuer { get; set; } = "";
     [Column("scope"), MaxLength(300)] public string Scope { get; set; } = "";
-    [Column("effective_from")] public DateOnly EffectiveFrom { get; set; }
+    [Column("standard_effective_from")] public DateOnly EffectiveFrom { get; set; }
     [Column("note"), MaxLength(500)] public string? Note { get; set; }
     [Column("created_at"), Precision(3)] public DateTimeOffset CreatedAt { get; set; }
 }
 
-[Table("grade_rule_set")]
-public sealed class GradeRuleSet
+public sealed class GradeRuleSet : GradingRuleRecord
 {
-    [Key, Column("rule_set_id")] public long RuleSetId { get; set; }
     [Column("standard_id")] public long StandardId { get; set; }
     [Column("crab_type"), MaxLength(20), Unicode(false)] public string CrabType { get; set; } = "";
     [Column("version_no")] public int VersionNo { get; set; }
@@ -45,10 +48,8 @@ public sealed class GradeRuleSet
     public List<GradeRule> Rules { get; set; } = [];
 }
 
-[Table("grade_rule")]
-public sealed class GradeRule
+public sealed class GradeRule : GradingRuleRecord
 {
-    [Key, Column("rule_id")] public long RuleId { get; set; }
     [Column("rule_set_id")] public long RuleSetId { get; set; }
     /// <summary>Size, PhysicalFactor, Sensory, Exclusion.</summary>
     [Column("rule_kind"), MaxLength(20), Unicode(false)] public string RuleKind { get; set; } = "";
@@ -62,13 +63,18 @@ public sealed class GradeRule
     /// <summary>LowerInclusive [a, b), UpperInclusive (a, b], BothInclusive [a, b].</summary>
     [Column("boundary"), MaxLength(20), Unicode(false)] public string Boundary { get; set; } = "LowerInclusive";
     [Column("sort_order")] public int SortOrder { get; set; }
-    [Column("note"), MaxLength(300)] public string? Note { get; set; }
+    [Column("rule_note"), MaxLength(300)] public string? Note { get; set; }
 }
 
-[Table("ai_inference")]
-public sealed class AiInference
+/// <summary>Bảng gộp measurement_record (V037): lượt đo (Session), kết quả AI (AiInference) và số đo (Value) nằm chung một bảng, phân biệt bằng cột record_type.</summary>
+[Table("measurement_record")]
+public abstract class MeasurementRecord
 {
-    [Key, Column("ai_inference_id")] public long AiInferenceId { get; set; }
+    [Key, Column("measurement_record_id")] public long MeasurementRecordId { get; set; }
+}
+
+public sealed class AiInference : MeasurementRecord
+{
     [Column("measurement_session_id")] public long MeasurementSessionId { get; set; }
     /// <summary>White (ảnh đèn trắng) hoặc Red (ảnh soi đỏ).</summary>
     [Column("image_kind"), MaxLength(10), Unicode(false)] public string ImageKind { get; set; } = "";
@@ -89,10 +95,8 @@ public sealed class AiInference
     [Column("created_at"), Precision(3)] public DateTimeOffset CreatedAt { get; set; }
 }
 
-[Table("measurement_value")]
-public sealed class MeasurementValue
+public sealed class MeasurementValue : MeasurementRecord
 {
-    [Key, Column("measurement_value_id")] public long MeasurementValueId { get; set; }
     [Column("measurement_session_id")] public long MeasurementSessionId { get; set; }
     /// <summary>WeightG, CarapaceLengthCm, CarapaceWidthCm, CarapaceAreaCm2, EdgeBandMm, CIndex.</summary>
     [Column("metric"), MaxLength(30), Unicode(false)] public string Metric { get; set; } = "";

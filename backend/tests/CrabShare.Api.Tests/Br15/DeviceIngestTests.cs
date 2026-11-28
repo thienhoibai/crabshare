@@ -74,7 +74,7 @@ public sealed class DeviceIngestTests(DeviceFixture f) : IClassFixture<DeviceFix
         };
         db.PartySites.Add(site);
         await db.SaveChangesAsync();
-        return site.SiteId;
+        return site.PartyRecordId;
     }
 
     [Fact]
@@ -345,7 +345,7 @@ public sealed class DeviceIngestTests(DeviceFixture f) : IClassFixture<DeviceFix
         Assert.DoesNotContain(password, queued.ToString());
         await using (var db = f.OpenDb())
         {
-            var stored = await db.DeviceCommands.SingleAsync(c => c.DeviceCommandId == id);
+            var stored = await db.DeviceCommands.SingleAsync(c => c.DeviceRecordId == id);
             Assert.NotNull(stored.ProtectedPayload);
             Assert.DoesNotContain(password, stored.ProtectedPayload!);
         }
@@ -355,7 +355,7 @@ public sealed class DeviceIngestTests(DeviceFixture f) : IClassFixture<DeviceFix
         Assert.Equal(password, delivered.GetProperty("wifi").GetProperty("password").GetString());
         var repeated = await Br15Fixture.Body(await Br15Fixture.PostJson(device, reportPath, state));
         Assert.Equal(JsonValueKind.Null, repeated.GetProperty("wifi").ValueKind);
-        await using (var db = f.OpenDb()) Assert.Null((await db.DeviceCommands.SingleAsync(c => c.DeviceCommandId == id)).ProtectedPayload);
+        await using (var db = f.OpenDb()) Assert.Null((await db.DeviceCommands.SingleAsync(c => c.DeviceRecordId == id)).ProtectedPayload);
         await Br15Fixture.Body(await Br15Fixture.PostJson(device, reportPath,
             state with { wifiOutcome = new { id, connected = true, message = "Đã kết nối" } }));
         var status = await Br15Fixture.Body(await farmer.GetAsync(path));

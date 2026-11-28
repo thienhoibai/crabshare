@@ -183,7 +183,7 @@ public class PaymentProfileDatabaseTests(KycDatabaseFixture fixture) : IClassFix
         var response = await owner.PutAsJsonAsync("/api/me/payout-account?ownerType=Operator", Bank("HTX CUA CA MAU")); response.EnsureSuccessStatusCode();
         var profile = (await response.Content.ReadFromJsonAsync<PayoutProfileResponse>())!;
         Assert.Equal("Operator", profile.OwnerType); Assert.Equal("Active", profile.Account!.Status);
-        await Db(async db => { var account = await db.PayoutAccounts.SingleAsync(a => a.PayoutAccountId == profile.Account.PayoutAccountId);
+        await Db(async db => { var account = await db.PayoutAccounts.SingleAsync(a => a.UserRecordId == profile.Account.PayoutAccountId);
             Assert.Null(account.OwnerUserId); Assert.NotNull(account.OwnerOperatorId); return true; });
         using var staff = Client(await Operator("Staff"), Roles.OperatorMember);
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync("/api/me/payout-account")).StatusCode);

@@ -83,13 +83,13 @@ internal static class Br15DemoSeeder
         db.PhysicalSlots.AddRange(slots);
         await db.SaveChangesAsync(ct);
 
-        var specs = await db.ProductSpecifications.AsNoTracking().ToDictionaryAsync(s => s.SpecCode, s => s.SpecId, ct);
-        var ruleSet = await db.GradeRuleSets.Where(s => s.CrabType == "FatteningMudCrab" && s.Status == "Active").Select(s => (long?)s.RuleSetId).SingleOrDefaultAsync(ct);
+        var specs = await db.ProductSpecifications.AsNoTracking().ToDictionaryAsync(s => s.SpecCode, s => s.OfferRecordId, ct);
+        var ruleSet = await db.GradeRuleSets.Where(s => s.CrabType == "FatteningMudCrab" && s.Status == "Active").Select(s => (long?)s.GradingRuleId).SingleOrDefaultAsync(ct);
 
         // 5. Lô P đang nuôi (WF-02 → WF-05): 40 con được cấp vốn, Chi phí chuẩn 425.000 đ mỗi con.
         var stocked = now.AddDays(-12);
         // Điểm xuất hàng của hai Lô mẫu là trại Năm Căn: đặt trước cần nó để tính khoảng cách giao (BR-084, BR-085).
-        var dispatchSite = await db.PartySites.Where(x => x.PartyId == farmParty && x.SiteType == "Farm").Select(x => x.SiteId).FirstAsync(ct);
+        var dispatchSite = await db.PartySites.Where(x => x.PartyId == farmParty && x.SiteType == "Farm").Select(x => x.PartyRecordId).FirstAsync(ct);
         var pBatch = NewBatch("CS-2611-P1", "Cua thịt hộp RAS Năm Căn — đợt tháng 11", p, farmParty, offtake.PartyId, ruleSet, now);
         pBatch.DispatchSiteId = dispatchSite;
         pBatch.BatchMode = "P";
@@ -130,15 +130,15 @@ internal static class Br15DemoSeeder
             // Tiền góp đi qua yêu cầu thanh toán VietQR đã trả và giao dịch ngân hàng đã khớp (BR-213, BR-232).
             var request = new PaymentRequest
             {
-                ReferenceCode = $"GV{c.ContributionId:D11}", BatchAccountId = pBatch.BatchAccount!.BatchAccountId, Purpose = "Contribution", Amount = amount,
+                ReferenceCode = $"GV{c.ContributionId:D11}", BatchAccountId = pBatch.BatchAccount!.BatchRecordId, Purpose = "Contribution", Amount = amount,
                 ContributionId = c.ContributionId, ExpiresAt = c.ExpiresAt, Status = "Paid", CreatedAt = c.ReservedAt, UpdatedAt = now.AddDays(-34),
             };
             db.PaymentRequests.Add(request);
             await db.SaveChangesAsync(ct);
             db.ProviderTransactions.Add(new ProviderTransaction
             {
-                ProviderTxnId = $"SEED-GV-{c.ContributionId}", BatchAccountId = pBatch.BatchAccount!.BatchAccountId, Direction = "In", Amount = amount,
-                ReferenceCode = request.ReferenceCode, PaymentRequestId = request.PaymentRequestId, MatchStatus = "Matched", OccurredAt = now.AddDays(-34), ReceivedAt = now.AddDays(-34),
+                ProviderTxnId = $"SEED-GV-{c.ContributionId}", BatchAccountId = pBatch.BatchAccount!.BatchRecordId, Direction = "In", Amount = amount,
+                ReferenceCode = request.ReferenceCode, PaymentRequestId = request.PaymentRecordId, MatchStatus = "Matched", OccurredAt = now.AddDays(-34), ReceivedAt = now.AddDays(-34),
             });
             await parties.AddParticipantAsync(pBatch.BatchId, await parties.PartyIdOfUserAsync(investor.UserId, ct), ParticipantRoles.Investor, ct);
         }
@@ -156,7 +156,7 @@ internal static class Br15DemoSeeder
         await db.SaveChangesAsync(ct);
         var lot = new SupplyLot
         {
-            LotCode = "LN-2611-P1-01", ProcurementOrderId = po.ProcurementOrderId, BatchId = pBatch.BatchId, OriginRegion = "Rạch Gốc, Ngọc Hiển, Cà Mau",
+            LotCode = "LN-2611-P1-01", ProcurementOrderId = po.SupplyRecordId, BatchId = pBatch.BatchId, OriginRegion = "Rạch Gốc, Ngọc Hiển, Cà Mau",
             HarvestedOn = DateOnly.FromDateTime(stocked.AddDays(-1).UtcDateTime), DeclaredSpecies = "Scylla paramamosain", DeclaredCount = 40, DeclaredWeightKg = 12.0m,
             CreatedAt = stocked.AddHours(-6),
         };
@@ -164,7 +164,7 @@ internal static class Br15DemoSeeder
         await db.SaveChangesAsync(ct);
         var receipt = new GoodsReceipt
         {
-            ReceiptNo = "GR-2611-P1-01", SupplyLotId = lot.SupplyLotId, BatchId = pBatch.BatchId, ReceivedAt = stocked.AddHours(-3), ReceivedBy = p.Owner.UserId,
+            ReceiptNo = "GR-2611-P1-01", SupplyLotId = lot.SupplyRecordId, BatchId = pBatch.BatchId, ReceivedAt = stocked.AddHours(-3), ReceivedBy = p.Owner.UserId,
             AcceptedCount = 40, AcceptedWeightG = 12_040, Status = "Completed", CompletedAt = stocked.AddHours(-1), CreatedAt = stocked.AddHours(-3),
         };
         db.GoodsReceipts.Add(receipt);
@@ -180,7 +180,7 @@ internal static class Br15DemoSeeder
         {
             var crab = new CrabUnit
             {
-                CrabCode = $"CU2611P1{i + 1:D2}", BatchId = pBatch.BatchId, SupplyLotId = lot.SupplyLotId, GoodsReceiptId = receipt.GoodsReceiptId,
+                CrabCode = $"CU2611P1{i + 1:D2}", BatchId = pBatch.BatchId, SupplyLotId = lot.SupplyRecordId, GoodsReceiptId = receipt.SupplyRecordId,
                 Species = "Scylla paramamosain", Sex = "Male", Maturity = "Mature", ReceivedWeightG = 280 + (i * 7 % 45), InventoryStatus = "Holding",
                 ReceivedAt = stocked.AddHours(-2), CreatedAt = stocked.AddHours(-2), UpdatedAt = now,
             };
@@ -206,7 +206,7 @@ internal static class Br15DemoSeeder
         await db.SaveChangesAsync(ct);
 
         // 6. Thiết bị IoT đã đăng ký (BR-116, BR-230): trạm đo tại trạm kiểm phẩm, camera chạy dàn R02, cụm cảm biến nước của đợt lưu nuôi.
-        var holdingId = await db.HoldingOperations.Where(h => h.BatchId == pBatch.BatchId).Select(h => h.HoldingId).SingleAsync(ct);
+        var holdingId = await db.HoldingOperations.Where(h => h.BatchId == pBatch.BatchId).Select(h => h.BatchRecordId).SingleAsync(ct);
         Device NewDevice(string code, string type, string key, string scope) => new()
         {
             DeviceCode = code, DeviceType = type, OperatorId = p.Farm.OperatorId, ScopeType = scope, KeyHash = DeviceKeys.Hash(key), KeyPrefix = key[..8],
@@ -214,7 +214,7 @@ internal static class Br15DemoSeeder
             LastCalibratedAt = now.AddDays(-2), CreatedAt = now.AddDays(-14), UpdatedAt = now,
         };
         var station = NewDevice(StationCode, "Station", StationKey, "QcStation");
-        station.ScopeSiteId = qcSite.SiteId;
+        station.ScopeSiteId = qcSite.PartyRecordId;
         station.CameraHeightMm = 370;
         var railCamera = NewDevice(RailCameraCode, "RailCamera", RailCameraKey, "Rack");
         railCamera.ScopeRackCode = "R02";
@@ -300,7 +300,7 @@ internal static class Br15DemoSeeder
             }
             await db.SaveChangesAsync();
         }
-        await db.StandardCostVersions.Where(v => v.CostVersionId == version.CostVersionId)
+        await db.StandardCostVersions.Where(v => v.CostRecordId == version.CostRecordId)
             .ExecuteUpdateAsync(s => s.SetProperty(v => v.Status, "Locked").SetProperty(v => v.LockedAt, now.AddDays(-41)).SetProperty(v => v.ApprovedAt, now.AddDays(-41)));
     }
 

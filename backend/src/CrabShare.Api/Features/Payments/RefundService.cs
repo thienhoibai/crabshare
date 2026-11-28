@@ -32,7 +32,7 @@ public sealed class RefundService(AppDbContext db, IAuditLog audit)
         };
         db.PaymentInstructions.Add(instruction);
         await db.SaveChangesAsync(ct);
-        await audit.WriteAsync("payment_instruction", instruction.InstructionId, "create", null,
+        await audit.WriteAsync("payment_instruction", instruction.PaymentRecordId, "create", null,
             new { type = "Refund", amount = (long)amount, contributionId, orderId, note }, now, ct);
         return instruction;
     }

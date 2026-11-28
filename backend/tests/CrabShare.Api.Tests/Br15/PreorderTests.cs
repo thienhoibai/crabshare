@@ -109,7 +109,7 @@ public sealed class PreorderTests(Br15Fixture f) : IClassFixture<Br15Fixture>
         }
         long farmerSite;
         await using (var db = f.OpenDb())
-            farmerSite = await db.PartySites.Where(s => s.PartyId == batch.Farmer.PartyId && s.SiteType == "DeliveryAddress").Select(s => s.SiteId).SingleAsync();
+            farmerSite = await db.PartySites.Where(s => s.PartyId == batch.Farmer.PartyId && s.SiteType == "DeliveryAddress").Select(s => s.PartyRecordId).SingleAsync();
         using var farmer = f.Client(batch.Farmer.UserId, Roles.Customer);
         var own = await Br15Fixture.PostJson(farmer, "/api/preorders", Order(batch.Code, farmerSite));
         Assert.Equal("preorder.related_party", await Br15Fixture.ErrorCode(own));

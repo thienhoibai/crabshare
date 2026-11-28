@@ -36,7 +36,6 @@ internal sealed class DemoLifecycleSeeder
         "Khai báo thu hoạch và cân từng con",
     ];
 
-    private static readonly Dictionary<string, decimal> MudCrabPrices = new() { ["L1"] = 650_000, ["L2"] = 520_000, ["L3"] = 420_000, ["L4"] = 320_000 };
     private static readonly Dictionary<string, decimal> RoeCrabPrices = new() { ["L1"] = 720_000, ["L2"] = 600_000, ["L3"] = 480_000, ["L4"] = 380_000 };
 
     private readonly AppDbContext db;
@@ -45,8 +44,11 @@ internal sealed class DemoLifecycleSeeder
     private readonly Random rng = new(20261013);
     private readonly HashSet<string> usedCodes = [];
     private int txnNo;
-    private Dictionary<string, ProductGrade> grades = null!;
-    private List<FeeTier> feeTiers = null!;
+    /// <summary>Hạng theo khối lượng. Bảng product_grade cũ đã bỏ ở V035; giữ đúng ngưỡng để số liệu demo không đổi.</summary>
+    private static readonly (string Code, int? MinWeightG, int? MaxWeightG)[] Grades =
+        [("L1", 500, null), ("L2", 350, 499), ("L3", 250, 349), ("L4", null, 249)];
+    /// <summary>Hạng đã xếp cho từng con lúc thu hoạch (chỉ dùng trong lúc seed để tính tiền đơn).</summary>
+    private readonly Dictionary<CrabItem, string> gradeOf = [];
     private ContractTemplate template = null!;
     private List<PhysicalSlot> boxes = null!;   // boxes[0] là hộp 0001
 
@@ -61,8 +63,6 @@ internal sealed class DemoLifecycleSeeder
 
     private async Task RunAsync()
     {
-        grades = await db.ProductGrades.ToDictionaryAsync(g => g.GradeCode);
-        feeTiers = await db.FeeTiers.ToListAsync();
         template = await db.ContractTemplates.SingleAsync(t => t.Status == "Active");
         boxes = await db.PhysicalSlots.Where(s => s.OperatorId == p.Farm.OperatorId).OrderBy(s => s.SlotCode).ToListAsync();
 
@@ -70,7 +70,7 @@ internal sealed class DemoLifecycleSeeder
         foreach (var investor in p.Investors)
             db.RiskAcknowledgements.Add(new RiskAcknowledgement
             {
-                InvestorId = investor.UserId, RiskDisclosureId = risk.RiskDisclosureId,
+                InvestorId = investor.UserId, RiskDisclosureId = risk.ContractRecordId,
                 AcknowledgedAt = Day(-170), ScrolledToEnd = true, CreatedAt = Day(-170),
             });
 
@@ -121,13 +121,10 @@ internal sealed class DemoLifecycleSeeder
         b.HarvestStartedAt = Day(-57);
         Release(b, tranches[2], Day(-57, 5));
         var harvested = Harvest(b, crabs, Day(-57), minWeight: 260, maxWeight: 640);
-        var listings = Listings(b, harvested, "Cua gạch Năm Căn", RoeCrabPrices, Day(-57, 6), "Published");
-        // Dòng đơn phải trỏ phiên bản giá lúc đặt (V006), nên lưu trước để có price_history_id
         await SaveAndLockCostsAsync();
         var orders = harvested.OrderBy(_ => rng.Next()).Chunk(16).ToList();
         for (var i = 0; i < orders.Count; i++)
-            SellCompleted(b, orders[i], listings, p.Buyers[i % p.Buyers.Count], Day(-56 + i, 9));
-        foreach (var listing in listings.Values.Where(l => l.StockQtyKg == 0)) listing.Status = "SoldOut";
+            SellCompleted(b, orders[i], RoeCrabPrices, p.Buyers[i % p.Buyers.Count], Day(-56 + i, 9));
 
         b.Status = "Settlement";
         await SaveAndLockCostsAsync();
@@ -161,8 +158,7 @@ internal sealed class DemoLifecycleSeeder
         b.HarvestStartedAt = Day(-3);
         tranches[2].Status = "Requested";
         tranches[2].RequestedAt = Day(-3, 5);
-        var harvested = Harvest(b, crabs, Day(-2), minWeight: 230, maxWeight: 620);
-        Listings(b, harvested, "Cua thịt Năm Căn", MudCrabPrices, Day(-2, 5), "Published");
+        Harvest(b, crabs, Day(-2), minWeight: 230, maxWeight: 620);
 
         b.Status = "Harvesting";
         await SaveAndLockCostsAsync();
@@ -204,7 +200,6 @@ internal sealed class DemoLifecycleSeeder
     {
         var b = NewBatch("CS-2610-03", "SoftShellCrab", "Cua lột hộp nhựa Năm Căn — gọi vốn tháng 10", 600, 150m, 60,
             90_000_000, 120_000_000, 150_000_000, Day(-8));
-        SetOfftakePrices(b, ("L1", 280_000), ("L2", 250_000), ("L3", 220_000), ("L4", 190_000), ("SOFT", 350_000));
         Approve(b, Day(-3), Day(11));
         var costs = Costs(b, "Locked", Day(-6), Day(-3),
             new("Seed", "Cua giống chuẩn bị lột 120–150 g/con", 600, "con", 70_000, 1),
@@ -227,7 +222,6 @@ internal sealed class DemoLifecycleSeeder
     {
         var b = NewBatch("CS-2610-02", "RoeCrab", "Cua gạch Năm Căn — gọi vốn tháng 10", 250, 100m, 90,
             45_000_000, 60_000_000, 75_000_000, Day(-6));
-        SetOfftakePrices(b, ("L1", 720_000), ("L2", 600_000), ("L3", 480_000), ("L4", 380_000));
         Approve(b, Day(-4), Day(10));
         var costs = Costs(b, "Locked", Day(-5), Day(-4),
             new("Seed", "Cua gạch giống 180–200 g/con", 250, "con", 56_000, 1),
@@ -250,7 +244,6 @@ internal sealed class DemoLifecycleSeeder
     {
         var b = NewBatch("CS-2611-01", "RoeCrab", "Cua gạch Năm Căn — đợt tháng 11", 250, 100m, 90,
             45_000_000, 60_000_000, 75_000_000, Day(-2));
-        SetOfftakePrices(b, ("L1", 700_000), ("L2", 580_000), ("L3", 460_000), ("L4", 360_000));
         var costs = Costs(b, "Submitted", Day(-1), null,
             new("Seed", "Cua gạch giống 180–200 g/con", 250, "con", 56_000, 1),
             new("Feed", "Thức ăn tháng 1–2", 250, "kg", 25_000, 1),
@@ -286,27 +279,11 @@ internal sealed class DemoLifecycleSeeder
         return batch;
     }
 
-    /// <summary>Giá chốt bao tiêu công khai theo hạng (TL-30). Gắn navigation trước SaveChanges.</summary>
-    private void SetOfftakePrices(Batch b, params (string GradeCode, long UnitPrice)[] rows)
-    {
-        foreach (var (gradeCode, unitPrice) in rows)
-        {
-            b.BatchOfftakePrices.Add(new BatchOfftakePrice
-            {
-                GradeId = grades[gradeCode].GradeId,
-                UnitPrice = unitPrice,
-                CreatedAt = b.CreatedAt,
-                UpdatedAt = b.CreatedAt,
-            });
-        }
-    }
-
     /// <summary>Quản trị duyệt: chọn bậc phí theo vốn mục tiêu, mở gọi vốn, mở tài khoản chuyên dùng của lô.</summary>
     private void Approve(Batch b, DateTimeOffset approvedAt, DateTimeOffset fundingDeadline)
     {
-        var tier = feeTiers.Single(t => b.TargetCapital >= t.MinCapital && (t.MaxCapital is null || b.TargetCapital < t.MaxCapital));
-        b.FeeTierId = tier.FeeTierId;
-        b.PlatformFeeAmount = tier.FeeAmount;
+        // Bậc phí cũ (bảng fee_tier đã bỏ ở V035): dưới 50 tr là 500.000 đ, dưới 200 tr là 1.000.000 đ, còn lại 2.000.000 đ
+        b.PlatformFeeAmount = b.TargetCapital < 50_000_000m ? 500_000m : b.TargetCapital < 200_000_000m ? 1_000_000m : 2_000_000m;
         b.ApprovedBy = p.Admin.UserId;
         b.ApprovedAt = approvedAt;
         b.FundingOpenAt = approvedAt;
@@ -379,7 +356,7 @@ internal sealed class DemoLifecycleSeeder
         var draftHash = Sha($"draft|{contractNo}");
         var contract = new InvestmentContract
         {
-            ContractNo = contractNo, Contribution = contribution, TemplateId = template.TemplateId, Status = "FullySigned",
+            ContractNo = contractNo, Contribution = contribution, TemplateId = template.ContractRecordId, Status = "FullySigned",
             SigningMethod = "DigitalSignature", DraftHash = draftHash, FinalHash = Sha($"final|{contractNo}"),
             FullySignedAt = reservedAt.AddMinutes(5), CreatedAt = reservedAt.AddMinutes(1), UpdatedAt = now,
         };
@@ -465,10 +442,6 @@ internal sealed class DemoLifecycleSeeder
                 Source = "Manual", ReceivedAt = stockedAt,
             });
             var crab = new CrabItem { Batch = b, SlotAllocation = allocation, StockedAt = stockedAt, Status = "Growing", CreatedAt = stockedAt, UpdatedAt = now };
-            crab.CrabItemEvents.Add(new CrabItemEvent
-            {
-                EventType = "Stocked", OccurredAt = stockedAt, ActorId = p.Staff.UserId, Note = $"Thả vào hộp {box.SlotCode}", CreatedAt = stockedAt,
-            });
             db.CrabItems.Add(crab);
             box.Status = "Occupied";
             box.UpdatedAt = now;
@@ -489,7 +462,6 @@ internal sealed class DemoLifecycleSeeder
             SlotAllocation = crab.SlotAllocation, Batch = crab.Batch, EventType = "Mortality", OccurredAt = at, Quantity = 1,
             Note = "Phát hiện khi kiểm tra buổi sáng", Source = "Manual", ReceivedAt = at,
         });
-        crab.CrabItemEvents.Add(new CrabItemEvent { EventType = "Died", OccurredAt = at, ActorId = p.Staff.UserId, CreatedAt = at });
     }
 
     private void Molt(List<CrabItem> crabs, int count, int fromDay, int toDay)
@@ -549,16 +521,10 @@ internal sealed class DemoLifecycleSeeder
 
     // ---------- Thu hoạch và bán ----------
 
-    /// <summary>Cân từng con, xếp hạng theo product_grade, in tem và kích hoạt tem bằng ảnh xác nhận.</summary>
+    /// <summary>Cân từng con, xếp hạng theo khối lượng, in tem và kích hoạt tem bằng ảnh xác nhận.</summary>
     private List<CrabItem> Harvest(Batch b, List<CrabItem> crabs, DateTimeOffset at, int minWeight, int maxWeight)
     {
         var alive = crabs.Where(c => c.Status == "Growing").ToList();
-        var harvest = new Harvest
-        {
-            Batch = b, HarvestedAt = at, HarvestedCount = alive.Count, DeclaredBy = p.Owner.UserId,
-            Note = "Thu hoạch toàn bộ lô", CreatedAt = at,
-        };
-        db.Harvests.Add(harvest);
         for (var i = 0; i < alive.Count; i++)
         {
             var crab = alive[i];
@@ -566,9 +532,8 @@ internal sealed class DemoLifecycleSeeder
             var weight = (short)rng.Next(minWeight, maxWeight + 1);
             var box = crab.SlotAllocation.Slot;
             crab.Status = "InStock";
-            crab.Harvest = harvest;
             crab.WeightG = weight;
-            crab.Grade = GradeFor(weight);
+            gradeOf[crab] = GradeFor(weight);
             crab.UpdatedAt = now;
             crab.SlotAllocation.ReleasedAt = t;
             box.Status = "Available";
@@ -593,41 +558,12 @@ internal sealed class DemoLifecycleSeeder
             db.Evidences.Add(photo);
             db.CrabTags.Add(tag);
             crab.CrabTag = tag;
-            crab.CrabItemEvents.Add(new CrabItemEvent { EventType = "Harvested", OccurredAt = t, ActorId = p.Staff.UserId, Note = $"{weight} g · {crab.Grade.GradeCode}", CreatedAt = t });
-            crab.CrabItemEvents.Add(new CrabItemEvent { EventType = "TagPrinted", OccurredAt = t.AddSeconds(5), ActorId = p.Staff.UserId, Tag = tag, CreatedAt = t.AddSeconds(5) });
-            crab.CrabItemEvents.Add(new CrabItemEvent { EventType = "TagActivated", OccurredAt = t.AddSeconds(11), ActorId = p.Staff.UserId, Tag = tag, Evidence = photo, CreatedAt = t.AddSeconds(11) });
         }
-        harvest.TotalWeightKg = alive.Sum(c => (decimal)c.WeightG!.Value) / 1000m;
         return alive;
     }
 
-    /// <summary>Niêm yết theo hạng, tồn kho = tổng khối lượng cua InStock của hạng đó.</summary>
-    private Dictionary<string, ProductListing> Listings(Batch b, List<CrabItem> harvested, string name,
-        IReadOnlyDictionary<string, decimal> prices, DateTimeOffset publishedAt, string status)
-    {
-        var listings = new Dictionary<string, ProductListing>();
-        foreach (var group in harvested.GroupBy(c => c.Grade!.GradeCode).OrderBy(g => g.Key))
-        {
-            var grade = grades[group.Key];
-            var listing = new ProductListing
-            {
-                Batch = b, Grade = grade, Title = $"{name} {grade.GradeName}", StorageType = "Fresh",
-                CurrentPricePerKg = prices[group.Key], StockQtyKg = group.Sum(c => (decimal)c.WeightG!.Value) / 1000m,
-                ReservedQtyKg = 0, Status = status, PublishedAt = publishedAt, CreatedAt = publishedAt.AddMinutes(-30), UpdatedAt = now,
-            };
-            listing.PriceHistories.Add(new PriceHistory
-            {
-                PricePerKg = listing.CurrentPricePerKg, EffectiveFrom = publishedAt, ChangedBy = p.Owner.UserId,
-                ReasonCode = "Initial", CreatedAt = publishedAt,
-            });
-            db.ProductListings.Add(listing);
-            listings[group.Key] = listing;
-        }
-        return listings;
-    }
-
     /// <summary>Đơn đã hoàn tất: trả VietQR → đóng gói bằng quét tem → giao → hết hạn đổi trả.</summary>
-    private void SellCompleted(Batch b, IReadOnlyList<CrabItem> crabs, Dictionary<string, ProductListing> listings, Buyer buyer, DateTimeOffset placedAt)
+    private void SellCompleted(Batch b, IReadOnlyList<CrabItem> crabs, IReadOnlyDictionary<string, decimal> prices, Buyer buyer, DateTimeOffset placedAt)
     {
         var order = new SalesOrder
         {
@@ -637,36 +573,26 @@ internal sealed class DemoLifecycleSeeder
             PlacedAt = placedAt, PaidAt = placedAt.AddMinutes(6), ShippedAt = placedAt.AddDays(1), DeliveredAt = placedAt.AddDays(2),
             ReturnWindowEndsAt = placedAt.AddDays(5), CompletedAt = placedAt.AddDays(5), CreatedAt = placedAt, UpdatedAt = now,
         };
-        foreach (var group in crabs.GroupBy(c => c.Grade!.GradeCode))
+        var total = 0m;
+        foreach (var group in crabs.GroupBy(c => gradeOf[c]))
         {
-            var listing = listings[group.Key];
             var quantityKg = group.Sum(c => (decimal)c.WeightG!.Value) / 1000m;
-            var line = new OrderLine
-            {
-                SalesOrder = order, Batch = b, ProductListing = listing, QuantityKg = quantityKg, UnitPrice = listing.CurrentPricePerKg,
-                PriceHistoryId = listing.PriceHistories.Single().PriceHistoryId, CreatedAt = placedAt,
-            };
-            order.OrderLines.Add(line);
-            listing.StockQtyKg -= quantityKg;
+            total += Math.Round(quantityKg * prices[group.Key], 0, MidpointRounding.AwayFromZero);
             foreach (var crab in group)
             {
                 crab.Status = "Sold";
-                crab.OrderLine = line;
                 crab.UpdatedAt = now;
-                crab.CrabItemEvents.Add(new CrabItemEvent { EventType = "Packed", OccurredAt = placedAt.AddHours(20), ActorId = p.Staff.UserId, Tag = crab.CrabTag, Note = order.OrderNo, CreatedAt = placedAt.AddHours(20) });
-                crab.CrabItemEvents.Add(new CrabItemEvent { EventType = "Delivered", OccurredAt = placedAt.AddDays(2), Note = order.OrderNo, CreatedAt = placedAt.AddDays(2) });
             }
         }
-        order.TotalAmount = order.OrderLines.Sum(l => Math.Round(l.QuantityKg * l.UnitPrice, 0, MidpointRounding.AwayFromZero));
+        order.TotalAmount = total;
         db.SalesOrders.Add(order);
         Pay(b, order.TotalAmount, placedAt.AddMinutes(6), "OrderPayment", order.OrderNo, order: order);
     }
 
     // ---------- Tiện ích ----------
 
-    private ProductGrade GradeFor(short weight) => grades.Values
-        .Where(g => g.GradeCode != "SOFT")
-        .Single(g => (g.MinWeightG is null || weight >= g.MinWeightG) && (g.MaxWeightG is null || weight <= g.MaxWeightG));
+    private static string GradeFor(short weight) => Grades
+        .Single(g => (g.MinWeightG is null || weight >= g.MinWeightG) && (g.MaxWeightG is null || weight <= g.MaxWeightG)).Code;
 
     private List<CrabItem> Pick(List<CrabItem> crabs, int count) => crabs.OrderBy(_ => rng.Next()).Take(count).ToList();
 

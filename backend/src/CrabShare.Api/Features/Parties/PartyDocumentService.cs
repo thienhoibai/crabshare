@@ -76,8 +76,8 @@ public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, Party
                     tracked.UpdatedAt = now;
                 }
                 await db.SaveChangesAsync(ct);
-                await audit.WriteAsync("party_document", doc.DocumentId, "upload", null, new { doc.PartyId, doc.DocType, doc.Sha256 }, ct);
-                return new PartyDocumentResponse(doc.DocumentId, doc.DocType, doc.ContentType, doc.Note, doc.UploadedAt);
+                await audit.WriteAsync("party_document", doc.PartyRecordId, "upload", null, new { doc.PartyId, doc.DocType, doc.Sha256 }, ct);
+                return new PartyDocumentResponse(doc.PartyRecordId, doc.DocType, doc.ContentType, doc.Note, doc.UploadedAt);
             }, ct);
         }
         catch
@@ -123,7 +123,7 @@ public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, Party
         {
             await audit.LockAsync(ct);
             var partyId = await parties.PartyIdOfUserAsync(me.UserId, ct);
-            var doc = await db.PartyDocuments.SingleOrDefaultAsync(d => d.DocumentId == documentId && d.PartyId == partyId && d.RemovedAt == null, ct)
+            var doc = await db.PartyDocuments.SingleOrDefaultAsync(d => d.PartyRecordId == documentId && d.PartyId == partyId && d.RemovedAt == null, ct)
                       ?? throw new NotFoundException("party.document_not_found", "Không tìm thấy giấy tờ.");
             var party = await db.Parties.SingleAsync(p => p.PartyId == partyId, ct);
             // Giấy tờ là căn cứ của lần xác minh đã xong nên không xoá được nữa.
@@ -131,7 +131,7 @@ public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, Party
                 throw new BusinessRuleException("party.document_locked", "Hồ sơ đã được xác minh nên không xoá giấy tờ được.");
             doc.RemovedAt = clock.GetUtcNow();
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("party_document", doc.DocumentId, "remove", new { doc.PartyId, doc.DocType }, null, ct);
+            await audit.WriteAsync("party_document", doc.PartyRecordId, "remove", new { doc.PartyId, doc.DocType }, null, ct);
         }, ct);
     }
 
@@ -170,11 +170,11 @@ public sealed class PartyDocumentService(AppDbContext db, ICurrentUser me, Party
 
     private async Task<IReadOnlyList<PartyDocumentResponse>> ListAsync(long partyId, CancellationToken ct)
         => await db.PartyDocuments.AsNoTracking().Where(d => d.PartyId == partyId && d.RemovedAt == null).OrderBy(d => d.UploadedAt)
-            .Select(d => new PartyDocumentResponse(d.DocumentId, d.DocType, d.ContentType, d.Note, d.UploadedAt)).ToListAsync(ct);
+            .Select(d => new PartyDocumentResponse(d.PartyRecordId, d.DocType, d.ContentType, d.Note, d.UploadedAt)).ToListAsync(ct);
 
     private async Task<(Stream Content, string ContentType)> FileAsync(long partyId, long documentId, CancellationToken ct)
     {
-        var doc = await db.PartyDocuments.AsNoTracking().SingleOrDefaultAsync(d => d.DocumentId == documentId && d.PartyId == partyId && d.RemovedAt == null, ct)
+        var doc = await db.PartyDocuments.AsNoTracking().SingleOrDefaultAsync(d => d.PartyRecordId == documentId && d.PartyId == partyId && d.RemovedAt == null, ct)
                   ?? throw new NotFoundException("party.document_not_found", "Không tìm thấy giấy tờ.");
         return (await files.OpenReadAsync(doc.FileUri, ct), doc.ContentType);
     }

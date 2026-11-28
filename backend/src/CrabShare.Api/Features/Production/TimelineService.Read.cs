@@ -12,7 +12,7 @@ public sealed partial class TimelineService
         var items = new List<TimelineItem>();
         static string Id(long id) => id.ToString(CultureInfo.InvariantCulture);
         var logs = await db.ProductionLogs.AsNoTracking().Where(l => l.BatchId == batchId && l.LogDate >= first && l.LogDate <= last)
-            .Select(l => new { l.ProductionLogId, l.LogDate, l.Ph, l.WaterTempC, l.SalinityPpt, l.FeedKg, l.Source, l.PlausibilityFlag, l.Note }).ToListAsync(ct);
+            .Select(l => new { ProductionLogId = l.CareRecordId, l.LogDate, l.Ph, l.WaterTempC, l.SalinityPpt, l.FeedKg, l.Source, l.PlausibilityFlag, l.Note }).ToListAsync(ct);
         items.AddRange(logs.Select(l => new TimelineItem($"ProductionLog:{l.ProductionLogId}", "ProductionLog", Id(l.ProductionLogId), l.LogDate, null, "Date",
             ProductionLog: new(l.Ph, l.WaterTempC, l.SalinityPpt, l.FeedKg, l.Source, l.PlausibilityFlag, l.Note))));
 
@@ -27,14 +27,14 @@ public sealed partial class TimelineService
 
         var evidence = await db.Evidences.AsNoTracking().Where(e => e.BatchId == batchId && e.ReviewStatus == "Accepted"
             && ((e.CapturedAt >= fromAt && e.CapturedAt < to) || (e.CapturedAt == null && e.ReceivedAt >= fromAt && e.ReceivedAt < to)))
-            .Select(e => new { e.EvidenceId, e.MediaType, e.Source, e.CapturedAt, e.ReceivedAt, SlotCode = e.Slot == null ? null : e.Slot.SlotCode }).ToListAsync(ct);
+            .Select(e => new { EvidenceId = e.EvidenceRecordId, e.MediaType, e.Source, e.CapturedAt, e.ReceivedAt, SlotCode = e.Slot == null ? null : e.Slot.SlotCode }).ToListAsync(ct);
         items.AddRange(evidence.Select(e => new TimelineItem($"Evidence:{e.EvidenceId}", "Evidence", Id(e.EvidenceId), BusinessDate(e.CapturedAt ?? e.ReceivedAt),
             e.CapturedAt ?? e.ReceivedAt, e.CapturedAt is null ? "Received" : "Capture",
             Evidence: new(e.MediaType, e.Source, e.SlotCode, "Accepted", $"/api/batches/{Uri.EscapeDataString(code)}/timeline/evidence/{e.EvidenceId}/file"))));
 
         // Same batch scope as AlertService.ListInvestorAsync; admin/audit notes are deliberately absent.
         var alerts = await db.Alerts.AsNoTracking().Where(a => a.BatchId == batchId && a.RaisedAt >= fromAt && a.RaisedAt < to)
-            .Select(a => new { a.AlertId, a.RaisedAt, a.AlertType, a.Severity, a.Message, a.Status, a.AcknowledgedAt, a.EscalatedAt }).ToListAsync(ct);
+            .Select(a => new { AlertId = a.CareRecordId, a.RaisedAt, a.AlertType, a.Severity, a.Message, a.Status, a.AcknowledgedAt, a.EscalatedAt }).ToListAsync(ct);
         items.AddRange(alerts.Select(a => new TimelineItem($"Alert:{a.AlertId}", "Alert", Id(a.AlertId), BusinessDate(a.RaisedAt), a.RaisedAt, "Raised",
             Alert: new(a.AlertType, a.Severity, a.Message, a.Status, a.AcknowledgedAt, a.EscalatedAt))));
 
@@ -42,7 +42,7 @@ public sealed partial class TimelineService
         var crabEvents = await (from e in db.InventoryEvents.AsNoTracking()
                                 join c in db.CrabUnits on e.CrabUnitId equals c.CrabUnitId
                                 where e.BatchId == batchId && e.OccurredAt >= fromAt && e.OccurredAt < to && e.EventType != "Allocated" && e.EventType != "Released"
-                                select new { e.InventoryEventId, e.OccurredAt, e.EventType, c.CrabCode, e.Source, e.Reason,
+                                select new { InventoryEventId = e.InventoryRecordId, e.OccurredAt, e.EventType, c.CrabCode, e.Source, e.Reason,
                                     SlotCode = e.SlotId == null ? null : db.PhysicalSlots.Where(s => s.SlotId == e.SlotId).Select(s => s.SlotCode).FirstOrDefault() })
             .ToListAsync(ct);
         items.AddRange(crabEvents.Select(e => new TimelineItem($"CrabEvent:{e.InventoryEventId}", "CrabEvent", Id(e.InventoryEventId), BusinessDate(e.OccurredAt),

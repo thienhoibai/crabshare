@@ -38,10 +38,8 @@ public partial class Settlement
     [Column("is_liquidation")] public bool IsLiquidation { get; set; }
 }
 
-[Table("site_visit_report")]
-public sealed class SiteVisitReport
+public sealed class SiteVisitReport : QcRecord
 {
-    [Key, Column("report_id")] public long ReportId { get; set; }
     [Column("report_no"), MaxLength(20), Unicode(false)] public string ReportNo { get; set; } = "";
     [Column("batch_id")] public long BatchId { get; set; }
     [Column("qc_assignment_id")] public long QcAssignmentId { get; set; }
@@ -58,10 +56,8 @@ public sealed class SiteVisitReport
     [Column("created_at"), Precision(3)] public DateTimeOffset CreatedAt { get; set; }
 }
 
-[Table("collective_decision")]
-public sealed class CollectiveDecision
+public sealed class CollectiveDecision : BatchRecord
 {
-    [Key, Column("decision_id")] public long DecisionId { get; set; }
     [Column("decision_no"), MaxLength(20), Unicode(false)] public string DecisionNo { get; set; } = "";
     [Column("batch_id")] public long BatchId { get; set; }
     /// <summary>EarlyLiquidation, SurplusSale.</summary>
@@ -78,10 +74,8 @@ public sealed class CollectiveDecision
     [Column("decided_at"), Precision(3)] public DateTimeOffset? DecidedAt { get; set; }
 }
 
-[Table("vote")]
-public sealed class Vote
+public sealed class Vote : BatchRecord
 {
-    [Key, Column("vote_id")] public long VoteId { get; set; }
     [Column("decision_id")] public long DecisionId { get; set; }
     [Column("investor_id")] public long InvestorId { get; set; }
     [Column("capital"), Precision(18, 0)] public decimal Capital { get; set; }

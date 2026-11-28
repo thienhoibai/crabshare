@@ -120,14 +120,6 @@ public class DemoSeedDatabaseTests(DemoSeedFixture fixture) : IClassFixture<Demo
             && !c.PaymentRequests.Any(r => r.Status == "Paid" && r.ProviderTransactions.Any(t => t.MatchStatus == "Matched"))));
         // Vốn đã chốt = tổng capital_share
         Assert.False(await db.Batches.AnyAsync(b => b.TotalConfirmedCapital != null && b.TotalConfirmedCapital != b.CapitalShares.Sum(s => s.ConfirmedAmount)));
-        // Tồn niêm yết = tổng khối lượng cua còn trong kho của đúng hạng đó
-        var listings = await db.ProductListings.Select(l => new
-        {
-            l.StockQtyKg,
-            InStockGrams = db.CrabItems.Where(c => c.BatchId == l.BatchId && c.GradeId == l.GradeId && c.Status == "InStock").Sum(c => (int?)c.WeightG) ?? 0,
-        }).ToListAsync();
-        Assert.NotEmpty(listings);
-        Assert.All(listings, l => Assert.Equal(l.InStockGrams / 1000m, l.StockQtyKg));
         // Mọi tem đang hiệu lực đều có ảnh kích hoạt
         Assert.False(await db.CrabTags.AnyAsync(t => t.Status == "Active" && t.ActivationEvidenceId == null));
     }

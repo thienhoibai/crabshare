@@ -67,7 +67,7 @@ public class MixedAuditDatabaseTests(KycDatabaseFixture fixture) : IClassFixture
         (await admin.PostAsJsonAsync($"/api/admin/users/{userId}/lock", new { reason = "Audit test" })).EnsureSuccessStatusCode();
         (await admin.PostAsJsonAsync($"/api/admin/users/{userId}/unlock", new { reason = "Audit test" })).EnsureSuccessStatusCode();
         var rejectedId = await fixture.CreateInvestorAsync("Rejected");
-        var checkId = await Db(async db => { var now = DateTimeOffset.UtcNow; var check = new KycCheck { UserId = rejectedId, CheckType = "EkycIdFace", Result = "Failed", ConsentAt = now, CheckedAt = now, CreatedAt = now }; db.KycChecks.Add(check); await db.SaveChangesAsync(); return check.KycCheckId; });
+        var checkId = await Db(async db => { var now = DateTimeOffset.UtcNow; var check = new KycCheck { UserId = rejectedId, CheckType = "EkycIdFace", Result = "Failed", ConsentAt = now, CheckedAt = now, CreatedAt = now }; db.KycChecks.Add(check); await db.SaveChangesAsync(); return check.UserRecordId; });
         (await admin.PostAsJsonAsync($"/api/admin/kyc-checks/{checkId}/approve-exception", new { reason = "Audit test" })).EnsureSuccessStatusCode();
         (await admin.PostAsJsonAsync($"/api/admin/operators/{setup.OperatorId}/approve", new { approvedSlotCapacity = 10 })).EnsureSuccessStatusCode();
         Assert.Equal(before + 6, await AssertChain());
@@ -78,7 +78,10 @@ public class MixedAuditDatabaseTests(KycDatabaseFixture fixture) : IClassFixture
     {
         var before = await Db(db => db.AuditLogs.CountAsync());
         var setup = await Setup(); var userId = await fixture.CreateInvestorAsync();
-        using var investorA = Client(userId, Roles.Investor); using var investorB = Client(userId, Roles.Investor); using var admin = Client(setup.AdminId, Roles.PlatformAdmin);
+        // Khai tài khoản nhận tiền đòi hồ sơ đã xác minh (BR-012, BR-013). Nếu cùng một người vừa eKYC vừa khai tài khoản thì kết quả tuỳ lệnh nào xong trước,
+        // nên lệnh khai tài khoản thuộc về một nhà đầu tư đã xác minh khác; vẫn là ba luồng ghi nhật ký cùng lúc.
+        var verifiedId = await fixture.CreateInvestorAsync("Verified");
+        using var investorA = Client(userId, Roles.Investor); using var investorB = Client(verifiedId, Roles.Investor); using var admin = Client(setup.AdminId, Roles.PlatformAdmin);
         using var images = KycControllerTests.Images();
         var responses = await Task.WhenAll(investorA.PostAsync("/api/kyc/ekyc", images), investorB.PutAsJsonAsync("/api/me/payout-account", Bank()),
             admin.PostAsJsonAsync($"/api/admin/operators/{setup.OperatorId}/approve", new { approvedSlotCapacity = 10 }));

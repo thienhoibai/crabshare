@@ -37,7 +37,7 @@ public class EvidenceReviewDatabaseTests(KycDatabaseFixture fixture) : IClassFix
         var evidence = new Infrastructure.Persistence.Entities.Evidence { Batch = batch, MediaType = "Photo", Source = "InAppCapture", FileUri = file.Uri, Sha256 = file.Sha256,
             ReceivedAt = now, CapturedAt = now, RiskScore = 100, ReviewStatus = "Flagged" };
         evidence.EvidenceDetections.Add(new EvidenceDetection { ModelVersion = "none", DetectedAt = now });
-        db.AppUsers.Add(reviewer); db.Evidences.Add(evidence); await db.SaveChangesAsync(); return new Scenario(reviewer.UserId, evidence.EvidenceId, batch.BatchId, bytes);
+        db.AppUsers.Add(reviewer); db.Evidences.Add(evidence); await db.SaveChangesAsync(); return new Scenario(reviewer.UserId, evidence.EvidenceRecordId, batch.BatchId, bytes);
     });
     private Task<bool> Chain() => Db(async db =>
     {
@@ -57,7 +57,7 @@ public class EvidenceReviewDatabaseTests(KycDatabaseFixture fixture) : IClassFix
         Assert.Equal(status, detail.Evidence.ReviewStatus); Assert.False(detail.CanReview);
         var review = Assert.Single(detail.Reviews); Assert.Equal(test.Reviewer, review.ReviewerId); Assert.Equal("Evidence Reviewer", review.ReviewerName); Assert.Equal("Checked metadata", review.Note);
         await Db(async db => {
-            Assert.Equal(status, (await db.Evidences.SingleAsync(e => e.EvidenceId == test.Evidence)).ReviewStatus);
+            Assert.Equal(status, (await db.Evidences.SingleAsync(e => e.EvidenceRecordId == test.Evidence)).ReviewStatus);
             Assert.Equal(verdict, (await db.EvidenceReviews.SingleAsync(r => r.EvidenceId == test.Evidence)).Verdict);
             var audit = await db.AuditLogs.SingleAsync(a => a.EntityType == "Evidence" && a.EntityId == test.Evidence && a.ActionType == "ReviewEvidence");
             Assert.Equal(test.Reviewer, audit.ActorUserId); Assert.Contains("\"reviewStatus\"", audit.NewValue); return true;
@@ -112,10 +112,10 @@ public class EvidenceReviewDatabaseTests(KycDatabaseFixture fixture) : IClassFix
         var test = await Setup(); using var client = Client(test.Reviewer);
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync($"/api/review/evidence/{test.Evidence}/verdict", new { verdict = "NeedMoreEvidence", note = "Explain timestamp" })).StatusCode);
         var first = await Db(db => db.EvidenceReviews.AsNoTracking().SingleAsync(r => r.EvidenceId == test.Evidence));
-        await Db(async db => { var row = await db.Evidences.SingleAsync(e => e.EvidenceId == test.Evidence); row.Explanation = "Camera clock was incorrect"; row.ExplainedAt = first.ReviewedAt.AddSeconds(1); await db.SaveChangesAsync(); return true; });
+        await Db(async db => { var row = await db.Evidences.SingleAsync(e => e.EvidenceRecordId == test.Evidence); row.Explanation = "Camera clock was incorrect"; row.ExplainedAt = first.ReviewedAt.AddSeconds(1); await db.SaveChangesAsync(); return true; });
         Assert.True((await client.GetFromJsonAsync<ReviewEvidenceDetail>($"/api/review/evidence/{test.Evidence}"))!.CanReview);
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync($"/api/review/evidence/{test.Evidence}/verdict", new { verdict = "Pass", note = "Explanation checked" })).StatusCode);
-        await Db(async db => { var review = Assert.Single(await db.EvidenceReviews.Where(r => r.EvidenceId == test.Evidence).ToListAsync()); Assert.Equal(first.EvidenceReviewId, review.EvidenceReviewId);
+        await Db(async db => { var review = Assert.Single(await db.EvidenceReviews.Where(r => r.EvidenceId == test.Evidence).ToListAsync()); Assert.Equal(first.EvidenceRecordId, review.EvidenceRecordId);
             var audits = await db.AuditLogs.Where(a => a.EntityType == "Evidence" && a.EntityId == test.Evidence).OrderBy(a => a.AuditId).ToListAsync(); Assert.Equal(2, audits.Count); Assert.Contains("NeedMoreEvidence", audits[0].NewValue); Assert.Contains("NeedMoreEvidence", audits[1].OldValue); return true; });
         await Chain();
     }
@@ -133,7 +133,7 @@ public class EvidenceReviewDatabaseTests(KycDatabaseFixture fixture) : IClassFix
     [InlineData("Accepted")] [InlineData("Rejected")]
     public async Task Only_flagged_evidence_can_receive_a_new_verdict(string status)
     {
-        var test = await Setup(); await Db(async db => { (await db.Evidences.SingleAsync(e => e.EvidenceId == test.Evidence)).ReviewStatus = status; await db.SaveChangesAsync(); return true; });
+        var test = await Setup(); await Db(async db => { (await db.Evidences.SingleAsync(e => e.EvidenceRecordId == test.Evidence)).ReviewStatus = status; await db.SaveChangesAsync(); return true; });
         using var client = Client(test.Reviewer);
         Assert.False((await client.GetFromJsonAsync<ReviewEvidenceDetail>($"/api/review/evidence/{test.Evidence}"))!.CanReview);
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync($"/api/review/evidence/{test.Evidence}/verdict", new { verdict = "Pass", note = "Checked" })).StatusCode);
@@ -143,7 +143,7 @@ public class EvidenceReviewDatabaseTests(KycDatabaseFixture fixture) : IClassFix
     public async Task Watch_evidence_can_be_decided_by_a_reviewer()
     {
         var test = await Setup();
-        await Db(async db => { (await db.Evidences.SingleAsync(e => e.EvidenceId == test.Evidence)).ReviewStatus = "Watch"; await db.SaveChangesAsync(); return true; });
+        await Db(async db => { (await db.Evidences.SingleAsync(e => e.EvidenceRecordId == test.Evidence)).ReviewStatus = "Watch"; await db.SaveChangesAsync(); return true; });
         using var client = Client(test.Reviewer);
         var response = await client.PostAsJsonAsync($"/api/review/evidence/{test.Evidence}/verdict", new { verdict = "Pass", note = "Watch reviewed" });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -161,7 +161,7 @@ public class EvidenceReviewDatabaseTests(KycDatabaseFixture fixture) : IClassFix
     [InlineData("review-tests/missing.png")] [InlineData("../outside.png")]
     public async Task Missing_or_escaping_image_is_404(string path)
     {
-        var test = await Setup(); await Db(async db => { (await db.Evidences.SingleAsync(e => e.EvidenceId == test.Evidence)).FileUri = path; await db.SaveChangesAsync(); return true; });
+        var test = await Setup(); await Db(async db => { (await db.Evidences.SingleAsync(e => e.EvidenceRecordId == test.Evidence)).FileUri = path; await db.SaveChangesAsync(); return true; });
         using var client = Client(test.Reviewer); Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/review/evidence/{test.Evidence}/image")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/review/evidence/{long.MaxValue}")).StatusCode);
     }
@@ -176,6 +176,6 @@ public class EvidenceReviewDatabaseTests(KycDatabaseFixture fixture) : IClassFix
         var test = await Setup(); using var factory = fixture.Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddDbContext<AppDbContext>(o => o.AddInterceptors(new FailAudit()))));
         using var client = factory.CreateClient(); client.DefaultRequestHeaders.Add("X-Test-User", test.Reviewer.ToString()); client.DefaultRequestHeaders.Add("X-Test-Role", Roles.EvidenceReviewer);
         Assert.Equal(HttpStatusCode.InternalServerError, (await client.PostAsJsonAsync($"/api/review/evidence/{test.Evidence}/verdict", new { verdict = "Pass", note = "Checked" })).StatusCode);
-        await Db(async db => { Assert.Equal("Flagged", (await db.Evidences.SingleAsync(e => e.EvidenceId == test.Evidence)).ReviewStatus); Assert.False(await db.EvidenceReviews.AnyAsync(r => r.EvidenceId == test.Evidence)); return true; });
+        await Db(async db => { Assert.Equal("Flagged", (await db.Evidences.SingleAsync(e => e.EvidenceRecordId == test.Evidence)).ReviewStatus); Assert.False(await db.EvidenceReviews.AnyAsync(r => r.EvidenceId == test.Evidence)); return true; });
     }
 }

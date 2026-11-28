@@ -34,7 +34,7 @@ public sealed class KycHandoffService(AppDbContext db, ICurrentUser me, TimeProv
             db.ChangeTracker.Clear();
             var existing = await db.KycHandoffs.AsNoTracking()
                 .Where(h => h.TokenHash == tokenHash)
-                .Select(h => new { h.HandoffId, h.ExpiresAt })
+                .Select(h => new { HandoffId = h.UserRecordId, h.ExpiresAt })
                 .SingleOrDefaultAsync(ct);
             if (existing is not null)
             {
@@ -62,7 +62,7 @@ public sealed class KycHandoffService(AppDbContext db, ICurrentUser me, TimeProv
             };
             db.KycHandoffs.Add(handoff);
             await db.SaveChangesAsync(ct);
-            handoffId = handoff.HandoffId;
+            handoffId = handoff.UserRecordId;
             await transaction.CommitAsync(ct);
         });
 
@@ -72,13 +72,13 @@ public sealed class KycHandoffService(AppDbContext db, ICurrentUser me, TimeProv
     public async Task<KycHandoffStatusResponse> GetAsync(long id, CancellationToken ct)
     {
         var handoff = await db.KycHandoffs.AsNoTracking()
-                          .SingleOrDefaultAsync(h => h.HandoffId == id && h.UserId == me.UserId, ct)
+                          .SingleOrDefaultAsync(h => h.UserRecordId == id && h.UserId == me.UserId, ct)
                       ?? throw new NotFoundException("kyc.handoff_not_found", "Không tìm thấy phiên xác minh.");
         if (handoff.Status == "Pending" && handoff.ExpiresAt <= clock.GetUtcNow())
         {
-            await db.KycHandoffs.Where(h => h.HandoffId == id && h.UserId == me.UserId && h.Status == "Pending")
+            await db.KycHandoffs.Where(h => h.UserRecordId == id && h.UserId == me.UserId && h.Status == "Pending")
                 .ExecuteUpdateAsync(setters => setters.SetProperty(h => h.Status, "Expired"), ct);
-            handoff = await db.KycHandoffs.AsNoTracking().SingleAsync(h => h.HandoffId == id, ct);
+            handoff = await db.KycHandoffs.AsNoTracking().SingleAsync(h => h.UserRecordId == id, ct);
         }
         return ToResponse(handoff);
     }
@@ -86,27 +86,27 @@ public sealed class KycHandoffService(AppDbContext db, ICurrentUser me, TimeProv
     public async Task<KycHandoffStatusResponse> CancelAsync(long id, CancellationToken ct)
     {
         var handoff = await db.KycHandoffs.AsNoTracking()
-                          .SingleOrDefaultAsync(h => h.HandoffId == id && h.UserId == me.UserId, ct)
+                          .SingleOrDefaultAsync(h => h.UserRecordId == id && h.UserId == me.UserId, ct)
                       ?? throw new NotFoundException("kyc.handoff_not_found", "Không tìm thấy phiên xác minh.");
         if (handoff.Status == "Pending")
         {
             var now = clock.GetUtcNow();
             if (handoff.ExpiresAt <= now)
             {
-                await db.KycHandoffs.Where(h => h.HandoffId == id && h.UserId == me.UserId && h.Status == "Pending")
+                await db.KycHandoffs.Where(h => h.UserRecordId == id && h.UserId == me.UserId && h.Status == "Pending")
                     .ExecuteUpdateAsync(setters => setters.SetProperty(h => h.Status, "Expired"), ct);
             }
             else
             {
                 var updated = await db.KycHandoffs
-                    .Where(h => h.HandoffId == id && h.UserId == me.UserId && h.Status == "Pending" && h.ExpiresAt > now)
+                    .Where(h => h.UserRecordId == id && h.UserId == me.UserId && h.Status == "Pending" && h.ExpiresAt > now)
                     .ExecuteUpdateAsync(setters => setters
                         .SetProperty(h => h.Status, "Cancelled")
                         .SetProperty(h => h.CancelledAt, now), ct);
-                if (updated == 1) return new(handoff.HandoffId, "Cancelled", handoff.ExpiresAt, handoff.ClaimedAt);
+                if (updated == 1) return new(handoff.UserRecordId, "Cancelled", handoff.ExpiresAt, handoff.ClaimedAt);
             }
 
-            handoff = await db.KycHandoffs.AsNoTracking().SingleAsync(h => h.HandoffId == id, ct);
+            handoff = await db.KycHandoffs.AsNoTracking().SingleAsync(h => h.UserRecordId == id, ct);
         }
 
         if (handoff.Status == "Claimed")
@@ -129,7 +129,7 @@ public sealed class KycHandoffService(AppDbContext db, ICurrentUser me, TimeProv
         var now = clock.GetUtcNow();
         if (handoff.Status == "Pending" && handoff.ExpiresAt <= now)
         {
-            await db.KycHandoffs.Where(h => h.HandoffId == handoff.HandoffId && h.Status == "Pending")
+            await db.KycHandoffs.Where(h => h.UserRecordId == handoff.UserRecordId && h.Status == "Pending")
                 .ExecuteUpdateAsync(setters => setters.SetProperty(h => h.Status, "Expired"), ct);
             throw Expired();
         }
@@ -140,19 +140,19 @@ public sealed class KycHandoffService(AppDbContext db, ICurrentUser me, TimeProv
 
         var claimedAt = now;
         var updated = await db.KycHandoffs
-            .Where(h => h.HandoffId == handoff.HandoffId && h.Status == "Pending" && h.ExpiresAt > now)
+            .Where(h => h.UserRecordId == handoff.UserRecordId && h.Status == "Pending" && h.ExpiresAt > now)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(h => h.Status, "Claimed")
                 .SetProperty(h => h.ClaimedAt, claimedAt), ct);
 
         if (updated == 1)
-            return new(handoff.HandoffId, "Claimed", handoff.ExpiresAt, claimedAt);
+            return new(handoff.UserRecordId, "Claimed", handoff.ExpiresAt, claimedAt);
 
-        var latest = await db.KycHandoffs.AsNoTracking().SingleAsync(h => h.HandoffId == handoff.HandoffId, ct);
+        var latest = await db.KycHandoffs.AsNoTracking().SingleAsync(h => h.UserRecordId == handoff.UserRecordId, ct);
         if (latest.Status == "Claimed") return ToResponse(latest);
         if (latest.Status == "Pending" && latest.ExpiresAt <= clock.GetUtcNow())
         {
-            await db.KycHandoffs.Where(h => h.HandoffId == latest.HandoffId && h.Status == "Pending")
+            await db.KycHandoffs.Where(h => h.UserRecordId == latest.UserRecordId && h.Status == "Pending")
                 .ExecuteUpdateAsync(setters => setters.SetProperty(h => h.Status, "Expired"), ct);
             throw Expired();
         }
@@ -165,7 +165,7 @@ public sealed class KycHandoffService(AppDbContext db, ICurrentUser me, TimeProv
         => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
     private static KycHandoffStatusResponse ToResponse(KycHandoff handoff)
-        => new(handoff.HandoffId, handoff.Status, handoff.ExpiresAt, handoff.ClaimedAt);
+        => new(handoff.UserRecordId, handoff.Status, handoff.ExpiresAt, handoff.ClaimedAt);
 
     private static ForbiddenException AccountMismatch()
         => new("kyc.handoff_account_mismatch", "Mã QR này thuộc tài khoản khác. Hãy đăng nhập đúng tài khoản CrabShare đã tạo mã.");

@@ -72,7 +72,7 @@ public class EvidenceDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<K
         Assert.Equal(10.123456m, result.Latitude); Assert.Equal(106.654321m, result.Longitude); Assert.Equal("none", result.Detection.ModelVersion);
         Assert.Null(result.Detection.CrabDetected); Assert.Null(result.Detection.Confidence);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var row = await db.Evidences.Include(e => e.EvidenceDetections).SingleAsync(e => e.EvidenceId == result.Id);
+        var row = await db.Evidences.Include(e => e.EvidenceDetections).SingleAsync(e => e.EvidenceRecordId == result.Id);
         Assert.Equal(farm.SlotId, row.SlotId); Assert.Equal("InAppCapture", row.Source); Assert.Equal(result.RiskScore, row.RiskScore);
         var detection = Assert.Single(row.EvidenceDetections); Assert.Null(detection.CrabDetected); Assert.Null(detection.Confidence);
         await using var file = await scope.ServiceProvider.GetRequiredService<IFileStorage>().OpenReadAsync(row.FileUri, default);
@@ -160,12 +160,12 @@ public class EvidenceDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<K
     public async Task Capture_request_validation_and_fulfillment_are_atomic_with_evidence_audit()
     {
         var farm = await Setup();
-        var requestId = await Db(async db => { var now = DateTimeOffset.UtcNow; var request = new CaptureRequest { BatchId = farm.BatchId, SlotId = farm.SlotId, Status = "Open", RequestedAt = now.AddMinutes(-10), DueAt = now.AddMinutes(10), CreatedAt = now }; db.CaptureRequests.Add(request); await db.SaveChangesAsync(); return request.CaptureRequestId; });
+        var requestId = await Db(async db => { var now = DateTimeOffset.UtcNow; var request = new CaptureRequest { BatchId = farm.BatchId, SlotId = farm.SlotId, Status = "Open", RequestedAt = now.AddMinutes(-10), DueAt = now.AddMinutes(10), CreatedAt = now }; db.CaptureRequests.Add(request); await db.SaveChangesAsync(); return request.EvidenceRecordId; });
         var bytes = EvidenceImages.Noise(2211);
         var result = await Upload(farm, bytes, requestId);
         Assert.Equal("Accepted", result.ReviewStatus);
         Assert.Equal("Fulfilled", result.CaptureRequestStatus);
-        Assert.Equal(result.CaptureRequestStatus, await Db(async db => (await db.CaptureRequests.SingleAsync(r => r.CaptureRequestId == requestId)).Status));
+        Assert.Equal(result.CaptureRequestStatus, await Db(async db => (await db.CaptureRequests.SingleAsync(r => r.EvidenceRecordId == requestId)).Status));
         await AssertChain();
     }
 
@@ -173,7 +173,7 @@ public class EvidenceDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<K
     public async Task Duplicate_photo_does_not_satisfy_a_capture_request()
     {
         var farm = await Setup(); var bytes = EvidenceImages.Noise(985); await Upload(farm, bytes);
-        var requestId = await Db(async db => { var now = DateTimeOffset.UtcNow; var request = new CaptureRequest { BatchId = farm.BatchId, SlotId = farm.SlotId, Status = "Open", RequestedAt = now.AddMinutes(-10), DueAt = now.AddMinutes(10) }; db.CaptureRequests.Add(request); await db.SaveChangesAsync(); return request.CaptureRequestId; });
+        var requestId = await Db(async db => { var now = DateTimeOffset.UtcNow; var request = new CaptureRequest { BatchId = farm.BatchId, SlotId = farm.SlotId, Status = "Open", RequestedAt = now.AddMinutes(-10), DueAt = now.AddMinutes(10) }; db.CaptureRequests.Add(request); await db.SaveChangesAsync(); return request.EvidenceRecordId; });
         var result = await Upload(farm, bytes, requestId);
         Assert.Equal("Flagged", result.ReviewStatus); Assert.Equal("Open", result.CaptureRequestStatus);
         Assert.False(await Db(db => db.AuditLogs.AnyAsync(a => a.EntityType == "CaptureRequest" && a.EntityId == requestId)));
@@ -183,7 +183,7 @@ public class EvidenceDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<K
     public async Task Expired_or_wrong_capture_request_is_rejected_without_evidence()
     {
         var farm = await Setup();
-        var requestId = await Db(async db => { var now = DateTimeOffset.UtcNow; var request = new CaptureRequest { BatchId = farm.BatchId, SlotId = farm.SlotId, Status = "Expired", RequestedAt = now.AddHours(-1), DueAt = now.AddMinutes(-1) }; db.CaptureRequests.Add(request); await db.SaveChangesAsync(); return request.CaptureRequestId; });
+        var requestId = await Db(async db => { var now = DateTimeOffset.UtcNow; var request = new CaptureRequest { BatchId = farm.BatchId, SlotId = farm.SlotId, Status = "Expired", RequestedAt = now.AddHours(-1), DueAt = now.AddMinutes(-1) }; db.CaptureRequests.Add(request); await db.SaveChangesAsync(); return request.EvidenceRecordId; });
         using var client = Client(farm.UserId); using var expired = EvidenceControllerTests.Upload(farm.BatchCode, farm.SlotCode, captureRequestId: requestId);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.PostAsync("/api/evidence", expired)).StatusCode);
         using var wrong = EvidenceControllerTests.Upload(farm.BatchCode, farm.SlotCode, captureRequestId: long.MaxValue);

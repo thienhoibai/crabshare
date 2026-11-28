@@ -20,7 +20,7 @@ BEGIN TRY
     JOIN dbo.app_user u ON u.user_id = m.user_id
     WHERE u.email = 'operator@crabshare.local' AND u.status = 'Active'
       AND m.member_role = 'Owner' AND o.status = 'Approved' AND o.tax_code = '2001234567'
-      AND EXISTS (SELECT 1 FROM dbo.app_user_role r WHERE r.user_id = u.user_id AND r.role_code = 'OperatorMember');
+      AND EXISTS (SELECT 1 FROM dbo.user_record r WHERE r.record_type = 'Role' AND r.user_id = u.user_id AND r.role_code = 'OperatorMember');
     IF @operatorId IS NULL
         THROW 51001, 'The approved demo farm and operator account must exist first.', 1;
 

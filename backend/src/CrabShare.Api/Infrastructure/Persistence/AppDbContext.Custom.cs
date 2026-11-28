@@ -4,8 +4,8 @@ namespace CrabShare.Api.Infrastructure.Persistence;
 
 /// <summary>
 /// Phần cấu hình viết tay của AppDbContext.
-/// AppDbContext.cs và thư mục Entities/ được SINH TỰ ĐỘNG từ CSDL (database-first) — KHÔNG sửa tay hai chỗ đó,
-/// vì lần scaffold sau sẽ ghi đè. Cấu hình thêm (query filter, converter...) đặt ở file này.
+/// AppDbContext.cs và thư mục Entities/ ban đầu sinh tự động từ CSDL (database-first). Từ V036 (gộp bảng theo cột record_type)
+/// hai chỗ đó được sửa tay và không chạy scaffold lại nữa. Cấu hình thêm (query filter, converter...) đặt ở file này hoặc các file AppDbContext.&lt;Nhóm&gt;.cs.
 /// Cách sinh lại: xem database/README.md, mục "Đổi lược đồ".
 /// </summary>
 public partial class AppDbContext
@@ -15,15 +15,12 @@ public partial class AppDbContext
         ConfigureBatchReview(modelBuilder);
         ConfigureOrderShipping(modelBuilder);
         ConfigurePayoutProtection(modelBuilder);
-        ConfigureBatchOfftakePrice(modelBuilder);
         ConfigureProduction(modelBuilder);
         ConfigureSlotEvents(modelBuilder);
-        ConfigureHarvest(modelBuilder);
         ConfigureBr15(modelBuilder); // các bảng theo BR v1.5, xem AppDbContext.Br15.cs
         // Ví dụ: modelBuilder.Entity<Entities.Batch>().HasQueryFilter(b => b.Status != "Cancelled");
 
         // Hai người đổi giá cùng lúc: lần lưu sau bị từ chối thay vì ghi "giá cũ" sai vào lịch sử giá
-        modelBuilder.Entity<Entities.ProductListing>().Property(l => l.UpdatedAt).IsConcurrencyToken();
 
         // Scaffold hiểu nhầm index unique có filter thành quan hệ 1:1.
         // Một khách có nhiều địa chỉ; chỉ địa chỉ mặc định mới unique.

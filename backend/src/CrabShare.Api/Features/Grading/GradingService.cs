@@ -53,7 +53,7 @@ public sealed partial class GradingService(AppDbContext db, ICurrentUser me, Tim
     /// <summary>Lượt đo bằng trạm vừa nhận bản tin (Received): ghi khối lượng từ cân, chạy AI trên hai ảnh, đề xuất hạng.</summary>
     public async Task ProcessStationAsync(long sessionId, CancellationToken ct)
     {
-        var s = await db.MeasurementSessions.AsNoTracking().SingleOrDefaultAsync(x => x.MeasurementSessionId == sessionId, ct);
+        var s = await db.MeasurementSessions.AsNoTracking().SingleOrDefaultAsync(x => x.MeasurementRecordId == sessionId, ct);
         if (s is not { Status: "Received", WeightG: not null, WhiteImageUri: not null }) return;
         var crabType = await db.Batches.Where(b => b.BatchId == s.BatchId).Select(b => b.CrabType).SingleAsync(ct);
         var white = await ReadAllAsync(s.WhiteImageUri, ct);
@@ -63,7 +63,7 @@ public sealed partial class GradingService(AppDbContext db, ICurrentUser me, Tim
         await db.InTransactionAsync(async () =>
         {
             await audit.LockAsync(ct);
-            var session = await db.MeasurementSessions.SingleAsync(x => x.MeasurementSessionId == sessionId, ct);
+            var session = await db.MeasurementSessions.SingleAsync(x => x.MeasurementRecordId == sessionId, ct);
             if (session.Status != "Received") return; // lần xử lý khác đã làm xong
             var now = clock.GetUtcNow();
             db.MeasurementValues.Add(new MeasurementValue
@@ -90,7 +90,7 @@ public sealed partial class GradingService(AppDbContext db, ICurrentUser me, Tim
         await access.RequireOperatorAsync(await db.Batches.SingleAsync(b => b.BatchId == session.BatchId, ct), ct);
         if (session.Status != "Received")
             throw new BusinessRuleException("grading.session_not_received", "Chỉ xử lý lại lượt đo đã nhận bản tin mà chưa có số đo.");
-        await ProcessStationAsync(session.MeasurementSessionId, ct);
+        await ProcessStationAsync(session.MeasurementRecordId, ct);
         return await MeasurementsAsync(sessionNo, ct);
     }
 
@@ -107,7 +107,7 @@ public sealed partial class GradingService(AppDbContext db, ICurrentUser me, Tim
         {
             await audit.LockAsync(ct);
             var session = await db.MeasurementSessions.FromSqlInterpolated(
-                    $"SELECT * FROM dbo.measurement_session WITH (UPDLOCK, HOLDLOCK) WHERE session_no = {sessionNo}").SingleOrDefaultAsync(ct)
+                    $"SELECT * FROM dbo.measurement_record WITH (UPDLOCK, HOLDLOCK) WHERE record_type = 'Session' AND session_no = {sessionNo}").SingleOrDefaultAsync(ct)
                           ?? throw new NotFoundException("grading.session_not_found", "Không tìm thấy lượt đo.");
             var batch = await db.Batches.SingleAsync(b => b.BatchId == session.BatchId, ct);
             await RequireMeasurerAsync(batch, ct);
@@ -129,7 +129,7 @@ public sealed partial class GradingService(AppDbContext db, ICurrentUser me, Tim
                 if (value is { } v)
                     db.MeasurementValues.Add(new MeasurementValue
                     {
-                        MeasurementSessionId = session.MeasurementSessionId, Metric = metric, Value = decimal.Round(v, 2), Unit = unit, Method = method,
+                        MeasurementSessionId = session.MeasurementRecordId, Metric = metric, Value = decimal.Round(v, 2), Unit = unit, Method = method,
                         RecordedBy = me.UserId, RecordedAt = now,
                     });
             }
@@ -149,7 +149,7 @@ public sealed partial class GradingService(AppDbContext db, ICurrentUser me, Tim
             session.UpdatedAt = now;
             await db.SaveChangesAsync(ct);
             var decision = await ProposeAsync(session, now, ct);
-            await audit.WriteAsync("measurement_session", session.MeasurementSessionId, "record_values", null,
+            await audit.WriteAsync("measurement_session", session.MeasurementRecordId, "record_values", null,
                 new { req.WeightG, req.CarapaceLengthCm, req.CarapaceWidthCm, req.EdgeBandMm, decision.DecisionNo, decision.Status, decision.HoldReasons }, ct);
         }, ct, IsolationLevel.Serializable);
         return await MeasurementsAsync(sessionNo, ct);
@@ -174,7 +174,7 @@ public sealed partial class GradingService(AppDbContext db, ICurrentUser me, Tim
                 db.MeasurementValues.Add(new MeasurementValue
                 {
                     MeasurementSessionId = sessionId, Metric = metric, Value = v, Unit = unit, Method = "AI", Confidence = image.Confidence,
-                    AiInferenceId = inference.AiInferenceId, RecordedAt = now,
+                    AiInferenceId = inference.MeasurementRecordId, RecordedAt = now,
                 });
         }
         Add("CarapaceLengthCm", image.CarapaceLengthCm, "cm");
@@ -188,15 +188,15 @@ public sealed partial class GradingService(AppDbContext db, ICurrentUser me, Tim
     {
         var batch = await db.Batches.SingleAsync(b => b.BatchId == session.BatchId, ct);
         var ruleSet = await RuleSetForAsync(batch, ct);
-        var values = await db.MeasurementValues.AsNoTracking().Where(v => v.MeasurementSessionId == session.MeasurementSessionId)
-            .OrderBy(v => v.RecordedAt).ThenBy(v => v.MeasurementValueId).ToListAsync(ct);
+        var values = await db.MeasurementValues.AsNoTracking().Where(v => v.MeasurementSessionId == session.MeasurementRecordId)
+            .OrderBy(v => v.RecordedAt).ThenBy(v => v.MeasurementRecordId).ToListAsync(ct);
         var weight = values.LastOrDefault(v => v.Metric == "WeightG")?.Value
                      ?? throw new BusinessRuleException("grading.weight_required", "Lượt đo chưa có khối lượng từ cân (BR-153).");
         var caliper = values.LastOrDefault(v => v.Metric == "CarapaceLengthCm" && v.Method == "Caliper");
         var aiLength = values.LastOrDefault(v => v.Metric == "CarapaceLengthCm" && v.Method == "AI");
         var edge = values.LastOrDefault(v => v.Metric == "EdgeBandMm");
-        var white = await db.AiInferences.AsNoTracking().Where(i => i.MeasurementSessionId == session.MeasurementSessionId && i.ImageKind == "White")
-            .OrderByDescending(i => i.AiInferenceId).FirstOrDefaultAsync(ct);
+        var white = await db.AiInferences.AsNoTracking().Where(i => i.MeasurementSessionId == session.MeasurementRecordId && i.ImageKind == "White")
+            .OrderByDescending(i => i.MeasurementRecordId).FirstOrDefaultAsync(ct);
         var threshold = await parameters.GetAsync(ParamKeys.AiConfidenceThreshold, now, ct);
         var length = caliper ?? aiLength;
         var input = new GradeInput(weight, length?.Value, edge?.Value, caliper is null ? white?.Confidence : null,
@@ -221,7 +221,7 @@ public sealed partial class GradingService(AppDbContext db, ICurrentUser me, Tim
         var decision = new GradeDecision
         {
             DecisionNo = Codes.New("GD", 10), CrabUnitId = session.CrabUnitId, BatchId = batch.BatchId,
-            MeasurementSessionId = session.MeasurementSessionId, RuleSetId = ruleSet.RuleSetId, VersionNo = version + 1,
+            MeasurementSessionId = session.MeasurementRecordId, RuleSetId = ruleSet.GradingRuleId, VersionNo = version + 1,
             Status = holds.Count == 0 ? "Draft" : "Hold", WeightG = decimal.Round(weight, 1),
             CarapaceLengthCm = usedLength is { } l ? decimal.Round(l, 2) : null, CIndex = proposal.CIndex,
             EdgeBandMm = proposal.Sensory is null ? null : edge?.Value is { } e ? decimal.Round(e, 2) : null,
@@ -265,7 +265,7 @@ public sealed partial class GradingService(AppDbContext db, ICurrentUser me, Tim
             if (!await db.GradeDecisions.AnyAsync(d => d.BatchId == batch.BatchId && d.IsCurrent && (d.Status == "Draft" || d.Status == "Hold"), ct))
                 throw new BusinessRuleException("grading.nothing_to_review", "Lô không có quyết định phân hạng nào đang chờ duyệt.");
             var assignment = await qc.AssignAsync(QcAssignmentKinds.GradingSession, batch.BatchId, "Batch", batch.BatchId, null, ct);
-            await audit.WriteAsync("qc_assignment", assignment.QcAssignmentId, "assign_grading", null, new { batch.BatchCode, assignment.QcUserId }, ct);
+            await audit.WriteAsync("qc_assignment", assignment.QcRecordId, "assign_grading", null, new { batch.BatchCode, assignment.QcUserId }, ct);
         }, ct);
         return await BatchSummaryAsync(batchCode, ct);
     }
@@ -274,10 +274,10 @@ public sealed partial class GradingService(AppDbContext db, ICurrentUser me, Tim
     private async Task<GradeRuleSet> RuleSetForAsync(Batch batch, CancellationToken ct)
     {
         if (batch.GradeRuleSetId is { } id)
-            return await db.GradeRuleSets.AsNoTracking().Include(s => s.Rules).SingleAsync(s => s.RuleSetId == id, ct);
+            return await db.GradeRuleSets.AsNoTracking().Include(s => s.Rules).SingleAsync(s => s.GradingRuleId == id, ct);
         var active = await db.GradeRuleSets.AsNoTracking().Include(s => s.Rules).SingleOrDefaultAsync(s => s.CrabType == batch.CrabType && s.Status == "Active", ct)
                      ?? throw new BusinessRuleException("grading.no_rule_set", "Chưa có bộ quy tắc phân hạng áp dụng cho loại cua này (BR-038).");
-        await db.Batches.Where(b => b.BatchId == batch.BatchId).ExecuteUpdateAsync(u => u.SetProperty(b => b.GradeRuleSetId, active.RuleSetId), ct);
+        await db.Batches.Where(b => b.BatchId == batch.BatchId).ExecuteUpdateAsync(u => u.SetProperty(b => b.GradeRuleSetId, active.GradingRuleId), ct);
         return active;
     }
 

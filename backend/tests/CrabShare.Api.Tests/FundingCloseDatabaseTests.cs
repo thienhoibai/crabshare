@@ -60,7 +60,7 @@ public class FundingCloseDatabaseTests(FundingDatabaseFixture fixture) : IClassF
         };
         db.Batches.Add(batch);
         await db.SaveChangesAsync();
-        return (batch.BatchId, code, batch.BatchAccount.BatchAccountId);
+        return (batch.BatchId, code, batch.BatchAccount.BatchRecordId);
     }
 
     private async Task<long> ContributionAsync(long batchId, long investorId, long amount, string status, DateTimeOffset? expiresAt = null)

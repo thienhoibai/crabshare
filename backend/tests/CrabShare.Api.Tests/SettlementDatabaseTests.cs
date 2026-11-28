@@ -18,7 +18,9 @@ public abstract class SettlementTestBase(FundingDatabaseFixture fixture)
     protected const string Password = "Test-password-123";
     protected FundingDatabaseFixture Fixture { get; } = fixture;
 
-    protected async Task<(HttpClient Client, long UserId)> UserAsync(string fullName, string role = "Customer", string? extraRole = null, string? memberRole = null)
+    /// <param name="verified">Nhà đầu tư đã eKYC đạt: bắt buộc trước khi khai tài khoản nhận tiền và nhận lệnh chi (BR-012, BR-013).</param>
+    protected async Task<(HttpClient Client, long UserId)> UserAsync(string fullName, string role = "Customer", string? extraRole = null, string? memberRole = null,
+        bool verified = false)
     {
         var email = $"st-{Guid.NewGuid():N}@test.local";
         (await Fixture.Factory.CreateClient().PostAsJsonAsync("/api/auth/register", new { email, password = Password, fullName, role })).EnsureSuccessStatusCode();
@@ -29,6 +31,17 @@ public abstract class SettlementTestBase(FundingDatabaseFixture fixture)
             if (extraRole is not null) db.AppUserRoles.Add(new AppUserRole { UserId = userId, RoleCode = extraRole, GrantedAt = now, CreatedAt = now });
             if (memberRole is not null)
                 db.OperatorMembers.Add(new OperatorMember { UserId = userId, OperatorId = Fixture.OperatorId, MemberRole = memberRole, JoinedAt = now, CreatedAt = now });
+            if (verified)
+            {
+                // Ghi thẳng kết quả như sau khi eKYC đạt: hồ sơ nhà đầu tư và đối tác cá nhân cùng chuyển Verified.
+                var investor = await db.Investors.SingleAsync(i => i.UserId == userId);
+                investor.VerificationStatus = "Verified";
+                investor.VerifiedAt = now;
+                var partyId = await db.AppUsers.Where(u => u.UserId == userId).Select(u => u.PartyId).SingleAsync();
+                var party = await db.Parties.SingleAsync(p => p.PartyId == partyId);
+                party.VerificationStatus = "Verified";
+                party.VerifiedAt = now;
+            }
             await db.SaveChangesAsync();
         }
         var client = Fixture.Factory.CreateClient();
@@ -97,13 +110,13 @@ public abstract class SettlementTestBase(FundingDatabaseFixture fixture)
         if (total + revenue > 0)
             db.ProviderTransactions.Add(new ProviderTransaction
             {
-                ProviderTxnId = $"TEST-{Guid.NewGuid():N}", BatchAccountId = batch.BatchAccount.BatchAccountId, Direction = "In", Amount = total + revenue,
+                ProviderTxnId = $"TEST-{Guid.NewGuid():N}", BatchAccountId = batch.BatchAccount.BatchRecordId, Direction = "In", Amount = total + revenue,
                 ReferenceCode = "GV-TEST", MatchStatus = "Matched", OccurredAt = now, ReceivedAt = now,
             });
         await db.SaveChangesAsync();
-        await db.StandardCostVersions.Where(v => v.CostVersionId == version.CostVersionId)
+        await db.StandardCostVersions.Where(v => v.CostRecordId == version.CostRecordId)
             .ExecuteUpdateAsync(s => s.SetProperty(v => v.Status, "Locked").SetProperty(v => v.LockedAt, now.AddDays(-110)));
-        return (batch.BatchId, code, batch.BatchAccount.BatchAccountId);
+        return (batch.BatchId, code, batch.BatchAccount.BatchRecordId);
     }
 
     protected static async Task<string?> ErrorCode(HttpResponseMessage response)
@@ -280,7 +293,7 @@ public class SettlementReviewDatabaseTests(FundingDatabaseFixture fixture) : Set
         await using (var db = Fixture.OpenDb())
         {
             var now = DateTimeOffset.UtcNow;
-            await db.Settlements.Where(s => s.SettlementId == draft.SettlementId).ExecuteUpdateAsync(s => s
+            await db.Settlements.Where(s => s.SettlementRecordId == draft.SettlementId).ExecuteUpdateAsync(s => s
                 .SetProperty(x => x.ProposedAt, now.AddDays(-8)).SetProperty(x => x.FeedbackDeadline, now.AddDays(-1)));
         }
         var late = await investorB.PostAsJsonAsync($"/api/settlements/{draft.SettlementId}/feedback", new { content = "Tôi muốn xem lại khoản chi phí thức ăn." });
@@ -304,8 +317,8 @@ public class SettlementPayoutDatabaseTests(FundingDatabaseFixture fixture) : Set
     [Fact]
     public async Task Approved_settlement_pays_tax_operator_and_investors_then_closes_the_batch()
     {
-        var (investorA, a) = await UserAsync("Nhà đầu tư Chi A", "Investor");
-        var (investorB, b) = await UserAsync("Nhà đầu tư Chi B", "Investor");
+        var (investorA, a) = await UserAsync("Nhà đầu tư Chi A", "Investor", verified: true);
+        var (investorB, b) = await UserAsync("Nhà đầu tư Chi B", "Investor", verified: true);
         (await investorA.PutAsJsonAsync("/api/me/payout-account?ownerType=Investor", new { bankCode = "VCB", accountNo = "1000" + Random.Shared.Next(100000, 999999), accountHolderName = "Nhà đầu tư Chi A" })).EnsureSuccessStatusCode();
         (await investorB.PutAsJsonAsync("/api/me/payout-account?ownerType=Investor", new { bankCode = "ACB", accountNo = "2000" + Random.Shared.Next(100000, 999999), accountHolderName = "Nhà đầu tư Chi B" })).EnsureSuccessStatusCode();
         var (owner, _) = await UserAsync("Chủ hộ nuôi Chi", extraRole: Roles.OperatorMember, memberRole: "Owner");
@@ -331,13 +344,13 @@ public class SettlementPayoutDatabaseTests(FundingDatabaseFixture fixture) : Set
 
         await using (var db = Fixture.OpenDb())
         {
-            var instructions = await db.PaymentInstructions.Where(i => i.BatchAccountId == accountId).OrderBy(i => i.InstructionId).ToListAsync();
+            var instructions = await db.PaymentInstructions.Where(i => i.BatchAccountId == accountId).OrderBy(i => i.PaymentRecordId).ToListAsync();
             Assert.Equal(["Payout", "Payout", "Payout"], instructions.Select(i => i.InstructionType));
             // BR-207: người nuôi nhận phần Chi phí chuẩn chưa giải ngân và thù lao; v1.5 không khấu trừ thuế trên bảng.
             Assert.Equal(s.OperatorRemuneration + s.Breakdown.UndisbursedCost, instructions[0].Amount);
             Assert.Equal(s.TotalNetPayout, instructions.Where(i => i.SettlementLineId != null).Sum(i => i.Amount));
             // Trigger BR-30: số liệu bảng đã duyệt không sửa được kể cả bằng SQL trực tiếp
-            await Assert.ThrowsAnyAsync<Exception>(() => db.Settlements.Where(x => x.SettlementId == s.SettlementId)
+            await Assert.ThrowsAnyAsync<Exception>(() => db.Settlements.Where(x => x.SettlementRecordId == s.SettlementId)
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.OperatorRemuneration, x => x.OperatorRemuneration + 1)));
         }
 

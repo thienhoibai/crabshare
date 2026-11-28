@@ -117,7 +117,7 @@ public partial class ProductionLogTests(KycDatabaseFixture fixture) : IClassFixt
         Assert.Equal(farm.UserId, result.GetProperty("recordedBy").GetInt64()); Assert.Equal(1, result.GetProperty("thresholdVersion").GetInt32());
         Assert.Equal(7.0m, result.GetProperty("thresholdsApplied").GetProperty("phMin").GetDecimal());
         var stored = await Db(db => db.ProductionLogs.AsNoTracking().SingleAsync(l => l.BatchId == farm.BatchId));
-        Assert.Equal(result.GetProperty("id").GetInt64(), stored.ProductionLogId); Assert.Equal(result.GetProperty("logDate").GetString(), stored.LogDate.ToString("yyyy-MM-dd"));
+        Assert.Equal(result.GetProperty("id").GetInt64(), stored.CareRecordId); Assert.Equal(result.GetProperty("logDate").GetString(), stored.LogDate.ToString("yyyy-MM-dd"));
         var page = await client.GetFromJsonAsync<JsonElement>(Path(farm)); Assert.Equal(1, page.GetProperty("total").GetInt32());
         Assert.Equal(result.GetProperty("id").GetInt64(), page.GetProperty("items")[0].GetProperty("id").GetInt64());
         Assert.False(await Db(db => db.Alerts.AnyAsync(a => a.BatchId == farm.BatchId))); Assert.True(await AuditCount(farm.UserId) >= 2); await AssertChain();
@@ -239,7 +239,7 @@ public partial class ProductionLogTests(KycDatabaseFixture fixture) : IClassFixt
         // Fixed test identifiers and database-generated numeric IDs only, confined to the isolated fixture DB.
         // A CHECK injects the alert failure without SQL Server's unrelated trigger/OUTPUT restriction.
         var trigger = failure == "alert"
-            ? $"ALTER TABLE dbo.alert ADD CONSTRAINT ck_vi08_log_test_failure CHECK (batch_id <> {farm.BatchId})"
+            ? $"ALTER TABLE dbo.care_record ADD CONSTRAINT ck_vi08_log_test_failure CHECK (record_type <> 'Alert' OR batch_id <> {farm.BatchId})"
             : $"CREATE TRIGGER dbo.vi08_log_test_failure ON dbo.audit_log AFTER INSERT AS BEGIN IF EXISTS (SELECT 1 FROM inserted WHERE actor_user_id={farm.UserId}) THROW 51008, 'VI08 audit test failure', 1; END";
         await Db(async db => { await db.Database.ExecuteSqlRawAsync(trigger); return true; });
         try
@@ -250,7 +250,7 @@ public partial class ProductionLogTests(KycDatabaseFixture fixture) : IClassFixt
             Assert.Contains(failure == "alert" ? "ck_vi08_log_test_failure" : "VI08 audit test failure", detail);
             Assert.False(await Db(db => db.ProductionLogs.AnyAsync(l => l.BatchId == farm.BatchId))); Assert.False(await Db(db => db.Alerts.AnyAsync(a => a.BatchId == farm.BatchId))); Assert.Equal(audits, await AuditCount(farm.UserId));
         }
-        finally { await Db(async db => { await db.Database.ExecuteSqlRawAsync(failure == "alert" ? "ALTER TABLE dbo.alert DROP CONSTRAINT ck_vi08_log_test_failure" : "DROP TRIGGER dbo.vi08_log_test_failure"); return true; }); }
+        finally { await Db(async db => { await db.Database.ExecuteSqlRawAsync(failure == "alert" ? "ALTER TABLE dbo.care_record DROP CONSTRAINT ck_vi08_log_test_failure" : "DROP TRIGGER dbo.vi08_log_test_failure"); return true; }); }
         Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync(Path(farm), Input())).StatusCode); await AssertChain();
     }
 }

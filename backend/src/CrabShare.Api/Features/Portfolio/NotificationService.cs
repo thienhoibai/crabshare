@@ -35,11 +35,11 @@ public sealed class NotificationService(AppDbContext db, ICurrentUser me, TimePr
                 .Select(c => new { Kind = 1, Id = c.ContributionId, At = c.ConfirmedAt!.Value, c.BatchId, Code = c.Batch.BatchCode, Amount = (decimal?)c.Amount });
             var contracts = db.InvestmentContracts.Where(c => c.Contribution.InvestorId == me.UserId && c.FullySignedAt != null
                 && (c.Status == "FullySigned" || c.Status == "Void"))
-                .Select(c => new { Kind = 2, Id = c.ContractId, At = c.FullySignedAt!.Value, c.Contribution.BatchId, Code = c.Contribution.Batch.BatchCode, Amount = (decimal?)null });
+                .Select(c => new { Kind = 2, Id = c.ContractRecordId, At = c.FullySignedAt!.Value, c.Contribution.BatchId, Code = c.Contribution.Batch.BatchCode, Amount = (decimal?)null });
             var production = db.ProductionLogs.Where(l => ids.Contains(l.BatchId))
-                .Select(l => new { Kind = 3, Id = l.ProductionLogId, At = l.ReceivedAt, l.BatchId, Code = l.Batch.BatchCode, Amount = (decimal?)null });
+                .Select(l => new { Kind = 3, Id = l.CareRecordId, At = l.ReceivedAt, l.BatchId, Code = l.Batch.BatchCode, Amount = (decimal?)null });
             var alerts = db.Alerts.Where(a => ids.Contains(a.BatchId))
-                .Select(a => new { Kind = 4, Id = a.AlertId, At = a.RaisedAt, a.BatchId, Code = a.Batch.BatchCode, Amount = (decimal?)null });
+                .Select(a => new { Kind = 4, Id = a.CareRecordId, At = a.RaisedAt, a.BatchId, Code = a.Batch.BatchCode, Amount = (decimal?)null });
             // Publication starts at ProposedAt, so investors can see that a statement was published for review.
             // Do not expose unpublished draft amounts or pretend approval is an executed payout.
             var published = db.SettlementLines.Where(l => l.InvestorId == me.UserId
@@ -50,7 +50,7 @@ public sealed class NotificationService(AppDbContext db, ICurrentUser me, TimePr
                 && p.SettlementLine != null && p.SettlementLine.InvestorId == me.UserId && p.SettlementLine.Settlement.ApprovedAt != null
                 && p.SettlementLine.Settlement.ApprovedAt <= asOf
                 && (p.SettlementLine.Settlement.Status == "Approved" || p.SettlementLine.Settlement.Status == "PaidOut" || p.SettlementLine.Settlement.Status == "Closed"))
-                .Select(p => new { Kind = 6, Id = p.InstructionId, At = p.CompletedAt!.Value, p.SettlementLine!.BatchId, Code = p.SettlementLine.Batch.BatchCode, Amount = (decimal?)p.Amount });
+                .Select(p => new { Kind = 6, Id = p.PaymentRecordId, At = p.CompletedAt!.Value, p.SettlementLine!.BatchId, Code = p.SettlementLine.Batch.BatchCode, Amount = (decimal?)p.Amount });
             var events = payments.Concat(contracts).Concat(production).Concat(alerts).Concat(published).Concat(payouts)
                 .Where(e => e.At <= asOf && (filter.After == null || e.At > filter.After));
             var page = await events.OrderByDescending(e => e.At).ThenBy(e => e.Kind).ThenByDescending(e => e.Id).ToPagedAsync(paging, ct);

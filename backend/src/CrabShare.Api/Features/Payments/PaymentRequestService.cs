@@ -85,7 +85,7 @@ public sealed class PaymentRequestService(AppDbContext db, IPaymentGateway gatew
     {
         var userId = me.UserId;
         var row = await db.PaymentRequests.AsNoTracking()
-                      .Where(r => r.PaymentRequestId == paymentRequestId)
+                      .Where(r => r.PaymentRecordId == paymentRequestId)
                       .Select(r => new
                       {
                           Request = r,
@@ -107,7 +107,7 @@ public sealed class PaymentRequestService(AppDbContext db, IPaymentGateway gatew
         => request.Status == "Pending" && request.ExpiresAt <= now ? "Expired" : request.Status;
 
     private static PaymentRequestResponse ToResponse(PaymentRequest r, string status, string? qrContent, BatchAccount account, string batchCode)
-        => new(r.PaymentRequestId, r.Purpose, status, batchCode, r.ReferenceCode, (long)r.Amount,
+        => new(r.PaymentRecordId, r.Purpose, status, batchCode, r.ReferenceCode, (long)r.Amount,
             status == "Pending" ? qrContent : null, r.ExpiresAt, account.ProviderName, account.ProviderAccountNo);
 
     private async Task<string> NewReferenceCodeAsync(string prefix, CancellationToken ct)

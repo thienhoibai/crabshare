@@ -18,11 +18,11 @@ public sealed class GradingStandardService(AppDbContext db, ICurrentUser me, Tim
 
     public async Task<IReadOnlyList<GradingStandardResponse>> StandardsAsync(bool includeDrafts, CancellationToken ct)
     {
-        var standards = await db.GradingStandards.AsNoTracking().OrderBy(s => s.StandardId).ToListAsync(ct);
+        var standards = await db.GradingStandards.AsNoTracking().OrderBy(s => s.GradingRuleId).ToListAsync(ct);
         var sets = await db.GradeRuleSets.AsNoTracking().Include(s => s.Rules)
             .Where(s => includeDrafts || s.Status == "Active").OrderBy(s => s.CrabType).ThenBy(s => s.VersionNo).ToListAsync(ct);
         return standards.Select(s => new GradingStandardResponse(s.StandardCode, s.Revision, s.Issuer, s.Scope, s.EffectiveFrom, s.Note,
-            sets.Where(x => x.StandardId == s.StandardId).Select(Response).ToList())).ToList();
+            sets.Where(x => x.StandardId == s.GradingRuleId).Select(Response).ToList())).ToList();
     }
 
     public async Task<GradeRuleSetResponse> CreateDraftAsync(CreateRuleSetRequest req, CancellationToken ct)
@@ -33,7 +33,7 @@ public sealed class GradingStandardService(AppDbContext db, ICurrentUser me, Tim
         {
             await audit.LockAsync(ct);
             var active = await db.GradeRuleSets.AsNoTracking().Include(s => s.Rules).SingleOrDefaultAsync(s => s.CrabType == req.CrabType && s.Status == "Active", ct);
-            var standardId = active?.StandardId ?? await db.GradingStandards.OrderByDescending(s => s.EffectiveFrom).Select(s => s.StandardId).FirstAsync(ct);
+            var standardId = active?.StandardId ?? await db.GradingStandards.OrderByDescending(s => s.EffectiveFrom).Select(s => s.GradingRuleId).FirstAsync(ct);
             if (await db.GradeRuleSets.AnyAsync(s => s.CrabType == req.CrabType && s.Status == "Draft", ct))
                 throw new ConflictException("grading.draft_exists", "Đã có bản nháp bộ quy tắc cho loại cua này; sửa hoặc áp dụng bản đó.");
             var now = clock.GetUtcNow();
@@ -54,8 +54,8 @@ public sealed class GradingStandardService(AppDbContext db, ICurrentUser me, Tim
             ValidateRules(set.Rules);
             db.GradeRuleSets.Add(set);
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("grade_rule_set", set.RuleSetId, "create_draft", null, new { set.CrabType, set.VersionNo, rules = set.Rules.Count }, ct);
-            return set.RuleSetId;
+            await audit.WriteAsync("grade_rule_set", set.GradingRuleId, "create_draft", null, new { set.CrabType, set.VersionNo, rules = set.Rules.Count }, ct);
+            return set.GradingRuleId;
         }, ct);
         return await GetAsync(id, ct);
     }
@@ -67,7 +67,7 @@ public sealed class GradingStandardService(AppDbContext db, ICurrentUser me, Tim
         await db.InTransactionAsync(async () =>
         {
             await audit.LockAsync(ct);
-            var set = await db.GradeRuleSets.Include(s => s.Rules).SingleOrDefaultAsync(s => s.RuleSetId == id, ct)
+            var set = await db.GradeRuleSets.Include(s => s.Rules).SingleOrDefaultAsync(s => s.GradingRuleId == id, ct)
                       ?? throw new NotFoundException("grading.rule_set_not_found", "Không tìm thấy bộ quy tắc.");
             if (set.Status != "Draft")
                 throw new BusinessRuleException("grading.rule_set_locked", "Bộ quy tắc đã áp dụng không sửa được; tạo phiên bản mới (BR-038).");
@@ -75,11 +75,11 @@ public sealed class GradingStandardService(AppDbContext db, ICurrentUser me, Tim
             ValidateRules(rules);
             db.GradeRules.RemoveRange(set.Rules);
             await db.SaveChangesAsync(ct);
-            foreach (var r in rules) { r.RuleSetId = set.RuleSetId; db.GradeRules.Add(r); }
+            foreach (var r in rules) { r.RuleSetId = set.GradingRuleId; db.GradeRules.Add(r); }
             if (req.NearThresholdPct is { } near) set.NearThresholdPct = near;
             if (req.Note is not null) set.Note = req.Note.Trim();
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("grade_rule_set", set.RuleSetId, "replace_rules", null, new { rules = rules.Count, set.NearThresholdPct }, ct);
+            await audit.WriteAsync("grade_rule_set", set.GradingRuleId, "replace_rules", null, new { rules = rules.Count, set.NearThresholdPct }, ct);
         }, ct);
         return await GetAsync(id, ct);
     }
@@ -90,7 +90,7 @@ public sealed class GradingStandardService(AppDbContext db, ICurrentUser me, Tim
         await db.InTransactionAsync(async () =>
         {
             await audit.LockAsync(ct);
-            var set = await db.GradeRuleSets.Include(s => s.Rules).SingleOrDefaultAsync(s => s.RuleSetId == id, ct)
+            var set = await db.GradeRuleSets.Include(s => s.Rules).SingleOrDefaultAsync(s => s.GradingRuleId == id, ct)
                       ?? throw new NotFoundException("grading.rule_set_not_found", "Không tìm thấy bộ quy tắc.");
             if (set.Status != "Draft")
                 throw new BusinessRuleException("grading.rule_set_not_draft", "Chỉ áp dụng bản nháp.");
@@ -112,14 +112,14 @@ public sealed class GradingStandardService(AppDbContext db, ICurrentUser me, Tim
             set.ApprovedAt = now;
             if (set.EffectiveFrom < now) set.EffectiveFrom = now;
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("grade_rule_set", set.RuleSetId, "activate", active is null ? null : new { retired = active.RuleSetId },
+            await audit.WriteAsync("grade_rule_set", set.GradingRuleId, "activate", active is null ? null : new { retired = active.GradingRuleId },
                 new { set.CrabType, set.VersionNo, set.ApprovedAt }, ct);
         }, ct);
         return await GetAsync(id, ct);
     }
 
     public async Task<GradeRuleSetResponse> GetAsync(long id, CancellationToken ct)
-        => Response(await db.GradeRuleSets.AsNoTracking().Include(s => s.Rules).SingleOrDefaultAsync(s => s.RuleSetId == id, ct)
+        => Response(await db.GradeRuleSets.AsNoTracking().Include(s => s.Rules).SingleOrDefaultAsync(s => s.GradingRuleId == id, ct)
                     ?? throw new NotFoundException("grading.rule_set_not_found", "Không tìm thấy bộ quy tắc."));
 
     private static GradeRule ToRule(GradeRuleRequest r) => new()
@@ -165,7 +165,7 @@ public sealed class GradingStandardService(AppDbContext db, ICurrentUser me, Tim
         return probes.Any(p => GradeEngine.Matches(a, p) && GradeEngine.Matches(b, p));
     }
 
-    private static GradeRuleSetResponse Response(GradeRuleSet s) => new(s.RuleSetId, s.CrabType, s.VersionNo, s.Status, s.EffectiveFrom, s.NearThresholdPct,
+    private static GradeRuleSetResponse Response(GradeRuleSet s) => new(s.GradingRuleId, s.CrabType, s.VersionNo, s.Status, s.EffectiveFrom, s.NearThresholdPct,
         s.Note, s.ApprovedAt, s.Rules.OrderBy(r => r.RuleKind).ThenBy(r => r.SortOrder)
-            .Select(r => new GradeRuleResponse(r.RuleId, r.RuleKind, r.Metric, r.LowerBound, r.UpperBound, r.Unit, r.ResultLabel, r.Boundary, r.SortOrder, r.Note)).ToList());
+            .Select(r => new GradeRuleResponse(r.GradingRuleId, r.RuleKind, r.Metric, r.LowerBound, r.UpperBound, r.Unit, r.ResultLabel, r.Boundary, r.SortOrder, r.Note)).ToList());
 }

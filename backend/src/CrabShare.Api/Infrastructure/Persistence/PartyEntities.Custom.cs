@@ -61,27 +61,30 @@ public sealed class Party
     public List<PartySite> Sites { get; set; } = [];
 }
 
-/// <summary>V027 — Giấy tờ pháp lý của đối tác tổ chức để Admin xác minh (BR-009, BR-016). Không dùng cho eKYC cá nhân (BR-010).</summary>
-[Table("party_document")]
-public sealed class PartyDocument
+/// <summary>Bảng gộp party_record (V044): giấy tờ (Document), vai trò (Role), cơ sở (Site) và người liên quan (RelatedParty) của đối tác nằm chung một bảng, phân biệt bằng cột record_type.</summary>
+[Table("party_record")]
+public abstract class PartyRecord
 {
-    [Key, Column("document_id")] public long DocumentId { get; set; }
+    [Key, Column("party_record_id")] public long PartyRecordId { get; set; }
+}
+
+/// <summary>V027 — Giấy tờ pháp lý của đối tác tổ chức để Admin xác minh (BR-009, BR-016). Không dùng cho eKYC cá nhân (BR-010).</summary>
+public sealed class PartyDocument : PartyRecord
+{
     [Column("party_id")] public long PartyId { get; set; }
     /// <summary>BusinessRegistration, License, Authorization, Other.</summary>
     [Column("doc_type"), MaxLength(30), Unicode(false)] public string DocType { get; set; } = "BusinessRegistration";
     [Column("file_uri"), MaxLength(500)] public string FileUri { get; set; } = "";
     [Column("content_type"), MaxLength(50), Unicode(false)] public string ContentType { get; set; } = "";
     [Column("sha256"), MaxLength(64), Unicode(false)] public string Sha256 { get; set; } = "";
-    [Column("note"), MaxLength(200)] public string? Note { get; set; }
+    [Column("document_note"), MaxLength(200)] public string? Note { get; set; }
     [Column("uploaded_by")] public long UploadedBy { get; set; }
     [Column("uploaded_at"), Precision(3)] public DateTimeOffset UploadedAt { get; set; }
     [Column("removed_at"), Precision(3)] public DateTimeOffset? RemovedAt { get; set; }
 }
 
-[Table("partner_role")]
-public sealed class PartnerRole
+public sealed class PartnerRole : PartyRecord
 {
-    [Key, Column("partner_role_id")] public long PartnerRoleId { get; set; }
     [Column("party_id")] public long PartyId { get; set; }
     [Column("role_type"), MaxLength(20), Unicode(false)] public string RoleType { get; set; } = "";
     [Column("status"), MaxLength(20), Unicode(false)] public string Status { get; set; } = "Active";
@@ -93,10 +96,8 @@ public sealed class PartnerRole
     public Party Party { get; set; } = null!;
 }
 
-[Table("party_site")]
-public sealed class PartySite
+public sealed class PartySite : PartyRecord
 {
-    [Key, Column("site_id")] public long SiteId { get; set; }
     [Column("party_id")] public long PartyId { get; set; }
     [Column("site_code"), MaxLength(30), Unicode(false)] public string SiteCode { get; set; } = "";
     [Column("site_type"), MaxLength(20), Unicode(false)] public string SiteType { get; set; } = "";
@@ -113,10 +114,8 @@ public sealed class PartySite
     [Column("updated_at"), Precision(3)] public DateTimeOffset UpdatedAt { get; set; }
 }
 
-[Table("related_party")]
-public sealed class RelatedParty
+public sealed class RelatedParty : PartyRecord
 {
-    [Key, Column("related_party_id")] public long RelatedPartyId { get; set; }
     [Column("party_id")] public long PartyId { get; set; }
     [Column("full_name"), MaxLength(150)] public string FullName { get; set; } = "";
     [Column("relation"), MaxLength(50)] public string Relation { get; set; } = "";
@@ -126,10 +125,8 @@ public sealed class RelatedParty
     [Column("created_at"), Precision(3)] public DateTimeOffset CreatedAt { get; set; }
 }
 
-[Table("batch_participant")]
-public sealed class BatchParticipant
+public sealed class BatchParticipant : BatchRecord
 {
-    [Key, Column("participant_id")] public long ParticipantId { get; set; }
     [Column("batch_id")] public long BatchId { get; set; }
     [Column("party_id")] public long PartyId { get; set; }
     [Column("participant_role"), MaxLength(20), Unicode(false)] public string ParticipantRole { get; set; } = "";
