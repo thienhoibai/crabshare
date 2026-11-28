@@ -1,7 +1,7 @@
 /* /operator/register — Hồ sơ hộ nuôi (UC04): hồ sơ xét duyệt, địa điểm, hồ sơ đối tác, bên liên quan.
    GET/PUT /api/operators/me, POST /api/operators, POST /api/operators/me/submit, GET/PUT /api/me/party.
    Trang chỉ trả nội dung vì còn được dùng cho tài khoản đã đăng nhập nhưng chưa thuộc hộ nuôi nào. */
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Send } from 'lucide-react'
 import type { OperatorProfileRequest, OperatorResponse, PartyResponse, UpdatePartyRequest } from '../../shared/api/api.gen'
 import { useAuthStore } from '../../shared/auth/authStore'
@@ -9,6 +9,7 @@ import {
   Field, Input, OpBadge, OpBtn, OpConfirm, OpError, OpHeading, OpLoading, OpMore, OpNote, OpPanel, Select, StatusBadge, errorMessage, label, options, useGet,
   useSend,
 } from '../../shared/ui/console'
+import { refreshSession } from '../auth/authApi'
 import FarmSites from './FarmSites'
 import { httpStatus } from './opA'
 import RelatedParties from './RelatedParties'
@@ -19,7 +20,9 @@ function ApplicationForm({ app }: { app: OperatorResponse | null }) {
   })
   const [confirming, setConfirming] = useState(false)
   const save = useSend<OperatorResponse, OperatorProfileRequest>(app ? 'put' : 'post', app ? '/api/operators/me' : '/api/operators', {
-    success: app ? 'Đã lưu hồ sơ.' : 'Đã tạo hồ sơ nháp.', quietError: true,
+    success: app ? 'Đã lưu hồ sơ.' : 'Đã tạo hồ sơ nháp.',
+    onSuccess: () => { if (!app) void refreshSession().catch(() => {}) },
+    quietError: true,
   })
   const submit = useSend<OperatorResponse, void>('post', '/api/operators/me/submit', { success: 'Đã gửi hồ sơ xét duyệt.', onSuccess: () => setConfirming(false), quietError: true })
   const canEdit = !app || app.canEdit
@@ -34,39 +37,42 @@ function ApplicationForm({ app }: { app: OperatorResponse | null }) {
   const readyToSubmit = !!app?.canSubmit && !dirty && complete
 
   return (
-    <form className="op-form" onSubmit={onSave}>
-      <div className="op-form__row">
-        <Field label="Tên pháp lý" required>
-          <Input value={f.legalName} maxLength={200} disabled={!canEdit} onChange={set('legalName')} placeholder="HTX Nuôi cua Năm Căn" />
-        </Field>
-        <Field label="Mã số thuế" required>
-          <Input value={f.taxCode} maxLength={14} inputMode="numeric" disabled={!canEdit} onChange={set('taxCode')} />
-        </Field>
-      </div>
-      <div className="op-form__row">
-        <Field label="Số đăng ký kinh doanh" required>
-          <Input value={f.businessRegNo} maxLength={30} disabled={!canEdit} onChange={set('businessRegNo')} />
-        </Field>
-        <Field label="Địa chỉ trại" required>
-          <Input value={f.farmAddress} maxLength={300} disabled={!canEdit} onChange={set('farmAddress')} />
-        </Field>
-      </div>
-      {save.isError && <OpNote tone="danger">{errorMessage(save.error)}</OpNote>}
-      {canEdit && (
-        <div className="op-formfoot">
-          <OpBtn type="submit" variant={readyToSubmit ? 'ghost' : 'primary'} disabled={!complete || !dirty || save.isPending}>
-            {save.isPending ? 'Đang lưu…' : app ? 'Lưu' : 'Tạo hồ sơ'}
-          </OpBtn>
-          {app?.canSubmit && <OpBtn type="button" variant={readyToSubmit ? 'primary' : 'ghost'} disabled={!readyToSubmit} onClick={() => setConfirming(true)}><Send size={16} /> Gửi xét duyệt</OpBtn>}
+    <>
+      <form className="op-form" onSubmit={onSave}>
+        <div className="op-form__row">
+          <Field label="Tên pháp lý" required>
+            <Input value={f.legalName} maxLength={200} disabled={!canEdit} onChange={set('legalName')} placeholder="Trại nuôi cua Năm Căn" />
+          </Field>
+          <Field label="Mã số thuế" required>
+            <Input value={f.taxCode} maxLength={14} inputMode="numeric" disabled={!canEdit} onChange={set('taxCode')} />
+          </Field>
         </div>
-      )}
+        <div className="op-form__row">
+          <Field label="Số đăng ký kinh doanh" required>
+            <Input value={f.businessRegNo} maxLength={30} disabled={!canEdit} onChange={set('businessRegNo')} />
+          </Field>
+          <Field label="Địa chỉ trại" required>
+            <Input value={f.farmAddress} maxLength={300} disabled={!canEdit} onChange={set('farmAddress')} />
+          </Field>
+        </div>
+        {save.isError && <OpNote tone="danger">{errorMessage(save.error)}</OpNote>}
+        {canEdit && (
+          <div className="op-formfoot">
+            <OpBtn type="submit" variant={readyToSubmit ? 'ghost' : 'primary'} disabled={!complete || !dirty || save.isPending}>
+              {save.isPending ? 'Đang lưu…' : app ? 'Lưu' : 'Tạo hồ sơ'}
+            </OpBtn>
+            {app?.canSubmit && <OpBtn type="button" variant={readyToSubmit ? 'primary' : 'ghost'} disabled={!readyToSubmit} onClick={() => setConfirming(true)}><Send size={16} /> Gửi xét duyệt</OpBtn>}
+          </div>
+        )}
+      </form>
+      {/* OpConfirm tự render <form>, phải đặt ngoài <form> của ApplicationForm để tránh nested form. */}
       {confirming && app && (
         <OpConfirm title="Gửi hồ sơ xét duyệt" sub={app.legalName} confirmLabel="Gửi" pending={submit.isPending} error={submit.error}
           onConfirm={() => submit.mutate()} onClose={() => setConfirming(false)}>
           <p className="rd-muted">Hồ sơ khoá lại cho tới khi Admin có kết quả.</p>
         </OpConfirm>
       )}
-    </form>
+    </>
   )
 }
 
@@ -129,6 +135,10 @@ export default function OperatorRegistration() {
   const none = application.isError && httpStatus(application.error) === 404
   const app = application.data ?? null
 
+  useEffect(() => {
+    if (app && !isMember) void refreshSession().catch(() => {})
+  }, [app, isMember])
+
   return (
     <>
       <OpHeading eyebrow="Hồ sơ" title="Hồ sơ hộ nuôi" />
@@ -139,10 +149,20 @@ export default function OperatorRegistration() {
       >
         {application.isPending ? <OpLoading /> : application.isError && !none ? <OpError error={application.error} onRetry={() => void application.refetch()} /> : (
           <>
-            {app && !isMember
-              ? <OpNote>Đăng xuất rồi đăng nhập lại để mở cổng người nuôi.</OpNote>
-              : app?.status === 'Rejected' ? <OpNote tone="danger">Hồ sơ bị từ chối. Liên hệ Admin để xét lại.</OpNote>
-                : app?.status === 'Suspended' ? <OpNote tone="danger">Hộ nuôi đang tạm dừng. Liên hệ Admin.</OpNote> : null}
+            {app?.status === 'Submitted' ? (
+              <OpNote tone="info">Hồ sơ đã gửi và đang chờ Admin xét duyệt. Sau khi được duyệt bạn có thể đánh số hộp và tạo Lô.</OpNote>
+            ) : app?.status === 'Approved' ? (
+              <OpNote tone="ok">
+                Hồ sơ hộ nuôi đã được duyệt.{' '}
+                {isMember
+                  ? <a className="op-link" href="/operator">Vào cổng người nuôi</a>
+                  : <button type="button" className="op-link" onClick={() => void refreshSession()}>Mở cổng người nuôi</button>}
+              </OpNote>
+            ) : app?.status === 'Rejected' ? (
+              <OpNote tone="danger">Hồ sơ bị từ chối. Liên hệ Admin để xét lại.</OpNote>
+            ) : app?.status === 'Suspended' ? (
+              <OpNote tone="danger">Hộ nuôi đang tạm dừng. Liên hệ Admin.</OpNote>
+            ) : null}
             <ApplicationForm key={app ? `${app.operatorId}-${app.status}` : 'new'} app={app} />
           </>
         )}

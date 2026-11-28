@@ -93,6 +93,7 @@ public class DemoSeedDatabaseTests(DemoSeedFixture fixture) : IClassFixture<Demo
             Assert.Equal("Approved", farm.Status);
             Assert.Equal("Verified", farmParty.VerificationStatus);
             Assert.Equal(farm.LegalName, farmParty.LegalName);
+            Assert.True(await db.PartnerRoles.AnyAsync(r => r.PartyId == farm.PartyId && r.RoleType == "Farmer" && r.Status == "Active" && r.ValidTo == null));
         }
         using var client = fixture.Client();
         foreach (var (code, key) in new[] { ("ST-NC-01", "dk_demo_station_namcan_2026"), ("RC-NC-R02", "dk_demo_railcam_namcan_r02_2026"), ("WS-NC-01", "dk_demo_water_namcan_2026") })

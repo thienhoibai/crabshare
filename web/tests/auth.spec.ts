@@ -412,3 +412,24 @@ test('đăng ký bằng Google gửi đúng vai trò Nhà đầu tư đang chọ
   ])
 })
 
+test('chọn Người nuôi khi đăng ký chuyển thẳng tới /dang-ky-ho-nuoi', async ({ page, api }) => {
+  api.get('/api/operators/me', () => reply(404, { status: 404, detail: 'Chưa có hồ sơ hộ nuôi.' }))
+  api.get('/api/me/party', party)
+  api.get('/api/me/sites', [])
+  api.post('/api/auth/register', session('Customer'))
+
+  await page.goto('/dang-ky')
+  await page.getByText('Người nuôi', { exact: true }).click()
+  await expect(page.getByText('Tạo tài khoản xong điền hồ sơ hộ nuôi ngay.')).toBeVisible()
+  await page.getByRole('textbox', { name: 'Họ và tên', exact: true }).fill('Chủ trại Năm Căn')
+  await page.getByRole('textbox', { name: 'Email', exact: true }).fill('chutrai@test.local')
+  await page.getByLabel(/^Mật khẩu/).fill('mat-khau-thu')
+  await acceptTerms(page)
+  await page.getByRole('button', { name: 'Tạo tài khoản' }).click()
+
+  await expect(page).toHaveURL(/\/dang-ky-ho-nuoi$/)
+  expect(api.sent('POST', '/api/auth/register').map((c) => c.body)).toEqual([{
+    email: 'chutrai@test.local', password: 'mat-khau-thu', fullName: 'Chủ trại Năm Căn', role: 'Customer', partyType: 'Individual',
+  }])
+})
+

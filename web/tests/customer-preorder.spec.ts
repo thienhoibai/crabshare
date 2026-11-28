@@ -189,10 +189,17 @@ test('thêm địa chỉ nhập tay ngay trong lúc đặt trước và tiếp t
   await page.getByRole('button', { name: 'Thêm địa chỉ' }).click()
   const dialog = page.getByRole('dialog', { name: 'Thêm địa điểm nhận hàng' })
   await dialog.getByLabel('Tên địa điểm').fill(address.name)
-  await dialog.getByLabel(/^Địa chỉ/).fill(address.addressLine)
+  await dialog.getByLabel(/^Tỉnh \/ Thành phố/).selectOption('Thành phố Hồ Chí Minh')
+  await dialog.getByLabel(/^Phường \/ Xã \/ Đặc khu/).selectOption('Phường Thủ Đức')
+  await dialog.getByLabel('Số nhà, đường / ấp, khóm').fill('8 Võ Văn Ngân')
   await dialog.getByRole('button', { name: 'Thêm địa điểm' }).click()
   await expect(dialog).toBeHidden()
-  expect(api.sent('POST', '/api/me/sites')[0].body).toMatchObject({ latitude: null, longitude: null })
+  expect(api.sent('POST', '/api/me/sites')[0].body).toMatchObject({
+    addressLine: '8 Võ Văn Ngân, Phường Thủ Đức',
+    province: 'Thành phố Hồ Chí Minh',
+    latitude: 10.776889,
+    longitude: 106.700897,
+  })
   await expect(page.getByRole('radio', { name: /Kho Thủ Đức/ })).toBeChecked()
   await expect(count).toHaveValue('30')
   await submit(page).click()
@@ -205,7 +212,7 @@ test('bổ sung vị trí nhận hàng trong form đặt trước và giữ số
   let dropOff = sites[2]
   api.get('/api/me/sites', () => [dropOff])
   api.put('/api/me/sites/13', () => {
-    dropOff = { ...dropOff, latitude: 10.7993, longitude: 106.6802 }
+    dropOff = { ...dropOff, province: 'Thành phố Hồ Chí Minh', addressLine: '8 Võ Văn Ngân, Thủ Đức, Phường Thủ Đức', latitude: 10.776889, longitude: 106.700897 }
     return dropOff
   })
   await signIn(page, 'Customer')
@@ -215,11 +222,15 @@ test('bổ sung vị trí nhận hàng trong form đặt trước và giữ số
   await expect(submit(page)).toBeEnabled()
   await page.getByRole('button', { name: 'Bổ sung vị trí cho Kho Thủ Đức' }).click()
   const dialog = page.getByRole('dialog', { name: 'Sửa Kho Thủ Đức' })
-  await dialog.getByText('Vị trí trên bản đồ (không bắt buộc)', { exact: true }).click()
-  await dialog.getByLabel('Toạ độ').fill('10.7993, 106.6802')
+  await expect(dialog.getByLabel('Tỉnh / Thành phố')).toHaveValue('Thành phố Hồ Chí Minh')
+  await dialog.getByLabel('Phường / Xã / Đặc khu').selectOption('Phường Thủ Đức')
   await dialog.getByRole('button', { name: 'Lưu địa điểm' }).click()
   await expect(dialog).toBeHidden()
-  expect(api.sent('PUT', '/api/me/sites/13')[0].body).toMatchObject({ latitude: 10.7993, longitude: 106.6802 })
+  expect(api.sent('PUT', '/api/me/sites/13')[0].body).toMatchObject({
+    province: 'Thành phố Hồ Chí Minh',
+    latitude: 10.776889,
+    longitude: 106.700897,
+  })
   await expect(page.getByRole('radio', { name: /Kho Thủ Đức/ })).toBeChecked()
   await expect(count).toHaveValue('30')
   await expect(submit(page)).toBeEnabled()

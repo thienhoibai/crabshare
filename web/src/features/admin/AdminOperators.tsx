@@ -1,11 +1,11 @@
-/* /admin/operators — Hồ sơ hộ nuôi (UC05): duyệt kèm số hộp tối đa, từ chối hoặc tạm dừng kèm lý do.
-   GET /api/admin/operators?status=; POST /api/admin/operators/{id}/approve | reject | suspend.
-   Hồ sơ bị từ chối chưa có luồng gửi lại; hộ nuôi đã tạm dừng chưa có thao tác mở lại. */
+/* /admin/operators — Hồ sơ hộ nuôi (UC05): Admin đối chiếu thông tin pháp lý và xác nhận duyệt, từ chối hoặc tạm dừng kèm lý do.
+   GET /api/admin/operators?status=; POST /api/admin/operators/{id}/approve | reject | suspend. */
 import { useState } from 'react'
 import { Check, Pause, X } from 'lucide-react'
 import type { AdminOperatorResponse, ApproveOperatorRequest, OperatorDecisionRequest, PagedResultOfAdminOperatorResponse } from '../../shared/api/api.gen'
+import { useAuthStore } from '../../shared/auth/authStore'
 import {
-  Field, NumberInput, OpBtn, OpConfirm, OpHeading, OpNote, OpPanel, OpTable, OpTabs, QueryView, StatusBadge, formatDate, useGet, useSend,
+  Checkbox, OpBtn, OpConfirm, OpHeading, OpKv, OpNote, OpPanel, OpTable, OpTabs, QueryView, StatusBadge, formatDate, useGet, useSend,
 } from '../../shared/ui/console'
 import { Pager, ReasonField, useUrlFilters } from './adminPartA'
 
@@ -20,19 +20,23 @@ const TABS = [
 type TabKey = (typeof TABS)[number]['key']
 type Action = 'approve' | 'reject' | 'suspend'
 
+/** Giá trị giữ tương thích schema DB/API cũ; theo BR-022/BR-026 hộ nuôi tự đăng ký số hộp thực tế của trại. */
+const UNBOUNDED_SLOT_CAPACITY = 1_000_000
+
 const ACTION_TEXT: Record<Action, { title: string; confirm: string; done: string }> = {
-  approve: { title: 'Duyệt hồ sơ hộ nuôi', confirm: 'Duyệt', done: 'Đã duyệt hồ sơ hộ nuôi.' },
+  approve: { title: 'Duyệt hồ sơ hộ nuôi', confirm: 'Xác nhận duyệt', done: 'Đã duyệt hồ sơ hộ nuôi.' },
   reject: { title: 'Từ chối hồ sơ hộ nuôi', confirm: 'Từ chối', done: 'Đã từ chối hồ sơ hộ nuôi.' },
   suspend: { title: 'Tạm dừng hộ nuôi', confirm: 'Tạm dừng', done: 'Đã tạm dừng hộ nuôi.' },
 }
 
 export default function AdminOperators() {
+  const admin = useAuthStore((s) => s.user)
   const filters = useUrlFilters()
   const tab = (TABS.find((t) => t.key === filters.get('status'))?.key ?? 'Submitted') as TabKey
   const list = useGet<PagedResultOfAdminOperatorResponse>('/api/admin/operators', { status: tab === 'all' ? '' : tab, page: filters.page, pageSize: 20 })
 
   const [target, setTarget] = useState<{ farm: AdminOperatorResponse; action: Action } | null>(null)
-  const [capacity, setCapacity] = useState<number | null>(null)
+  const [confirmed, setConfirmed] = useState(false)
   const [reason, setReason] = useState('')
   const close = () => setTarget(null)
 
@@ -45,7 +49,7 @@ export default function AdminOperators() {
 
   const open = (farm: AdminOperatorResponse, action: Action) => {
     send.reset()
-    setCapacity(farm.approvedSlotCapacity > 0 ? farm.approvedSlotCapacity : null)
+    setConfirmed(false)
     setReason('')
     setTarget({ farm, action })
   }
@@ -75,7 +79,6 @@ export default function AdminOperators() {
                     ),
                   },
                   { key: 'status', header: 'Trạng thái', cell: (f) => <StatusBadge kind="operator" value={f.status} /> },
-                  { key: 'cap', header: 'Số hộp được duyệt', num: true, cell: (f) => (f.status === 'Approved' || f.status === 'Suspended' ? f.approvedSlotCapacity : '—') },
                   { key: 'time', header: 'Gửi ngày', cell: (f) => formatDate(f.submittedAt) || '—' },
                   {
                     key: 'act', header: '', cell: (f) => (
@@ -102,18 +105,27 @@ export default function AdminOperators() {
           variant={target.action === 'approve' ? 'primary' : 'danger'}
           pending={send.isPending}
           error={send.error}
-          disabled={target.action === 'approve' ? capacity === null : !reason.trim()}
-          onConfirm={() => send.mutate(target.action === 'approve' ? { approvedSlotCapacity: capacity } : { reason: reason.trim() })}
+          disabled={target.action === 'approve' ? !confirmed : !reason.trim()}
+          onConfirm={() => send.mutate(target.action === 'approve' ? { approvedSlotCapacity: UNBOUNDED_SLOT_CAPACITY } : { reason: reason.trim() })}
           onClose={close}
         >
           {target.action === 'approve' ? (
-            <Field label="Số hộp nuôi tối đa được duyệt" required>
-              <NumberInput value={capacity} onChange={setCapacity} unit="hộp" max={2_147_483_647} autoFocus />
-            </Field>
+            <>
+              <OpKv items={[
+                { label: 'Tên pháp lý', value: target.farm.legalName },
+                { label: 'Mã số thuế', value: target.farm.taxCode },
+                { label: 'Số ĐKKD', value: target.farm.businessRegNo },
+                { label: 'Địa chỉ trại', value: target.farm.farmAddress },
+                { label: 'Quản trị viên xét duyệt', value: admin ? `${admin.fullName} (${admin.email})` : 'Quản trị viên' },
+              ]} />
+              <Checkbox checked={confirmed} onChange={setConfirmed}>
+                Tôi xác nhận đã đối chiếu hồ sơ pháp lý và đồng ý duyệt hộ nuôi này.
+              </Checkbox>
+            </>
           ) : (
             <ReasonField value={reason} onChange={setReason} />
           )}
-          {target.action === 'suspend' && <OpNote tone="danger">Hộ nuôi tạm dừng không tạo được Lô mới và chưa mở lại được.</OpNote>}
+          {target.action === 'suspend' && <OpNote tone="danger">Hộ nuôi tạm dừng không tạo được Lô mới.</OpNote>}
         </OpConfirm>
       )}
     </>

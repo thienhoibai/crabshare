@@ -11,7 +11,7 @@ import PasswordInput from './PasswordInput'
 import TermsDialog from './TermsDialog'
 import { useGoogleLogin, useRegister } from './authApi'
 
-type RoleChoice = 'Customer' | 'Investor'
+type RoleChoice = 'Customer' | 'Investor' | 'Operator'
 const PHONE_TAKEN = 'Số điện thoại này đã được dùng cho một tài khoản khác.'
 
 function isPhoneConflict(error: unknown) {
@@ -77,17 +77,18 @@ export default function RegisterPage() {
 
     const submittedPhone = phone.trim()
     const phoneField = event.currentTarget.elements.namedItem('phone')
+    const apiRole = role === 'Investor' ? 'Investor' : 'Customer'
     register.mutate(
       {
         email: email.trim(),
         password,
         fullName: fullName.trim(),
         phone: submittedPhone || undefined,
-        role,
+        role: apiRole,
         partyType: 'Individual',
       },
       {
-        onSuccess: () => navigate('/hoan-thien-ho-so', { replace: true }),
+        onSuccess: () => navigate(role === 'Operator' ? '/dang-ky-ho-nuoi' : '/hoan-thien-ho-so', { replace: true }),
         onError: (e) => {
           if (!isPhoneConflict(e)) return setMessage(errorMessage(e))
           setRejectedPhone(submittedPhone)
@@ -110,10 +111,15 @@ export default function RegisterPage() {
             options={[
               { value: 'Customer', label: 'Khách hàng' },
               { value: 'Investor', label: 'Nhà đầu tư' },
+              { value: 'Operator', label: 'Người nuôi' },
             ]}
           />
           <p className="auth-role-hint" aria-live="polite">
-            {role === 'Customer' ? 'Đặt trước cua và tra cứu nguồn gốc.' : 'Xác minh danh tính sau khi tạo tài khoản.'}
+            {role === 'Customer'
+              ? 'Đặt trước cua và tra cứu nguồn gốc.'
+              : role === 'Investor'
+                ? 'Xác minh danh tính sau khi tạo tài khoản.'
+                : 'Tạo tài khoản xong điền hồ sơ hộ nuôi ngay.'}
           </p>
         </fieldset>
 
@@ -160,11 +166,14 @@ export default function RegisterPage() {
         disabled={busy}
         onCredential={(idToken) => {
           setMessage('')
+          const apiRole = role === 'Investor' ? 'Investor' : 'Customer'
           googleLogin.mutate(
-            { idToken, role },
+            { idToken, role: apiRole },
             {
               onSuccess: (res) => navigate(
-                res.user.customerProfileRequired || role === 'Investor' ? PROFILE_SETUP_PATH : homePathFor(res.user),
+                role === 'Operator'
+                  ? '/dang-ky-ho-nuoi'
+                  : res.user.customerProfileRequired || role === 'Investor' ? PROFILE_SETUP_PATH : homePathFor(res.user),
                 { replace: true },
               ),
               onError: (e) => setMessage(errorMessage(e)),

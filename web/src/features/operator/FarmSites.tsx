@@ -1,10 +1,13 @@
 /* Địa điểm của hộ nuôi: trại, trạm kiểm phẩm, kho (GET/POST /api/me/sites, PUT/DELETE /api/me/sites/{siteId}).
-   Trại hoặc kho phải có toạ độ thì mới chọn được làm địa điểm xuất hàng của Lô (BR-084). */
-import { useState } from 'react'
-import { LocateFixed, Pencil, Plus, Trash2 } from 'lucide-react'
+   Người dùng chọn Tỉnh/Thành phố (34 tỉnh/thành sau sáp nhập), Phường/Xã và số nhà/đường; toạ độ được phân giải tự động. */
+import { useEffect, useState } from 'react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import type { PartySiteResponse, SiteRequest } from '../../shared/api/api.gen'
 import {
-  Checkbox, DecimalInput, Field, Input, OpBadge, OpBtn, OpConfirm, OpMore, OpNote, OpPanel, OpTable, QueryView, Select, StatusBadge, toast, useGet, useSend,
+  composeVnAddress, parseVnAddress, resolveVnCoordinates, useVnProvinces, VnAddressPicker, type VnAddressValue,
+} from '../../shared/party/VnAddressPicker'
+import {
+  Checkbox, Field, Input, OpBadge, OpBtn, OpConfirm, OpMore, OpNote, OpPanel, OpTable, QueryView, Select, StatusBadge, useGet, useSend,
 } from '../../shared/ui/console'
 
 const SITE_TYPES = [
@@ -14,44 +17,71 @@ const SITE_TYPES = [
 ]
 
 type Draft = {
-  siteType: string; name: string; addressLine: string; province: string; latitude: number | null; longitude: number | null
+  siteType: string; name: string; address: VnAddressValue
   contactName: string; contactPhone: string; isDefault: boolean
 }
 
-const toDraft = (s?: PartySiteResponse): Draft => ({
-  siteType: s?.siteType ?? 'Farm', name: s?.name ?? '', addressLine: s?.addressLine ?? '', province: s?.province ?? '',
-  latitude: s?.latitude ?? null, longitude: s?.longitude ?? null, contactName: s?.contactName ?? '', contactPhone: s?.contactPhone ?? '',
+const toDraft = (s?: PartySiteResponse, parsed?: VnAddressValue): Draft => ({
+  siteType: s?.siteType ?? 'Farm',
+  name: s?.name ?? '',
+  address: parsed ?? { provinceName: s?.province ?? '', wardName: '', streetLine: s?.addressLine ?? '' },
+  contactName: s?.contactName ?? '',
+  contactPhone: s?.contactPhone ?? '',
   isDefault: s?.isDefault ?? false,
 })
 
 function SiteDialog({ site, onClose }: { site: PartySiteResponse | null; onClose: () => void }) {
-  const [f, setF] = useState<Draft>(() => toDraft(site ?? undefined))
-  const [locating, setLocating] = useState(false)
+  const provinces = useVnProvinces()
+  const [f, setF] = useState<Draft>(() => toDraft(site ?? undefined, site ? parseVnAddress(provinces, site.addressLine, site.province) : undefined))
+  const [hydrating, setHydrating] = useState(false)
+  const [touchedAddress, setTouchedAddress] = useState(false)
+
+  useEffect(() => {
+    if (!site || touchedAddress || provinces.length === 0) return
+    setF((old) => ({ ...old, address: parseVnAddress(provinces, site.addressLine, site.province) }))
+  }, [provinces, site, touchedAddress])
+
   const save = useSend<PartySiteResponse, SiteRequest>(site ? 'put' : 'post', site ? `/api/me/sites/${site.siteId}` : '/api/me/sites', {
     success: site ? 'Đã lưu địa điểm.' : 'Đã thêm địa điểm.', onSuccess: onClose, quietError: true,
   })
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setF((old) => ({ ...old, [key]: value }))
-  const locate = () => {
-    if (!('geolocation' in navigator)) return toast('Trình duyệt này không có định vị.', 'danger')
-    setLocating(true)
-    navigator.geolocation.getCurrentPosition(
-      (p) => { setF((old) => ({ ...old, latitude: Number(p.coords.latitude.toFixed(6)), longitude: Number(p.coords.longitude.toFixed(6)) })); setLocating(false) },
-      () => { toast('Không lấy được vị trí. Nhập vĩ độ, kinh độ bằng tay.', 'danger'); setLocating(false) },
-      { enableHighAccuracy: true, timeout: 15_000 },
-    )
+  const hasProvinceData = provinces.length > 0
+  const addressReady = !!f.address.streetLine.trim() && !!f.address.provinceName.trim() && (!hasProvinceData || !!f.address.wardName.trim() || !provinces.some((p) => p.name === f.address.provinceName))
+
+  const onSave = async () => {
+    setHydrating(true)
+    try {
+      const coords = await resolveVnCoordinates(
+        provinces,
+        f.address,
+        site ? { latitude: site.latitude, longitude: site.longitude, addressLine: site.addressLine, province: site.province } : undefined,
+      )
+      save.mutate({
+        siteCode: site?.siteCode,
+        siteType: f.siteType,
+        name: f.name.trim(),
+        addressLine: composeVnAddress(f.address.streetLine, f.address.wardName),
+        province: f.address.provinceName.trim() || null,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        contactName: f.contactName.trim() || null,
+        contactPhone: f.contactPhone.trim() || null,
+        isDefault: f.isDefault,
+      })
+    } finally {
+      setHydrating(false)
+    }
   }
+
   return (
     <OpConfirm
       title={site ? `Sửa ${site.name}` : 'Thêm địa điểm'}
       confirmLabel="Lưu"
-      pending={save.isPending}
+      pending={hydrating || save.isPending}
       error={save.error}
-      disabled={!f.name.trim() || !f.addressLine.trim()}
+      disabled={!f.name.trim() || !addressReady}
       onClose={onClose}
-      onConfirm={() => save.mutate({
-        siteCode: site?.siteCode, siteType: f.siteType, name: f.name.trim(), addressLine: f.addressLine.trim(), province: f.province.trim() || null,
-        latitude: f.latitude, longitude: f.longitude, contactName: f.contactName.trim() || null, contactPhone: f.contactPhone.trim() || null, isDefault: f.isDefault,
-      })}
+      onConfirm={() => void onSave()}
       wide
     >
       <div className="op-form__row">
@@ -65,25 +95,14 @@ function SiteDialog({ site, onClose }: { site: PartySiteResponse | null; onClose
           <Input value={f.name} maxLength={150} onChange={(e) => set('name', e.target.value)} placeholder="Trại cua hộp Năm Căn" />
         </Field>
       </div>
-      <Field label="Địa chỉ" required>
-        <Input value={f.addressLine} maxLength={300} onChange={(e) => set('addressLine', e.target.value)} />
-      </Field>
-      <div className="op-form__row">
-        <Field label="Vĩ độ" hint="Ví dụ 8,7601">
-          <DecimalInput value={f.latitude} onChange={(v) => set('latitude', v)} />
-        </Field>
-        <Field label="Kinh độ" hint="Ví dụ 105,0503">
-          <DecimalInput value={f.longitude} onChange={(v) => set('longitude', v)} />
-        </Field>
-      </div>
-      <div className="op-inline">
-        <OpBtn type="button" variant="ghost" sm onClick={locate} disabled={locating}><LocateFixed size={15} /> {locating ? 'Đang lấy vị trí…' : 'Lấy vị trí của máy'}</OpBtn>
-      </div>
+      <VnAddressPicker
+        provinces={provinces}
+        value={f.address}
+        onChange={(next) => { setTouchedAddress(true); set('address', next) }}
+        streetPlaceholder="Ấp Hàng Vịnh, số nhà, tên đường…"
+      />
       <OpMore label="Tuỳ chọn thêm">
         <div className="op-form__row">
-          <Field label="Tỉnh, thành">
-            <Input value={f.province} maxLength={100} onChange={(e) => set('province', e.target.value)} />
-          </Field>
           <Field label="Người liên hệ">
             <Input value={f.contactName} maxLength={150} onChange={(e) => set('contactName', e.target.value)} />
           </Field>
@@ -106,7 +125,7 @@ export default function FarmSites() {
   return (
     <OpPanel
       title="Địa điểm"
-      subtitle="Trại hoặc kho cần có toạ độ để làm nơi xuất hàng của Lô."
+      subtitle="Chọn Tỉnh/Thành phố, Phường/Xã và địa chỉ trại hoặc kho để làm nơi xuất hàng của Lô."
       action={<OpBtn variant="ghost" sm onClick={() => setEditing('new')}><Plus size={15} /> Thêm</OpBtn>}
     >
       <QueryView query={sites}>
@@ -115,7 +134,7 @@ export default function FarmSites() {
           const dispatchReady = mine.some((s) => (s.siteType === 'Farm' || s.siteType === 'Warehouse') && s.latitude !== null)
           return (
             <>
-              {!dispatchReady && <OpNote tone="danger">Chưa có trại hoặc kho nào có toạ độ nên chưa tạo được Lô.</OpNote>}
+              {!dispatchReady && <OpNote tone="danger">Chưa có trại hoặc kho nào có địa chỉ đầy đủ nên chưa tạo được Lô.</OpNote>}
               {mine.length > 0 && (
                 <OpTable
                   rows={mine}
@@ -127,7 +146,7 @@ export default function FarmSites() {
                       ),
                     },
                     { key: 'type', header: 'Loại', cell: (s) => <StatusBadge kind="siteType" value={s.siteType} /> },
-                    { key: 'geo', header: 'Toạ độ', cell: (s) => (s.latitude !== null && s.longitude !== null ? <span className="rd-num">{s.latitude}, {s.longitude}</span> : <span className="op-warn">Chưa có</span>) },
+                    { key: 'contact', header: 'Liên hệ', cell: (s) => [s.contactName, s.contactPhone].filter(Boolean).join(' · ') || <span className="rd-muted">—</span> },
                     {
                       key: 'act', header: '', cell: (s) => (
                         <span className="op-inline">

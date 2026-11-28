@@ -31,7 +31,15 @@ export const authApi = {
   login: (body: LoginInput) => http.post<AuthResponse>('/api/auth/login', body).then((r) => r.data),
   googleLogin: (body: GoogleLoginInput) => http.post<AuthResponse>('/api/auth/google', body).then((r) => r.data),
   register: (body: RegisterInput) => http.post<AuthResponse>('/api/auth/register', body).then((r) => r.data),
+  refresh: () => http.post<AuthResponse>('/api/auth/refresh').then((r) => r.data),
   me: () => http.get<Me>('/api/auth/me').then((r) => r.data),
+}
+
+/** Làm mới JWT từ quyền mới nhất trong CSDL (không cần đăng xuất rồi đăng nhập lại). */
+export async function refreshSession(): Promise<AuthResponse> {
+  const res = await authApi.refresh()
+  useAuthStore.getState().setSession(res.accessToken, res.expiresAt, res.user)
+  return res
 }
 
 /** Đăng nhập xong thì lưu phiên vào authStore. */

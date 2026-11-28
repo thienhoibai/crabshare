@@ -82,6 +82,12 @@ public class OperatorsControllerTests(OperatorDatabaseFixture fixture) : IClassF
         Assert.Contains(Roles.OperatorMember, loggedIn.User.Roles);
         Assert.Equal(id, loggedIn.User.OperatorId);
         Assert.Equal(id.ToString(), new JwtSecurityTokenHandler().ReadJwtToken(loggedIn.AccessToken).Claims.Single(c => c.Type == "operator_id").Value);
+        var refresh = await client.PostAsync("/api/auth/refresh", null);
+        Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
+        var refreshed = (await refresh.Content.ReadFromJsonAsync<AuthResponse>())!;
+        Assert.Contains(Roles.OperatorMember, refreshed.User.Roles);
+        Assert.Equal(id, refreshed.User.OperatorId);
+        Assert.Equal(id.ToString(), new JwtSecurityTokenHandler().ReadJwtToken(refreshed.AccessToken).Claims.Single(c => c.Type == "operator_id").Value);
         var submitted = await client.PostAsync("/api/operators/me/submit", null);
         Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);
         var result = await submitted.Content.ReadFromJsonAsync<JsonElement>();
