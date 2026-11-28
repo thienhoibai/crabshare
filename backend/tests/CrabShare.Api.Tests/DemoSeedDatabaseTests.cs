@@ -87,6 +87,12 @@ public class DemoSeedDatabaseTests(DemoSeedFixture fixture) : IClassFixture<Demo
             Assert.Equal(40, await db.BoxAssignments.CountAsync(a => a.BatchId == batch.BatchId && a.LeftAt == null));
             Assert.Equal(new[] { "RailCamera", "Station", "WaterSensor" }, await db.Devices.OrderBy(d => d.DeviceType).Select(d => d.DeviceType).ToListAsync());
             Assert.True(await db.Offers.CountAsync(o => o.BatchId == batch.BatchId) >= 4);
+            // Trại mẫu đã duyệt phải nhận được tiền giải ngân: đối tác đã xác minh, tên pháp lý khớp hồ sơ hộ nuôi (BR-012, BR-013).
+            var farm = await db.Operators.SingleAsync();
+            var farmParty = await db.Parties.SingleAsync(x => x.PartyId == farm.PartyId);
+            Assert.Equal("Approved", farm.Status);
+            Assert.Equal("Verified", farmParty.VerificationStatus);
+            Assert.Equal(farm.LegalName, farmParty.LegalName);
         }
         using var client = fixture.Client();
         foreach (var (code, key) in new[] { ("ST-NC-01", "dk_demo_station_namcan_2026"), ("RC-NC-R02", "dk_demo_railcam_namcan_r02_2026"), ("WS-NC-01", "dk_demo_water_namcan_2026") })

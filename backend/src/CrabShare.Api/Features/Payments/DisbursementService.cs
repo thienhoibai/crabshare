@@ -108,9 +108,9 @@ public sealed class DisbursementService(AppDbContext db, ICurrentUser me, IAudit
         tranche.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
         await audit.WriteAsync("disbursement_tranche", tranche.PaymentRecordId, "release", new { status = "Requested" },
-            new { tranche.Status, batch.BatchCode, tranche.TrancheNo, releasedAt = now, instruction.PaymentRecordId }, now, ct);
+            new { tranche.Status, batch.BatchCode, tranche.TrancheNo, releasedAt = now, InstructionId = instruction.PaymentRecordId }, now, ct);
         await audit.WriteAsync("payment_instruction", instruction.PaymentRecordId, "create", null,
-            new { type = "Disbursement", amount = (long)instruction.Amount, tranche.PaymentRecordId, payout.UserRecordId }, now, ct);
+            new { type = "Disbursement", amount = (long)instruction.Amount, TrancheId = tranche.PaymentRecordId, PayoutAccountId = payout.UserRecordId }, now, ct);
         return (await DescribeAsync([batch], null, ct)).Single(t => t.TrancheId == tranche.PaymentRecordId);
     }, ct);
 

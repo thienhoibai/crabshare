@@ -74,7 +74,7 @@ public sealed class PaymentProfileService(AppDbContext db, ICurrentUser me, IBan
             });
             await db.SaveChangesAsync(ct);
             AccountAuditWriter.Append(db, me.UserId, "PayoutAccount", account.UserRecordId, "MaintainPayoutAccount",
-                null, AuditChain.Snapshot(new { account.UserRecordId, OwnerType = owner.Type, account.NameMatchStatus, account.Status }), now, previousHash);
+                null, AuditChain.Snapshot(new { PayoutAccountId = account.UserRecordId, OwnerType = owner.Type, account.NameMatchStatus, account.Status }), now, previousHash);
             await db.SaveChangesAsync(ct);
             return Profile(owner, account);
         }, ct);

@@ -427,7 +427,7 @@ public static class QcStats
                                 equals new { a.OrderId, a.LineId, a.TrancheId }
                             join d in db.GradeDecisions on a.GradeDecisionId equals d.GradeDecisionId
                             where c.Status == "Accepted" && d.DecidedBy != null && userIds.Contains(d.DecidedBy.Value)
-                            select new { c.SalesRecordId, Qc = d.DecidedBy!.Value }).Distinct()
+                            select new { ClaimId = c.SalesRecordId, Qc = d.DecidedBy!.Value }).Distinct()
             .GroupBy(x => x.Qc).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count, ct);
         return userIds.ToDictionary(id => id, id => (approved.GetValueOrDefault(id), claims.GetValueOrDefault(id)));
     }
