@@ -49,7 +49,7 @@ public sealed class SourcingService(AppDbContext db, ICurrentUser me, TimeProvid
             db.ProcurementOrders.Add(po);
             await db.SaveChangesAsync(ct);
             await parties.AddParticipantAsync(batch.BatchId, req.SupplierPartyId, ParticipantRoles.Supplier, ct);
-            await audit.WriteAsync("procurement_order", po.ProcurementOrderId, "create", null,
+            await audit.WriteAsync("procurement_order", po.SupplyRecordId, "create", null,
                 new { po.PoNo, batch.BatchCode, po.SupplierPartyId, po.Quantity, unitPrice = req.UnitPrice }, ct);
             return po.PoNo;
         }, ct, IsolationLevel.Serializable);
@@ -83,7 +83,7 @@ public sealed class SourcingService(AppDbContext db, ICurrentUser me, TimeProvid
             if (req.SiteId is { } siteId)
             {
                 var ownParty = await parties.PartyIdOfOperatorAsync(batch.OperatorId, ct);
-                if (!await db.PartySites.AnyAsync(s => s.SiteId == siteId && (s.PartyId == ownParty || s.PartyId == batch.ExecutorPartyId) &&
+                if (!await db.PartySites.AnyAsync(s => s.PartyRecordId == siteId && (s.PartyId == ownParty || s.PartyId == batch.ExecutorPartyId) &&
                         (s.SiteType == "Farm" || s.SiteType == "QcStation" || s.SiteType == "Warehouse"), ct))
                     throw new NotFoundException("sourcing.site_not_found", "Địa điểm nhận không thuộc đơn vị thực hiện.");
             }
@@ -93,7 +93,7 @@ public sealed class SourcingService(AppDbContext db, ICurrentUser me, TimeProvid
                 throw new ConflictException("sourcing.lot_code_taken", "Mã lô nguồn đã dùng.");
             var lot = new SupplyLot
             {
-                LotCode = lotCode, ProcurementOrderId = po.ProcurementOrderId, BatchId = batch.BatchId, OriginRegion = req.OriginRegion.Trim(),
+                LotCode = lotCode, ProcurementOrderId = po.SupplyRecordId, BatchId = batch.BatchId, OriginRegion = req.OriginRegion.Trim(),
                 HarvestedOn = req.HarvestedOn, DeclaredSpecies = req.DeclaredSpecies.Trim(), DeclaredCount = req.DeclaredCount,
                 DeclaredWeightKg = req.DeclaredWeightKg, TraceStatus = "Declared", CreatedAt = now,
             };
@@ -101,16 +101,16 @@ public sealed class SourcingService(AppDbContext db, ICurrentUser me, TimeProvid
             await db.SaveChangesAsync(ct);
             var receipt = new GoodsReceipt
             {
-                ReceiptNo = Codes.New("GR", 10), SupplyLotId = lot.SupplyLotId, BatchId = batch.BatchId, SiteId = req.SiteId,
+                ReceiptNo = Codes.New("GR", 10), SupplyLotId = lot.SupplyRecordId, BatchId = batch.BatchId, SiteId = req.SiteId,
                 ReceivedAt = req.ReceivedAt ?? now, ReceivedBy = me.UserId, Status = "Inspecting", Note = req.Note?.Trim(), CreatedAt = now,
             };
             db.GoodsReceipts.Add(receipt);
             await db.SaveChangesAsync(ct);
             // BR-017: phân ngẫu nhiên Nhân viên kiểm phẩm cho buổi kiểm đầu vào.
-            var assignment = await qc.AssignAsync(QcAssignmentKinds.IncomingInspection, batch.BatchId, "GoodsReceipt", receipt.GoodsReceiptId, null, ct);
+            var assignment = await qc.AssignAsync(QcAssignmentKinds.IncomingInspection, batch.BatchId, "GoodsReceipt", receipt.SupplyRecordId, null, ct);
             receipt.QcUserId = assignment.QcUserId;
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("goods_receipt", receipt.GoodsReceiptId, "create", null,
+            await audit.WriteAsync("goods_receipt", receipt.SupplyRecordId, "create", null,
                 new { receipt.ReceiptNo, po.PoNo, lot.LotCode, lot.DeclaredCount, lot.DeclaredWeightKg, receipt.QcUserId }, ct);
             return receipt.ReceiptNo;
         }, ct);
@@ -124,13 +124,13 @@ public sealed class SourcingService(AppDbContext db, ICurrentUser me, TimeProvid
         return await db.InTransactionAsync(async () =>
         {
             await audit.LockAsync(ct);
-            var receipt = await db.GoodsReceipts.FromSqlInterpolated($"SELECT * FROM dbo.goods_receipt WITH (UPDLOCK, HOLDLOCK) WHERE receipt_no = {receiptNo}")
+            var receipt = await db.GoodsReceipts.FromSqlInterpolated($"SELECT * FROM dbo.supply_record WITH (UPDLOCK, HOLDLOCK) WHERE record_type = 'GoodsReceipt' AND receipt_no = {receiptNo}")
                               .SingleOrDefaultAsync(ct)
                           ?? throw new NotFoundException("sourcing.receipt_not_found", "Không tìm thấy phiếu nhận hàng.");
-            await qc.RequireAssignedAsync(me.UserId, QcAssignmentKinds.IncomingInspection, "GoodsReceipt", receipt.GoodsReceiptId, ct);
+            await qc.RequireAssignedAsync(me.UserId, QcAssignmentKinds.IncomingInspection, "GoodsReceipt", receipt.SupplyRecordId, ct);
             if (receipt.Status != "Inspecting")
                 throw new BusinessRuleException("sourcing.receipt_closed", "Phiếu nhận hàng đã đóng.");
-            var lot = await db.SupplyLots.SingleAsync(l => l.SupplyLotId == receipt.SupplyLotId, ct);
+            var lot = await db.SupplyLots.SingleAsync(l => l.SupplyRecordId == receipt.SupplyLotId, ct);
             var batch = await db.Batches.SingleAsync(b => b.BatchId == receipt.BatchId, ct);
             if (receipt.AcceptedCount + receipt.RejectedCount >= lot.DeclaredCount)
                 throw new BusinessRuleException("sourcing.receipt_full", "Đã kiểm đủ số con khai báo của lô nguồn.");
@@ -148,7 +148,7 @@ public sealed class SourcingService(AppDbContext db, ICurrentUser me, TimeProvid
             {
                 unit = new CrabUnit
                 {
-                    CrabCode = Codes.New("CU", 8), BatchId = batch.BatchId, SupplyLotId = lot.SupplyLotId, GoodsReceiptId = receipt.GoodsReceiptId,
+                    CrabCode = Codes.New("CU", 8), BatchId = batch.BatchId, SupplyLotId = lot.SupplyRecordId, GoodsReceiptId = receipt.SupplyRecordId,
                     Species = req.Species.Trim(), Sex = req.Sex, Maturity = req.Maturity, ReceivedWeightG = req.WeightG, Condition = "Healthy",
                     InventoryStatus = "Received", ReceivedAt = now, CreatedAt = now, UpdatedAt = now,
                 };
@@ -168,7 +168,7 @@ public sealed class SourcingService(AppDbContext db, ICurrentUser me, TimeProvid
             }
             var inspection = new QcInspection
             {
-                InspectionNo = Codes.New("QC", 10), InspectionKind = "Incoming", BatchId = batch.BatchId, GoodsReceiptId = receipt.GoodsReceiptId,
+                InspectionNo = Codes.New("QC", 10), InspectionKind = "Incoming", BatchId = batch.BatchId, GoodsReceiptId = receipt.SupplyRecordId,
                 CrabUnitId = unit?.CrabUnitId, InspectorId = me.UserId, InspectedAt = now, Species = req.Species.Trim(), Sex = req.Sex,
                 Maturity = req.Maturity, SpeciesOk = req.SpeciesOk, Alive = req.Alive, Healthy = req.Healthy, TwoClaws = req.TwoClaws,
                 FoodSafe = req.FoodSafe, WeightG = req.WeightG, SensoryResult = req.Note?.Trim(),
@@ -196,7 +196,7 @@ public sealed class SourcingService(AppDbContext db, ICurrentUser me, TimeProvid
             await audit.LockAsync(ct);
             var receipt = await db.GoodsReceipts.SingleOrDefaultAsync(r => r.ReceiptNo == receiptNo, ct)
                           ?? throw new NotFoundException("sourcing.receipt_not_found", "Không tìm thấy phiếu nhận hàng.");
-            await qc.RequireAssignedAsync(me.UserId, QcAssignmentKinds.IncomingInspection, "GoodsReceipt", receipt.GoodsReceiptId, ct);
+            await qc.RequireAssignedAsync(me.UserId, QcAssignmentKinds.IncomingInspection, "GoodsReceipt", receipt.SupplyRecordId, ct);
             if (receipt.Status != "Inspecting")
                 throw new BusinessRuleException("sourcing.receipt_closed", "Phiếu nhận hàng đã đóng.");
             if (receipt.AcceptedCount + receipt.RejectedCount == 0)
@@ -204,15 +204,15 @@ public sealed class SourcingService(AppDbContext db, ICurrentUser me, TimeProvid
             var now = clock.GetUtcNow();
             receipt.Status = "Completed";
             receipt.CompletedAt = now;
-            var lot = await db.SupplyLots.SingleAsync(l => l.SupplyLotId == receipt.SupplyLotId, ct);
-            var po = await db.ProcurementOrders.SingleAsync(p => p.ProcurementOrderId == lot.ProcurementOrderId, ct);
+            var lot = await db.SupplyLots.SingleAsync(l => l.SupplyRecordId == receipt.SupplyLotId, ct);
+            var po = await db.ProcurementOrders.SingleAsync(p => p.SupplyRecordId == lot.ProcurementOrderId, ct);
             await db.SaveChangesAsync(ct);
             var accepted = await db.GoodsReceipts.Where(r => r.Status == "Completed" &&
-                db.SupplyLots.Any(l => l.SupplyLotId == r.SupplyLotId && l.ProcurementOrderId == po.ProcurementOrderId)).SumAsync(r => r.AcceptedCount, ct);
+                db.SupplyLots.Any(l => l.SupplyRecordId == r.SupplyLotId && l.ProcurementOrderId == po.SupplyRecordId)).SumAsync(r => r.AcceptedCount, ct);
             po.Status = accepted >= po.Quantity ? "Received" : "PartiallyReceived";
             po.UpdatedAt = now;
-            await qc.CompleteAsync(QcAssignmentKinds.IncomingInspection, "GoodsReceipt", receipt.GoodsReceiptId, ct);
-            await audit.WriteAsync("goods_receipt", receipt.GoodsReceiptId, "complete", new { status = "Inspecting" },
+            await qc.CompleteAsync(QcAssignmentKinds.IncomingInspection, "GoodsReceipt", receipt.SupplyRecordId, ct);
+            await audit.WriteAsync("goods_receipt", receipt.SupplyRecordId, "complete", new { status = "Inspecting" },
                 new { receipt.Status, receipt.AcceptedCount, receipt.RejectedCount, receipt.AcceptedWeightG, poStatus = po.Status }, ct);
         }, ct);
         return await ReceiptAsync(receiptNo, ct);
@@ -234,7 +234,7 @@ public sealed class SourcingService(AppDbContext db, ICurrentUser me, TimeProvid
                     ?? throw new NotFoundException("batch.not_found", "Không tìm thấy Lô.");
         await access.RequireOperatorOrAdminReadAsync(batch, ct);
         var result = new List<ProcurementOrderResponse>();
-        foreach (var po in await db.ProcurementOrders.AsNoTracking().Where(p => p.BatchId == batch.BatchId).OrderBy(p => p.ProcurementOrderId).ToListAsync(ct))
+        foreach (var po in await db.ProcurementOrders.AsNoTracking().Where(p => p.BatchId == batch.BatchId).OrderBy(p => p.SupplyRecordId).ToListAsync(ct))
             result.Add(await OrderResponseAsync(po, code, ct));
         return result;
     }
@@ -244,7 +244,7 @@ public sealed class SourcingService(AppDbContext db, ICurrentUser me, TimeProvid
         var batch = await db.Batches.AsNoTracking().SingleOrDefaultAsync(b => b.BatchCode == code, ct)
                     ?? throw new NotFoundException("batch.not_found", "Không tìm thấy Lô.");
         await access.RequireOperatorOrAdminReadAsync(batch, ct);
-        var nos = await db.GoodsReceipts.AsNoTracking().Where(r => r.BatchId == batch.BatchId).OrderBy(r => r.GoodsReceiptId).Select(r => r.ReceiptNo).ToListAsync(ct);
+        var nos = await db.GoodsReceipts.AsNoTracking().Where(r => r.BatchId == batch.BatchId).OrderBy(r => r.SupplyRecordId).Select(r => r.ReceiptNo).ToListAsync(ct);
         var result = new List<GoodsReceiptResponse>();
         foreach (var no in nos) result.Add(await ReceiptAsync(no, ct));
         return result;
@@ -254,8 +254,8 @@ public sealed class SourcingService(AppDbContext db, ICurrentUser me, TimeProvid
     {
         var r = await db.GoodsReceipts.AsNoTracking().SingleOrDefaultAsync(x => x.ReceiptNo == receiptNo, ct)
                 ?? throw new NotFoundException("sourcing.receipt_not_found", "Không tìm thấy phiếu nhận hàng.");
-        var lot = await db.SupplyLots.AsNoTracking().SingleAsync(l => l.SupplyLotId == r.SupplyLotId, ct);
-        var poNo = await db.ProcurementOrders.Where(p => p.ProcurementOrderId == lot.ProcurementOrderId).Select(p => p.PoNo).SingleAsync(ct);
+        var lot = await db.SupplyLots.AsNoTracking().SingleAsync(l => l.SupplyRecordId == r.SupplyLotId, ct);
+        var poNo = await db.ProcurementOrders.Where(p => p.SupplyRecordId == lot.ProcurementOrderId).Select(p => p.PoNo).SingleAsync(ct);
         return new GoodsReceiptResponse(r.ReceiptNo, poNo, lot.LotCode, lot.OriginRegion, lot.HarvestedOn, lot.DeclaredCount, lot.DeclaredWeightKg,
             r.ReceivedAt, r.Status, r.AcceptedCount, r.RejectedCount, r.AcceptedWeightG, r.QcUserId, r.CompletedAt);
     }
@@ -263,7 +263,7 @@ public sealed class SourcingService(AppDbContext db, ICurrentUser me, TimeProvid
     private async Task<ProcurementOrderResponse> OrderResponseAsync(ProcurementOrder po, string batchCode, CancellationToken ct)
     {
         var supplier = await db.Parties.AsNoTracking().Where(p => p.PartyId == po.SupplierPartyId).Select(p => p.LegalName).SingleAsync(ct);
-        var received = await db.GoodsReceipts.Where(r => db.SupplyLots.Any(l => l.SupplyLotId == r.SupplyLotId && l.ProcurementOrderId == po.ProcurementOrderId))
+        var received = await db.GoodsReceipts.Where(r => db.SupplyLots.Any(l => l.SupplyRecordId == r.SupplyLotId && l.ProcurementOrderId == po.SupplyRecordId))
             .SumAsync(r => (int?)r.AcceptedCount, ct) ?? 0;
         return new ProcurementOrderResponse(po.PoNo, batchCode, po.SupplierPartyId, supplier, po.OrderedOn, po.AgreedSpec, po.Quantity, (long)po.UnitPrice,
             po.Status, received);

@@ -112,7 +112,7 @@ public sealed class HoldingService(AppDbContext db, ICurrentUser me, TimeProvide
             });
             crab.InventoryStatus = "Holding";
             crab.UpdatedAt = now;
-            await db.Evidences.Where(e => e.EvidenceId == req.EvidenceId)
+            await db.Evidences.Where(e => e.EvidenceRecordId == req.EvidenceId)
                 .ExecuteUpdateAsync(s => s.SetProperty(e => e.CrabUnitId, crab.CrabUnitId).SetProperty(e => e.EvidenceKind, reason == "Stock" ? "Stocking" : "Restock"), ct);
             db.InventoryEvents.Add(Event(crab, "Boxed", now, slot.SlotId, req.EvidenceId,
                 replaced is null ? $"Thả vào hộp {slot.SlotCode}" : $"Thả bù thay {replaced.CrabCode} ở hộp {slot.SlotCode}"));
@@ -200,7 +200,7 @@ public sealed class HoldingService(AppDbContext db, ICurrentUser me, TimeProvide
                     box.LeftAt = at;
                     box.LeaveReason = "Died";
                 }
-                await db.Evidences.Where(e => e.EvidenceId == evidenceId)
+                await db.Evidences.Where(e => e.EvidenceRecordId == evidenceId)
                     .ExecuteUpdateAsync(s => s.SetProperty(e => e.CrabUnitId, crab.CrabUnitId).SetProperty(e => e.EvidenceKind, "Mortality"), ct);
             }
             else if (req.EventType == "Molted")
@@ -242,11 +242,11 @@ public sealed class HoldingService(AppDbContext db, ICurrentUser me, TimeProvide
                    ?? throw new NotFoundException("holding.crab_not_found", "Không tìm thấy con cua.");
         var batch = await db.Batches.AsNoTracking().SingleAsync(b => b.BatchId == crab.BatchId, ct);
         await RequireCrabViewerAsync(batch, crab, ct);
-        var lot = await db.SupplyLots.AsNoTracking().SingleAsync(l => l.SupplyLotId == crab.SupplyLotId, ct);
+        var lot = await db.SupplyLots.AsNoTracking().SingleAsync(l => l.SupplyRecordId == crab.SupplyLotId, ct);
         var slots = await db.PhysicalSlots.AsNoTracking().Where(s => s.OperatorId == batch.OperatorId).ToDictionaryAsync(s => s.SlotId, s => s.SlotCode, ct);
         var boxes = await db.BoxAssignments.AsNoTracking().Where(a => a.CrabUnitId == crab.CrabUnitId).OrderBy(a => a.AssignedAt)
             .Select(a => new { a.SlotId, a.AssignedAt, a.LeftAt, a.Reason, a.LeaveReason, a.EvidenceId }).ToListAsync(ct);
-        var events = await db.InventoryEvents.AsNoTracking().Where(e => e.CrabUnitId == crab.CrabUnitId).OrderBy(e => e.OccurredAt).ThenBy(e => e.InventoryEventId)
+        var events = await db.InventoryEvents.AsNoTracking().Where(e => e.CrabUnitId == crab.CrabUnitId).OrderBy(e => e.OccurredAt).ThenBy(e => e.InventoryRecordId)
             .ToListAsync(ct);
         var replaces = crab.ReplacesCrabUnitId is { } r ? await db.CrabUnits.Where(c => c.CrabUnitId == r).Select(c => c.CrabCode).SingleAsync(ct) : null;
         return new CrabUnitResponse(crab.CrabCode, batch.BatchCode, lot.LotCode, lot.OriginRegion, lot.HarvestedOn, crab.Species, crab.Sex, crab.Maturity,
@@ -338,7 +338,7 @@ public sealed class HoldingService(AppDbContext db, ICurrentUser me, TimeProvide
     /// <summary>Ảnh bằng chứng của đúng hộp và Lô, chụp trong ứng dụng, mới chụp (BR-108, BR-127, BR-130, BR-132).</summary>
     private async Task RequireBoxPhotoAsync(long evidenceId, long batchId, long slotId, CancellationToken ct)
     {
-        var e = await db.Evidences.AsNoTracking().SingleOrDefaultAsync(x => x.EvidenceId == evidenceId, ct)
+        var e = await db.Evidences.AsNoTracking().SingleOrDefaultAsync(x => x.EvidenceRecordId == evidenceId, ct)
                 ?? throw new NotFoundException("holding.photo_not_found", "Không tìm thấy ảnh bằng chứng.");
         if (e.BatchId != batchId || e.SlotId != slotId)
             throw new BusinessRuleException("holding.photo_wrong_box", "Ảnh phải chụp đúng hộp của Lô (BR-132).");
@@ -347,7 +347,7 @@ public sealed class HoldingService(AppDbContext db, ICurrentUser me, TimeProvide
 
     private async Task RequireBatchPhotoAsync(long evidenceId, long batchId, CancellationToken ct)
     {
-        var e = await db.Evidences.AsNoTracking().SingleOrDefaultAsync(x => x.EvidenceId == evidenceId, ct)
+        var e = await db.Evidences.AsNoTracking().SingleOrDefaultAsync(x => x.EvidenceRecordId == evidenceId, ct)
                 ?? throw new NotFoundException("holding.photo_not_found", "Không tìm thấy ảnh bằng chứng.");
         if (e.BatchId != batchId) throw new BusinessRuleException("holding.photo_wrong_box", "Ảnh phải thuộc Lô này.");
         RequireFreshInApp(e);

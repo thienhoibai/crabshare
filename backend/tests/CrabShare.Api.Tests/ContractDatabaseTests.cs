@@ -166,7 +166,7 @@ public class ContractDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtu
         var actions = await db.AuditLogs.Where(a => a.EntityType == "investment_contract" && a.EntityId == draft.ContractId)
             .OrderBy(a => a.AuditId).Select(a => a.ActionType).ToListAsync();
         Assert.Equal(["create", "sign", "sign"], actions);
-        var row = await db.InvestmentContracts.SingleAsync(c => c.ContractId == draft.ContractId);
+        var row = await db.InvestmentContracts.SingleAsync(c => c.ContractRecordId == draft.ContractId);
         Assert.Equal(ContractFileStore.UriFor(row.ContractNo, final.FinalHash!), row.FinalFileUri);
 
         // Người ngoài không thấy hợp đồng
@@ -194,7 +194,7 @@ public class ContractDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtu
         Assert.Equal(HttpStatusCode.UnprocessableEntity, sign.StatusCode);
         Assert.Equal("contract.void", await ErrorCode(sign));
         await using var check = fixture.OpenDb();
-        Assert.Equal(ContractStatuses.Void, (await check.InvestmentContracts.SingleAsync(c => c.ContractId == contract.ContractId)).Status);
+        Assert.Equal(ContractStatuses.Void, (await check.InvestmentContracts.SingleAsync(c => c.ContractRecordId == contract.ContractId)).Status);
     }
 
     private async Task<HttpClient> AdminAsync()

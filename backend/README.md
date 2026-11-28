@@ -6,7 +6,7 @@ Lưu ảnh hiện hỗ trợ Local/Cloudinary qua IFileStorage. Cấu hình loca
 backend/
 ├── CrabShare.sln
 ├── dotnet-tools.json                 ← dotnet-ef + dotnet-stryker (chạy dotnet tool restore trong backend/)
-├── scripts/scaffold-db.ps1           ← sinh lại Entities từ CSDL
+├── scripts/scaffold-db.ps1           ← (ngừng dùng từ V036) từng sinh Entities từ CSDL
 ├── src/
 │   ├── CrabShare.Api/                ← API (Controller, lát cắt dọc theo Features/)
 │   └── CrabShare.SettlementEngine/   ← thư viện quyết toán thuần (không phụ thuộc DB)
@@ -71,12 +71,8 @@ Mỗi thư mục `Features/<Module>/README.md` đã ghi sẵn use case, bảng, 
 
 1. Thêm file `database/migrations/V00X__mo_ta.sql` (không sửa file cũ).
 2. `dotnet run --project backend/tools/CrabShare.DbMigrator`
-3. Sinh lại entity (Windows):
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File backend/scripts/scaffold-db.ps1
-   ```
-   Thêm **bảng/view mới** thì thêm tên vào danh sách `$objects` trong script. Tắt API đang chạy trước khi scaffold (file .exe bị khoá).
-4. Cấu hình thêm cho entity (không sửa file sinh ra) → viết trong `Infrastructure/Persistence/AppDbContext.Custom.cs`.
+3. Sửa tay lớp thực thể trong `Infrastructure/Persistence/` (từ V036 không chạy `scaffold-db.ps1` nữa, vì các bảng gộp ánh xạ theo cột `record_type` được viết tay). Bảng gộp: thêm lớp con kế thừa lớp gốc (ví dụ `PaymentRecord`) và khai báo `HasValue<...>("Loại")` trong file `AppDbContext.<Nhóm>.cs` tương ứng.
+4. Cấu hình thêm cho entity → viết trong `Infrastructure/Persistence/AppDbContext.Custom.cs` hoặc file `AppDbContext.<Nhóm>.cs`.
 
 ## Cấu hình (`appsettings*.json`)
 

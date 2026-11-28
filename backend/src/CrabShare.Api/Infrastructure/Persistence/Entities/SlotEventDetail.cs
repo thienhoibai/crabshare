@@ -10,6 +10,5 @@ public sealed class SlotEventDetail
     public long ActorId { get; set; }
     public Guid RequestId { get; set; }
     public string RequestHash { get; set; } = "";
-    public long? PolicyVersionId { get; set; }
     public int AliveCount { get; set; }
 }

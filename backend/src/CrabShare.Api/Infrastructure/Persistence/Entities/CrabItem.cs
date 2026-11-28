@@ -29,19 +29,7 @@ public partial class CrabItem
     /// </summary>
     public long? ReplacesCrabItemId { get; set; }
 
-    /// <summary>
-    /// Null khi còn nuôi hoặc đã chết
-    /// </summary>
-    public long? HarvestId { get; set; }
-
-    public long? GradeId { get; set; }
-
     public short? WeightG { get; set; }
-
-    /// <summary>
-    /// Gán khi đóng đơn bằng cách quét tem
-    /// </summary>
-    public long? OrderLineId { get; set; }
 
     /// <summary>
     /// Giá trị: Growing, Dead, InStock, Packed, Sold, DeliveredInKind, Lost
@@ -54,17 +42,9 @@ public partial class CrabItem
 
     public virtual Batch Batch { get; set; } = null!;
 
-    public virtual ICollection<CrabItemEvent> CrabItemEvents { get; set; } = new List<CrabItemEvent>();
-
     public virtual CrabTag? CrabTag { get; set; }
 
-    public virtual ProductGrade? Grade { get; set; }
-
-    public virtual Harvest? Harvest { get; set; }
-
     public virtual ICollection<CrabItem> InverseReplacesCrabItem { get; set; } = new List<CrabItem>();
-
-    public virtual OrderLine? OrderLine { get; set; }
 
     public virtual CrabItem? ReplacesCrabItem { get; set; }
 

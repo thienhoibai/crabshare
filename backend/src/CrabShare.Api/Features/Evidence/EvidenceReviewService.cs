@@ -20,11 +20,11 @@ public sealed class EvidenceReviewService(AppDbContext db, ICurrentUser me, Evid
         if (!string.IsNullOrWhiteSpace(filter.Q))
         {
             var text = filter.Q.Trim(); var id = long.TryParse(text, out var parsed) ? parsed : -1;
-            query = query.Where(e => e.EvidenceId == id || e.Batch.BatchCode.Contains(text) || e.Batch.Operator.LegalName.Contains(text)
+            query = query.Where(e => e.EvidenceRecordId == id || e.Batch.BatchCode.Contains(text) || e.Batch.Operator.LegalName.Contains(text)
                 || (e.Slot != null && e.Slot.SlotCode.Contains(text)));
         }
-        return await query.OrderBy(e => e.ReceivedAt).ThenBy(e => e.EvidenceId)
-            .Select(e => new ReviewEvidenceSummary(e.EvidenceId, e.Batch.BatchCode, e.Batch.Title, e.Batch.Operator.LegalName,
+        return await query.OrderBy(e => e.ReceivedAt).ThenBy(e => e.EvidenceRecordId)
+            .Select(e => new ReviewEvidenceSummary(e.EvidenceRecordId, e.Batch.BatchCode, e.Batch.Title, e.Batch.Operator.LegalName,
                 e.Slot == null ? null : e.Slot.SlotCode, e.MediaType, e.ReviewStatus, e.RiskScore, e.ReceivedAt)).ToPagedAsync(paging, ct);
     }
     public async Task<ReviewEvidenceDetail> GetAsync(long id, CancellationToken ct)
@@ -35,7 +35,7 @@ public sealed class EvidenceReviewService(AppDbContext db, ICurrentUser me, Evid
     public async Task<EvidenceImageContent> OpenImageAsync(long id, CancellationToken ct)
     {
         await RequireAccessAsync(id, ct);
-        var row = await db.Evidences.AsNoTracking().SingleAsync(e => e.EvidenceId == id, ct);
+        var row = await db.Evidences.AsNoTracking().SingleAsync(e => e.EvidenceRecordId == id, ct);
         return await images.OpenAsync(row.FileUri, row.MediaType, ct);
     }
     public Task<ReviewEvidenceDetail> DecideAsync(long id, EvidenceVerdictRequest request, CancellationToken ct)
@@ -53,7 +53,7 @@ public sealed class EvidenceReviewService(AppDbContext db, ICurrentUser me, Evid
             await RequireAccessAsync(id, ct);
             var evidence = await Load(id, ct);
             var mine = evidence.EvidenceReviews.SingleOrDefault(r => r.ReviewerId == me.UserId);
-            if (writtenReviewId is not null && mine?.EvidenceReviewId == writtenReviewId && mine.Verdict == request.Verdict && mine.Note == note && mine.ReviewedAt == now)
+            if (writtenReviewId is not null && mine?.EvidenceRecordId == writtenReviewId && mine.Verdict == request.Verdict && mine.Note == note && mine.ReviewedAt == now)
             {
                 var persisted = Detail(evidence); await tx.CommitAsync(ct); return persisted;
             }
@@ -68,9 +68,9 @@ public sealed class EvidenceReviewService(AppDbContext db, ICurrentUser me, Evid
             mine.Verdict = request.Verdict; mine.Note = note; mine.ReviewedAt = now;
             evidence.ReviewStatus = request.Verdict switch { "Pass" => "Accepted", "Fail" => "Rejected", _ => "Flagged" };
             await db.SaveChangesAsync(ct);
-            writtenReviewId = mine.EvidenceReviewId;
+            writtenReviewId = mine.EvidenceRecordId;
             var audit = new AuditLog { EntityType = "Evidence", EntityId = id, ActionType = "ReviewEvidence", OldValue = old,
-                NewValue = AuditChain.Snapshot(new { evidence.ReviewStatus, mine.EvidenceReviewId, mine.ReviewerId, mine.Verdict, mine.Note, mine.ReviewedAt }),
+                NewValue = AuditChain.Snapshot(new { evidence.ReviewStatus, mine.EvidenceRecordId, mine.ReviewerId, mine.Verdict, mine.Note, mine.ReviewedAt }),
                 ActorUserId = me.UserId, OccurredAt = now, PrevHash = previous };
             audit.RowHash = AuditChain.Hash(audit); db.AuditLogs.Add(audit); await db.SaveChangesAsync(ct);
             var result = Detail(await Load(id, ct));
@@ -82,11 +82,11 @@ public sealed class EvidenceReviewService(AppDbContext db, ICurrentUser me, Evid
         .AsSplitQuery()
         .Include(e => e.Batch).ThenInclude(b => b.Operator).Include(e => e.Slot)
         .Include(e => e.EvidenceDetections).Include(e => e.EvidenceReviews).ThenInclude(r => r.Reviewer)
-        .SingleAsync(e => e.EvidenceId == id, ct);
+        .SingleAsync(e => e.EvidenceRecordId == id, ct);
     private async Task RequireAccessAsync(long id, CancellationToken ct)
     {
         await RequireReviewerAsync(ct);
-        var batchId = await db.Evidences.AsNoTracking().Where(e => e.EvidenceId == id).Select(e => (long?)e.BatchId).SingleOrDefaultAsync(ct)
+        var batchId = await db.Evidences.AsNoTracking().Where(e => e.EvidenceRecordId == id).Select(e => (long?)e.BatchId).SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException("evidence.not_found", "Không tìm thấy bằng chứng.");
         if (await db.CapitalShares.AnyAsync(s => s.BatchId == batchId && s.InvestorId == me.UserId, ct)
             || await db.Contributions.AnyAsync(c => c.BatchId == batchId && c.InvestorId == me.UserId && (c.Status == "Confirmed" || c.ConfirmedAt != null), ct))
@@ -102,10 +102,10 @@ public sealed class EvidenceReviewService(AppDbContext db, ICurrentUser me, Evid
         ? mine == null
         : e.ReviewStatus == "Flagged" && (mine == null || (mine.Verdict == "NeedMoreEvidence" && e.ExplainedAt > mine.ReviewedAt));
     private ReviewEvidenceDetail Detail(Infrastructure.Persistence.Entities.Evidence e) => new(
-        new(e.EvidenceId, e.Batch.BatchCode, e.Batch.Title, e.Batch.Operator.LegalName, e.Slot?.SlotCode, e.MediaType, e.ReviewStatus, e.RiskScore, e.ReceivedAt),
+        new(e.EvidenceRecordId, e.Batch.BatchCode, e.Batch.Title, e.Batch.Operator.LegalName, e.Slot?.SlotCode, e.MediaType, e.ReviewStatus, e.RiskScore, e.ReceivedAt),
         e.Source, e.CapturedAt, e.Latitude, e.Longitude, e.Sha256, e.PerceptualHash, e.Explanation, e.ExplainedAt,
         e.EvidenceDetections.OrderByDescending(d => d.DetectedAt).Select(d => new ReviewDetection(d.ModelVersion, d.CrabDetected, d.Confidence, d.BboxJson, d.DetectedAt)).ToList(),
         e.EvidenceReviews.OrderByDescending(r => r.ReviewedAt).Select(Decision).ToList(),
         CanReview(e, e.EvidenceReviews.SingleOrDefault(r => r.ReviewerId == me.UserId)));
-    private static ReviewDecision Decision(EvidenceReview r) => new(r.EvidenceReviewId, r.ReviewerId, r.Reviewer.FullName, r.Verdict, r.Note, r.ReviewedAt);
+    private static ReviewDecision Decision(EvidenceReview r) => new(r.EvidenceRecordId, r.ReviewerId, r.Reviewer.FullName, r.Verdict, r.Note, r.ReviewedAt);
 }

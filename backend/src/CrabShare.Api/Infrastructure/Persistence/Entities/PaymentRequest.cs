@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Chỉ dẫn thu tiền (mã VietQR) vào tài khoản lô; gắn với đúng một nghĩa vụ
 /// </summary>
-public partial class PaymentRequest
+public partial class PaymentRequest : PaymentRecord
 {
-    public long PaymentRequestId { get; set; }
-
     /// <summary>
     /// Nội dung chuyển khoản
     /// </summary>
@@ -35,11 +33,11 @@ public partial class PaymentRequest
     /// <summary>
     /// Giá trị: Pending, Paid, Expired, Cancelled
     /// </summary>
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "Pending";
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual BatchAccount BatchAccount { get; set; } = null!;
 

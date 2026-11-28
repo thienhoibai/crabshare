@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Phiên bản bảng Standard Cost của lô; đúng một bản bị khoá khi mở gọi vốn
 /// </summary>
-public partial class StandardCostVersion
+public partial class StandardCostVersion : CostRecord
 {
-    public long CostVersionId { get; set; }
-
     public long BatchId { get; set; }
 
     public short VersionNo { get; set; }
@@ -17,7 +15,7 @@ public partial class StandardCostVersion
     /// <summary>
     /// Giá trị: Draft, Submitted, Approved, Locked, Superseded
     /// </summary>
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "Draft";
 
     public DateTimeOffset? SubmittedAt { get; set; }
 
@@ -27,9 +25,9 @@ public partial class StandardCostVersion
 
     public DateTimeOffset? LockedAt { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual AppUser? ApprovedByNavigation { get; set; }
 

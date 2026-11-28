@@ -56,10 +56,10 @@ public sealed class PreorderService(AppDbContext db, ICurrentUser me, TimeProvid
             if (await parties.IsExecutorOrRelatedAsync(batch.BatchId, partyId, ct))
                 throw new ForbiddenException("preorder.related_party", "Người nuôi của Lô và bên liên quan không được đặt trước Lô của mình (BR-094).");
 
-            var site = await db.PartySites.SingleOrDefaultAsync(s => s.SiteId == req.DeliverySiteId && s.PartyId == partyId &&
+            var site = await db.PartySites.SingleOrDefaultAsync(s => s.PartyRecordId == req.DeliverySiteId && s.PartyId == partyId &&
                            s.SiteType == "DeliveryAddress" && s.Status == "Active", ct)
                        ?? throw new NotFoundException("preorder.site_not_found", "Không tìm thấy địa chỉ giao của bạn.");
-            var dispatch = await db.PartySites.AsNoTracking().SingleOrDefaultAsync(s => s.SiteId == batch.DispatchSiteId, ct);
+            var dispatch = await db.PartySites.AsNoTracking().SingleOrDefaultAsync(s => s.PartyRecordId == batch.DispatchSiteId, ct);
             if (dispatch?.Latitude is null || dispatch.Longitude is null)
                 throw new BusinessRuleException("preorder.no_dispatch_site", "Lô chưa khai điểm xuất hàng có toạ độ nên chưa nhận đặt trước (BR-084).");
             decimal? distance = site.Latitude is { } lat && site.Longitude is { } lng
@@ -92,7 +92,7 @@ public sealed class PreorderService(AppDbContext db, ICurrentUser me, TimeProvid
                     $"Lô chỉ còn đặt trước được {Math.Max(0, sellable - committed.Total)} con (BR-055, BR-089).");
             foreach (var line in lines)
             {
-                var offer = offers.Single(o => o.OfferId == line.OfferId);
+                var offer = offers.Single(o => o.OfferRecordId == line.OfferId);
                 var used = committed.BySpec.GetValueOrDefault(line.SpecId);
                 if (used + line.ConvertedCrabs > offer.OfferedQuantity)
                     throw new BusinessRuleException("preorder.exceeds_offer",
@@ -111,7 +111,7 @@ public sealed class PreorderService(AppDbContext db, ICurrentUser me, TimeProvid
             {
                 OrderNo = OrderNumber.New(), CustomerId = userId, CustomerPartyId = partyId, BatchId = batch.BatchId, OrderType = "PreOrder",
                 Status = PreorderStatus.PendingDeposit, TotalAmount = estimated, EstimatedValue = estimated, DepositAmount = deposit,
-                DepositRatePct = rate, HoldExpiresAt = hold, DeliverySiteId = site.SiteId, DeliveryDistanceKm = distance,
+                DepositRatePct = rate, HoldExpiresAt = hold, DeliverySiteId = site.PartyRecordId, DeliveryDistanceKm = distance,
                 RecipientName = site.ContactName ?? site.Name, RecipientPhone = site.ContactPhone ?? "0000000000",
                 ShippingAddress = site.AddressLine, PlacedAt = now, CreatedAt = now, UpdatedAt = now,
             };
@@ -126,7 +126,7 @@ public sealed class PreorderService(AppDbContext db, ICurrentUser me, TimeProvid
             var account = await db.BatchAccounts.SingleOrDefaultAsync(a => a.BatchId == batch.BatchId && a.Status == "Open", ct)
                           ?? throw new BusinessRuleException("preorder.batch_account_unavailable", "Lô chưa có tài khoản để nhận cọc.");
             if (deposit > 0)
-                await payments.CreateAsync(PaymentPurposes.PreOrderDeposit, deposit, account.BatchAccountId, account.ProviderAccountNo, hold,
+                await payments.CreateAsync(PaymentPurposes.PreOrderDeposit, deposit, account.BatchRecordId, account.ProviderAccountNo, hold,
                     PaymentTarget.ForOrder(order), order.OrderNo, ct);
             await db.SaveChangesAsync(ct);
             await audit.WriteAsync("sales_order", order.OrderId, "preorder", null, new
@@ -154,7 +154,7 @@ public sealed class PreorderService(AppDbContext db, ICurrentUser me, TimeProvid
         var estimatedKg = byKg ? l.QtyKg!.Value : decimal.Round(l.QtyCrabs!.Value * offer.ConversionWeightG / 1000m, 3);
         return new SalesOrderLine
         {
-            BatchId = batchId, OfferId = offer.OfferId, SpecId = offer.SpecId, Spec = offer.Spec, OrderMode = l.Mode,
+            BatchId = batchId, OfferId = offer.OfferRecordId, SpecId = offer.SpecId, Spec = offer.Spec, OrderMode = l.Mode,
             QtyCrabs = byKg ? null : l.QtyCrabs, QtyKg = byKg ? l.QtyKg : null, ConvertedCrabs = converted,
             PricePerKg = offer.PricePerKg, ConversionWeightG = offer.ConversionWeightG, MinGradeCode = l.MinGrade,
             EstimatedKg = estimatedKg, EstimatedValue = decimal.Round(estimatedKg * offer.PricePerKg, 0, MidpointRounding.AwayFromZero), CreatedAt = now,
@@ -192,7 +192,7 @@ public sealed class PreorderService(AppDbContext db, ICurrentUser me, TimeProvid
                 Lines = lines.Select(l => new TrancheLineRequest { SpecCode = l.Spec.SpecCode, QtyCrabs = l.QtyCrabs, QtyKg = l.QtyKg }).ToList(),
             }];
         ValidateTranches(tranches, lines, batch);
-        db.DeliveryTrancheLines.RemoveRange(await db.DeliveryTrancheLines.Where(l => db.DeliveryTranches.Any(t => t.TrancheId == l.TrancheId && t.OrderId == order.OrderId)).ToListAsync(ct));
+        db.DeliveryTrancheLines.RemoveRange(await db.DeliveryTrancheLines.Where(l => db.DeliveryTranches.Any(t => t.DeliveryRecordId == l.TrancheId && t.OrderId == order.OrderId)).ToListAsync(ct));
         db.DeliveryTranches.RemoveRange(await db.DeliveryTranches.Where(t => t.OrderId == order.OrderId).ToListAsync(ct));
         await db.SaveChangesAsync(ct);
         foreach (var t in tranches.OrderBy(t => t.Seq))
@@ -204,7 +204,7 @@ public sealed class PreorderService(AppDbContext db, ICurrentUser me, TimeProvid
                 var converted = line.OrderMode == "ByKg"
                     ? (int)Math.Ceiling(tl.QtyKg!.Value * 1000m / line.ConversionWeightG)
                     : tl.QtyCrabs!.Value;
-                tranche.Lines.Add(new DeliveryTrancheLine { LineId = line.LineId, QtyCrabs = tl.QtyCrabs, QtyKg = tl.QtyKg, ConvertedCrabs = converted });
+                tranche.Lines.Add(new DeliveryTrancheLine { LineId = line.SalesRecordId, QtyCrabs = tl.QtyCrabs, QtyKg = tl.QtyKg, ConvertedCrabs = converted });
             }
             db.DeliveryTranches.Add(tranche);
         }
@@ -366,11 +366,11 @@ public sealed class PreorderService(AppDbContext db, ICurrentUser me, TimeProvid
     public async Task<DepositPaymentResponse?> DepositAsync(SalesOrder order, CancellationToken ct)
     {
         var request = await db.PaymentRequests.AsNoTracking().Where(r => r.OrderId == order.OrderId && r.Purpose == PaymentPurposes.PreOrderDeposit)
-            .OrderByDescending(r => r.PaymentRequestId).FirstOrDefaultAsync(ct);
+            .OrderByDescending(r => r.PaymentRecordId).FirstOrDefaultAsync(ct);
         if (request is null) return null;
-        var account = await db.BatchAccounts.AsNoTracking().SingleAsync(a => a.BatchAccountId == request.BatchAccountId, ct);
+        var account = await db.BatchAccounts.AsNoTracking().SingleAsync(a => a.BatchRecordId == request.BatchAccountId, ct);
         var described = await payments.DescribeAsync(request, account, "", ct);
-        return new DepositPaymentResponse(request.PaymentRequestId, request.ReferenceCode, (long)request.Amount, described.QrContent ?? "",
+        return new DepositPaymentResponse(request.PaymentRecordId, request.ReferenceCode, (long)request.Amount, described.QrContent ?? "",
             request.ExpiresAt, account.ProviderAccountNo, described.Status);
     }
 
@@ -393,9 +393,9 @@ public sealed class PreorderService(AppDbContext db, ICurrentUser me, TimeProvid
     internal async Task<IReadOnlyList<TrancheResponse>> TranchesAsync(long orderId, CancellationToken ct)
     {
         var specs = await db.SalesOrderLines.AsNoTracking().Where(l => l.OrderId == orderId)
-            .Select(l => new { l.LineId, l.Spec.SpecCode }).ToDictionaryAsync(l => l.LineId, l => l.SpecCode, ct);
+            .Select(l => new { LineId = l.SalesRecordId, l.Spec.SpecCode }).ToDictionaryAsync(l => l.LineId, l => l.SpecCode, ct);
         return (await db.DeliveryTranches.AsNoTracking().Include(t => t.Lines).Where(t => t.OrderId == orderId).OrderBy(t => t.Seq).ToListAsync(ct))
-            .Select(t => new TrancheResponse(t.TrancheId, t.Seq, t.DueDate, t.Status,
+            .Select(t => new TrancheResponse(t.DeliveryRecordId, t.Seq, t.DueDate, t.Status,
                 t.Lines.Select(l => new TrancheLineResponse(specs.GetValueOrDefault(l.LineId, ""), l.QtyCrabs, l.QtyKg, l.ConvertedCrabs)).ToList()))
             .ToList();
     }
@@ -403,8 +403,8 @@ public sealed class PreorderService(AppDbContext db, ICurrentUser me, TimeProvid
     private async Task<PreorderResponse> ResponseAsync(SalesOrder o, CancellationToken ct)
     {
         var batch = await db.Batches.AsNoTracking().Where(b => b.BatchId == o.BatchId).Select(b => new { b.BatchCode, b.BatchMode }).SingleAsync(ct);
-        var lines = await db.SalesOrderLines.AsNoTracking().Include(l => l.Spec).Where(l => l.OrderId == o.OrderId).OrderBy(l => l.LineId)
-            .Select(l => new PreorderLineResponse(l.LineId, l.Spec.SpecCode, l.Spec.Name, l.OrderMode, l.QtyCrabs, l.QtyKg, l.ConvertedCrabs,
+        var lines = await db.SalesOrderLines.AsNoTracking().Include(l => l.Spec).Where(l => l.OrderId == o.OrderId).OrderBy(l => l.SalesRecordId)
+            .Select(l => new PreorderLineResponse(l.SalesRecordId, l.Spec.SpecCode, l.Spec.Name, l.OrderMode, l.QtyCrabs, l.QtyKg, l.ConvertedCrabs,
                 (long)l.PricePerKg, l.ConversionWeightG, l.MinGradeCode, l.EstimatedKg, (long)l.EstimatedValue)).ToListAsync(ct);
         var deposit = o.Status == PreorderStatus.PendingDeposit ? await DepositAsync(o, ct) : null;
         return new PreorderResponse(o.OrderNo, batch.BatchCode, batch.BatchMode, o.Status, (long)(o.EstimatedValue ?? o.TotalAmount), o.DepositRatePct ?? 0,

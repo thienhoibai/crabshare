@@ -55,9 +55,9 @@ public sealed class DisbursementService(AppDbContext db, ICurrentUser me, IAudit
         tranche.ExplanationDeadline = null;
         tranche.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
-        await audit.WriteAsync("disbursement_tranche", tranche.TrancheId, "request", before,
+        await audit.WriteAsync("disbursement_tranche", tranche.PaymentRecordId, "request", before,
             new { tranche.Status, batch.BatchCode, tranche.TrancheNo, plannedAmount = (long)tranche.PlannedAmount, requestedAt = now }, now, ct);
-        return (await DescribeAsync([batch], null, ct)).Single(t => t.TrancheId == tranche.TrancheId);
+        return (await DescribeAsync([batch], null, ct)).Single(t => t.TrancheId == tranche.PaymentRecordId);
     }, ct);
 
     // ---------- Admin ----------
@@ -85,12 +85,12 @@ public sealed class DisbursementService(AppDbContext db, ICurrentUser me, IAudit
             throw new BusinessRuleException("payment.batch_account_unavailable", $"Tài khoản chuyên dùng của lô {batch.BatchCode} không ở trạng thái mở.");
         var payout = await db.PayoutAccounts.AsNoTracking()
             .Where(p => p.OwnerOperatorId == batch.OperatorId && p.Status == "Active")
-            .OrderByDescending(p => p.PayoutAccountId)
+            .OrderByDescending(p => p.UserRecordId)
             .FirstOrDefaultAsync(ct)
             ?? throw new BusinessRuleException("payment.no_payout_account", "Hộ nuôi chưa có tài khoản nhận tiền đang dùng.");
         // TH-15: không giải ngân vượt số vốn đã chốt (lô chốt ở mức vốn khả thi thấp hơn chi phí chuẩn thì đợt sau có thể không đủ tiền)
         var disbursed = await db.PaymentInstructions
-            .Where(i => i.BatchAccountId == account.BatchAccountId && i.InstructionType == "Disbursement" && i.Status != "Failed")
+            .Where(i => i.BatchAccountId == account.BatchRecordId && i.InstructionType == "Disbursement" && i.Status != "Failed")
             .SumAsync(i => (decimal?)i.Amount, ct) ?? 0;
         if (disbursed + tranche.PlannedAmount > (batch.TotalConfirmedCapital ?? 0))
             throw new BusinessRuleException("payment.insufficient_capital",
@@ -98,8 +98,8 @@ public sealed class DisbursementService(AppDbContext db, ICurrentUser me, IAudit
 
         var instruction = new PaymentInstruction
         {
-            BatchAccountId = account.BatchAccountId, InstructionType = "Disbursement", Amount = tranche.PlannedAmount,
-            PayoutAccountId = payout.PayoutAccountId, TrancheId = tranche.TrancheId, Status = "Created",
+            BatchAccountId = account.BatchRecordId, InstructionType = "Disbursement", Amount = tranche.PlannedAmount,
+            PayoutAccountId = payout.UserRecordId, TrancheId = tranche.PaymentRecordId, Status = "Created",
             BeneficiaryNote = $"Giải ngân đợt {tranche.TrancheNo} lô {batch.BatchCode}", CreatedAt = now, UpdatedAt = now,
         };
         db.PaymentInstructions.Add(instruction);
@@ -107,11 +107,11 @@ public sealed class DisbursementService(AppDbContext db, ICurrentUser me, IAudit
         tranche.ReleasedAt = now;
         tranche.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
-        await audit.WriteAsync("disbursement_tranche", tranche.TrancheId, "release", new { status = "Requested" },
-            new { tranche.Status, batch.BatchCode, tranche.TrancheNo, releasedAt = now, instruction.InstructionId }, now, ct);
-        await audit.WriteAsync("payment_instruction", instruction.InstructionId, "create", null,
-            new { type = "Disbursement", amount = (long)instruction.Amount, tranche.TrancheId, payout.PayoutAccountId }, now, ct);
-        return (await DescribeAsync([batch], null, ct)).Single(t => t.TrancheId == tranche.TrancheId);
+        await audit.WriteAsync("disbursement_tranche", tranche.PaymentRecordId, "release", new { status = "Requested" },
+            new { tranche.Status, batch.BatchCode, tranche.TrancheNo, releasedAt = now, instruction.PaymentRecordId }, now, ct);
+        await audit.WriteAsync("payment_instruction", instruction.PaymentRecordId, "create", null,
+            new { type = "Disbursement", amount = (long)instruction.Amount, tranche.PaymentRecordId, payout.UserRecordId }, now, ct);
+        return (await DescribeAsync([batch], null, ct)).Single(t => t.TrancheId == tranche.PaymentRecordId);
     }, ct);
 
     /// <summary>Yêu cầu giải trình (TL-03 §6.4): Requested → NeedsExplanation, hạn 72 giờ. Người nuôi xin lại sau khi bổ sung.</summary>
@@ -135,9 +135,9 @@ public sealed class DisbursementService(AppDbContext db, ICurrentUser me, IAudit
             tranche.ExplanationDeadline = to == "NeedsExplanation" ? now.AddHours(ExplanationHours) : tranche.ExplanationDeadline;
             tranche.UpdatedAt = now;
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("disbursement_tranche", tranche.TrancheId, action, before,
+            await audit.WriteAsync("disbursement_tranche", tranche.PaymentRecordId, action, before,
                 new { tranche.Status, batch.BatchCode, tranche.TrancheNo, reason = reason.Trim(), tranche.ExplanationDeadline }, now, ct);
-            return (await DescribeAsync([batch], null, ct)).Single(t => t.TrancheId == tranche.TrancheId);
+            return (await DescribeAsync([batch], null, ct)).Single(t => t.TrancheId == tranche.PaymentRecordId);
         }, ct);
 
     // ---------- Điều kiện mốc ----------
@@ -267,18 +267,18 @@ public sealed class DisbursementService(AppDbContext db, ICurrentUser me, IAudit
 
     private async Task<(Batch Batch, DisbursementTranche Tranche)> LoadTrancheAsync(long trancheId, CancellationToken ct)
     {
-        var batch = (await LoadAsync(db.Batches.Where(b => b.DisbursementTranches.Any(t => t.TrancheId == trancheId)), ct)).SingleOrDefault()
+        var batch = (await LoadAsync(db.Batches.Where(b => b.DisbursementTranches.Any(t => t.PaymentRecordId == trancheId)), ct)).SingleOrDefault()
                     ?? throw new NotFoundException("tranche.not_found", "Không tìm thấy đợt giải ngân.");
-        return (batch, batch.DisbursementTranches.Single(t => t.TrancheId == trancheId));
+        return (batch, batch.DisbursementTranches.Single(t => t.PaymentRecordId == trancheId));
     }
 
     private async Task<IReadOnlyList<TrancheResponse>> DescribeAsync(IEnumerable<Batch> batches, string[]? onlyStatuses, CancellationToken ct)
     {
         var list = batches.ToList();
-        var trancheIds = list.SelectMany(b => b.DisbursementTranches).Select(t => t.TrancheId).ToList();
+        var trancheIds = list.SelectMany(b => b.DisbursementTranches).Select(t => t.PaymentRecordId).ToList();
         var instructions = await db.PaymentInstructions.AsNoTracking()
             .Where(i => i.TrancheId != null && trancheIds.Contains(i.TrancheId.Value))
-            .Select(i => new { i.TrancheId, i.InstructionId, i.Status })
+            .Select(i => new { i.TrancheId, InstructionId = i.PaymentRecordId, i.Status })
             .ToListAsync(ct);
         var now = clock.GetUtcNow();
         var rows = new List<TrancheResponse>();
@@ -287,9 +287,9 @@ public sealed class DisbursementService(AppDbContext db, ICurrentUser me, IAudit
         {
             if (onlyStatuses is not null && !onlyStatuses.Contains(t.Status)) continue;
             var reason = await GateAsync(batch, t, now, ct);
-            var instruction = instructions.Where(i => i.TrancheId == t.TrancheId).MaxBy(i => i.InstructionId);
+            var instruction = instructions.Where(i => i.TrancheId == t.PaymentRecordId).MaxBy(i => i.InstructionId);
             rows.Add(new TrancheResponse(
-                t.TrancheId, batch.BatchCode, batch.Title, batch.Operator.LegalName, t.TrancheNo, (long)t.PlannedAmount, t.PlannedDate,
+                t.PaymentRecordId, batch.BatchCode, batch.Title, batch.Operator.LegalName, t.TrancheNo, (long)t.PlannedAmount, t.PlannedDate,
                 t.UnlockCondition, t.Status, t.RequestedAt, t.ExplanationDeadline, t.ReleasedAt,
                 reason is null, reason, instruction?.InstructionId, instruction?.Status));
         }

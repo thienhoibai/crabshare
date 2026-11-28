@@ -23,14 +23,14 @@ public sealed class ContributionPaymentHandler(AppDbContext db, IAuditLog audit,
         if (contribution is null)
         {
             log.LogError("Khoản thu {PaymentRequestId} (Contribution) đã Paid nhưng không có khoản góp #{ContributionId}",
-                request.PaymentRequestId, request.ContributionId);
+                request.PaymentRecordId, request.ContributionId);
             return;
         }
 
         if (contribution.Status != "Reserved")
         {
             await audit.WriteAsync("contribution", contribution.ContributionId, "payment_after_close",
-                new { contribution.Status }, new { request.PaymentRequestId, request.ReferenceCode, amount = (long)request.Amount, paidAt }, paidAt, ct);
+                new { contribution.Status }, new { request.PaymentRecordId, request.ReferenceCode, amount = (long)request.Amount, paidAt }, paidAt, ct);
             return;
         }
 
@@ -39,6 +39,6 @@ public sealed class ContributionPaymentHandler(AppDbContext db, IAuditLog audit,
         contribution.UpdatedAt = paidAt;
         await db.SaveChangesAsync(ct);
         await audit.WriteAsync("contribution", contribution.ContributionId, "confirm", new { status = "Reserved" },
-            new { status = "Confirmed", confirmedAt = paidAt, request.PaymentRequestId, request.ReferenceCode, amount = (long)request.Amount }, paidAt, ct);
+            new { status = "Confirmed", confirmedAt = paidAt, request.PaymentRecordId, request.ReferenceCode, amount = (long)request.Amount }, paidAt, ct);
     }
 }

@@ -43,7 +43,7 @@ public sealed class AlertJob(AlertService alerts, Infrastructure.Persistence.App
 
         // Cùng điều kiện với v_overdue_alerts; dùng TimeProvider để job/test cùng một mốc thời gian.
         var overdue = await db.Alerts.Include(a => a.Batch).ThenInclude(b => b.Operator)
-            .Where(a => a.Status == "Open" && a.AckDeadline < now).OrderBy(a => a.AlertId).ToListAsync(ct);
+            .Where(a => a.Status == "Open" && a.AckDeadline < now).OrderBy(a => a.CareRecordId).ToListAsync(ct);
         foreach (var alert in overdue)
         {
             var previous = await AuditChain.LockAndReadTailAsync(db, ct);

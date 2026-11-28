@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Lệnh chi CrabShare gửi tổ chức trung gian: giải ngân, chi trả, hoàn tiền, nộp thuế
 /// </summary>
-public partial class PaymentInstruction
+public partial class PaymentInstruction : PaymentRecord
 {
-    public long InstructionId { get; set; }
-
     public long BatchAccountId { get; set; }
 
     /// <summary>
@@ -34,15 +32,15 @@ public partial class PaymentInstruction
     /// <summary>
     /// Giá trị: Created, Sent, Succeeded, Failed, Disputed
     /// </summary>
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "Created";
 
     public DateTimeOffset? SentAt { get; set; }
 
     public DateTimeOffset? CompletedAt { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual BatchAccount BatchAccount { get; set; } = null!;
 

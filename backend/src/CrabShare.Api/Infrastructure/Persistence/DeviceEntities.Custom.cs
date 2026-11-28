@@ -40,10 +40,18 @@ public sealed class Device
     [Column("updated_at"), Precision(3)] public DateTimeOffset UpdatedAt { get; set; }
 }
 
-[Table("device_message")]
-public sealed class DeviceMessage
+/// <summary>
+/// Bảng gộp device_record (V036): bản tin thiết bị, ảnh thiết bị, chỉ số nước, hiệu chuẩn và lệnh nằm chung một bảng,
+/// phân biệt bằng cột record_type (Message, Image, WaterReading, Calibration, Command). Mỗi lớp con chỉ dùng các cột của loại mình.
+/// </summary>
+[Table("device_record")]
+public abstract class DeviceRecord
 {
-    [Key, Column("device_message_id")] public long DeviceMessageId { get; set; }
+    [Key, Column("device_record_id")] public long DeviceRecordId { get; set; }
+}
+
+public sealed class DeviceMessage : DeviceRecord
+{
     [Column("message_id")] public Guid MessageId { get; set; }
     [Column("device_id")] public long? DeviceId { get; set; }
     [Column("device_code"), MaxLength(40), Unicode(false)] public string DeviceCode { get; set; } = "";
@@ -55,10 +63,8 @@ public sealed class DeviceMessage
     [Column("payload_sha256"), MaxLength(64), Unicode(false)] public string? PayloadSha256 { get; set; }
 }
 
-[Table("device_image")]
-public sealed class DeviceImage
+public sealed class DeviceImage : DeviceRecord
 {
-    [Key, Column("device_image_id")] public long DeviceImageId { get; set; }
     [Column("device_id")] public long DeviceId { get; set; }
     [Column("batch_id")] public long? BatchId { get; set; }
     [Column("slot_id")] public long SlotId { get; set; }
@@ -77,10 +83,8 @@ public sealed class DeviceImage
     [Column("created_at"), Precision(3)] public DateTimeOffset CreatedAt { get; set; }
 }
 
-[Table("water_reading")]
-public sealed class WaterReading
+public sealed class WaterReading : DeviceRecord
 {
-    [Key, Column("water_reading_id")] public long WaterReadingId { get; set; }
     [Column("device_id")] public long DeviceId { get; set; }
     [Column("holding_id")] public long HoldingId { get; set; }
     [Column("batch_id")] public long BatchId { get; set; }
@@ -95,10 +99,8 @@ public sealed class WaterReading
     [Column("quality"), MaxLength(20), Unicode(false)] public string Quality { get; set; } = "Calibrated";
 }
 
-[Table("device_calibration")]
-public sealed class DeviceCalibration
+public sealed class DeviceCalibration : DeviceRecord
 {
-    [Key, Column("device_calibration_id")] public long DeviceCalibrationId { get; set; }
     [Column("device_id")] public long DeviceId { get; set; }
     [Column("message_id")] public Guid? MessageId { get; set; }
     /// <summary>scale, camera, tof, ph, ec, position.</summary>
@@ -111,10 +113,8 @@ public sealed class DeviceCalibration
     [Column("received_at"), Precision(3)] public DateTimeOffset ReceivedAt { get; set; }
 }
 
-[Table("device_command")]
-public sealed class DeviceCommand
+public sealed class DeviceCommand : DeviceRecord
 {
-    [Key, Column("device_command_id")] public long DeviceCommandId { get; set; }
     [Column("device_id")] public long DeviceId { get; set; }
     /// <summary>ScanRack, ScanBox, Park, Calibrate, StartMeasurement.</summary>
     [Column("command_type"), MaxLength(20), Unicode(false)] public string CommandType { get; set; } = "";
@@ -128,10 +128,8 @@ public sealed class DeviceCommand
     [Column("acked_at"), Precision(3)] public DateTimeOffset? AckedAt { get; set; }
 }
 
-[Table("measurement_session")]
-public sealed class MeasurementSession
+public sealed class MeasurementSession : MeasurementRecord
 {
-    [Key, Column("measurement_session_id")] public long MeasurementSessionId { get; set; }
     [Column("session_no"), MaxLength(20), Unicode(false)] public string SessionNo { get; set; } = "";
     [Column("batch_id")] public long BatchId { get; set; }
     [Column("crab_unit_id")] public long CrabUnitId { get; set; }

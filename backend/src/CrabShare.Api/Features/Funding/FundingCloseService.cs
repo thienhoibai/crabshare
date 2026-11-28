@@ -53,7 +53,7 @@ public sealed class FundingCloseService(AppDbContext db, IAuditLog audit, TimePr
         {
             request.Status = "Expired";
             request.UpdatedAt = now;
-            await audit.WriteAsync("payment_request", request.PaymentRequestId, "expire", new { status = "Pending" },
+            await audit.WriteAsync("payment_request", request.PaymentRecordId, "expire", new { status = "Pending" },
                 new { status = "Expired", reason = "Quá hạn thanh toán", request.ReferenceCode }, now, ct);
         }
         return due.Count;
@@ -156,7 +156,7 @@ public sealed class FundingCloseService(AppDbContext db, IAuditLog audit, TimePr
             foreach (var (investorId, amount) in refundShares.Where(r => r.Value > 0))
             {
                 var contribution = confirmed.Where(c => c.InvestorId == investorId).OrderByDescending(c => c.Amount).First();
-                await refunds.CreateRefundAsync(account.BatchAccountId, amount, contribution.ContributionId, null,
+                await refunds.CreateRefundAsync(account.BatchRecordId, amount, contribution.ContributionId, null,
                     $"Hoàn phần vốn lẻ không đủ một con: Lô {batch.BatchCode}", now, ct);
                 refundCount++;
             }
@@ -208,7 +208,7 @@ public sealed class FundingCloseService(AppDbContext db, IAuditLog audit, TimePr
         var refundCount = 0;
         foreach (var contribution in confirmed.OrderBy(c => c.ContributionId))
         {
-            await refunds.CreateRefundAsync(account.BatchAccountId, contribution.Amount, contribution.ContributionId, null,
+            await refunds.CreateRefundAsync(account.BatchRecordId, contribution.Amount, contribution.ContributionId, null,
                 $"Hoàn 100% vốn góp: lô {batch.BatchCode} huỷ vì không đạt vốn tối thiểu", now, ct);
             refundCount++;
         }
@@ -217,12 +217,12 @@ public sealed class FundingCloseService(AppDbContext db, IAuditLog audit, TimePr
 
         // Mã VietQR góp vốn còn chờ của lô không còn hiệu lực
         foreach (var request in await db.PaymentRequests
-                     .Where(r => r.BatchAccountId == account.BatchAccountId && r.Purpose == PaymentPurposes.Contribution && r.Status == "Pending")
+                     .Where(r => r.BatchAccountId == account.BatchRecordId && r.Purpose == PaymentPurposes.Contribution && r.Status == "Pending")
                      .ToListAsync(ct))
         {
             request.Status = "Cancelled";
             request.UpdatedAt = now;
-            await audit.WriteAsync("payment_request", request.PaymentRequestId, "cancel", new { status = "Pending" },
+            await audit.WriteAsync("payment_request", request.PaymentRecordId, "cancel", new { status = "Pending" },
                 new { status = "Cancelled", reason = "Lô huỷ", request.ReferenceCode }, now, ct);
         }
         return new BatchCloseOutcome(batch.BatchCode, OutcomeCancelled, (long)total, confirmed.Select(c => c.InvestorId).Distinct().Count(), refundCount);

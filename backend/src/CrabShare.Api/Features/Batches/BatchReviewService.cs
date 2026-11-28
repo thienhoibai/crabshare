@@ -115,7 +115,7 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
         b.RejectionReason = null;
         // BR-038: Lô dùng bộ quy tắc phân hạng có hiệu lực lúc được duyệt cho tới khi Lô đóng.
         b.GradeRuleSetId = await db.GradeRuleSets.Where(s => s.CrabType == b.CrabType && s.Status == "Active")
-            .Select(s => (long?)s.RuleSetId).SingleOrDefaultAsync(ct);
+            .Select(s => (long?)s.GradingRuleId).SingleOrDefaultAsync(ct);
         cost.Status = "Locked";
         cost.LockedAt = cost.ApprovedAt = cost.UpdatedAt = now;
         cost.ApprovedBy = me.UserId;
@@ -143,8 +143,8 @@ public sealed class BatchReviewService(AppDbContext db, BatchService batches, IC
         var after = await DetailAsync(b, ct);
         await audit.WriteAsync("batch", b.BatchId, "approve", before, after, now, ct);
         if (accountCreated)
-            await audit.WriteAsync("batch_account", account.BatchAccountId, "create", null,
-                new { account.BatchAccountId, account.BatchId, account.ProviderName, account.ProviderAccountNo, account.Status, account.OpenedAt }, now, ct);
+            await audit.WriteAsync("batch_account", account.BatchRecordId, "create", null,
+                new { account.BatchRecordId, account.BatchId, account.ProviderName, account.ProviderAccountNo, account.Status, account.OpenedAt }, now, ct);
         return after;
     }, ct);
 

@@ -53,7 +53,7 @@ public sealed class GradingTests(GradingFixture f) : IClassFixture<GradingFixtur
             };
             db.PartySites.Add(site);
             await db.SaveChangesAsync();
-            siteId = site.SiteId;
+            siteId = site.PartyRecordId;
         }
         using var admin = f.Admin();
         var registered = await Br15Fixture.Body(await Br15Fixture.PostJson(admin, "/api/admin/devices",
@@ -335,7 +335,7 @@ public sealed class GradingTests(GradingFixture f) : IClassFixture<GradingFixtur
         Assert.Equal("Retired", await db.GradeRuleSets.Where(s => s.CrabType == "OilRoeCrab" && s.VersionNo == 1).Select(s => s.Status).SingleAsync());
         // Bộ đã áp dụng không sửa được kể cả ghi thẳng vào cơ sở dữ liệu (BR-038).
         await Assert.ThrowsAnyAsync<Exception>(() => db.Database.ExecuteSqlRawAsync(
-            $"UPDATE dbo.grade_rule SET lower_bound = 170 WHERE rule_set_id = {id} AND result_label = 'M'"));
+            $"UPDATE dbo.grading_rule SET lower_bound = 170 WHERE record_type = 'Rule' AND rule_set_id = {id} AND result_label = 'M'"));
         Assert.Equal("grading.rule_set_locked", await Br15Fixture.ErrorCode(await admin.PutAsJsonAsync($"/api/admin/grade-rule-sets/{id}/rules",
             new { rules = new[] { Rule("M", 170, 200), Rule("L", 200, 300), Rule("XL", 300, null) } })));
     }

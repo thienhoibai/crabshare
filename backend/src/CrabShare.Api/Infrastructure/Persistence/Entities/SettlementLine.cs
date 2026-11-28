@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Phần chia của từng nhà đầu tư; tổng khớp Revenue Pool tới từng đồng
 /// </summary>
-public partial class SettlementLine
+public partial class SettlementLine : SettlementRecord
 {
-    public long SettlementLineId { get; set; }
-
     public long SettlementId { get; set; }
 
     public long BatchId { get; set; }
@@ -29,7 +27,7 @@ public partial class SettlementLine
 
     public decimal InKindQtyKg { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual Batch Batch { get; set; } = null!;
 

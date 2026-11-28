@@ -123,7 +123,7 @@ public static class Br15Scenario
         db.Contributions.Add(contribution);
         await db.SaveChangesAsync();
         // Tiền góp vào tài khoản của Lô như giao dịch đã đối soát (BR-232: số dư dẫn xuất từ giao dịch tiền).
-        if (await db.BatchAccounts.Where(a => a.BatchId == batchId).Select(a => (long?)a.BatchAccountId).SingleOrDefaultAsync() is { } account)
+        if (await db.BatchAccounts.Where(a => a.BatchId == batchId).Select(a => (long?)a.BatchRecordId).SingleOrDefaultAsync() is { } account)
         {
             db.ProviderTransactions.Add(new ProviderTransaction
             {
@@ -166,7 +166,7 @@ public static class Br15Scenario
         };
         db.PartySites.Add(site);
         await db.SaveChangesAsync();
-        return new Customer(userId, partyId, site.SiteId);
+        return new Customer(userId, partyId, site.PartyRecordId);
     }
 
     public sealed record CrabSet(BatchHandle Batch, IReadOnlyList<string> CrabCodes, long SupplierPartyId);
@@ -198,7 +198,7 @@ public static class Br15Scenario
         await db.SaveChangesAsync();
         var lot = new SupplyLot
         {
-            LotCode = $"LN{Guid.NewGuid():N}"[..12], ProcurementOrderId = po.ProcurementOrderId, BatchId = batch.BatchId, OriginRegion = "Năm Căn, Cà Mau",
+            LotCode = $"LN{Guid.NewGuid():N}"[..12], ProcurementOrderId = po.SupplyRecordId, BatchId = batch.BatchId, OriginRegion = "Năm Căn, Cà Mau",
             HarvestedOn = DateOnly.FromDateTime(now.UtcDateTime.AddDays(-1)), DeclaredSpecies = "Scylla paramamosain", DeclaredCount = count,
             DeclaredWeightKg = count * 0.4m, CreatedAt = now,
         };
@@ -206,7 +206,7 @@ public static class Br15Scenario
         await db.SaveChangesAsync();
         var receipt = new GoodsReceipt
         {
-            ReceiptNo = $"GR{Guid.NewGuid():N}"[..12], SupplyLotId = lot.SupplyLotId, BatchId = batch.BatchId, ReceivedAt = now, ReceivedBy = batch.Farmer.UserId,
+            ReceiptNo = $"GR{Guid.NewGuid():N}"[..12], SupplyLotId = lot.SupplyRecordId, BatchId = batch.BatchId, ReceivedAt = now, ReceivedBy = batch.Farmer.UserId,
             AcceptedCount = count, AcceptedWeightG = count * 400, Status = "Completed", CompletedAt = now, CreatedAt = now,
         };
         db.GoodsReceipts.Add(receipt);
@@ -217,7 +217,7 @@ public static class Br15Scenario
         {
             var crab = new CrabUnit
             {
-                CrabCode = $"CU{Guid.NewGuid():N}"[..10].ToUpperInvariant(), BatchId = batch.BatchId, SupplyLotId = lot.SupplyLotId, GoodsReceiptId = receipt.GoodsReceiptId,
+                CrabCode = $"CU{Guid.NewGuid():N}"[..10].ToUpperInvariant(), BatchId = batch.BatchId, SupplyLotId = lot.SupplyRecordId, GoodsReceiptId = receipt.SupplyRecordId,
                 Species = "Scylla paramamosain", Sex = "Male", Maturity = "Mature", ReceivedWeightG = 400, InventoryStatus = boxed ? "Holding" : "Received",
                 ReceivedAt = now, CreatedAt = now, UpdatedAt = now,
             };

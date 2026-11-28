@@ -41,7 +41,7 @@ public class CaptureRequestDatabaseTests(KycDatabaseFixture fixture) : IClassFix
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<AppDbContext>(); var clock = new Clock(now);
         return await new CaptureRequestJob(db, new AlertService(db, scope.ServiceProvider.GetRequiredService<ICurrentUser>(), clock), Options.Create(new CaptureRequestOptions { DailyRequestHour = hour, RandomDailyRequests = true }), clock).RunAsync();
     }
-    private Task<List<CaptureRequest>> Requests(Farm farm) => Db(db => db.CaptureRequests.AsNoTracking().Where(r => r.BatchId == farm.BatchId).OrderBy(r => r.CaptureRequestId).ToListAsync());
+    private Task<List<CaptureRequest>> Requests(Farm farm) => Db(db => db.CaptureRequests.AsNoTracking().Where(r => r.BatchId == farm.BatchId).OrderBy(r => r.EvidenceRecordId).ToListAsync());
     private Task<bool> Chain() => Db(async db => { string? previous = null; foreach (var row in await db.AuditLogs.AsNoTracking().OrderBy(a => a.AuditId).ToListAsync()) { Assert.Equal(previous, row.PrevHash); Assert.Matches("^[0-9a-f]{64}$", row.RowHash); Assert.True(AuditChain.VerifyHash(row)); previous = row.RowHash; } return true; });
 
     [Fact]
@@ -58,7 +58,7 @@ public class CaptureRequestDatabaseTests(KycDatabaseFixture fixture) : IClassFix
         var farm = await Setup(); var local = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)); var start = new DateTimeOffset(local.Date, local.Offset);
         await Run(start.AddHours(8), 9); Assert.Empty(await Requests(farm));
         await Run(start.AddHours(9), 9); var request = Assert.Single(await Requests(farm));
-        await Db(async db => { var row = await db.CaptureRequests.SingleAsync(r => r.CaptureRequestId == request.CaptureRequestId); row.Status = "Fulfilled"; row.FulfilledAt = start.AddHours(10); await db.SaveChangesAsync(); return true; });
+        await Db(async db => { var row = await db.CaptureRequests.SingleAsync(r => r.EvidenceRecordId == request.EvidenceRecordId); row.Status = "Fulfilled"; row.FulfilledAt = start.AddHours(10); await db.SaveChangesAsync(); return true; });
         await Run(start.AddHours(11), 9); Assert.Single(await Requests(farm));
         await Run(start.AddDays(1).AddHours(9), 9); Assert.Equal(2, (await Requests(farm)).Count); await Chain();
     }
@@ -70,7 +70,7 @@ public class CaptureRequestDatabaseTests(KycDatabaseFixture fixture) : IClassFix
         await Run(request.DueAt.AddMilliseconds(1)); await Run(request.DueAt.AddMinutes(1));
         Assert.Equal("Expired", (await Requests(farm)).First().Status);
         var alert = await Db(db => db.Alerts.AsNoTracking().SingleAsync(a => a.BatchId == farm.BatchId && a.AlertType == "EvidenceFlag")); Assert.Contains("0014", alert.Message);
-        Assert.Equal(1, await Db(db => db.AuditLogs.CountAsync(a => a.EntityType == "CaptureRequest" && a.EntityId == request.CaptureRequestId && a.ActionType == "ExpireCaptureRequest"))); await Chain();
+        Assert.Equal(1, await Db(db => db.AuditLogs.CountAsync(a => a.EntityType == "CaptureRequest" && a.EntityId == request.EvidenceRecordId && a.ActionType == "ExpireCaptureRequest"))); await Chain();
     }
     [Fact]
     public async Task Scoped_API_and_correct_photo_fulfill_the_request_and_remove_it_from_open_list()
@@ -104,6 +104,6 @@ public class CaptureRequestDatabaseTests(KycDatabaseFixture fixture) : IClassFix
         var clock = new Clock(request.DueAt.AddSeconds(1)); var alerts = new AlertService(db, scope.ServiceProvider.GetRequiredService<ICurrentUser>(), clock);
         await Assert.ThrowsAsync<InvalidOperationException>(() => new CaptureRequestJob(db, alerts, Options.Create(new CaptureRequestOptions { RandomDailyRequests = true }), clock).RunAsync());
         Assert.Equal("Open", (await Requests(farm)).First().Status);
-        Assert.False(await Db(db => db.AuditLogs.AnyAsync(a => a.EntityType == "CaptureRequest" && a.EntityId == request.CaptureRequestId && a.ActionType == "ExpireCaptureRequest"))); await Chain();
+        Assert.False(await Db(db => db.AuditLogs.AnyAsync(a => a.EntityType == "CaptureRequest" && a.EntityId == request.EvidenceRecordId && a.ActionType == "ExpireCaptureRequest"))); await Chain();
     }
 }

@@ -84,7 +84,7 @@ public sealed class PartyService(AppDbContext db, ICurrentUser me, PartyDirector
         var partyId = await parties.PartyIdOfUserAsync(me.UserId, ct);
         return await db.PartySites.AsNoTracking()
             .Where(s => s.PartyId == partyId && s.Status == "Active" && (siteType == null || s.SiteType == siteType))
-            .OrderByDescending(s => s.IsDefault).ThenBy(s => s.SiteId).Select(s => ToSite(s)).ToListAsync(ct);
+            .OrderByDescending(s => s.IsDefault).ThenBy(s => s.PartyRecordId).Select(s => ToSite(s)).ToListAsync(ct);
     }
 
     public Task<PartySiteResponse> AddMySiteAsync(SiteRequest req, CancellationToken ct)
@@ -99,7 +99,7 @@ public sealed class PartyService(AppDbContext db, ICurrentUser me, PartyDirector
         => db.InTransactionAsync(async () =>
         {
             var partyId = await parties.PartyIdOfUserAsync(me.UserId, ct);
-            var site = await db.PartySites.SingleOrDefaultAsync(s => s.SiteId == siteId && s.PartyId == partyId && s.Status == "Active", ct)
+            var site = await db.PartySites.SingleOrDefaultAsync(s => s.PartyRecordId == siteId && s.PartyId == partyId && s.Status == "Active", ct)
                        ?? throw new NotFoundException("party.site_not_found", "Không tìm thấy địa điểm.");
             if (site.SiteType != req.SiteType)
                 throw new BusinessRuleException("party.site_type_fixed", "Không đổi loại địa điểm; hãy tạo địa điểm mới.");
@@ -121,7 +121,7 @@ public sealed class PartyService(AppDbContext db, ICurrentUser me, PartyDirector
         => db.InTransactionAsync(async () =>
         {
             var partyId = await parties.PartyIdOfUserAsync(me.UserId, ct);
-            var site = await db.PartySites.SingleOrDefaultAsync(s => s.SiteId == siteId && s.PartyId == partyId && s.Status == "Active", ct)
+            var site = await db.PartySites.SingleOrDefaultAsync(s => s.PartyRecordId == siteId && s.PartyId == partyId && s.Status == "Active", ct)
                        ?? throw new NotFoundException("party.site_not_found", "Không tìm thấy địa điểm.");
             // Đơn và Lô đã dùng địa điểm vẫn giữ tham chiếu, nên chỉ ngừng dùng chứ không xoá.
             site.Status = "Inactive";
@@ -155,8 +155,8 @@ public sealed class PartyService(AppDbContext db, ICurrentUser me, PartyDirector
     public async Task<IReadOnlyList<RelatedPartyResponse>> ListRelatedAsync(CancellationToken ct)
     {
         var partyId = await RequireFarmerPartyAsync(ct);
-        return await db.RelatedParties.AsNoTracking().Where(r => r.PartyId == partyId).OrderBy(r => r.RelatedPartyId)
-            .Select(r => new RelatedPartyResponse(r.RelatedPartyId, r.FullName, r.Relation, r.IdNumberLast4,
+        return await db.RelatedParties.AsNoTracking().Where(r => r.PartyId == partyId).OrderBy(r => r.PartyRecordId)
+            .Select(r => new RelatedPartyResponse(r.PartyRecordId, r.FullName, r.Relation, r.IdNumberLast4,
                 db.Parties.Where(p => p.PartyId == r.LinkedPartyId).Select(p => p.PartyCode).FirstOrDefault()))
             .ToListAsync(ct);
     }
@@ -181,16 +181,16 @@ public sealed class PartyService(AppDbContext db, ICurrentUser me, PartyDirector
             };
             db.RelatedParties.Add(row);
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("related_party", row.RelatedPartyId, "create", null,
+            await audit.WriteAsync("related_party", row.PartyRecordId, "create", null,
                 new { row.PartyId, row.FullName, row.Relation, row.IdNumberLast4, row.LinkedPartyId }, ct);
-            return new RelatedPartyResponse(row.RelatedPartyId, row.FullName, row.Relation, row.IdNumberLast4, linkedCode);
+            return new RelatedPartyResponse(row.PartyRecordId, row.FullName, row.Relation, row.IdNumberLast4, linkedCode);
         }, ct);
 
     public Task RemoveRelatedAsync(long id, CancellationToken ct)
         => db.InTransactionAsync(async () =>
         {
             var partyId = await RequireFarmerPartyAsync(ct);
-            var row = await db.RelatedParties.SingleOrDefaultAsync(r => r.RelatedPartyId == id && r.PartyId == partyId, ct)
+            var row = await db.RelatedParties.SingleOrDefaultAsync(r => r.PartyRecordId == id && r.PartyId == partyId, ct)
                       ?? throw new NotFoundException("party.related_not_found", "Không tìm thấy bên liên quan.");
             db.RelatedParties.Remove(row);
             await audit.WriteAsync("related_party", id, "delete", new { row.FullName, row.Relation, row.IdNumberLast4 }, null, ct);
@@ -406,7 +406,7 @@ public sealed class PartyService(AppDbContext db, ICurrentUser me, PartyDirector
         p.LegalName, p.PartyType, p.RegistrationNo, p.Representative, p.Phone, p.VerificationStatus, p.RejectReason,
     };
 
-    private static PartySiteResponse ToSite(PartySite s) => new(s.SiteId, s.SiteCode, s.SiteType, s.Name, s.AddressLine, s.Province,
+    private static PartySiteResponse ToSite(PartySite s) => new(s.PartyRecordId, s.SiteCode, s.SiteType, s.Name, s.AddressLine, s.Province,
         s.Latitude, s.Longitude, s.ContactName, s.ContactPhone, s.IsDefault, s.Status);
 }
 
@@ -422,12 +422,12 @@ public static class QcStats
             .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
         // Khiếu nại được chấp nhận trên dòng giao có cua do người này duyệt hạng (đếm mỗi khiếu nại một lần cho mỗi người).
         var claims = await (from c in db.CustomerClaims
-                            join s in db.Shipments on c.ShipmentId equals s.ShipmentId
+                            join s in db.Shipments on c.ShipmentId equals s.DeliveryRecordId
                             join a in db.InventoryAllocations on new { c.OrderId, LineId = (long?)c.LineId, TrancheId = (long?)s.TrancheId }
                                 equals new { a.OrderId, a.LineId, a.TrancheId }
                             join d in db.GradeDecisions on a.GradeDecisionId equals d.GradeDecisionId
                             where c.Status == "Accepted" && d.DecidedBy != null && userIds.Contains(d.DecidedBy.Value)
-                            select new { c.ClaimId, Qc = d.DecidedBy!.Value }).Distinct()
+                            select new { c.SalesRecordId, Qc = d.DecidedBy!.Value }).Distinct()
             .GroupBy(x => x.Qc).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count, ct);
         return userIds.ToDictionary(id => id, id => (approved.GetValueOrDefault(id), claims.GetValueOrDefault(id)));
     }

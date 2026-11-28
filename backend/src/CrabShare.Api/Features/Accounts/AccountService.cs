@@ -17,7 +17,7 @@ public sealed class AccountService(AppDbContext db, ICurrentUser me, IEkycProvid
         var investor = await GetInvestorAsync(tracking: false, ct);
         var check = await db.KycChecks.AsNoTracking()
             .Where(c => c.UserId == investor.UserId && c.CheckType == "EkycIdFace")
-            .OrderByDescending(c => c.CheckedAt).ThenByDescending(c => c.KycCheckId)
+            .OrderByDescending(c => c.CheckedAt).ThenByDescending(c => c.UserRecordId)
             .FirstOrDefaultAsync(ct);
         return ToResponse(investor, check);
     }
@@ -180,6 +180,6 @@ public sealed class AccountService(AppDbContext db, ICurrentUser me, IEkycProvid
 
     private static KycStatusResponse ToResponse(Investor investor, KycCheck? check)
         => new(investor.VerificationStatus, investor.VerifiedAt, check is null ? null : new(
-            check.KycCheckId, check.CheckType, check.Result, check.ProviderRef,
+            check.UserRecordId, check.CheckType, check.Result, check.ProviderRef,
             check.ConsentAt, check.CheckedAt, check.FailureReason));
 }

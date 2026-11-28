@@ -24,7 +24,7 @@ public sealed class StationControlController(AppDbContext db, ICurrentUser me, T
             d.OperatorId == owner && d.DeviceType == "Station" && d.Status != "Removed", ct)
             ?? throw new NotFoundException("device.not_found", "Không tìm thấy trạm của đơn vị.");
         var session = await FindSession(device.DeviceId, sessionNo, ct);
-        var command = await LastCommand(device.DeviceId, session.MeasurementSessionId, ct);
+        var command = await LastCommand(device.DeviceId, session.MeasurementRecordId, ct);
         return new JsonResult(command is null ? null : StationStartCommands.View(command, clock.GetUtcNow()));
     }
 
@@ -42,7 +42,7 @@ public sealed class StationControlController(AppDbContext db, ICurrentUser me, T
             if (session.Status != "Open")
                 throw new ConflictException("device.session_closed", "Phiên đo đã đóng. Chọn lượt đang mở.");
             var now = clock.GetUtcNow();
-            var last = await LastCommand(device.DeviceId, session.MeasurementSessionId, ct);
+            var last = await LastCommand(device.DeviceId, session.MeasurementRecordId, ct);
             if (last is not null && StationStartCommands.Expires(last) > now && last.Status is "Pending" or "Claimed" or "Accepted")
                 return StationStartCommands.View(last, now);
 
@@ -55,7 +55,7 @@ public sealed class StationControlController(AppDbContext db, ICurrentUser me, T
 
             var job = new DeviceCommand
             {
-                DeviceId = device.DeviceId, CommandType = StationStartCommands.Type, MeasurementSessionId = session.MeasurementSessionId,
+                DeviceId = device.DeviceId, CommandType = StationStartCommands.Type, MeasurementSessionId = session.MeasurementRecordId,
                 Status = "Pending", CreatedAt = now, CreatedBy = me.UserId,
             };
             db.DeviceCommands.Add(job);
@@ -71,7 +71,7 @@ public sealed class StationControlController(AppDbContext db, ICurrentUser me, T
 
     private Task<DeviceCommand?> LastCommand(long device, long session, CancellationToken ct)
         => db.DeviceCommands.AsNoTracking().Where(c => c.DeviceId == device && c.MeasurementSessionId == session &&
-            c.CommandType == StationStartCommands.Type).OrderByDescending(c => c.DeviceCommandId).FirstOrDefaultAsync(ct);
+            c.CommandType == StationStartCommands.Type).OrderByDescending(c => c.DeviceRecordId).FirstOrDefaultAsync(ct);
 }
 
 internal static class StationStartCommands
@@ -82,7 +82,7 @@ internal static class StationStartCommands
     internal static DateTimeOffset Expires(DeviceCommand command) => command.CreatedAt + Lifetime;
 
     internal static StationStartStatus View(DeviceCommand command, DateTimeOffset now)
-        => new(command.DeviceCommandId,
+        => new(command.DeviceRecordId,
             command.Status is "Pending" or "Claimed" && Expires(command) <= now ? "Expired" : command.Status,
             Expires(command), command.Reason);
 
@@ -97,7 +97,7 @@ internal static class StationStartCommands
         if (state.StartOutcome is { } outcome)
         {
             var status = outcome.Accepted ? "Accepted" : "Rejected";
-            await db.DeviceCommands.Where(c => c.DeviceCommandId == outcome.Id && c.DeviceId == device.DeviceId &&
+            await db.DeviceCommands.Where(c => c.DeviceRecordId == outcome.Id && c.DeviceId == device.DeviceId &&
                 c.CommandType == Type && c.Status == "Claimed").ExecuteUpdateAsync(set => set
                 .SetProperty(c => c.Status, status).SetProperty(c => c.Reason, outcome.Message), ct);
         }
@@ -107,16 +107,16 @@ internal static class StationStartCommands
                    join crab in db.CrabUnits on s.CrabUnitId equals crab.CrabUnitId
                    where s.StationDeviceId == device.DeviceId && s.Status == "Open" && s.SessionNo == state.SessionNo &&
                        crab.GradeAiTag == state.CrabTag
-                   select s.MeasurementSessionId;
+                   select s.MeasurementRecordId;
         var cutoff = now - Lifetime;
         var pending = db.DeviceCommands.Where(c => c.DeviceId == device.DeviceId && c.CommandType == Type &&
             c.Status == "Pending" && c.CreatedAt > cutoff && open.Contains(c.MeasurementSessionId!.Value));
-        var command = await pending.AsNoTracking().OrderBy(c => c.DeviceCommandId).FirstOrDefaultAsync(ct);
+        var command = await pending.AsNoTracking().OrderBy(c => c.DeviceRecordId).FirstOrDefaultAsync(ct);
         if (command is null) return null;
-        var claimed = await pending.Where(c => c.DeviceCommandId == command.DeviceCommandId)
+        var claimed = await pending.Where(c => c.DeviceRecordId == command.DeviceRecordId)
             .ExecuteUpdateAsync(set => set.SetProperty(c => c.Status, "Claimed").SetProperty(c => c.AckedAt, now), ct);
         if (claimed == 0) return null;
         var validForMs = (int)(Expires(command) - clock.GetUtcNow()).TotalMilliseconds;
-        return validForMs > 0 ? new StationStartDelivery(command.DeviceCommandId, state.SessionNo!, state.CrabTag!, validForMs) : null;
+        return validForMs > 0 ? new StationStartDelivery(command.DeviceRecordId, state.SessionNo!, state.CrabTag!, validForMs) : null;
     }
 }

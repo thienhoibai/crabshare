@@ -90,7 +90,7 @@ public partial class ProductionLogTests
                 db.Evidences.Add(new Infrastructure.Persistence.Entities.Evidence { BatchId = farm.BatchId, MediaType = "Photo", Source = "InAppCapture", CapturedAt = at.AddDays(1), ReceivedAt = at, FileUri = stored.Uri + status, Sha256 = new string('a', 64), ReviewStatus = status });
             db.Alerts.Add(new Alert { BatchId = farm.BatchId, AlertType = "WaterQuality", Severity = "Medium", Message = "Kiểm tra nước", Status = "Acknowledged", RaisedAt = at, AckDeadline = at.AddDays(1), AcknowledgedAt = at.AddHours(1), AcknowledgedBy = farm.UserId, ResponseNote = "PRIVATE-NOTE", CreatedAt = at, UpdatedAt = at });
             db.Alerts.Add(new Alert { BatchId = farm.BatchId, AlertType = "DataSilence", Severity = "Low", Message = "Ngày trước", Status = "Open", RaisedAt = at.AddMinutes(-11), AckDeadline = at.AddDays(1), CreatedAt = at, UpdatedAt = at });
-            await db.SaveChangesAsync(); return accepted.EvidenceId;
+            await db.SaveChangesAsync(); return accepted.EvidenceRecordId;
         });
     }
 
@@ -136,7 +136,7 @@ public partial class ProductionLogTests
         Assert.Equal(HttpStatusCode.Forbidden, (await foreign.GetAsync(path)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(path)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await foreign.GetAsync(TimelinePath(other) + $"/evidence/{id}/file")).StatusCode);
-        await Db(async db => { (await db.Evidences.SingleAsync(e => e.EvidenceId == id)).ReviewStatus = "Rejected"; await db.SaveChangesAsync(); return true; });
+        await Db(async db => { (await db.Evidences.SingleAsync(e => e.EvidenceRecordId == id)).ReviewStatus = "Rejected"; await db.SaveChangesAsync(); return true; });
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(path)).StatusCode);
     }
 

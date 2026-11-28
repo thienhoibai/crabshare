@@ -12,7 +12,7 @@ public sealed class PaymentInstructionQueryService(AppDbContext db)
 
     /// <summary>Một lệnh chi cho web; dùng chung với PayoutSendService (trả về lệnh vừa gửi).</summary>
     public static readonly Expression<Func<PaymentInstruction, PaymentInstructionResponse>> Projection = i => new PaymentInstructionResponse(
-        i.InstructionId, i.InstructionType, (long)i.Amount, i.Status, i.BatchAccount.Batch.BatchCode,
+        i.PaymentRecordId, i.InstructionType, (long)i.Amount, i.Status, i.BatchAccount.Batch.BatchCode,
         i.ContributionId != null ? i.Contribution!.Investor.User.FullName
             : i.OrderId != null ? i.Order!.RecipientName
             : i.SettlementLineId != null ? i.SettlementLine!.Investor.User.FullName
@@ -27,6 +27,6 @@ public sealed class PaymentInstructionQueryService(AppDbContext db)
         if (!string.IsNullOrWhiteSpace(query.Type)) rows = rows.Where(i => i.InstructionType == query.Type);
         if (!string.IsNullOrWhiteSpace(query.Status)) rows = rows.Where(i => i.Status == query.Status);
         if (!string.IsNullOrWhiteSpace(query.BatchCode)) rows = rows.Where(i => i.BatchAccount.Batch.BatchCode == query.BatchCode);
-        return await rows.OrderByDescending(i => i.InstructionId).Take(MaxRows).Select(Projection).ToListAsync(ct);
+        return await rows.OrderByDescending(i => i.PaymentRecordId).Take(MaxRows).Select(Projection).ToListAsync(ct);
     }
 }

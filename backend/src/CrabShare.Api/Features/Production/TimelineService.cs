@@ -54,21 +54,21 @@ public sealed partial class TimelineService(AppDbContext db, ICurrentUser me, Ev
         var dates = await db.Database.SqlQuery<DateOnly>($"""
             SELECT TOP ({query.Days + 1}) d.[Value]
             FROM (
-                SELECT log_date AS [Value] FROM dbo.production_log
-                    WHERE batch_id = {batchId} AND log_date < {beforeDate}
+                SELECT log_date AS [Value] FROM dbo.care_record
+                    WHERE record_type = 'Log' AND batch_id = {batchId} AND log_date < {beforeDate}
                 UNION
                 SELECT CONVERT(date, SWITCHOFFSET(occurred_at, '+07:00')) FROM dbo.slot_event
                     WHERE batch_id = {batchId} AND occurred_at < {beforeAt}
                 UNION
-                SELECT CONVERT(date, SWITCHOFFSET(COALESCE(captured_at, received_at), '+07:00')) FROM dbo.evidence
-                    WHERE batch_id = {batchId} AND review_status = 'Accepted'
+                SELECT CONVERT(date, SWITCHOFFSET(COALESCE(captured_at, received_at), '+07:00')) FROM dbo.evidence_record
+                    WHERE record_type = 'Evidence' AND batch_id = {batchId} AND review_status = 'Accepted'
                     AND (captured_at < {beforeAt} OR (captured_at IS NULL AND received_at < {beforeAt}))
                 UNION
-                SELECT CONVERT(date, SWITCHOFFSET(raised_at, '+07:00')) FROM dbo.alert
-                    WHERE batch_id = {batchId} AND raised_at < {beforeAt}
+                SELECT CONVERT(date, SWITCHOFFSET(raised_at, '+07:00')) FROM dbo.care_record
+                    WHERE record_type = 'Alert' AND batch_id = {batchId} AND raised_at < {beforeAt}
                 UNION
-                SELECT CONVERT(date, SWITCHOFFSET(occurred_at, '+07:00')) FROM dbo.inventory_event
-                    WHERE batch_id = {batchId} AND occurred_at < {beforeAt} AND event_type NOT IN ('Allocated', 'Released')
+                SELECT CONVERT(date, SWITCHOFFSET(occurred_at, '+07:00')) FROM dbo.inventory_record
+                    WHERE record_type = 'Event' AND batch_id = {batchId} AND occurred_at < {beforeAt} AND event_type NOT IN ('Allocated', 'Released')
             ) d ORDER BY d.[Value] DESC
             """).ToListAsync(ct);
         var hasMore = dates.Count > query.Days;
@@ -86,7 +86,7 @@ public sealed partial class TimelineService(AppDbContext db, ICurrentUser me, Ev
     {
         var batchId = await RequireBatchAsync(code, ct);
         var evidence = await db.Evidences.AsNoTracking()
-            .Where(e => e.EvidenceId == id && e.BatchId == batchId && e.ReviewStatus == "Accepted")
+            .Where(e => e.EvidenceRecordId == id && e.BatchId == batchId && e.ReviewStatus == "Accepted")
             .Select(e => new { e.FileUri, e.MediaType }).SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException("timeline.evidence_not_found", "Bằng chứng không tồn tại hoặc chưa được phép xem.");
         if (evidence.MediaType == "Photo")

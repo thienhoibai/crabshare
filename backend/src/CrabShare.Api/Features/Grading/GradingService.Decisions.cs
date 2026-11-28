@@ -57,7 +57,7 @@ public sealed partial class GradingService
             d.Reason = Clean(req.Reason);
             d.DecidedBy = me.UserId;
             d.DecidedAt = d.UpdatedAt = now;
-            d.QcInspectionId = inspection.QcInspectionId;
+            d.QcInspectionId = inspection.QcRecordId;
             crab.InventoryStatus = "Graded";
             crab.UpdatedAt = now;
             await LeaveBoxAsync(crab, "Harvested", now, ct);
@@ -124,7 +124,7 @@ public sealed partial class GradingService
             target.PhotoSha256 = photo.Sha256;
             target.DecidedBy = me.UserId;
             target.DecidedAt = target.UpdatedAt = now;
-            target.QcInspectionId = inspection.QcInspectionId;
+            target.QcInspectionId = inspection.QcRecordId;
             crab.InventoryStatus = "Destroyed";
             crab.Condition = req.LiveStatus == "Dead" ? "Dead" : req.LiveStatus == "Weak" ? "Weak" : crab.Condition;
             crab.UpdatedAt = now;
@@ -233,7 +233,7 @@ public sealed partial class GradingService
             next.PhotoSha256 = photo.Sha256;
             next.DecidedBy = me.UserId;
             next.DecidedAt = next.UpdatedAt = now;
-            next.QcInspectionId = inspection.QcInspectionId;
+            next.QcInspectionId = inspection.QcRecordId;
             var lowered = GradeLabels.GradeRank(req.FinalGrade) < GradeLabels.GradeRank(d.FinalGrade) ||
                           GradeLabels.SizeRank(req.FinalSize) < GradeLabels.SizeRank(d.FinalSize);
             db.InventoryEvents.Add(Event(crab, lowered ? "Downgraded" : "Graded", now, $"{d.FinalSize} {d.FinalGrade} → {req.FinalSize} {req.FinalGrade}: {req.Reason.Trim()}"));
@@ -285,7 +285,7 @@ public sealed partial class GradingService
         d.FinalGrade = grade;
         d.IsSubstandard = GradeLabels.IsSubstandard(size, grade);
         var code = GradeLabels.SpecCode(batch.CrabType, size, grade);
-        d.SpecId = code is null ? null : await db.ProductSpecifications.Where(s => s.SpecCode == code).Select(s => (long?)s.SpecId).SingleOrDefaultAsync(ct);
+        d.SpecId = code is null ? null : await db.ProductSpecifications.Where(s => s.SpecCode == code).Select(s => (long?)s.OfferRecordId).SingleOrDefaultAsync(ct);
     }
 
     private QcInspection Inspection(Batch batch, CrabUnit crab, GradeDecision d, string conclusion, string? sensory, string? rejectReason, DateTimeOffset now) => new()

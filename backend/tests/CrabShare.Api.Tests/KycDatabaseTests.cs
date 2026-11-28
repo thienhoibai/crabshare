@@ -98,7 +98,7 @@ public class KycDatabaseTests(KycDatabaseFixture fixture) : IClassFixture<KycDat
         Assert.DoesNotContain("KYC Test", audit.NewValue!);
         AssertAuditHash(audit);
         var read = await client.GetFromJsonAsync<KycStatusResponse>("/api/me/kyc");
-        Assert.Equal(check.KycCheckId, read!.LastCheck!.Id);
+        Assert.Equal(check.UserRecordId, read!.LastCheck!.Id);
     }
 
     [Fact]

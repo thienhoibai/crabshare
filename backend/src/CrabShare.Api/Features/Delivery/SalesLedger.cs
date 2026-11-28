@@ -34,7 +34,7 @@ public sealed class SalesLedger(AppDbContext db, TimeProvider clock, IAuditLog a
         };
         db.Invoices.Add(invoice);
         await db.SaveChangesAsync(ct);
-        await audit.WriteAsync("invoice", invoice.InvoiceId, "issue", null, new { invoice.InvoiceNo, order.OrderNo, trancheId, amount = (long)invoice.Amount }, now, ct);
+        await audit.WriteAsync("invoice", invoice.DeliveryRecordId, "issue", null, new { invoice.InvoiceNo, order.OrderNo, trancheId, amount = (long)invoice.Amount }, now, ct);
         return invoice;
     }
 
@@ -84,7 +84,7 @@ public sealed class SalesLedger(AppDbContext db, TimeProvider clock, IAuditLog a
             a.Status = "Refused";
             a.UpdatedAt = now;
             await CancelInvoicesAsync(order.OrderId, a.TrancheId, "Khách không trả phần còn lại (BR-168)", now, ct);
-            var tranche = await db.DeliveryTranches.SingleAsync(t => t.TrancheId == a.TrancheId, ct);
+            var tranche = await db.DeliveryTranches.SingleAsync(t => t.DeliveryRecordId == a.TrancheId, ct);
             tranche.Status = "Cancelled";
             tranche.UpdatedAt = now;
         }
@@ -123,7 +123,7 @@ public sealed class SalesLedger(AppDbContext db, TimeProvider clock, IAuditLog a
         var account = await db.BatchAccounts.SingleAsync(a => a.BatchId == order.BatchId, ct);
         var credit = await DepositCreditAsync(order, ct);
         if (credit > 0)
-            await refunds.CreateRefundAsync(account.BatchAccountId, Money(credit), null, order.OrderId,
+            await refunds.CreateRefundAsync(account.BatchRecordId, Money(credit), null, order.OrderId,
                 $"Hoàn phần cọc chưa trừ vào tiền hàng của đơn {order.OrderNo} (BR-160, BR-167)", now, ct);
         var previous = order.Status;
         if (tranches.Any(t => t.Status == "Completed"))

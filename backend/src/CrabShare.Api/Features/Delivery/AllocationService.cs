@@ -72,14 +72,14 @@ public sealed class AllocationService(AppDbContext db, ICurrentUser me, TimeProv
     private async Task AllocateExactAsync(CrabUnit crab, GradeDecision decision, long specId, CancellationToken ct)
     {
         var target = await (from tl in db.DeliveryTrancheLines
-                            join t in db.DeliveryTranches on tl.TrancheId equals t.TrancheId
-                            join l in db.SalesOrderLines on tl.LineId equals l.LineId
+                            join t in db.DeliveryTranches on tl.TrancheId equals t.DeliveryRecordId
+                            join l in db.SalesOrderLines on tl.LineId equals l.SalesRecordId
                             join o in db.SalesOrders on t.OrderId equals o.OrderId
                             where o.BatchId == crab.BatchId && o.OrderType == "PreOrder" && OrderStatus.Allocatable.Contains(o.Status)
                                   && (t.Status == "Planned" || t.Status == "Allocated") && l.SpecId == specId
-                                  && db.InventoryAllocations.Count(a => a.TrancheId == t.TrancheId && a.LineId == l.LineId && a.ReleasedAt == null) < tl.ConvertedCrabs
+                                  && db.InventoryAllocations.Count(a => a.TrancheId == t.DeliveryRecordId && a.LineId == l.SalesRecordId && a.ReleasedAt == null) < tl.ConvertedCrabs
                             orderby t.DueDate, o.DepositedAt, o.OrderId, t.Seq
-                            select new { t.TrancheId, l.LineId, o.OrderId }).FirstOrDefaultAsync(ct);
+                            select new { TrancheId = t.DeliveryRecordId, LineId = l.SalesRecordId, o.OrderId }).FirstOrDefaultAsync(ct);
         if (target is null) return;
         await AddAsync(crab, decision, target.OrderId, target.LineId, target.TrancheId, substitution: false, ct);
     }
@@ -91,18 +91,18 @@ public sealed class AllocationService(AppDbContext db, ICurrentUser me, TimeProv
     public async Task<int> FillLineAsync(long trancheId, long lineId, bool allowSubstitution, CancellationToken ct)
     {
         var tl = await db.DeliveryTrancheLines.SingleAsync(x => x.TrancheId == trancheId && x.LineId == lineId, ct);
-        var line = await db.SalesOrderLines.Include(l => l.Spec).SingleAsync(l => l.LineId == lineId, ct);
+        var line = await db.SalesOrderLines.Include(l => l.Spec).SingleAsync(l => l.SalesRecordId == lineId, ct);
         var missing = tl.ConvertedCrabs - await db.InventoryAllocations.CountAsync(a => a.TrancheId == trancheId && a.LineId == lineId && a.ReleasedAt == null, ct);
         if (missing <= 0) return 0;
         var candidates = await (from c in db.CrabUnits
                                 join d in db.GradeDecisions on c.CrabUnitId equals d.CrabUnitId
-                                join s in db.ProductSpecifications on d.SpecId equals s.SpecId
+                                join s in db.ProductSpecifications on d.SpecId equals s.OfferRecordId
                                 where c.BatchId == line.BatchId && c.InventoryStatus == "Graded" && d.IsCurrent && d.Status == "Approved" && !d.IsSubstandard
                                       && !db.InventoryAllocations.Any(a => a.CrabUnitId == c.CrabUnitId && a.ReleasedAt == null)
-                                      && (s.SpecId == line.SpecId || (allowSubstitution && s.CrabType == line.Spec.CrabType
+                                      && (s.OfferRecordId == line.SpecId || (allowSubstitution && s.CrabType == line.Spec.CrabType
                                           && s.SizeCode == line.Spec.SizeCode && s.GradeRank > line.Spec.GradeRank))
-                                orderby s.SpecId == line.SpecId ? 0 : 1, s.GradeRank, d.DecidedAt
-                                select new { Crab = c, Decision = d, Exact = s.SpecId == line.SpecId }).Take(missing).ToListAsync(ct);
+                                orderby s.OfferRecordId == line.SpecId ? 0 : 1, s.GradeRank, d.DecidedAt
+                                select new { Crab = c, Decision = d, Exact = s.OfferRecordId == line.SpecId }).Take(missing).ToListAsync(ct);
         foreach (var c in candidates)
             await AddAsync(c.Crab, c.Decision, line.OrderId, lineId, trancheId, substitution: !c.Exact, ct);
         return missing - candidates.Count;
@@ -111,9 +111,9 @@ public sealed class AllocationService(AppDbContext db, ICurrentUser me, TimeProv
     private async Task<bool> FitsLineAsync(GradeDecision decision, long lineId, CancellationToken ct)
     {
         if (decision.IsSubstandard || decision.SpecId is not { } specId) return false;
-        var line = await db.SalesOrderLines.Include(l => l.Spec).SingleAsync(l => l.LineId == lineId, ct);
+        var line = await db.SalesOrderLines.Include(l => l.Spec).SingleAsync(l => l.SalesRecordId == lineId, ct);
         if (line.SpecId == specId) return true;
-        var spec = await db.ProductSpecifications.SingleAsync(s => s.SpecId == specId, ct);
+        var spec = await db.ProductSpecifications.SingleAsync(s => s.OfferRecordId == specId, ct);
         return spec.CrabType == line.Spec.CrabType && spec.SizeCode == line.Spec.SizeCode && spec.GradeRank > line.Spec.GradeRank;
     }
 
@@ -158,13 +158,13 @@ public sealed class AllocationService(AppDbContext db, ICurrentUser me, TimeProv
         });
         await db.SaveChangesAsync(ct);
         if (allocation.TrancheId is { } trancheId) await RefreshTrancheAsync(trancheId, ct);
-        await audit.WriteAsync("inventory_allocation", allocation.AllocationId, "release", null, new { allocation.CrabUnitId, allocation.OrderId, reason }, ct);
+        await audit.WriteAsync("inventory_allocation", allocation.InventoryRecordId, "release", null, new { allocation.CrabUnitId, allocation.OrderId, reason }, ct);
     }
 
     /// <summary>Đợt giao chưa xuất: Allocated khi mọi dòng đủ số con, ngược lại Planned.</summary>
     public async Task RefreshTrancheAsync(long trancheId, CancellationToken ct)
     {
-        var tranche = await db.DeliveryTranches.Include(t => t.Lines).SingleAsync(t => t.TrancheId == trancheId, ct);
+        var tranche = await db.DeliveryTranches.Include(t => t.Lines).SingleAsync(t => t.DeliveryRecordId == trancheId, ct);
         if (tranche.Status is not ("Planned" or "Allocated")) return;
         var counts = await db.InventoryAllocations.Where(a => a.TrancheId == trancheId && a.ReleasedAt == null)
             .GroupBy(a => a.LineId).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key!.Value, x => x.Count, ct);

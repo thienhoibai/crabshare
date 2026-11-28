@@ -24,7 +24,7 @@ public sealed class PayoutProtectionUpgrade(IServiceScopeFactory scopes) : IHost
             await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
             while (true)
             {
-                var rows = await db.Database.SqlQueryRaw<LegacyRow>("SELECT TOP (200) payout_account_id AS Id, bank_code AS BankCode, account_no AS Stored FROM dbo.payout_account WITH (UPDLOCK,HOLDLOCK) WHERE account_no_digest IS NULL ORDER BY payout_account_id").ToListAsync(ct);
+                var rows = await db.Database.SqlQueryRaw<LegacyRow>("SELECT TOP (200) user_record_id AS Id, bank_code AS BankCode, account_no AS Stored FROM dbo.user_record WITH (UPDLOCK,HOLDLOCK) WHERE record_type = 'PayoutAccount' AND account_no_digest IS NULL ORDER BY user_record_id").ToListAsync(ct);
                 if (rows.Count == 0) break;
                 foreach (var row in rows)
                 {
@@ -34,19 +34,19 @@ public sealed class PayoutProtectionUpgrade(IServiceScopeFactory scopes) : IHost
                         throw new InvalidOperationException("Invalid legacy payout number; resolve before deployment.");
                     var encrypted = db.PayoutProtection.Protect(number);
                     var digest = db.PayoutProtection.Digest(row.BankCode, number);
-                    await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE dbo.payout_account SET account_no={encrypted}, account_no_digest={digest} WHERE payout_account_id={row.Id}", ct);
+                    await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE dbo.user_record SET account_no={encrypted}, account_no_digest={digest} WHERE record_type = 'PayoutAccount' AND user_record_id={row.Id}", ct);
                 }
             }
             long cursor = 0;
             while (true)
             {
-                var protectedRows = await db.PayoutAccounts.AsNoTracking().Where(a => a.PayoutAccountId > cursor)
-                    .OrderBy(a => a.PayoutAccountId).Take(200).ToListAsync(ct);
+                var protectedRows = await db.PayoutAccounts.AsNoTracking().Where(a => a.UserRecordId > cursor)
+                    .OrderBy(a => a.UserRecordId).Take(200).ToListAsync(ct);
                 if (protectedRows.Count == 0) break;
                 foreach (var row in protectedRows)
                     if (row.AccountNoDigest != db.PayoutProtection.Digest(row.BankCode, row.AccountNo))
                         throw new CryptographicException("Payout lookup key or protected data is inconsistent. Restore the private key-ring backup.");
-                cursor = protectedRows[^1].PayoutAccountId;
+                cursor = protectedRows[^1].UserRecordId;
             }
             await transaction.CommitAsync(ct);
         });

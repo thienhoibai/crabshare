@@ -44,11 +44,11 @@ public sealed class ClaimService(AppDbContext db, ICurrentUser me, TimeProvider 
             var now = clock.GetUtcNow();
             if (shipment.Status != "Accepted" || shipment.ReturnWindowEndsAt is not { } end || now > end)
                 throw new BusinessRuleException("claim.window_closed", "Chỉ gửi khiếu nại cho chuyến đã nghiệm thu, trong hạn đổi trả (BR-172).");
-            if (await db.CustomerClaims.AnyAsync(c => c.ShipmentId == shipment.ShipmentId, ct))
+            if (await db.CustomerClaims.AnyAsync(c => c.ShipmentId == shipment.DeliveryRecordId, ct))
                 throw new ConflictException("claim.exists", "Chuyến giao này đã có khiếu nại.");
             var line = await db.SalesOrderLines.Include(l => l.Spec).SingleOrDefaultAsync(l => l.OrderId == order.OrderId && l.Spec.SpecCode == req.SpecCode, ct)
                        ?? throw new NotFoundException("claim.line_not_found", "Đơn không có dòng quy cách này.");
-            var shipped = shipment.Lines.SingleOrDefault(l => l.LineId == line.LineId);
+            var shipped = shipment.Lines.SingleOrDefault(l => l.LineId == line.SalesRecordId);
             if (shipped is null || (shipped.AcceptedCrabs ?? 0) == 0)
                 throw new BusinessRuleException("claim.line_not_delivered", "Chuyến giao không có cua nghiệm thu của quy cách này.");
             if (req.AffectedCrabs > shipped.AcceptedCrabs || req.AffectedKg > shipped.AcceptedKg)
@@ -56,14 +56,14 @@ public sealed class ClaimService(AppDbContext db, ICurrentUser me, TimeProvider 
             var hours = await parameters.GetIntAsync(ParamKeys.ClaimResponseHours, now, ct);
             var claim = new CustomerClaim
             {
-                ClaimNo = Codes.New("KN", 10), OrderId = order.OrderId, ShipmentId = shipment.ShipmentId, LineId = line.LineId, ClaimType = req.ClaimType,
+                ClaimNo = Codes.New("KN", 10), OrderId = order.OrderId, ShipmentId = shipment.DeliveryRecordId, LineId = line.SalesRecordId, ClaimType = req.ClaimType,
                 IssueType = req.IssueType, AffectedCrabs = req.AffectedCrabs, AffectedKg = req.AffectedKg is { } kg ? decimal.Round(kg, 3) : null,
                 Description = req.Description.Trim(), PhotoUri = photo.Uri, PhotoSha256 = photo.Sha256, Status = "Open", ResponseDueAt = now.AddHours(hours),
                 CreatedBy = me.UserId, CreatedAt = now, UpdatedAt = now,
             };
             db.CustomerClaims.Add(claim);
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("claim", claim.ClaimId, "create", null, new { claim.ClaimNo, order.OrderNo, claim.ClaimType, claim.IssueType, claim.AffectedCrabs, claim.AffectedKg }, ct);
+            await audit.WriteAsync("claim", claim.SalesRecordId, "create", null, new { claim.ClaimNo, order.OrderNo, claim.ClaimType, claim.IssueType, claim.AffectedCrabs, claim.AffectedKg }, ct);
             return claim.ClaimNo;
         }, ct, IsolationLevel.Serializable);
         return await GetAsync(claimNo, ct);
@@ -89,7 +89,7 @@ public sealed class ClaimService(AppDbContext db, ICurrentUser me, TimeProvider 
             claim.OperatorRespondedAt = claim.UpdatedAt = now;
             if (req.Accept) claim.RefundKg = req.RefundKg is { } kg ? decimal.Round(kg, 3) : null;
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("claim", claim.ClaimId, "respond", new { status = "Open" }, new { claim.Status, claim.OperatorResponse, claim.RefundKg }, ct);
+            await audit.WriteAsync("claim", claim.SalesRecordId, "respond", new { status = "Open" }, new { claim.Status, claim.OperatorResponse, claim.RefundKg }, ct);
         }, ct, IsolationLevel.Serializable);
         return await GetAsync(claimNo, ct);
     }
@@ -113,7 +113,7 @@ public sealed class ClaimService(AppDbContext db, ICurrentUser me, TimeProvider 
             else if (previous == "OperatorAccepted") await AcceptAsync(claim, order, claim.RefundKg, $"Người nuôi chấp nhận: {claim.OperatorResponse}", now, ct);
             else { claim.Status = "Rejected"; claim.DecidedAt = now; }
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("claim", claim.ClaimId, "customer_reply", new { status = previous }, new { claim.Status, req.Agree }, ct);
+            await audit.WriteAsync("claim", claim.SalesRecordId, "customer_reply", new { status = previous }, new { claim.Status, req.Agree }, ct);
         }, ct, IsolationLevel.Serializable);
         return await GetAsync(claimNo, ct);
     }
@@ -136,7 +136,7 @@ public sealed class ClaimService(AppDbContext db, ICurrentUser me, TimeProvider 
             if (req.Accept) await AcceptAsync(claim, order, req.RefundKg, $"Admin quyết định: {claim.AdminDecision}", now, ct);
             else { claim.Status = "Rejected"; claim.DecidedAt = now; }
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("claim", claim.ClaimId, "admin_decide", new { status = previous }, new { claim.Status, claim.AdminDecision, claim.RefundAmount }, ct);
+            await audit.WriteAsync("claim", claim.SalesRecordId, "admin_decide", new { status = previous }, new { claim.Status, claim.AdminDecision, claim.RefundAmount }, ct);
         }, ct, IsolationLevel.Serializable);
         return await GetAsync(claimNo, ct);
     }
@@ -156,9 +156,9 @@ public sealed class ClaimService(AppDbContext db, ICurrentUser me, TimeProvider 
         if (amount > 0)
         {
             var account = await db.BatchAccounts.SingleAsync(a => a.BatchId == order.BatchId, ct);
-            var instruction = await refunds.CreateRefundAsync(account.BatchAccountId, amount, null, order.OrderId,
+            var instruction = await refunds.CreateRefundAsync(account.BatchRecordId, amount, null, order.OrderId,
                 $"Hoàn tiền khiếu nại {claim.ClaimNo}: {note}", now, ct);
-            claim.RefundInstructionId = instruction.InstructionId;
+            claim.RefundInstructionId = instruction.PaymentRecordId;
         }
     }
 
@@ -173,7 +173,7 @@ public sealed class ClaimService(AppDbContext db, ICurrentUser me, TimeProvider 
             {
                 c.Status = "Escalated";
                 c.UpdatedAt = now;
-                await audit.WriteAsync("claim", c.ClaimId, "escalate_overdue", new { status = "Open" }, new { c.Status }, now, ct);
+                await audit.WriteAsync("claim", c.SalesRecordId, "escalate_overdue", new { status = "Open" }, new { c.Status }, now, ct);
             }
             await db.SaveChangesAsync(ct);
             return due.Count;
@@ -236,7 +236,7 @@ public sealed class ClaimService(AppDbContext db, ICurrentUser me, TimeProvider 
 
     private async Task<(CustomerClaim Claim, SalesOrder Order)> LoadAsync(string claimNo, CancellationToken ct)
     {
-        var claim = await db.CustomerClaims.FromSqlInterpolated($"SELECT * FROM dbo.claim WITH (UPDLOCK, HOLDLOCK) WHERE claim_no = {claimNo}").SingleOrDefaultAsync(ct)
+        var claim = await db.CustomerClaims.FromSqlInterpolated($"SELECT * FROM dbo.sales_record WITH (UPDLOCK, HOLDLOCK) WHERE record_type = 'Claim' AND claim_no = {claimNo}").SingleOrDefaultAsync(ct)
                     ?? throw new NotFoundException("claim.not_found", "Không tìm thấy khiếu nại.");
         return (claim, await db.SalesOrders.SingleAsync(o => o.OrderId == claim.OrderId, ct));
     }
@@ -247,8 +247,8 @@ public sealed class ClaimService(AppDbContext db, ICurrentUser me, TimeProvider 
         var shipmentIds = claims.Select(c => c.ShipmentId).Distinct().ToList();
         var lineIds = claims.Select(c => c.LineId).Distinct().ToList();
         var orders = await db.SalesOrders.Where(o => orderIds.Contains(o.OrderId)).ToDictionaryAsync(o => o.OrderId, o => o.OrderNo, ct);
-        var shipments = await db.Shipments.Where(s => shipmentIds.Contains(s.ShipmentId)).ToDictionaryAsync(s => s.ShipmentId, s => s.ShipmentNo, ct);
-        var specs = await db.SalesOrderLines.Where(l => lineIds.Contains(l.LineId)).Select(l => new { l.LineId, l.Spec.SpecCode }).ToDictionaryAsync(l => l.LineId, l => l.SpecCode, ct);
+        var shipments = await db.Shipments.Where(s => shipmentIds.Contains(s.DeliveryRecordId)).ToDictionaryAsync(s => s.DeliveryRecordId, s => s.ShipmentNo, ct);
+        var specs = await db.SalesOrderLines.Where(l => lineIds.Contains(l.SalesRecordId)).Select(l => new { LineId = l.SalesRecordId, l.Spec.SpecCode }).ToDictionaryAsync(l => l.LineId, l => l.SpecCode, ct);
         return claims.Select(c => new ClaimResponse(c.ClaimNo, orders[c.OrderId], shipments[c.ShipmentId], specs[c.LineId], c.ClaimType, c.IssueType,
             c.AffectedCrabs, c.AffectedKg, c.Description, c.Status, c.ResponseDueAt, c.OperatorResponse, c.OperatorRespondedAt, c.CustomerAgreed,
             c.AdminDecision, c.DecidedAt, c.RefundKg, c.RefundAmount is { } r ? (long)r : null, c.CreatedAt)).ToList();

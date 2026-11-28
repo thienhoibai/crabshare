@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Địa chỉ nhận hàng của khách (thuộc tính đa trị)
 /// </summary>
-public partial class CustomerAddress
+public partial class CustomerAddress : UserRecord
 {
-    public long AddressId { get; set; }
-
     public long CustomerId { get; set; }
 
     public string RecipientName { get; set; } = null!;
@@ -22,7 +20,7 @@ public partial class CustomerAddress
 
     public bool IsDefault { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual Customer Customer { get; set; } = null!;
 }

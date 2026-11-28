@@ -36,7 +36,7 @@ public class EvidenceExplanationDatabaseTests(KycDatabaseFixture fixture) : ICla
         var bytes = EvidenceImages.Png(); await using var scope = fixture.Factory.Services.CreateAsyncScope();
         var file = await scope.ServiceProvider.GetRequiredService<IFileStorage>().SaveAsync(new MemoryStream(bytes), "test.png", "image/png", "explanation-tests", default);
         var evidence = new Infrastructure.Persistence.Entities.Evidence { Batch = batch, Slot = slot, MediaType = "Photo", Source = "InAppCapture", FileUri = file.Uri, Sha256 = file.Sha256, ReceivedAt = now, CapturedAt = now, RiskScore = 100, ReviewStatus = status };
-        db.AppUsers.Add(reviewer); db.Evidences.Add(evidence); await db.SaveChangesAsync(); return new Scenario(owner.UserId, reviewer.UserId, evidence.EvidenceId, batch.BatchId, batch.BatchCode, bytes);
+        db.AppUsers.Add(reviewer); db.Evidences.Add(evidence); await db.SaveChangesAsync(); return new Scenario(owner.UserId, reviewer.UserId, evidence.EvidenceRecordId, batch.BatchId, batch.BatchCode, bytes);
     });
     private Task<bool> Chain() => Db(async db => {
         string? previous = null; foreach (var row in await db.AuditLogs.AsNoTracking().OrderBy(a => a.AuditId).ToListAsync()) {
@@ -124,7 +124,7 @@ public class EvidenceExplanationDatabaseTests(KycDatabaseFixture fixture) : ICla
     public async Task Own_photo_has_private_headers_and_unsafe_path_is_404(string? path)
     {
         var test = await Setup(); using var client = Client(test.OperatorUser);
-        if (path != null) { await Db(async db => { (await db.Evidences.SingleAsync(e => e.EvidenceId == test.Evidence)).FileUri = path; await db.SaveChangesAsync(); return true; }); Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/operators/me/evidence/{test.Evidence}/image")).StatusCode); return; }
+        if (path != null) { await Db(async db => { (await db.Evidences.SingleAsync(e => e.EvidenceRecordId == test.Evidence)).FileUri = path; await db.SaveChangesAsync(); return true; }); Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/operators/me/evidence/{test.Evidence}/image")).StatusCode); return; }
         var image = await client.GetAsync($"/api/operators/me/evidence/{test.Evidence}/image"); Assert.Equal(HttpStatusCode.OK, image.StatusCode); Assert.Equal(test.Bytes, await image.Content.ReadAsByteArrayAsync()); Assert.True(image.Headers.CacheControl!.NoStore); Assert.Equal("nosniff", Assert.Single(image.Headers.GetValues("X-Content-Type-Options")));
     }
     private sealed class FailAudit : SaveChangesInterceptor
@@ -138,7 +138,7 @@ public class EvidenceExplanationDatabaseTests(KycDatabaseFixture fixture) : ICla
         var test = await Setup(); using var factory = fixture.Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddDbContext<AppDbContext>(o => o.AddInterceptors(new FailAudit()))));
         using var client = factory.CreateClient(); client.DefaultRequestHeaders.Add("X-Test-User", test.OperatorUser.ToString()); client.DefaultRequestHeaders.Add("X-Test-Role", Roles.OperatorMember);
         Assert.Equal(HttpStatusCode.InternalServerError, (await client.PostAsJsonAsync($"/api/evidence/{test.Evidence}/explanation", new { text = "Explain" })).StatusCode);
-        var row = await Db(db => db.Evidences.AsNoTracking().SingleAsync(e => e.EvidenceId == test.Evidence)); Assert.Null(row.Explanation); Assert.Null(row.ExplainedAt); Assert.Equal("Flagged", row.ReviewStatus);
+        var row = await Db(db => db.Evidences.AsNoTracking().SingleAsync(e => e.EvidenceRecordId == test.Evidence)); Assert.Null(row.Explanation); Assert.Null(row.ExplainedAt); Assert.Equal("Flagged", row.ReviewStatus);
     }
     [Fact]
     public async Task Explanation_racing_final_verdict_cannot_modify_closed_status()
@@ -146,6 +146,6 @@ public class EvidenceExplanationDatabaseTests(KycDatabaseFixture fixture) : ICla
         var test = await Setup(); using var owner = Client(test.OperatorUser); using var reviewer = Client(test.Reviewer, Roles.EvidenceReviewer);
         var replies = await Task.WhenAll(owner.PostAsJsonAsync($"/api/evidence/{test.Evidence}/explanation", new { text = "Explain concurrent" }), reviewer.PostAsJsonAsync($"/api/review/evidence/{test.Evidence}/verdict", new { verdict = "Pass", note = "Verified original" }));
         Assert.Equal(HttpStatusCode.OK, replies[1].StatusCode); Assert.Contains(replies[0].StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.Conflict });
-        var row = await Db(db => db.Evidences.AsNoTracking().SingleAsync(e => e.EvidenceId == test.Evidence)); Assert.Equal("Accepted", row.ReviewStatus); if (replies[0].StatusCode == HttpStatusCode.Conflict) Assert.Null(row.Explanation); else Assert.Equal("Explain concurrent", row.Explanation); await Chain();
+        var row = await Db(db => db.Evidences.AsNoTracking().SingleAsync(e => e.EvidenceRecordId == test.Evidence)); Assert.Equal("Accepted", row.ReviewStatus); if (replies[0].StatusCode == HttpStatusCode.Conflict) Assert.Null(row.Explanation); else Assert.Equal("Explain concurrent", row.Explanation); await Chain();
     }
 }

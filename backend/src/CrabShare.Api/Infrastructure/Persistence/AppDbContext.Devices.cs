@@ -16,11 +16,11 @@ public partial class AppDbContext
     private static void ConfigureDevices(ModelBuilder model)
     {
         model.Entity<Device>().ToTable("device");
-        model.Entity<DeviceMessage>().ToTable("device_message");
-        model.Entity<DeviceImage>().ToTable("device_image");
-        model.Entity<WaterReading>().ToTable("water_reading");
-        model.Entity<DeviceCalibration>().ToTable("device_calibration");
-        model.Entity<DeviceCommand>().ToTable("device_command");
-        model.Entity<MeasurementSession>().ToTable("measurement_session");
+        // device_record gộp 5 loại bản ghi của thiết bị (V036); EF tự thêm điều kiện record_type khi truy vấn từng loại.
+        var record = model.Entity<DeviceRecord>();
+        record.Property<string>("record_type").HasMaxLength(30).IsUnicode(false);
+        record.HasDiscriminator<string>("record_type")
+            .HasValue<DeviceMessage>("Message").HasValue<DeviceImage>("Image").HasValue<WaterReading>("WaterReading")
+            .HasValue<DeviceCalibration>("Calibration").HasValue<DeviceCommand>("Command");
     }
 }

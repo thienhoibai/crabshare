@@ -1,8 +1,7 @@
 namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 
-public sealed class ProductionThresholdVersion
+public sealed class ProductionThresholdVersion : BatchRecord
 {
-    public long ThresholdVersionId { get; set; }
     public long BatchId { get; set; }
     public int VersionNo { get; set; }
     public decimal PhMin { get; set; }

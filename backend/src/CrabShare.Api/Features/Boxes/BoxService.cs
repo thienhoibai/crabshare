@@ -58,8 +58,8 @@ public sealed class BoxService(AppDbContext db, ICurrentUser me, TimeProvider cl
             b.Allocation == null ? null : db.Evidences.Where(e => e.SlotId == b.Slot.SlotId
                 && e.BatchId == b.Allocation.BatchId && e.ReceivedAt >= b.Allocation.AllocatedAt
                 && e.MediaType == "Photo" && e.Source == "InAppCapture")
-                .OrderByDescending(e => e.ReceivedAt).ThenByDescending(e => e.EvidenceId)
-                .Select(e => new BoxEvidenceResponse(e.EvidenceId, e.ReceivedAt, e.ReviewStatus)).FirstOrDefault())).ToPagedAsync(paging, ct);
+                .OrderByDescending(e => e.ReceivedAt).ThenByDescending(e => e.EvidenceRecordId)
+                .Select(e => new BoxEvidenceResponse(e.EvidenceRecordId, e.ReceivedAt, e.ReviewStatus)).FirstOrDefault())).ToPagedAsync(paging, ct);
     }
 
     // Khóa hộ nuôi trước khi đếm sức chứa để hai yêu cầu tạo hộp không cùng vượt hạn mức.

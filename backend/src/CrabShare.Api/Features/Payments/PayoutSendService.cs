@@ -29,7 +29,7 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
 
     private Task<PayoutAccount?> ActivePayoutOfUserAsync(long userId, CancellationToken ct) => db.PayoutAccounts.AsNoTracking()
         .Where(p => p.OwnerUserId == userId && p.Status == "Active")
-        .OrderByDescending(p => p.PayoutAccountId).FirstOrDefaultAsync(ct);
+        .OrderByDescending(p => p.UserRecordId).FirstOrDefaultAsync(ct);
 
     public Task<PaymentInstructionResponse> SendAsync(long instructionId, CancellationToken ct) => db.InTransactionAsync(async () =>
     {
@@ -38,7 +38,7 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
             .Include(i => i.BatchAccount).ThenInclude(a => a.Batch)
             .Include(i => i.PayoutAccount)
             .Include(i => i.Contribution)
-            .SingleOrDefaultAsync(i => i.InstructionId == instructionId, ct)
+            .SingleOrDefaultAsync(i => i.PaymentRecordId == instructionId, ct)
             ?? throw new NotFoundException("payment.instruction_not_found", "Không tìm thấy lệnh chi.");
         if (instruction.Status is not ("Created" or "Failed"))
             throw new ConflictException("payment.instruction_already_sent", $"Lệnh chi đang ở trạng thái {instruction.Status}, không gửi lại được.");
@@ -51,7 +51,7 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
         // Chi trả quyết toán (TH-14): nhà đầu tư thêm tài khoản nhận tiền sau lúc duyệt thì lấy tài khoản đang dùng lúc gửi
         if (payout is null && instruction is { InstructionType: "Payout", SettlementLineId: { } lineId })
             payout = await ActivePayoutOfUserAsync(
-                await db.SettlementLines.Where(l => l.SettlementLineId == lineId).Select(l => l.InvestorId).SingleAsync(ct), ct);
+                await db.SettlementLines.Where(l => l.SettlementRecordId == lineId).Select(l => l.InvestorId).SingleAsync(ct), ct);
         if (payout is null && instruction.InstructionType is not ("Refund" or "TaxPayment" or "PlatformFee" or "Commission"))
             throw new BusinessRuleException("payment.no_payout_account", "Người nhận chưa có tài khoản nhận tiền đang dùng.");
         if (payout is not null)
@@ -73,7 +73,7 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
             : instruction.InstructionType == "TaxPayment" ? StateTreasury
             : instruction.InstructionType is "PlatformFee" or "Commission" ? PlatformAccount : OriginalSender;
 
-        var reference = $"CHI{instruction.InstructionId:D8}";
+        var reference = $"CHI{instruction.PaymentRecordId:D8}";
         var now = Now();
         var before = new { instruction.Status };
         var result = await gateway.SendPayoutAsync(new PayoutRequest(instruction.BatchAccount.ProviderAccountNo, bank, accountNo, name,
@@ -87,14 +87,14 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
             db.ProviderTransactions.Add(new ProviderTransaction
             {
                 ProviderTxnId = result.ProviderTransactionId, BatchAccountId = instruction.BatchAccountId, Direction = "Out",
-                Amount = instruction.Amount, ReferenceCode = reference, InstructionId = instruction.InstructionId,
+                Amount = instruction.Amount, ReferenceCode = reference, InstructionId = instruction.PaymentRecordId,
                 MatchStatus = "Matched", OccurredAt = now, ReceivedAt = now,
             });
         }
         else
             instruction.Status = "Failed";
         await db.SaveChangesAsync(ct);
-        await audit.WriteAsync("payment_instruction", instruction.InstructionId, "send", before, new
+        await audit.WriteAsync("payment_instruction", instruction.PaymentRecordId, "send", before, new
         {
             instruction.Status, type = instruction.InstructionType, amount = (long)instruction.Amount, reference,
             providerTransactionId = result.Accepted ? result.ProviderTransactionId : null, error = result.Error,
@@ -110,14 +110,14 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
             contribution.UpdatedAt = now;
             await db.SaveChangesAsync(ct);
             await audit.WriteAsync("contribution", contribution.ContributionId, "refund", new { status = "Confirmed" },
-                new { status = contribution.Status, refundedAt = now, instruction.InstructionId }, now, ct);
+                new { status = contribution.Status, refundedAt = now, instruction.PaymentRecordId }, now, ct);
         }
 
         // Lệnh chi quyết toán cuối cùng đã thành công → bảng quyết toán PaidOut, Lô Closed (BR-209)
         if (result.Accepted && instruction.InstructionType is "Payout" or "PlatformFee" or "Commission" or "SupplierPayout")
             await Settlement.SettlementClosing.CloseIfPaidAsync(db, audit, instruction.BatchAccount.BatchId, now, ct);
 
-        return await db.PaymentInstructions.AsNoTracking().Where(i => i.InstructionId == instructionId)
+        return await db.PaymentInstructions.AsNoTracking().Where(i => i.PaymentRecordId == instructionId)
             .Select(PaymentInstructionQueryService.Projection).SingleAsync(ct);
     }, ct);
 
@@ -125,10 +125,10 @@ public sealed class PayoutSendService(AppDbContext db, IAuditLog audit, TimeProv
     public async Task<IReadOnlyList<UnmatchedTransactionResponse>> ListUnmatchedAsync(CancellationToken ct)
         => await db.ProviderTransactions.AsNoTracking()
             .Where(t => t.Direction == "In" && t.MatchStatus != "Matched")
-            .OrderByDescending(t => t.TransactionId)
+            .OrderByDescending(t => t.PaymentRecordId)
             .Take(200)
             .Select(t => new UnmatchedTransactionResponse(
-                t.TransactionId, t.ProviderTxnId, t.BatchAccount.Batch.BatchCode, (long)t.Amount, t.ReferenceCode, t.MatchStatus,
+                t.PaymentRecordId, t.ProviderTxnId, t.BatchAccount.Batch.BatchCode, (long)t.Amount, t.ReferenceCode, t.MatchStatus,
                 t.OccurredAt, t.ReceivedAt,
                 t.PaymentRequest != null ? t.PaymentRequest.ReferenceCode : null,
                 t.PaymentRequest != null ? t.PaymentRequest.Status : null,

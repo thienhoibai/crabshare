@@ -82,7 +82,7 @@ public class KycHandoffDatabaseTests(KycDatabaseFixture fixture) : IClassFixture
 
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var row = await db.KycHandoffs.AsNoTracking().SingleAsync(h => h.HandoffId == created.Id);
+        var row = await db.KycHandoffs.AsNoTracking().SingleAsync(h => h.UserRecordId == created.Id);
         Assert.Equal(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(created.Token))), row.TokenHash);
         Assert.NotEqual(created.Token, row.TokenHash);
         Assert.Equal("Claimed", row.Status);

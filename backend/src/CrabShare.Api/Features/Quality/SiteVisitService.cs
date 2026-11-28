@@ -48,10 +48,10 @@ public sealed class SiteVisitService(AppDbContext db, ICurrentUser me, TimeProvi
             if (batch.BatchMode != "P" || batch.Status is not ("InProduction" or "Harvesting"))
                 throw new BusinessRuleException("sitevisit.not_applicable", "Thăm trại giữa vụ áp dụng cho lô P đang nuôi (BR-233).");
             var assignment = await qc.AssignAsync(QcAssignmentKinds.SiteVisit, batch.BatchId, "Batch", batch.BatchId, null, ct);
-            await audit.WriteAsync("qc_assignment", assignment.QcAssignmentId, "assign_site_visit", null, new { batch.BatchCode, assignment.QcUserId }, ct);
-            return assignment.QcAssignmentId;
+            await audit.WriteAsync("qc_assignment", assignment.QcRecordId, "assign_site_visit", null, new { batch.BatchCode, assignment.QcUserId }, ct);
+            return assignment.QcRecordId;
         }, ct);
-        return (await qc.MyTasksAsync(await db.QcAssignments.Where(a => a.QcAssignmentId == assignmentId).Select(a => a.QcUserId).SingleAsync(ct), ct))
+        return (await qc.MyTasksAsync(await db.QcAssignments.Where(a => a.QcRecordId == assignmentId).Select(a => a.QcUserId).SingleAsync(ct), ct))
             .Single(t => t.AssignmentId == assignmentId);
     }
 
@@ -65,7 +65,7 @@ public sealed class SiteVisitService(AppDbContext db, ICurrentUser me, TimeProvi
         var no = await db.InTransactionAsync(async () =>
         {
             await audit.LockAsync(ct);
-            var assignment = await db.QcAssignments.SingleOrDefaultAsync(a => a.QcAssignmentId == assignmentId, ct)
+            var assignment = await db.QcAssignments.SingleOrDefaultAsync(a => a.QcRecordId == assignmentId, ct)
                              ?? throw new NotFoundException("sitevisit.assignment_not_found", "Không tìm thấy việc thăm trại.");
             if (assignment.AssignmentKind != QcAssignmentKinds.SiteVisit || assignment.QcUserId != me.UserId || assignment.Status != "Assigned")
                 throw new ForbiddenException("qc.not_assigned", "Bạn không được phân công thăm trại này (BR-017, BR-233).");
@@ -84,7 +84,7 @@ public sealed class SiteVisitService(AppDbContext db, ICurrentUser me, TimeProvi
             var now = clock.GetUtcNow();
             var report = new SiteVisitReport
             {
-                ReportNo = Codes.New("TT", 10), BatchId = batch.BatchId, QcAssignmentId = assignment.QcAssignmentId, QcUserId = me.UserId, VisitedAt = now,
+                ReportNo = Codes.New("TT", 10), BatchId = batch.BatchId, QcAssignmentId = assignment.QcRecordId, QcUserId = me.UserId, VisitedAt = now,
                 Latitude = decimal.Round(req.Latitude!.Value, 6), Longitude = decimal.Round(req.Longitude!.Value, 6), DistanceToFarmM = distance,
                 BoxCodes = string.Join(',', codes), CrabsSeen = req.CrabsSeen, Findings = req.Findings.Trim(), PhotoUri = photo.Uri, PhotoSha256 = photo.Sha256,
                 CreatedAt = now,
@@ -93,7 +93,7 @@ public sealed class SiteVisitService(AppDbContext db, ICurrentUser me, TimeProvi
             assignment.Status = "Completed";
             assignment.CompletedAt = now;
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("site_visit_report", report.ReportId, "submit", null,
+            await audit.WriteAsync("site_visit_report", report.QcRecordId, "submit", null,
                 new { report.ReportNo, batch.BatchCode, report.BoxCodes, report.CrabsSeen, report.DistanceToFarmM, photo.Sha256 }, ct);
             return report.ReportNo;
         }, ct);

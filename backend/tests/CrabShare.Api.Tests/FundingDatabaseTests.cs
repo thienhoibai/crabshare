@@ -323,7 +323,7 @@ public class FundingDatabaseTests(FundingDatabaseFixture fixture) : IClassFixtur
         Assert.Equal($"VIETQR|SANDBOX|{payment.AccountNo}|3000000|{payment.ReferenceCode}", payment.QrContent);
 
         await using var db = fixture.OpenDb();
-        var row = await db.PaymentRequests.SingleAsync(r => r.PaymentRequestId == payment.PaymentRequestId);
+        var row = await db.PaymentRequests.SingleAsync(r => r.PaymentRecordId == payment.PaymentRequestId);
         Assert.Equal((contribution.ContributionId, (long?)null, (long?)null), (row.ContributionId, row.OrderId, row.OfftakeId));
         var audit = await db.AuditLogs.SingleAsync(a => a.EntityType == "payment_request" && a.EntityId == payment.PaymentRequestId);
         Assert.Equal(("create", userId), (audit.ActionType, audit.ActorUserId));

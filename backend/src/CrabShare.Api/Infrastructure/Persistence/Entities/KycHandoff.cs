@@ -1,9 +1,8 @@
 namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 
 /// <summary>Phiên ngắn hạn nối trang KYC trên web với app; chỉ lưu hash mã tham chiếu.</summary>
-public partial class KycHandoff
+public partial class KycHandoff : UserRecord
 {
-    public long HandoffId { get; set; }
     public long UserId { get; set; }
     public string TokenHash { get; set; } = null!;
     public string Status { get; set; } = null!;

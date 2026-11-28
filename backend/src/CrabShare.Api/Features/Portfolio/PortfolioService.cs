@@ -65,10 +65,10 @@ public sealed class PortfolioService(AppDbContext db, ICurrentUser me, TimeProvi
         Add("Stocked", "Thả giống", dates.StockedAt); Add("Harvesting", "Bắt đầu thu hoạch", dates.HarvestStartedAt); Add("Closed", "Đóng lô", dates.ClosedAt);
         foreach (var c in contributions) { Add("Contribution", $"Xác nhận khoản góp #{c.Id}", c.ConfirmedAt); Add("Contract", $"Hợp đồng {c.ContractNo} đã đủ chữ ký", c.FullySignedAt); }
         var logs = await db.ProductionLogs.AsNoTracking().Where(l => l.BatchId == row.Id && l.ReceivedAt <= now)
-            .OrderByDescending(l => l.ReceivedAt).ThenByDescending(l => l.ProductionLogId).Take(20).ToListAsync(ct);
+            .OrderByDescending(l => l.ReceivedAt).ThenByDescending(l => l.CareRecordId).Take(20).ToListAsync(ct);
         foreach (var log in logs) Add("Production", "Nhận nhật ký nuôi", log.ReceivedAt);
         var evidence = await db.Evidences.AsNoTracking().Where(e => e.BatchId == row.Id && e.ReviewStatus == "Accepted" && e.ReceivedAt <= now)
-            .OrderByDescending(e => e.ReceivedAt).ThenByDescending(e => e.EvidenceId).Take(20)
+            .OrderByDescending(e => e.ReceivedAt).ThenByDescending(e => e.EvidenceRecordId).Take(20)
             .Select(e => new { e.ReceivedAt, Slot = e.Slot == null ? null : e.Slot.SlotCode }).ToListAsync(ct);
         foreach (var e in evidence) Add("Evidence", e.Slot == null ? "Nhận bằng chứng đã chấp nhận" : $"Nhận bằng chứng hộp {e.Slot} đã chấp nhận", e.ReceivedAt);
         var latest = logs.FirstOrDefault();

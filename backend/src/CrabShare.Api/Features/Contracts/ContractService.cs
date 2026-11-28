@@ -45,7 +45,7 @@ public sealed class ContractService(
             if (contribution.InvestorId != me.UserId)
                 throw new ForbiddenException("contribution.not_owner", "Khoản góp này không phải của bạn.");
             if (contribution.InvestmentContract is { } existing)
-                return (await DescribeAsync(existing.ContractId, ct), false);
+                return (await DescribeAsync(existing.ContractRecordId, ct), false);
 
             var now = Now();
             if (!IsActive(contribution, now))
@@ -67,18 +67,18 @@ public sealed class ContractService(
 
             var contract = new InvestmentContract
             {
-                ContractNo = contractNo, ContributionId = contribution.ContributionId, TemplateId = template.TemplateId,
+                ContractNo = contractNo, ContributionId = contribution.ContributionId, TemplateId = template.ContractRecordId,
                 Status = ContractStatuses.Draft, SigningMethod = ContractStatuses.DigitalSignature, DraftHash = draft.Sha256,
                 CreatedAt = now, UpdatedAt = now,
             };
             db.InvestmentContracts.Add(contract);
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("investment_contract", contract.ContractId, "create", null, new
+            await audit.WriteAsync("investment_contract", contract.ContractRecordId, "create", null, new
             {
                 contractNo, contribution.ContributionId, contribution.Batch.BatchCode, amount = (long)contribution.Amount,
                 templateVersion = template.VersionCode, templateHash = template.ContentHash, draftHash = draft.Sha256, status = contract.Status,
             }, now, ct);
-            return (await DescribeAsync(contract.ContractId, ct), true);
+            return (await DescribeAsync(contract.ContractRecordId, ct), true);
         }, ct);
 
     // ---------- Ký số ----------
@@ -94,7 +94,7 @@ public sealed class ContractService(
             .Include(c => c.ContractSignatures)
             .Include(c => c.Contribution).ThenInclude(c => c.Batch).ThenInclude(b => b.Operator)
             .Include(c => c.Contribution).ThenInclude(c => c.Investor).ThenInclude(i => i.User)
-            .SingleOrDefaultAsync(c => c.ContractId == contractId, ct)
+            .SingleOrDefaultAsync(c => c.ContractRecordId == contractId, ct)
             ?? throw ContractNotFound();
         var role = await SignerRoleAsync(contract, ct);
         if (role == StaffOnly)
@@ -141,12 +141,12 @@ public sealed class ContractService(
         }
         contract.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
-        await audit.WriteAsync("investment_contract", contract.ContractId, "sign", new { status = before, hash = previousHash }, new
+        await audit.WriteAsync("investment_contract", contract.ContractRecordId, "sign", new { status = before, hash = previousHash }, new
         {
             status = contract.Status, role, signerUserId = me.UserId, signedHash = stored.Sha256, previousHash,
             providerReference = signed.ProviderReference, contract.FinalHash,
         }, now, ct);
-        return await DescribeAsync(contract.ContractId, ct);
+        return await DescribeAsync(contract.ContractRecordId, ct);
     }, ct);
 
     // ---------- Xem / tải ----------
@@ -201,7 +201,7 @@ public sealed class ContractService(
         var contract = await db.InvestmentContracts
             .Include(c => c.ContractSignatures)
             .Include(c => c.Contribution)
-            .SingleOrDefaultAsync(c => c.ContractId == contractId, ct)
+            .SingleOrDefaultAsync(c => c.ContractRecordId == contractId, ct)
             ?? throw ContractNotFound();
         var now = Now();
         if (contract.Status == ContractStatuses.Void)
@@ -220,12 +220,12 @@ public sealed class ContractService(
         contract.FullySignedAt = now;
         contract.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
-        await audit.WriteAsync("investment_contract", contract.ContractId, "offline_upload", before, new
+        await audit.WriteAsync("investment_contract", contract.ContractRecordId, "offline_upload", before, new
         {
             contract.Status, contract.SigningMethod, finalHash = stored.Sha256, sizeBytes = pdf.Length, receivedAt = now,
             uploadedBy = me.UserId, confirmedBothSigned, previousHash = CurrentHashBefore(contract),
         }, now, ct);
-        return await DescribeAsync(contract.ContractId, ct);
+        return await DescribeAsync(contract.ContractRecordId, ct);
     }, ct);
 
     /// <summary>Tab Hợp đồng của cổng nhà đầu tư: chỉ hợp đồng của các khoản góp của chính tôi.</summary>
@@ -252,9 +252,9 @@ public sealed class ContractService(
     // ---------- Dùng chung ----------
 
     internal static IQueryable<ContractSummary> SummaryQuery(IQueryable<InvestmentContract> contracts) => contracts
-        .OrderByDescending(c => c.ContractId)
+        .OrderByDescending(c => c.ContractRecordId)
         .Select(c => new ContractSummary(
-            c.ContractId, c.ContractNo, c.Status, c.SigningMethod, c.Contribution.Batch.BatchCode, c.Contribution.Batch.Title,
+            c.ContractRecordId, c.ContractNo, c.Status, c.SigningMethod, c.Contribution.Batch.BatchCode, c.Contribution.Batch.Title,
             c.Contribution.Investor.InvestorKind == "Organization" && c.Contribution.Investor.OrganizationName != null
                 ? c.Contribution.Investor.OrganizationName : c.Contribution.Investor.User.FullName,
             (long)c.Contribution.Amount, c.Contribution.Status,
@@ -269,7 +269,7 @@ public sealed class ContractService(
             .Include(x => x.ContractSignatures).ThenInclude(s => s.SignerUser)
             .Include(x => x.Contribution).ThenInclude(x => x.Batch).ThenInclude(b => b.Operator)
             .Include(x => x.Contribution).ThenInclude(x => x.Investor).ThenInclude(i => i.User)
-            .SingleAsync(x => x.ContractId == contractId, ct);
+            .SingleAsync(x => x.ContractRecordId == contractId, ct);
         var next = c.Status switch
         {
             ContractStatuses.Draft when c.SigningMethod == ContractStatuses.DigitalSignature => ContractStatuses.Operator,
@@ -278,7 +278,7 @@ public sealed class ContractService(
         };
         var canSign = next is not null && IsActive(c.Contribution, clock.GetUtcNow()) && await SignerRoleAsync(c, ct) == next;
         return new ContractResponse(
-            c.ContractId, c.ContractNo, c.Status, c.SigningMethod, c.Contribution.Batch.BatchCode, c.Contribution.Batch.Title,
+            c.ContractRecordId, c.ContractNo, c.Status, c.SigningMethod, c.Contribution.Batch.BatchCode, c.Contribution.Batch.Title,
             c.Contribution.Batch.Operator.LegalName, InvestorName(c.Contribution.Investor), c.ContributionId, (long)c.Contribution.Amount,
             c.Contribution.Status, c.Template.VersionCode, c.DraftHash, CurrentHash(c), c.FinalHash, c.FullySignedAt, c.CreatedAt,
             c.ContractSignatures.OrderBy(s => s.SigningOrder)
@@ -293,7 +293,7 @@ public sealed class ContractService(
         var contract = await db.InvestmentContracts.AsNoTracking()
             .Include(c => c.ContractSignatures)
             .Include(c => c.Contribution).ThenInclude(c => c.Batch)
-            .SingleOrDefaultAsync(c => c.ContractId == contractId, ct)
+            .SingleOrDefaultAsync(c => c.ContractRecordId == contractId, ct)
             ?? throw ContractNotFound();
         var allowed = me.IsInRole(Roles.PlatformAdmin)
                       || contract.Contribution.InvestorId == me.UserId
@@ -333,12 +333,12 @@ public sealed class ContractService(
         var investor = contribution.Investor;
         var cost = await db.StandardCostVersions.AsNoTracking()
             .Where(v => v.BatchId == batch.BatchId && v.Status == "Locked")
-            .Select(v => new { v.VersionNo, Items = v.StandardCostItems.OrderBy(i => i.CostItemId)
+            .Select(v => new { v.VersionNo, Items = v.StandardCostItems.OrderBy(i => i.CostRecordId)
                 .Select(i => new { i.Category, i.Description, i.Quantity, i.Unit, i.UnitPrice, i.TrancheNo }).ToList() })
             .FirstOrDefaultAsync(ct);
         var offtake = await db.OfftakeCommitments.AsNoTracking()
             .Where(o => o.ContributionId == contribution.ContributionId && o.Status != "Cancelled")
-            .OrderByDescending(o => o.OfftakeId)
+            .OrderByDescending(o => o.ContractRecordId)
             .FirstOrDefaultAsync(ct);
         return new Dictionary<string, string>
         {

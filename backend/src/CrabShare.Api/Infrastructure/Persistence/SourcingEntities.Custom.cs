@@ -19,10 +19,15 @@ public partial class ProductionLog
     [Column("incident_note"), MaxLength(500)] public string? IncidentNote { get; set; }
 }
 
-[Table("procurement_order")]
-public sealed class ProcurementOrder
+/// <summary>Bảng gộp supply_record (V040): đơn mua (ProcurementOrder), lô cua nhập (SupplyLot) và phiếu nhận (GoodsReceipt) nằm chung một bảng, phân biệt bằng cột record_type.</summary>
+[Table("supply_record")]
+public abstract class SupplyRecord
 {
-    [Key, Column("procurement_order_id")] public long ProcurementOrderId { get; set; }
+    [Key, Column("supply_record_id")] public long SupplyRecordId { get; set; }
+}
+
+public sealed class ProcurementOrder : SupplyRecord
+{
     [Column("po_no"), MaxLength(20), Unicode(false)] public string PoNo { get; set; } = "";
     [Column("batch_id")] public long BatchId { get; set; }
     [Column("supplier_party_id")] public long SupplierPartyId { get; set; }
@@ -36,10 +41,8 @@ public sealed class ProcurementOrder
     [Column("updated_at"), Precision(3)] public DateTimeOffset UpdatedAt { get; set; }
 }
 
-[Table("supply_lot")]
-public sealed class SupplyLot
+public sealed class SupplyLot : SupplyRecord
 {
-    [Key, Column("supply_lot_id")] public long SupplyLotId { get; set; }
     [Column("lot_code"), MaxLength(30), Unicode(false)] public string LotCode { get; set; } = "";
     [Column("procurement_order_id")] public long ProcurementOrderId { get; set; }
     [Column("batch_id")] public long BatchId { get; set; }
@@ -52,10 +55,8 @@ public sealed class SupplyLot
     [Column("created_at"), Precision(3)] public DateTimeOffset CreatedAt { get; set; }
 }
 
-[Table("goods_receipt")]
-public sealed class GoodsReceipt
+public sealed class GoodsReceipt : SupplyRecord
 {
-    [Key, Column("goods_receipt_id")] public long GoodsReceiptId { get; set; }
     [Column("receipt_no"), MaxLength(20), Unicode(false)] public string ReceiptNo { get; set; } = "";
     [Column("supply_lot_id")] public long SupplyLotId { get; set; }
     [Column("batch_id")] public long BatchId { get; set; }
@@ -96,10 +97,15 @@ public sealed class CrabUnit
     [Column("updated_at"), Precision(3)] public DateTimeOffset UpdatedAt { get; set; }
 }
 
-[Table("qc_assignment")]
-public sealed class QcAssignment
+/// <summary>Bảng gộp qc_record (V041): phân công kiểm phẩm (Assignment), phiếu kiểm phẩm (Inspection) và báo cáo thăm trại (SiteVisitReport) nằm chung một bảng, phân biệt bằng cột record_type.</summary>
+[Table("qc_record")]
+public abstract class QcRecord
 {
-    [Key, Column("qc_assignment_id")] public long QcAssignmentId { get; set; }
+    [Key, Column("qc_record_id")] public long QcRecordId { get; set; }
+}
+
+public sealed class QcAssignment : QcRecord
+{
     /// <summary>IncomingInspection, GradingSession, SecondReview, SiteVisit, Dispatch, Dispute.</summary>
     [Column("assignment_kind"), MaxLength(20), Unicode(false)] public string AssignmentKind { get; set; } = "";
     [Column("batch_id")] public long BatchId { get; set; }
@@ -111,10 +117,8 @@ public sealed class QcAssignment
     [Column("completed_at"), Precision(3)] public DateTimeOffset? CompletedAt { get; set; }
 }
 
-[Table("qc_inspection")]
-public sealed class QcInspection
+public sealed class QcInspection : QcRecord
 {
-    [Key, Column("qc_inspection_id")] public long QcInspectionId { get; set; }
     [Column("inspection_no"), MaxLength(20), Unicode(false)] public string InspectionNo { get; set; } = "";
     /// <summary>Incoming, Grading, Dispatch, Dispute.</summary>
     [Column("inspection_kind"), MaxLength(20), Unicode(false)] public string InspectionKind { get; set; } = "";
@@ -139,10 +143,15 @@ public sealed class QcInspection
     [Column("created_at"), Precision(3)] public DateTimeOffset CreatedAt { get; set; }
 }
 
-[Table("inventory_event")]
-public sealed class InventoryEvent
+/// <summary>Bảng gộp inventory_record (V042): sự kiện tồn (Event), xếp hộp (BoxAssignment) và phân bổ cua cho đơn (Allocation) nằm chung một bảng, phân biệt bằng cột record_type.</summary>
+[Table("inventory_record")]
+public abstract class InventoryRecord
 {
-    [Key, Column("inventory_event_id")] public long InventoryEventId { get; set; }
+    [Key, Column("inventory_record_id")] public long InventoryRecordId { get; set; }
+}
+
+public sealed class InventoryEvent : InventoryRecord
+{
     [Column("crab_unit_id")] public long CrabUnitId { get; set; }
     [Column("batch_id")] public long BatchId { get; set; }
     [Column("event_type"), MaxLength(20), Unicode(false)] public string EventType { get; set; } = "";
@@ -159,10 +168,8 @@ public sealed class InventoryEvent
     [Column("created_at"), Precision(3)] public DateTimeOffset CreatedAt { get; set; }
 }
 
-[Table("holding_operation")]
-public sealed class HoldingOperation
+public sealed class HoldingOperation : BatchRecord
 {
-    [Key, Column("holding_id")] public long HoldingId { get; set; }
     [Column("holding_code"), MaxLength(20), Unicode(false)] public string HoldingCode { get; set; } = "";
     [Column("batch_id")] public long BatchId { get; set; }
     [Column("method"), MaxLength(100)] public string Method { get; set; } = "";
@@ -175,17 +182,15 @@ public sealed class HoldingOperation
     [Column("created_at"), Precision(3)] public DateTimeOffset CreatedAt { get; set; }
 }
 
-[Table("box_assignment")]
-public sealed class BoxAssignment
+public sealed class BoxAssignment : InventoryRecord
 {
-    [Key, Column("box_assignment_id")] public long BoxAssignmentId { get; set; }
     [Column("crab_unit_id")] public long CrabUnitId { get; set; }
     [Column("batch_id")] public long BatchId { get; set; }
     [Column("slot_id")] public long SlotId { get; set; }
     [Column("assigned_at"), Precision(3)] public DateTimeOffset AssignedAt { get; set; }
     [Column("left_at"), Precision(3)] public DateTimeOffset? LeftAt { get; set; }
     /// <summary>Stock, Restock, Move.</summary>
-    [Column("reason"), MaxLength(20), Unicode(false)] public string Reason { get; set; } = "";
+    [Column("box_reason"), MaxLength(20), Unicode(false)] public string Reason { get; set; } = "";
     /// <summary>Moved, Died, Harvested, Destroyed.</summary>
     [Column("leave_reason"), MaxLength(20), Unicode(false)] public string? LeaveReason { get; set; }
     [Column("evidence_id")] public long? EvidenceId { get; set; }

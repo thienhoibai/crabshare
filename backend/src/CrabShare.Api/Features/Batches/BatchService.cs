@@ -186,7 +186,7 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
         var ownerParties = new List<long> { batch.ExecutorPartyId!.Value, await parties.PartyIdOfOperatorAsync(batch.OperatorId, ct) };
         PartySite site;
         if (req.DispatchSiteId is { } siteId)
-            site = await db.PartySites.SingleOrDefaultAsync(s => s.SiteId == siteId && ownerParties.Contains(s.PartyId) && s.Status == "Active", ct)
+            site = await db.PartySites.SingleOrDefaultAsync(s => s.PartyRecordId == siteId && ownerParties.Contains(s.PartyId) && s.Status == "Active", ct)
                    ?? throw new NotFoundException("batch.site_not_found", "Không tìm thấy địa điểm xuất hàng của đơn vị thực hiện.");
         else
             site = await db.PartySites.Where(s => ownerParties.Contains(s.PartyId) && s.Status == "Active" && (s.SiteType == "Farm" || s.SiteType == "Warehouse"))
@@ -219,7 +219,7 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
         batch.ExpectedGrade = req.ExpectedGrade?.Trim();
         batch.SaleDays = req.SaleDays;
         batch.DeliveryRadiusKm = req.DeliveryRadiusKm;
-        batch.DispatchSiteId = site.SiteId;
+        batch.DispatchSiteId = site.PartyRecordId;
         batch.ExpectedReceiptDate = req.ExpectedReceiptDate;
         batch.MinViableBasis = req.MinViableBasis?.Trim();
         batch.SurvivalThresholdPct = req.SurvivalThresholdPct;
@@ -251,7 +251,7 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
                 throw new BusinessRuleException("batch.spec_crab_type", $"Quy cách {spec.SpecCode} không cùng loại cua với Lô (BR-028).");
             offers.Add(new Offer
             {
-                SpecId = spec.SpecId, Spec = spec, PricePerKg = o.PricePerKg, ConversionWeightG = o.ConversionWeightG,
+                SpecId = spec.OfferRecordId, Spec = spec, PricePerKg = o.PricePerKg, ConversionWeightG = o.ConversionWeightG,
                 OfferedQuantity = o.OfferedQuantity, CreatedAt = now,
             });
         }
@@ -566,9 +566,9 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
                 throw new BusinessRuleException("batch.actual_cost_document", "Chi phí thực tế phải kèm chứng từ (BR-037).");
             var cost = await db.StandardCostVersions.Where(v => v.BatchId == batch.BatchId && v.Status == "Locked").SingleOrDefaultAsync(ct)
                        ?? throw new BusinessRuleException("batch.cost_not_locked", "Lô chưa có kế hoạch chi phí đã khoá.");
-            if (!await db.StandardCostItems.AnyAsync(i => i.CostItemId == req.CostItemId && i.CostVersionId == cost.CostVersionId, ct))
+            if (!await db.StandardCostItems.AnyAsync(i => i.CostRecordId == req.CostItemId && i.CostVersionId == cost.CostRecordId, ct))
                 throw new NotFoundException("batch.cost_item_not_found", "Khoản chi không thuộc kế hoạch chi phí đã khoá của Lô.");
-            if (req.DocumentEvidenceId is { } evidenceId && !await db.Evidences.AnyAsync(e => e.EvidenceId == evidenceId && e.BatchId == batch.BatchId, ct))
+            if (req.DocumentEvidenceId is { } evidenceId && !await db.Evidences.AnyAsync(e => e.EvidenceRecordId == evidenceId && e.BatchId == batch.BatchId, ct))
                 throw new NotFoundException("batch.document_not_found", "Không tìm thấy chứng từ của Lô.");
             var row = new CostActual
             {
@@ -578,9 +578,9 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
             };
             db.CostActuals.Add(row);
             await db.SaveChangesAsync(ct);
-            await audit.WriteAsync("cost_actual", row.CostActualId, "record", null,
+            await audit.WriteAsync("cost_actual", row.CostRecordId, "record", null,
                 new { batch.BatchCode, row.CostItemId, amount = req.Amount, row.DocumentEvidenceId, row.DocumentRef, row.IncurredOn }, ct);
-            return row.CostActualId;
+            return row.CostRecordId;
         }, ct);
 
     // ---------- đọc ----------
@@ -610,7 +610,7 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
     public async Task<IReadOnlyList<SpecResponse>> SpecsAsync(string? crabType, CancellationToken ct)
         => await db.ProductSpecifications.AsNoTracking().Where(s => s.Status == "Active" && (crabType == null || s.CrabType == crabType))
             .OrderBy(s => s.CrabType).ThenBy(s => s.SizeRank).ThenByDescending(s => s.GradeRank)
-            .Select(s => new SpecResponse(s.SpecId, s.SpecCode, s.CrabType, s.SizeCode, s.GradeCode, s.LiveCondition, s.Name))
+            .Select(s => new SpecResponse(s.OfferRecordId, s.SpecCode, s.CrabType, s.SizeCode, s.GradeCode, s.LiveCondition, s.Name))
             .ToListAsync(ct);
 
     internal Task<StandardCostVersion?> CostAsync(long batchId, CancellationToken ct)
@@ -621,15 +621,15 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
     {
         var offers = await db.Offers.AsNoTracking().Where(o => o.BatchId == b.BatchId).Include(o => o.Spec)
             .OrderBy(o => o.Spec.SizeRank).ThenByDescending(o => o.Spec.GradeRank)
-            .Select(o => new OfferResponse(o.OfferId, o.Spec.SpecCode, o.Spec.Name, o.Spec.SizeCode, o.Spec.GradeCode, (long)o.PricePerKg,
+            .Select(o => new OfferResponse(o.OfferRecordId, o.Spec.SpecCode, o.Spec.Name, o.Spec.SizeCode, o.Spec.GradeCode, (long)o.PricePerKg,
                 o.ConversionWeightG, o.OfferedQuantity)).ToListAsync(ct);
         var tiers = await db.RemunerationTiers.AsNoTracking().Where(t => t.BatchId == b.BatchId).OrderBy(t => t.TierNo)
             .Select(t => new RemunerationTierResponse(t.TierNo, t.SurvivalFromPct, t.SurvivalToPct, t.RatePct)).ToListAsync(ct);
         var refs = await db.Parties.AsNoTracking().Where(p => p.PartyId == b.ExecutorPartyId || p.PartyId == b.OfftakeBuyerPartyId)
             .Select(p => new PartyRefResponse(p.PartyId, p.PartyCode, p.LegalName)).ToListAsync(ct);
         var site = b.DispatchSiteId is { } sid
-            ? await db.PartySites.AsNoTracking().Where(s => s.SiteId == sid)
-                .Select(s => new SiteRefResponse(s.SiteId, s.SiteCode, s.Name, s.AddressLine, s.Latitude, s.Longitude)).SingleOrDefaultAsync(ct)
+            ? await db.PartySites.AsNoTracking().Where(s => s.PartyRecordId == sid)
+                .Select(s => new SiteRefResponse(s.PartyRecordId, s.SiteCode, s.Name, s.AddressLine, s.Latitude, s.Longitude)).SingleOrDefaultAsync(ct)
             : null;
         CostPlanResponse? plan = null;
         if (includeCost && await CostAsync(b.BatchId, ct) is { } cost)
@@ -640,8 +640,8 @@ public sealed class BatchService(AppDbContext db, ICurrentUser me, TimeProvider 
             var perCrab = b.StandardCostPerCrab is { } locked ? (long)locked : CostPerCrab(total, b.SeedQuantity);
             var funded = b.FundedQuantity ?? b.SeedQuantity;
             plan = new CostPlanResponse(cost.VersionNo, cost.Status, total, perCrab, perCrab * b.SeedQuantity,
-                cost.StandardCostItems.OrderBy(i => i.CostItemId).Select(i => new CostItemResponse(i.CostItemId, i.Category, i.Description,
-                    i.Quantity, i.Unit, (long)i.UnitPrice, Amount(i.Quantity, i.UnitPrice), i.Basis, i.CostBearer, actuals.GetValueOrDefault(i.CostItemId))).ToList(),
+                cost.StandardCostItems.OrderBy(i => i.CostRecordId).Select(i => new CostItemResponse(i.CostRecordId, i.Category, i.Description,
+                    i.Quantity, i.Unit, (long)i.UnitPrice, Amount(i.Quantity, i.UnitPrice), i.Basis, i.CostBearer, actuals.GetValueOrDefault(i.CostRecordId))).ToList(),
                 cost.TranchePlans.OrderBy(p => p.TrancheNo).Select(p => new MilestoneResponse(p.TrancheNo, p.MilestoneKind ?? "Custom",
                     p.MilestoneName ?? $"Mốc {p.TrancheNo}", p.Pct ?? 0, p.UnlockCondition,
                     p.Pct is { } pct ? MilestoneAmount(pct, perCrab, funded) : null)).ToList(),

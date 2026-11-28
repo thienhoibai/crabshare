@@ -11,8 +11,11 @@ public partial class AppDbContext
 
     private static void ConfigureSettlementV15(ModelBuilder model)
     {
-        model.Entity<SiteVisitReport>().ToTable("site_visit_report");
-        model.Entity<CollectiveDecision>().ToTable("collective_decision");
-        model.Entity<Vote>().ToTable("vote");
+        // settlement_record gộp bảng quyết toán, dòng chia và phản hồi (V051). Bảng có trigger khoá số liệu: không dùng OUTPUT.
+        var settlementRecord = model.Entity<SettlementRecord>();
+        settlementRecord.ToTable(t => t.UseSqlOutputClause(false));
+        settlementRecord.Property<string>("record_type").HasMaxLength(30).IsUnicode(false);
+        settlementRecord.HasDiscriminator<string>("record_type")
+            .HasValue<Settlement>("Settlement").HasValue<SettlementLine>("Line").HasValue<SettlementFeedback>("Feedback");
     }
 }

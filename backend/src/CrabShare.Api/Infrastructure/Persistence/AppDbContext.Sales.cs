@@ -11,8 +11,6 @@ public partial class AppDbContext
 
     private static void ConfigureSales(ModelBuilder model)
     {
-        model.Entity<SalesOrderLine>().ToTable("sales_order_line").HasOne(l => l.Spec).WithMany().HasForeignKey(l => l.SpecId);
-        model.Entity<DeliveryTranche>().ToTable("delivery_tranche").HasMany(t => t.Lines).WithOne().HasForeignKey(l => l.TrancheId);
-        model.Entity<DeliveryTrancheLine>().ToTable("delivery_tranche_line").HasKey(l => new { l.TrancheId, l.LineId });
+        model.Entity<SalesOrderLine>().HasOne(l => l.Spec).WithMany().HasForeignKey(l => l.SpecId);
     }
 }

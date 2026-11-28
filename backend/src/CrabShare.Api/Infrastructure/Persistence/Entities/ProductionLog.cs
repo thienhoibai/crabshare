@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Nhật ký vận hành hằng ngày của lô
 /// </summary>
-public partial class ProductionLog
+public partial class ProductionLog : CareRecord
 {
-    public long ProductionLogId { get; set; }
-
     public long BatchId { get; set; }
 
     public DateOnly LogDate { get; set; }
@@ -32,7 +30,7 @@ public partial class ProductionLog
     /// <summary>
     /// Kết quả kiểm tra hợp lý số liệu: Ok, OutOfRange (ngoài dải), Inconsistent (mâu thuẫn với số cua còn sống)
     /// </summary>
-    public string PlausibilityFlag { get; set; } = null!;
+    public string PlausibilityFlag { get; set; } = "Ok";
 
     /// <summary>
     /// Có giá trị khi số liệu đã được kiểm (nhãn nguồn &quot;đã kiểm&quot;)
@@ -41,9 +39,9 @@ public partial class ProductionLog
 
     public long? RecordedBy { get; set; }
 
-    public DateTimeOffset ReceivedAt { get; set; }
+    public DateTimeOffset ReceivedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual Batch Batch { get; set; } = null!;
 

@@ -48,7 +48,7 @@ public class AdminAccountDatabaseTests(KycDatabaseFixture fixture) : IClassFixtu
             var now = DateTimeOffset.UtcNow.AddDays(-daysAgo);
             var check = new KycCheck { UserId = userId, CheckType = type, Result = result, ConsentAt = type == "EkycIdFace" ? now : null,
                 FailureReason = "Provider failed", ProviderRef = "TEST-ONLY", CheckedAt = now, CreatedAt = now };
-            db.KycChecks.Add(check); await db.SaveChangesAsync(); return check.KycCheckId;
+            db.KycChecks.Add(check); await db.SaveChangesAsync(); return check.UserRecordId;
         });
 
     [Fact]
@@ -156,7 +156,7 @@ public class AdminAccountDatabaseTests(KycDatabaseFixture fixture) : IClassFixtu
         using var client = failing.CreateClient(); client.DefaultRequestHeaders.Add("X-Test-User", admin.UserId.ToString()); client.DefaultRequestHeaders.Add("X-Test-Role", Roles.PlatformAdmin);
         Assert.Equal(HttpStatusCode.InternalServerError, (await client.PostAsJsonAsync($"/api/admin/kyc-checks/{id}/approve-exception", new { reason = "Fail transaction" })).StatusCode);
         await Run(async db => {
-            var check = await db.KycChecks.SingleAsync(c => c.KycCheckId == id);
+            var check = await db.KycChecks.SingleAsync(c => c.UserRecordId == id);
             Assert.Equal("Failed", check.Result); Assert.Null(check.ReviewedBy);
             Assert.Equal("Rejected", (await db.Investors.SingleAsync(i => i.UserId == investor.UserId)).VerificationStatus);
             Assert.False(await db.AuditLogs.AnyAsync(a => a.EntityType == "KycCheck" && a.EntityId == id)); return true;

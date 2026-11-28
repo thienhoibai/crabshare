@@ -24,7 +24,7 @@ public partial class ProductionLogTests
             };
             // Separate inserts establish a known id ordering within a business date.
             foreach (var log in logs) { db.ProductionLogs.Add(log); await db.SaveChangesAsync(); }
-            return logs.Select(l => l.ProductionLogId).ToArray();
+            return logs.Select(l => l.CareRecordId).ToArray();
         });
         var page = await client.GetFromJsonAsync<JsonElement>(Path(farm) + "?from=2026-01-01&to=2026-01-02&page=1&pageSize=2");
         Assert.Equal(3, page.GetProperty("total").GetInt32()); Assert.Equal(1, page.GetProperty("page").GetInt32()); Assert.Equal(2, page.GetProperty("pageSize").GetInt32());

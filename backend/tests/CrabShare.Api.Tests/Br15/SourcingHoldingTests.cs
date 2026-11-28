@@ -54,7 +54,7 @@ public sealed class SourcingHoldingTests(Br15Fixture f) : IClassFixture<Br15Fixt
         };
         db.Evidences.Add(evidence);
         await db.SaveChangesAsync();
-        return evidence.EvidenceId;
+        return evidence.EvidenceRecordId;
     }
 
     /// <summary>Nhận 3 con: 2 đạt, 1 thiếu càng. Trả về mã hai con đạt.</summary>
@@ -184,7 +184,7 @@ public sealed class SourcingHoldingTests(Br15Fixture f) : IClassFixture<Br15Fixt
         Assert.Equal(40, holding.GetProperty("maxRestock").GetInt32());
         await using var db = f.OpenDb();
         Assert.Equal("InProduction", await db.Batches.Where(b => b.BatchId == o.Batch.BatchId).Select(b => b.Status).SingleAsync());
-        var evidence = await db.Evidences.SingleAsync(e => e.EvidenceId == photo);
+        var evidence = await db.Evidences.SingleAsync(e => e.EvidenceRecordId == photo);
         Assert.Equal("Stocking", evidence.EvidenceKind);
     }
 
@@ -220,7 +220,7 @@ public sealed class SourcingHoldingTests(Br15Fixture f) : IClassFixture<Br15Fixt
 
         // Sự kiện tồn không sửa, không xoá được (BR-102).
         await using var db = f.OpenDb();
-        var sql = () => db.Database.ExecuteSqlRawAsync("DELETE FROM dbo.inventory_event");
+        var sql = () => db.Database.ExecuteSqlRawAsync("DELETE FROM dbo.inventory_record WHERE record_type = 'Event'");
         await Assert.ThrowsAnyAsync<Exception>(sql);
     }
 

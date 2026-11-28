@@ -30,13 +30,13 @@ public sealed partial class GradingService
         var sessionResponse = new SessionResponse(session.SessionNo, batch.BatchCode, crab.CrabCode, session.Procedure, station, session.Status, session.OpenedAt,
             session.CapturedAt, session.ReceivedAt, session.WeightG, session.TofMm, session.CameraHeightMm, session.WhiteImageUri is not null,
             session.RedImageUri is not null, session.FailReason, crab.GradeAiTag);
-        var values = await db.MeasurementValues.AsNoTracking().Where(v => v.MeasurementSessionId == session.MeasurementSessionId)
-            .OrderBy(v => v.RecordedAt).ThenBy(v => v.MeasurementValueId)
+        var values = await db.MeasurementValues.AsNoTracking().Where(v => v.MeasurementSessionId == session.MeasurementRecordId)
+            .OrderBy(v => v.RecordedAt).ThenBy(v => v.MeasurementRecordId)
             .Select(v => new MeasurementValueResponse(v.Metric, v.Value, v.Unit, v.Method, v.Confidence, v.VerificationStatus, v.RecordedAt)).ToListAsync(ct);
-        var inferences = await db.AiInferences.AsNoTracking().Where(i => i.MeasurementSessionId == session.MeasurementSessionId).OrderBy(i => i.AiInferenceId)
+        var inferences = await db.AiInferences.AsNoTracking().Where(i => i.MeasurementSessionId == session.MeasurementRecordId).OrderBy(i => i.MeasurementRecordId)
             .Select(i => new AiInferenceResponse(i.ImageKind, i.ModelName, i.ModelVersion, i.IsSimulated, i.Status, i.ImageQuality, i.CarapaceLengthCm,
                 i.CarapaceWidthCm, i.CarapaceAreaCm2, i.EdgeBandMm, i.Confidence, i.ErrorReason, i.CreatedAt)).ToListAsync(ct);
-        var decision = await db.GradeDecisions.AsNoTracking().Where(d => d.MeasurementSessionId == session.MeasurementSessionId)
+        var decision = await db.GradeDecisions.AsNoTracking().Where(d => d.MeasurementSessionId == session.MeasurementRecordId)
             .OrderByDescending(d => d.VersionNo).FirstOrDefaultAsync(ct);
         return new SessionMeasurementsResponse(sessionResponse, values, inferences, decision is null ? null : (await ResponsesAsync([decision], ct)).Single());
     }
@@ -75,12 +75,12 @@ public sealed partial class GradingService
         var notMeasured = await db.CrabUnits.CountAsync(c => c.BatchId == batch.BatchId && (c.InventoryStatus == "Received" || c.InventoryStatus == "Holding")
                                                              && !db.GradeDecisions.Any(d => d.CrabUnitId == c.CrabUnitId && d.IsCurrent), ct);
         var specIds = current.Where(c => c.Status == "Approved" && c.SpecId != null).Select(c => c.SpecId!.Value).Distinct().ToList();
-        var specCodes = await db.ProductSpecifications.Where(s => specIds.Contains(s.SpecId)).ToDictionaryAsync(s => s.SpecId, s => s.SpecCode, ct);
+        var specCodes = await db.ProductSpecifications.Where(s => specIds.Contains(s.OfferRecordId)).ToDictionaryAsync(s => s.OfferRecordId, s => s.SpecCode, ct);
         var bySpec = current.Where(c => c.Status == "Approved")
             .GroupBy(c => new { Code = c.SpecId is { } id ? specCodes[id] : "SUBSTANDARD", c.FinalSize, c.FinalGrade })
             .Select(g => new SpecCount(g.Key.Code, g.Key.FinalSize ?? "", g.Key.FinalGrade ?? "", g.Count()))
             .OrderBy(s => s.SpecCode).ToList();
-        var ruleVersion = batch.GradeRuleSetId is { } rs ? await db.GradeRuleSets.Where(s => s.RuleSetId == rs).Select(s => (int?)s.VersionNo).SingleAsync(ct) : null;
+        var ruleVersion = batch.GradeRuleSetId is { } rs ? await db.GradeRuleSets.Where(s => s.GradingRuleId == rs).Select(s => (int?)s.VersionNo).SingleAsync(ct) : null;
         var qcUser = await db.QcAssignments.Where(a => a.AssignmentKind == QcAssignmentKinds.GradingSession && a.TargetType == "Batch" &&
                 a.TargetId == batch.BatchId).OrderByDescending(a => a.AssignedAt).Select(a => (long?)a.QcUserId).FirstOrDefaultAsync(ct);
         return new BatchGradingSummary(batch.BatchCode, batch.Status, batch.CrabType, ruleVersion, received, notMeasured,
@@ -120,9 +120,9 @@ public sealed partial class GradingService
         var specIds = list.Where(d => d.SpecId != null).Select(d => d.SpecId!.Value).Distinct().ToList();
         var batches = await db.Batches.Where(b => batchIds.Contains(b.BatchId)).ToDictionaryAsync(b => b.BatchId, b => b.BatchCode, ct);
         var crabs = await db.CrabUnits.Where(c => crabIds.Contains(c.CrabUnitId)).ToDictionaryAsync(c => c.CrabUnitId, c => c.CrabCode, ct);
-        var sessions = await db.MeasurementSessions.Where(s => sessionIds.Contains(s.MeasurementSessionId)).ToDictionaryAsync(s => s.MeasurementSessionId, s => s.SessionNo, ct);
-        var rules = await db.GradeRuleSets.Where(s => ruleIds.Contains(s.RuleSetId)).ToDictionaryAsync(s => s.RuleSetId, s => s.VersionNo, ct);
-        var specs = await db.ProductSpecifications.Where(s => specIds.Contains(s.SpecId)).ToDictionaryAsync(s => s.SpecId, s => s.SpecCode, ct);
+        var sessions = await db.MeasurementSessions.Where(s => sessionIds.Contains(s.MeasurementRecordId)).ToDictionaryAsync(s => s.MeasurementRecordId, s => s.SessionNo, ct);
+        var rules = await db.GradeRuleSets.Where(s => ruleIds.Contains(s.GradingRuleId)).ToDictionaryAsync(s => s.GradingRuleId, s => s.VersionNo, ct);
+        var specs = await db.ProductSpecifications.Where(s => specIds.Contains(s.OfferRecordId)).ToDictionaryAsync(s => s.OfferRecordId, s => s.SpecCode, ct);
         return list.Select(d => new GradeDecisionResponse(d.DecisionNo, batches[d.BatchId], crabs[d.CrabUnitId], sessions[d.MeasurementSessionId],
             rules[d.RuleSetId], d.VersionNo, d.Status, d.IsCurrent, d.WeightG, d.CarapaceLengthCm, d.CIndex, d.EdgeBandMm, d.ProposedSize,
             d.ProposedCLevel, d.ProposedSensory, d.ProposedGrade, HoldReasons.Parse(d.HoldReasons), d.FinalSize, d.FinalGrade,

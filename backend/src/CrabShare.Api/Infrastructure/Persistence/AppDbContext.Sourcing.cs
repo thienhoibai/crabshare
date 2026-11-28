@@ -17,15 +17,23 @@ public partial class AppDbContext
 
     private static void ConfigureSourcing(ModelBuilder model)
     {
-        model.Entity<ProcurementOrder>().ToTable("procurement_order");
-        model.Entity<SupplyLot>().ToTable("supply_lot");
-        model.Entity<GoodsReceipt>().ToTable("goods_receipt");
+        // supply_record gộp đơn mua, lô cua nhập và phiếu nhận (V040).
+        var supply = model.Entity<SupplyRecord>();
+        supply.Property<string>("record_type").HasMaxLength(30).IsUnicode(false);
+        supply.HasDiscriminator<string>("record_type")
+            .HasValue<ProcurementOrder>("ProcurementOrder").HasValue<SupplyLot>("SupplyLot").HasValue<GoodsReceipt>("GoodsReceipt");
         model.Entity<CrabUnit>().ToTable("crab_unit");
-        model.Entity<QcAssignment>().ToTable("qc_assignment");
-        // Hai bảng chỉ ghi thêm (trigger): EF không được dùng OUTPUT khi chèn.
-        model.Entity<QcInspection>().ToTable("qc_inspection", t => t.UseSqlOutputClause(false));
-        model.Entity<InventoryEvent>().ToTable("inventory_event", t => t.UseSqlOutputClause(false));
-        model.Entity<HoldingOperation>().ToTable("holding_operation");
-        model.Entity<BoxAssignment>().ToTable("box_assignment");
+        // qc_record gộp phân công, phiếu kiểm phẩm và báo cáo thăm trại (V041). Phiếu kiểm phẩm có trigger chỉ ghi thêm: không dùng OUTPUT.
+        var qc = model.Entity<QcRecord>();
+        qc.ToTable(t => t.UseSqlOutputClause(false));
+        qc.Property<string>("record_type").HasMaxLength(30).IsUnicode(false);
+        qc.HasDiscriminator<string>("record_type")
+            .HasValue<QcAssignment>("Assignment").HasValue<QcInspection>("Inspection").HasValue<SiteVisitReport>("SiteVisitReport");
+        // inventory_record gộp sự kiện tồn, xếp hộp và phân bổ cho đơn (V042). Sự kiện tồn có trigger chỉ ghi thêm: không dùng OUTPUT.
+        var inventory = model.Entity<InventoryRecord>();
+        inventory.ToTable(t => t.UseSqlOutputClause(false));
+        inventory.Property<string>("record_type").HasMaxLength(30).IsUnicode(false);
+        inventory.HasDiscriminator<string>("record_type")
+            .HasValue<InventoryEvent>("Event").HasValue<BoxAssignment>("BoxAssignment").HasValue<InventoryAllocation>("Allocation");
     }
 }

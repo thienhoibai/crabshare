@@ -41,9 +41,5 @@ public partial class CrabTag
 
     public virtual CrabItem CrabItem { get; set; } = null!;
 
-    public virtual ICollection<CrabItemEvent> CrabItemEvents { get; set; } = new List<CrabItemEvent>();
-
     public virtual AppUser PrintedByNavigation { get; set; } = null!;
-
-    public virtual ICollection<TagScan> TagScans { get; set; } = new List<TagScan>();
 }

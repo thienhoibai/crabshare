@@ -19,7 +19,7 @@ public sealed class SettlementReviewService(AppDbContext db, ICurrentUser me, IA
     public Task<SettlementResponse> ProposeAsync(long settlementId, ProposeSettlementRequest req, CancellationToken ct) => db.InTransactionAsync(async () =>
     {
         await audit.LockAsync(ct);
-        var s = await db.Settlements.SingleOrDefaultAsync(x => x.SettlementId == settlementId, ct) ?? throw NotFound();
+        var s = await db.Settlements.SingleOrDefaultAsync(x => x.SettlementRecordId == settlementId, ct) ?? throw NotFound();
         if (s.Status != "Draft")
             throw new BusinessRuleException("settlement.not_draft", "Chỉ công bố được bảng nháp. Muốn đổi số liệu thì tính lại rồi công bố lại.");
         var now = Now();
@@ -28,16 +28,16 @@ public sealed class SettlementReviewService(AppDbContext db, ICurrentUser me, IA
         s.FeedbackDeadline = now.AddDays(req.FeedbackDays);
         s.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
-        await audit.WriteAsync("settlement", s.SettlementId, "propose", new { status = "Draft" },
+        await audit.WriteAsync("settlement", s.SettlementRecordId, "propose", new { status = "Draft" },
             new { s.Status, s.RevisionNo, proposedAt = now, s.FeedbackDeadline, req.FeedbackDays }, now, ct);
-        return await settlements.DescribeAsync(s.SettlementId, SettlementService.Viewer.Admin, ct);
+        return await settlements.DescribeAsync(s.SettlementRecordId, SettlementService.Viewer.Admin, ct);
     }, ct);
 
     public Task<SettlementResponse> AnswerAsync(long feedbackId, AnswerFeedbackRequest req, CancellationToken ct) => db.InTransactionAsync(async () =>
     {
         await audit.LockAsync(ct);
         var feedback = await db.SettlementFeedbacks.Include(f => f.Settlement).ThenInclude(s => s.SettlementFeedbacks)
-            .SingleOrDefaultAsync(f => f.FeedbackId == feedbackId, ct)
+            .SingleOrDefaultAsync(f => f.SettlementRecordId == feedbackId, ct)
             ?? throw new NotFoundException("settlement.feedback_not_found", "Không tìm thấy góp ý.");
         if (feedback.Status != "Open")
             throw new ConflictException("settlement.feedback_answered", "Góp ý này đã được trả lời.");
@@ -48,15 +48,15 @@ public sealed class SettlementReviewService(AppDbContext db, ICurrentUser me, IA
         feedback.UpdatedAt = now;
         var settlement = feedback.Settlement;
         var before = settlement.Status;
-        if (settlement.Status == "Disputed" && settlement.SettlementFeedbacks.All(f => f.FeedbackId == feedbackId || f.Status != "Open"))
+        if (settlement.Status == "Disputed" && settlement.SettlementFeedbacks.All(f => f.SettlementRecordId == feedbackId || f.Status != "Open"))
         {
             settlement.Status = "Proposed";
             settlement.UpdatedAt = now;
         }
         await db.SaveChangesAsync(ct);
-        await audit.WriteAsync("settlement_feedback", feedback.FeedbackId, "answer", new { status = "Open" },
+        await audit.WriteAsync("settlement_feedback", feedback.SettlementRecordId, "answer", new { status = "Open" },
             new { feedback.Status, feedback.Response, feedback.SettlementId, settlementStatus = settlement.Status, settlementStatusBefore = before }, now, ct);
-        return await settlements.DescribeAsync(settlement.SettlementId, SettlementService.Viewer.Admin, ct);
+        return await settlements.DescribeAsync(settlement.SettlementRecordId, SettlementService.Viewer.Admin, ct);
     }, ct);
 
     // ---------- Các bên của lô ----------
@@ -71,22 +71,22 @@ public sealed class SettlementReviewService(AppDbContext db, ICurrentUser me, IA
         await audit.LockAsync(ct);
         if (await RequireViewerAsync(settlementId, ct) != SettlementService.Viewer.Investor)
             throw new ForbiddenException("settlement.investor_only", "Chỉ nhà đầu tư của lô mới góp ý bảng quyết toán.");
-        var s = await db.Settlements.SingleAsync(x => x.SettlementId == settlementId, ct);
+        var s = await db.Settlements.SingleAsync(x => x.SettlementRecordId == settlementId, ct);
         var now = Now();
         if (s.Status is not ("Proposed" or "Disputed") || s.FeedbackDeadline is not { } deadline || now > deadline)
             throw new BusinessRuleException("settlement.feedback_closed", "Đã hết hạn góp ý bảng quyết toán này.");
         var feedback = new SettlementFeedback
         {
-            SettlementId = s.SettlementId, UserId = me.UserId, Content = req.Content.Trim(), Status = "Open", CreatedAt = now, UpdatedAt = now,
+            SettlementId = s.SettlementRecordId, UserId = me.UserId, Content = req.Content.Trim(), Status = "Open", CreatedAt = now, UpdatedAt = now,
         };
         db.SettlementFeedbacks.Add(feedback);
         var before = s.Status;
         s.Status = "Disputed";
         s.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
-        await audit.WriteAsync("settlement_feedback", feedback.FeedbackId, "create", null,
+        await audit.WriteAsync("settlement_feedback", feedback.SettlementRecordId, "create", null,
             new { feedback.SettlementId, feedback.Content, settlementStatus = s.Status, settlementStatusBefore = before }, now, ct);
-        return await settlements.DescribeAsync(s.SettlementId, SettlementService.Viewer.Investor, ct);
+        return await settlements.DescribeAsync(s.SettlementRecordId, SettlementService.Viewer.Investor, ct);
     }, ct);
 
     /// <summary>Bảng quyết toán đã công bố của các lô tôi góp vốn.</summary>
@@ -99,7 +99,7 @@ public sealed class SettlementReviewService(AppDbContext db, ICurrentUser me, IA
             .Where(s => s.Status != "Draft" && s.Batch.CapitalShares.Any(c => c.InvestorId == userId))
             .OrderByDescending(s => s.ProposedAt)
             .Select(s => new SettlementSummary(
-                s.SettlementId, s.Batch.BatchCode, s.Batch.Title, s.Status, s.RevisionNo, (long)s.RevenuePool,
+                s.SettlementRecordId, s.Batch.BatchCode, s.Batch.Title, s.Status, s.RevisionNo, (long)s.RevenuePool,
                 s.SettlementLines.Where(l => l.InvestorId == userId).Select(l => (long?)l.NetPayout).FirstOrDefault(),
                 s.FeedbackDeadline, (s.Status == "Proposed" || s.Status == "Disputed") && s.FeedbackDeadline >= now,
                 s.SettlementFeedbacks.Count(f => f.UserId == userId && f.Status == "Open")))
@@ -115,7 +115,7 @@ public sealed class SettlementReviewService(AppDbContext db, ICurrentUser me, IA
             .Where(s => s.Status != "Draft" && s.Batch.OperatorId == operatorId)
             .OrderByDescending(s => s.ProposedAt)
             .Select(s => new SettlementSummary(
-                s.SettlementId, s.Batch.BatchCode, s.Batch.Title, s.Status, s.RevisionNo, (long)s.RevenuePool, null,
+                s.SettlementRecordId, s.Batch.BatchCode, s.Batch.Title, s.Status, s.RevisionNo, (long)s.RevenuePool, null,
                 s.FeedbackDeadline, (s.Status == "Proposed" || s.Status == "Disputed") && s.FeedbackDeadline >= now,
                 s.SettlementFeedbacks.Count(f => f.Status == "Open")))
             .ToListAsync(ct);
@@ -124,7 +124,7 @@ public sealed class SettlementReviewService(AppDbContext db, ICurrentUser me, IA
     /// <summary>Người đang xem là ai với bảng này; bản nháp chỉ admin thấy. Không có quyền → 404 (không lộ là có bảng).</summary>
     private async Task<SettlementService.Viewer> RequireViewerAsync(long settlementId, CancellationToken ct)
     {
-        var s = await db.Settlements.AsNoTracking().Where(x => x.SettlementId == settlementId)
+        var s = await db.Settlements.AsNoTracking().Where(x => x.SettlementRecordId == settlementId)
             .Select(x => new { x.Status, x.BatchId, x.Batch.OperatorId })
             .SingleOrDefaultAsync(ct) ?? throw NotFound();
         if (me.IsInRole(Roles.PlatformAdmin)) return SettlementService.Viewer.Admin;

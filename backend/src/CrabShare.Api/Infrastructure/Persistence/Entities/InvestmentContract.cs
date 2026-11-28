@@ -6,10 +6,8 @@ namespace CrabShare.Api.Infrastructure.Persistence.Entities;
 /// <summary>
 /// Hợp đồng hợp tác của một khoản góp, ký lần lượt người nuôi rồi nhà đầu tư
 /// </summary>
-public partial class InvestmentContract
+public partial class InvestmentContract : ContractRecord
 {
-    public long ContractId { get; set; }
-
     public string ContractNo { get; set; } = null!;
 
     public long ContributionId { get; set; }
@@ -19,12 +17,12 @@ public partial class InvestmentContract
     /// <summary>
     /// Giá trị: Draft, OperatorSigned, FullySigned, Void
     /// </summary>
-    public string Status { get; set; } = null!;
+    public string Status { get; set; } = "Draft";
 
     /// <summary>
     /// Giá trị: DigitalSignature, OfflineUpload
     /// </summary>
-    public string SigningMethod { get; set; } = null!;
+    public string SigningMethod { get; set; } = "DigitalSignature";
 
     public string DraftHash { get; set; } = null!;
 
@@ -34,9 +32,9 @@ public partial class InvestmentContract
 
     public DateTimeOffset? FullySignedAt { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public virtual ICollection<ContractSignature> ContractSignatures { get; set; } = new List<ContractSignature>();
 

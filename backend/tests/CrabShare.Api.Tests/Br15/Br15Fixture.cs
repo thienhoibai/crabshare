@@ -197,7 +197,7 @@ public class Br15Fixture : IAsyncLifetime
                 ColumnNo = (short)((i - 1) % 10 + 1), Status = "Available", CreatedAt = now, UpdatedAt = now,
             });
         await db.SaveChangesAsync();
-        return new Farmer(userId, farm.OperatorId, party.PartyId, site.SiteId);
+        return new Farmer(userId, farm.OperatorId, party.PartyId, site.PartyRecordId);
     }
 
     public static async Task<string?> ErrorCode(HttpResponseMessage response)

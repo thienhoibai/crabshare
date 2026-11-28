@@ -19,10 +19,10 @@ public sealed class OrderTraceService(AppDbContext db)
         var batch = await db.Batches.AsNoTracking().SingleAsync(b => b.BatchId == order.BatchId, ct);
         var farmName = await db.Operators.AsNoTracking().Where(o => o.OperatorId == batch.OperatorId).Select(o => o.LegalName).SingleAsync(ct);
         var crabIds = await db.InventoryAllocations.Where(a => a.OrderId == order.OrderId && a.Status != "Released").Select(a => a.CrabUnitId).ToListAsync(ct);
-        var lots = await db.SupplyLots.AsNoTracking().Where(l => db.CrabUnits.Any(c => crabIds.Contains(c.CrabUnitId) && c.SupplyLotId == l.SupplyLotId))
+        var lots = await db.SupplyLots.AsNoTracking().Where(l => db.CrabUnits.Any(c => crabIds.Contains(c.CrabUnitId) && c.SupplyLotId == l.SupplyRecordId))
             .OrderBy(l => l.HarvestedOn).Select(l => new TraceSourceLot(l.OriginRegion, l.HarvestedOn, l.DeclaredSpecies)).ToListAsync(ct);
         var lines = await (from a in db.InventoryAllocations
-                           join s in db.ProductSpecifications on a.CrabSpecId equals s.SpecId
+                           join s in db.ProductSpecifications on a.CrabSpecId equals s.OfferRecordId
                            where a.OrderId == order.OrderId && a.Status != "Released"
                            group a by new { s.SpecCode, s.Name } into g
                            orderby g.Key.SpecCode

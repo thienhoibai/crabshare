@@ -82,7 +82,7 @@ public sealed class QcAssignmentService(AppDbContext db, PartyDirectory parties,
     /// <summary>Việc đang chờ của một Nhân viên kiểm phẩm.</summary>
     public async Task<IReadOnlyList<QcTaskResponse>> MyTasksAsync(long userId, CancellationToken ct)
         => await db.QcAssignments.AsNoTracking().Where(a => a.QcUserId == userId && a.Status == "Assigned").OrderBy(a => a.AssignedAt)
-            .Select(a => new QcTaskResponse(a.QcAssignmentId, a.AssignmentKind, db.Batches.Where(b => b.BatchId == a.BatchId).Select(b => b.BatchCode).First(),
+            .Select(a => new QcTaskResponse(a.QcRecordId, a.AssignmentKind, db.Batches.Where(b => b.BatchId == a.BatchId).Select(b => b.BatchCode).First(),
                 a.TargetType, a.TargetId, a.AssignedAt)).ToListAsync(ct);
 }
 

@@ -53,16 +53,16 @@ public partial class AlertDatabaseTests
         var farm = await SetupFarm(); var overdue = await Raise(farm); var future = await Raise(farm, type: AlertType.LowStock);
         var done = await Raise(farm, type: AlertType.Mortality); var now = DateTimeOffset.UtcNow;
         await Db(async db => {
-            (await db.Alerts.SingleAsync(a => a.AlertId == overdue.Id)).AckDeadline = now.AddMinutes(-1);
-            var acknowledged = await db.Alerts.SingleAsync(a => a.AlertId == done.Id); acknowledged.Status = "Acknowledged"; acknowledged.AckDeadline = now.AddMinutes(-1);
+            (await db.Alerts.SingleAsync(a => a.CareRecordId == overdue.Id)).AckDeadline = now.AddMinutes(-1);
+            var acknowledged = await db.Alerts.SingleAsync(a => a.CareRecordId == done.Id); acknowledged.Status = "Acknowledged"; acknowledged.AckDeadline = now.AddMinutes(-1);
             db.ProductionLogs.Add(new ProductionLog { BatchId = farm.BatchId, LogDate = DateOnly.FromDateTime(now.ToOffset(TimeSpan.FromHours(7)).DateTime), Source = "Manual", PlausibilityFlag = "Ok", ReceivedAt = now });
             await db.SaveChangesAsync(); return true;
         });
         await RunJob(now); await RunJob(now);
         await Db(async db => {
-            var row = await db.Alerts.SingleAsync(a => a.AlertId == overdue.Id); Assert.Equal("Escalated", row.Status); Assert.Equal(now.ToUnixTimeMilliseconds(), row.EscalatedAt!.Value.ToUnixTimeMilliseconds());
-            Assert.Equal("Open", (await db.Alerts.SingleAsync(a => a.AlertId == future.Id)).Status);
-            Assert.Equal("Acknowledged", (await db.Alerts.SingleAsync(a => a.AlertId == done.Id)).Status);
+            var row = await db.Alerts.SingleAsync(a => a.CareRecordId == overdue.Id); Assert.Equal("Escalated", row.Status); Assert.Equal(now.ToUnixTimeMilliseconds(), row.EscalatedAt!.Value.ToUnixTimeMilliseconds());
+            Assert.Equal("Open", (await db.Alerts.SingleAsync(a => a.CareRecordId == future.Id)).Status);
+            Assert.Equal("Acknowledged", (await db.Alerts.SingleAsync(a => a.CareRecordId == done.Id)).Status);
             Assert.Equal(1, await db.AuditLogs.CountAsync(a => a.EntityType == "Alert" && a.EntityId == overdue.Id && a.ActionType == "EscalateAlert")); return true;
         });
         await AssertChain();
@@ -84,7 +84,7 @@ public partial class AlertDatabaseTests
         Assert.Equal("Open", alert.Status);
         Assert.False(await Db(db => db.Alerts.AnyAsync(a => (a.BatchId == logged.BatchId || a.BatchId == inactive.BatchId) && a.AlertType == "DataSilence")));
         var adminId = await Admin(); using var admin = Client(adminId, Roles.PlatformAdmin);
-        (await admin.PostAsJsonAsync($"/api/admin/alerts/{alert.AlertId}/resolve", new { note = "Handled today" })).EnsureSuccessStatusCode();
+        (await admin.PostAsJsonAsync($"/api/admin/alerts/{alert.CareRecordId}/resolve", new { note = "Handled today" })).EnsureSuccessStatusCode();
         await RunJob(evening.AddMinutes(30));
         Assert.Equal(1, await Db(db => db.Alerts.CountAsync(a => a.BatchId == farm.BatchId && a.AlertType == "DataSilence")));
     }
@@ -109,7 +109,7 @@ public partial class AlertDatabaseTests
     public async Task Two_concurrent_job_instances_do_not_duplicate_escalation_or_daily_alerts()
     {
         var farm = await SetupFarm(); var alert = await Raise(farm); var now = TodayAt(19);
-        await Db(async db => { (await db.Alerts.SingleAsync(a => a.AlertId == alert.Id)).AckDeadline = now.AddMinutes(-1); await db.SaveChangesAsync(); return true; });
+        await Db(async db => { (await db.Alerts.SingleAsync(a => a.CareRecordId == alert.Id)).AckDeadline = now.AddMinutes(-1); await db.SaveChangesAsync(); return true; });
         await Task.WhenAll(RunJob(now), RunJob(now));
         Assert.Equal(1, await Db(db => db.Alerts.CountAsync(a => a.BatchId == farm.BatchId && a.AlertType == "DataSilence")));
         Assert.Equal(1, await Db(db => db.AuditLogs.CountAsync(a => a.EntityType == "Alert" && a.EntityId == alert.Id && a.ActionType == "EscalateAlert")));
@@ -120,7 +120,7 @@ public partial class AlertDatabaseTests
     public async Task Admin_filters_pages_and_resolves_without_overwriting_operator_note()
     {
         var farm = await SetupFarm(); var alert = await Raise(farm); var now = DateTimeOffset.UtcNow;
-        await Db(async db => { var a = await db.Alerts.SingleAsync(a => a.AlertId == alert.Id); a.Status = "Escalated"; a.EscalatedAt = now; a.ResponseNote = "Farm response"; await db.SaveChangesAsync(); return true; });
+        await Db(async db => { var a = await db.Alerts.SingleAsync(a => a.CareRecordId == alert.Id); a.Status = "Escalated"; a.EscalatedAt = now; a.ResponseNote = "Farm response"; await db.SaveChangesAsync(); return true; });
         using var client = Client(await Admin(), Roles.PlatformAdmin);
         var page = (await client.GetFromJsonAsync<PagedResult<AlertResponse>>("/api/admin/alerts?q=" + farm.Code + "&severity=High&pageSize=1"))!;
         Assert.Equal(1, page.Total); Assert.Single(page.Items); Assert.Equal("Escalated", page.Items[0].Status);
