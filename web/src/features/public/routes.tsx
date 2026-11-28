@@ -5,6 +5,7 @@ const BatchExplorePage = lazy(() => import('./BatchExplorePage'))
 const BatchPublicPage = lazy(() => import('./BatchPublicPage'))
 const GradingStandardPage = lazy(() => import('./GradingStandardPage'))
 const OrderTracePage = lazy(() => import('./OrderTracePage'))
+const TermsPage = lazy(() => import('./TermsPage'))
 
 /** Trang ai cũng xem được, không cần đăng nhập. */
 export const publicRoutes: RouteObject[] = [
@@ -12,4 +13,5 @@ export const publicRoutes: RouteObject[] = [
   { path: '/lo/:code', element: <BatchPublicPage /> },
   { path: '/chuan-phan-hang', element: <GradingStandardPage /> },
   { path: '/truy-xuat/:traceCode', element: <OrderTracePage /> },
+  { path: '/dieu-khoan', element: <TermsPage /> },
 ]

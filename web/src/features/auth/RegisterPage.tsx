@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+﻿import { useState, type FormEvent } from 'react'
 import { isAxiosError } from 'axios'
 import { ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router'
@@ -8,6 +8,7 @@ import { Checkbox, Field, Input, OpBtn, OpNote, RadioCards } from '../../shared/
 import AuthLayout from './AuthLayout'
 import GoogleSignInButton from './GoogleSignInButton'
 import PasswordInput from './PasswordInput'
+import TermsDialog from './TermsDialog'
 import { useGoogleLogin, useRegister } from './authApi'
 
 type RoleChoice = 'Customer' | 'Investor'
@@ -36,6 +37,8 @@ export default function RegisterPage() {
   const [rejectedPhone, setRejectedPhone] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [terms, setTerms] = useState(false)
+  const [termsRead, setTermsRead] = useState(false)
+  const [termsOpen, setTermsOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [attempted, setAttempted] = useState(false)
 
@@ -136,10 +139,11 @@ export default function RegisterPage() {
         </div>
 
         <div className="auth-consent">
-          <Checkbox name="terms" checked={terms} onChange={setTerms} required
+          <Checkbox name="terms" checked={terms} onChange={setTerms} required disabled={!termsRead}
             aria-invalid={termsError ? true : undefined} aria-describedby={termsError ? 'register-terms-description' : undefined}>
-            Tôi đồng ý điều khoản sử dụng
+            Tôi đồng ý <button type="button" className="auth-consent__link" onClick={(e) => { e.preventDefault(); setTermsOpen(true) }}>điều khoản sử dụng</button>
           </Checkbox>
+          {!termsRead && <p className="auth-consent__hint">Bấm vào điều khoản và đọc hết để có thể tick.</p>}
           {termsError && <p id="register-terms-description" className="op-field__error">{termsError}</p>}
         </div>
 
@@ -149,6 +153,7 @@ export default function RegisterPage() {
           <ArrowRight size={18} aria-hidden="true" />
         </OpBtn>
       </form>
+      <TermsDialog open={termsOpen} onClose={() => setTermsOpen(false)} onRead={() => { setTermsRead(true); setTerms(true); setTermsOpen(false) }} />
 
       <GoogleSignInButton
         mode="register"
@@ -170,3 +175,4 @@ export default function RegisterPage() {
     </AuthLayout>
   )
 }
+
