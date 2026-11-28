@@ -3,10 +3,12 @@ import { isAxiosError } from 'axios'
 import { ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { errorMessage, type ApiProblem } from '../../shared/api/http'
+import { homePathFor, PROFILE_SETUP_PATH } from '../../shared/auth/authStore'
 import { Checkbox, Field, Input, OpBtn, OpNote, RadioCards } from '../../shared/ui/console'
 import AuthLayout from './AuthLayout'
+import GoogleSignInButton from './GoogleSignInButton'
 import PasswordInput from './PasswordInput'
-import { useRegister } from './authApi'
+import { useGoogleLogin, useRegister } from './authApi'
 
 type RoleChoice = 'Customer' | 'Investor'
 const PHONE_TAKEN = 'Số điện thoại này đã được dùng cho một tài khoản khác.'
@@ -25,6 +27,8 @@ function isPhoneConflict(error: unknown) {
 export default function RegisterPage() {
   const navigate = useNavigate()
   const register = useRegister()
+  const googleLogin = useGoogleLogin()
+  const busy = register.isPending || googleLogin.isPending
   const [role, setRole] = useState<RoleChoice>('Customer')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -140,11 +144,29 @@ export default function RegisterPage() {
         </div>
 
         {message && <div role="alert"><OpNote tone="danger">{message}</OpNote></div>}
-        <OpBtn className="auth-submit" type="submit" full disabled={register.isPending}>
+        <OpBtn className="auth-submit" type="submit" full disabled={busy}>
           {register.isPending ? 'Đang tạo tài khoản…' : 'Tạo tài khoản'}
           <ArrowRight size={18} aria-hidden="true" />
         </OpBtn>
       </form>
+
+      <GoogleSignInButton
+        mode="register"
+        disabled={busy}
+        onCredential={(idToken) => {
+          setMessage('')
+          googleLogin.mutate(
+            { idToken, role },
+            {
+              onSuccess: (res) => navigate(
+                res.user.customerProfileRequired || role === 'Investor' ? PROFILE_SETUP_PATH : homePathFor(res.user),
+                { replace: true },
+              ),
+              onError: (e) => setMessage(errorMessage(e)),
+            },
+          )
+        }}
+      />
     </AuthLayout>
   )
 }

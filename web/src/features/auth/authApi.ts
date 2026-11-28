@@ -10,6 +10,7 @@ export interface AuthResponse {
 }
 
 export interface LoginInput { email: string; password: string }
+export interface GoogleLoginInput { idToken: string; role?: 'Customer' | 'Investor' }
 export interface RegisterInput {
   email: string
   password: string
@@ -28,6 +29,7 @@ export interface RegisterInput {
 
 export const authApi = {
   login: (body: LoginInput) => http.post<AuthResponse>('/api/auth/login', body).then((r) => r.data),
+  googleLogin: (body: GoogleLoginInput) => http.post<AuthResponse>('/api/auth/google', body).then((r) => r.data),
   register: (body: RegisterInput) => http.post<AuthResponse>('/api/auth/register', body).then((r) => r.data),
   me: () => http.get<Me>('/api/auth/me').then((r) => r.data),
 }
@@ -37,6 +39,14 @@ export function useLogin() {
   const setSession = useAuthStore((s) => s.setSession)
   return useMutation({
     mutationFn: authApi.login,
+    onSuccess: (res) => setSession(res.accessToken, res.expiresAt, res.user),
+  })
+}
+
+export function useGoogleLogin() {
+  const setSession = useAuthStore((s) => s.setSession)
+  return useMutation({
+    mutationFn: authApi.googleLogin,
     onSuccess: (res) => setSession(res.accessToken, res.expiresAt, res.user),
   })
 }

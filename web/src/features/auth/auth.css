@@ -205,6 +205,12 @@
 .auth-content .auth-submit::before { content: none; }
 .auth-content .auth-submit:disabled { box-shadow: none; }
 .auth-demo { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
+.auth-social { display: grid; gap: 12px; margin-top: 16px; }
+.auth-divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+.auth-divider::before,
+.auth-divider::after { content: ''; flex: 1; height: 1px; background: #ddd3c6; }
+.auth-google { display: grid; justify-items: center; min-height: 44px; }
+.auth-google[data-disabled] { opacity: 0.6; pointer-events: none; }
 
 .auth-password-toggle {
   position: absolute;
