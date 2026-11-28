@@ -17,7 +17,7 @@ export interface RegisterInput {
   fullName: string
   phone?: string
   role: 'Customer' | 'Investor'
-  /** Individual, Household, Company, Cooperative. */
+  /** Individual, Household, Company. */
   partyType?: string
   /** Tên pháp lý của tổ chức; cá nhân để trống thì lấy họ tên. */
   legalName?: string

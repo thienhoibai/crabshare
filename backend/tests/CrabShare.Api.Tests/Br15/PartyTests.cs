@@ -239,7 +239,7 @@ public sealed class PartyTests(Br15Fixture f) : IClassFixture<Br15Fixture>
             var partyId = await db.Operators.Where(o => o.OperatorId == operatorId).Select(o => o.PartyId).SingleAsync();
             var party = await db.Parties.Include(p => p.Roles).SingleAsync(p => p.PartyId == partyId);
             Assert.Equal("Verified", party.VerificationStatus);
-            Assert.Equal("Cooperative", party.PartyType);
+            Assert.Equal("Household", party.PartyType);
             Assert.Contains(party.Roles, r => r.RoleType == "Farmer" && r.Status == "Active");
             Assert.True(await db.PartySites.AnyAsync(s => s.PartyId == partyId && s.SiteType == "Farm"));
         }

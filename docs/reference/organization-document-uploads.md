@@ -9,5 +9,5 @@ Bộ Công an công bố Cổng Dịch vụ công Quốc gia được vận hàn
 
 ## Áp dụng cho CrabShare
 
-- Chủ hồ sơ hộ kinh doanh, doanh nghiệp hoặc hợp tác xã chọn loại giấy tờ rồi gửi ảnh hoặc PDF. Giới hạn hiện tại của CrabShare là 5 MB mỗi tệp. Admin tải giấy tờ từ hồ sơ để đối chiếu theo BR-009. Cá nhân đi theo luồng eKYC theo BR-010. [Quy tắc nghiệp vụ CrabShare](business-rules-v1.5.md).
+- Chủ hồ sơ hộ kinh doanh hoặc doanh nghiệp chọn loại giấy tờ rồi gửi ảnh hoặc PDF. Giới hạn hiện tại của CrabShare là 5 MB mỗi tệp. Admin tải giấy tờ từ hồ sơ để đối chiếu theo BR-009. Cá nhân đi theo luồng eKYC theo BR-010. [Quy tắc nghiệp vụ CrabShare](business-rules-v1.5.md).
 - Cloudinary lưu PDF dưới loại tài nguyên `image` với quyền truy cập `authenticated`. API CrabShare kiểm tra quyền trước khi tải bản gốc qua URL ký có thời hạn. [Tùy chọn tải lên](https://cloudinary.com/documentation/upload_parameters) · [Kiểm soát truy cập](https://cloudinary.com/documentation/control_access_to_media).

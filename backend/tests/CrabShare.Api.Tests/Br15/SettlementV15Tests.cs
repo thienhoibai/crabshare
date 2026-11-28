@@ -216,7 +216,7 @@ public sealed class SettlementV15Tests(Br15Fixture f) : IClassFixture<Br15Fixtur
         await using (var db = f.OpenDb())
         {
             var now = DateTimeOffset.UtcNow;
-            var party = new Party { LegalName = $"Hợp tác xã cua {f.Next()}", PartyType = "Cooperative", VerificationStatus = "Verified", VerifiedAt = now, RegisteredAt = now, CreatedAt = now, UpdatedAt = now };
+            var party = new Party { LegalName = $"Hợp tác xã cua {f.Next()}", PartyType = "Company", VerificationStatus = "Verified", VerifiedAt = now, RegisteredAt = now, CreatedAt = now, UpdatedAt = now };
             party.Roles.Add(new PartnerRole { RoleType = "Supplier", Status = "Active", ValidFrom = now, CreatedAt = now, UpdatedAt = now });
             db.Parties.Add(party);
             await db.SaveChangesAsync();

@@ -209,7 +209,6 @@ const MAPS = {
     Individual: ['Cá nhân', 'mute'],
     Household: ['Hộ kinh doanh', 'mute'],
     Company: ['Doanh nghiệp', 'mute'],
-    Cooperative: ['Hợp tác xã', 'mute'],
   },
   customerType: {
     Restaurant: ['Nhà hàng', 'mute'],

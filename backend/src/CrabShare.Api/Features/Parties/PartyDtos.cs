@@ -14,8 +14,8 @@ public sealed record PartyResponse(long PartyId, string PartyCode, string LegalN
 public sealed class UpdatePartyRequest
 {
     [Required, MaxLength(200)] public string LegalName { get; set; } = "";
-    /// <summary>Individual, Household, Company, Cooperative.</summary>
-    [Required, RegularExpression("^(Individual|Household|Company|Cooperative)$")] public string PartyType { get; set; } = "Individual";
+    /// <summary>Individual, Household, Company.</summary>
+    [Required, RegularExpression("^(Individual|Household|Company)$")] public string PartyType { get; set; } = "Individual";
     [MaxLength(30)] public string? RegistrationNo { get; set; }
     [MaxLength(150)] public string? Representative { get; set; }
     [Phone, MaxLength(15)] public string? Phone { get; set; }
@@ -53,7 +53,7 @@ public sealed record RelatedPartyResponse(long RelatedPartyId, string FullName, 
 public sealed class ExternalPartyRequest
 {
     [Required, MaxLength(200)] public string LegalName { get; set; } = "";
-    [Required, RegularExpression("^(Individual|Household|Company|Cooperative)$")] public string PartyType { get; set; } = "Household";
+    [Required, RegularExpression("^(Individual|Household|Company)$")] public string PartyType { get; set; } = "Household";
     [MaxLength(30)] public string? RegistrationNo { get; set; }
     [MaxLength(150)] public string? Representative { get; set; }
     [Required, Phone, MaxLength(15)] public string Phone { get; set; } = "";
