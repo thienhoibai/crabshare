@@ -79,66 +79,57 @@ test.describe('/khach/dia-diem', () => {
     expect(api.sent('GET', '/api/me/sites')[0].query).toEqual({ siteType: 'DeliveryAddress' })
   })
 
-  test('thêm địa điểm: toạ độ sai thì báo ngay, đúng thì gửi vĩ độ và kinh độ dạng số', async ({ page, api }) => {
+  test('thêm địa điểm chọn Tỉnh/Phường/Xã không cần nhập toạ độ, hệ thống tự phân giải ngầm', async ({ page, api }) => {
     await open(page, api, '/khach/dia-diem')
-    const created: PartySiteResponse = { ...sites[1], siteId: 14, siteCode: 'DA-14', name: 'Quán Hải Sản Bờ Kè', addressLine: '3 Trường Sa, Phú Nhuận' }
+    const created: PartySiteResponse = {
+      ...sites[1],
+      siteId: 14,
+      siteCode: 'DA-14',
+      name: 'Quán Hải Sản Bờ Kè',
+      addressLine: '3 Trường Sa, Phường Phú Nhuận',
+      province: 'Thành phố Hồ Chí Minh',
+    }
     api.post('/api/me/sites', () => reply(201, created))
 
     await page.getByRole('button', { name: 'Thêm địa điểm' }).click()
     const dialog = page.getByRole('dialog', { name: 'Thêm địa điểm nhận hàng' })
+    await expect(dialog.getByLabel(/Toạ độ|Vĩ độ|Kinh độ/)).toHaveCount(0)
+
     const save = dialog.getByRole('button', { name: 'Thêm địa điểm' })
     await save.click()
-    await expect(dialog).toContainText('Nhập tên địa điểm và địa chỉ.')
-
-    await dialog.getByLabel('Tên địa điểm').fill('  Quán Hải Sản Bờ Kè ')
-    await dialog.getByLabel('Địa chỉ').fill('3 Trường Sa, Phú Nhuận')
-    await dialog.getByText('Vị trí trên bản đồ (không bắt buộc)', { exact: true }).click()
-    await dialog.getByLabel('Toạ độ').fill('ở gần cầu')
-    await save.click()
-    await expect(dialog).toContainText('Toạ độ chưa đúng. Ví dụ: 10.7769, 106.7009.')
+    await expect(dialog).toContainText('Nhập tên địa điểm, chọn Tỉnh/Thành phố, Phường/Xã và điền số nhà, tên đường.')
     expect(api.writes()).toEqual([])
 
-    await dialog.getByLabel('Toạ độ').fill('10.7993, 106.6802')
+    await dialog.getByLabel('Tên địa điểm').fill('  Quán Hải Sản Bờ Kè ')
+    await dialog.getByLabel(/^Tỉnh \/ Thành phố/).selectOption('Thành phố Hồ Chí Minh')
+    await dialog.getByLabel(/^Phường \/ Xã \/ Đặc khu/).selectOption('Phường Phú Nhuận')
+    await dialog.getByLabel('Số nhà, đường / ấp, khóm').fill('3 Trường Sa')
     await dialog.getByLabel('Số điện thoại người nhận').fill('0909123456')
     await save.click()
+
     const body: SiteRequest = {
-      siteType: 'DeliveryAddress', name: 'Quán Hải Sản Bờ Kè', addressLine: '3 Trường Sa, Phú Nhuận', province: null,
-      latitude: 10.7993, longitude: 106.6802, contactName: null, contactPhone: '0909123456', isDefault: false,
+      siteType: 'DeliveryAddress',
+      name: 'Quán Hải Sản Bờ Kè',
+      addressLine: '3 Trường Sa, Phường Phú Nhuận',
+      province: 'Thành phố Hồ Chí Minh',
+      latitude: 10.776889,
+      longitude: 106.700897,
+      contactName: null,
+      contactPhone: '0909123456',
+      isDefault: false,
     }
     await expect(page.getByRole('status').filter({ hasText: 'Đã thêm địa điểm nhận hàng.' })).toBeVisible()
     expect(api.sent('POST', '/api/me/sites').map((c) => c.body)).toEqual([body])
     await expect(dialog).toHaveCount(0)
   })
 
-  test('thêm địa điểm không cần toạ độ: để trống vẫn lưu, gửi vĩ độ và kinh độ rỗng', async ({ page, api }) => {
-    await open(page, api, '/khach/dia-diem')
-    const created: PartySiteResponse = { ...sites[1], siteId: 15, siteCode: 'DA-15', name: 'Kho Bình Thạnh', addressLine: '8 Điện Biên Phủ, Bình Thạnh', latitude: null, longitude: null }
-    api.post('/api/me/sites', () => reply(201, created))
-
-    await page.getByRole('button', { name: 'Thêm địa điểm' }).click()
-    const dialog = page.getByRole('dialog', { name: 'Thêm địa điểm nhận hàng' })
-    await expect(dialog.getByText('Vị trí trên bản đồ (không bắt buộc)', { exact: true })).toBeVisible()
-    await expect(dialog.getByLabel('Toạ độ')).toBeHidden()
-    await dialog.getByLabel('Tên địa điểm').fill('Kho Bình Thạnh')
-    await dialog.getByLabel('Địa chỉ').fill('8 Điện Biên Phủ, Bình Thạnh')
-    await dialog.getByRole('button', { name: 'Thêm địa điểm' }).click()
-
-    const body: SiteRequest = {
-      siteType: 'DeliveryAddress', name: 'Kho Bình Thạnh', addressLine: '8 Điện Biên Phủ, Bình Thạnh', province: null,
-      latitude: null, longitude: null, contactName: null, contactPhone: null, isDefault: false,
-    }
-    await expect(page.getByRole('status').filter({ hasText: 'Đã thêm địa điểm nhận hàng.' })).toBeVisible()
-    expect(api.sent('POST', '/api/me/sites').map((c) => c.body)).toEqual([body])
-    await expect(dialog).toHaveCount(0)
-  })
-
-  test('sửa địa điểm gửi PUT theo mã địa điểm', async ({ page, api }) => {
+  test('sửa địa điểm gửi PUT theo mã địa điểm và giữ nguyên toạ độ cũ khi không đổi địa chỉ', async ({ page, api }) => {
     await open(page, api, '/khach/dia-diem')
     api.put('/api/me/sites/12', { ...sites[1], name: 'Bếp trung tâm Quận 7 (cổng sau)' })
     await page.locator('main .op-card').filter({ hasText: 'Bếp trung tâm Quận 7' }).getByRole('button', { name: 'Sửa' }).click()
     const dialog = page.getByRole('dialog', { name: 'Sửa Bếp trung tâm Quận 7' })
-    await dialog.getByText('Vị trí trên bản đồ (không bắt buộc)', { exact: true }).click()
-    await expect(dialog.getByLabel('Toạ độ')).toHaveValue('10.77, 106.7')
+    await expect(dialog.getByLabel('Tỉnh / Thành phố')).toHaveValue('Thành phố Hồ Chí Minh')
+    await expect(dialog.getByLabel('Số nhà, đường / ấp, khóm')).toHaveValue('45 Nguyễn Thị Thập, Quận 7')
     await dialog.getByLabel('Tên địa điểm').fill('Bếp trung tâm Quận 7 (cổng sau)')
     await dialog.getByRole('button', { name: 'Lưu địa điểm' }).click()
     await expect(page.getByRole('status').filter({ hasText: 'Đã lưu địa điểm.' })).toBeVisible()
