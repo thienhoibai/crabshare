@@ -45,7 +45,7 @@ const SECTIONS: { title: string; body: (string | string[])[] }[] = [
     title: '5. Điều khoản dành cho Nhà đầu tư',
     body: [
       [
-        'Góp vốn có rủi ro, kể cả mất một phần hoặc toàn bộ vốn góp. CrabShare không cam kết, không công bố lợi suất hay lãi kỳ vọng; hệ thống chỉ hiển thị số liệu thực: vốn, chi phí chuẩn, doanh thu thực thu và quyết toán.',
+        'Góp vốn có rủi ro, kể cả mất một phần hoặc toàn bộ vốn góp. CrabShare không cam kết hay công bố mức sinh lời kỳ vọng; hệ thống chỉ hiển thị số liệu thực: vốn, chi phí chuẩn, doanh thu thực thu và quyết toán.',
         'Khoản góp chỉ được xác nhận khi bạn thanh toán đủ và hoàn tất ký thỏa thuận theo thứ tự. Nếu đến hạn mà thiếu thanh toán hoặc chữ ký, khoản góp bị loại và số tiền đã nộp được hoàn lại.',
         'Sau khi được xác nhận, bạn không thể tự rút vốn. Nếu lô không đủ điều kiện mở (vốn tối thiểu, tỷ lệ đặt trước tối thiểu), toàn bộ khoản góp được hoàn tự động theo quy tắc của lô. Phần vốn không đủ mua trọn một con cua được hoàn theo tỷ lệ.',
         'Vốn được giải ngân cho Hộ nuôi theo mốc có kiểm chứng và được Quản trị viên duyệt; bạn xem được số vốn đã góp, đã giải ngân và đang giữ.',
@@ -87,7 +87,7 @@ const SECTIONS: { title: string; body: (string | string[])[] }[] = [
         'Gian lận thanh toán, rửa tiền, hoặc dùng nền tảng cho mục đích trái pháp luật.',
         'Can thiệp trái phép vào hệ thống, thiết bị đo, dữ liệu cảm biến, API; dò quét lỗ hổng; tấn công hoặc làm gián đoạn dịch vụ.',
         'Thao túng đặt hàng, giữ chỗ hàng loạt nhằm cản trở người dùng khác; dùng bot hoặc công cụ tự động ngoài cho phép.',
-        'Công bố dữ liệu cá nhân của người khác hoặc đưa thông tin sai lệch về lợi suất, kết quả của lô.',
+        'Công bố dữ liệu cá nhân của người khác hoặc đưa thông tin sai lệch về mức sinh lời, kết quả của lô.',
       ],
     ],
   },
@@ -168,3 +168,4 @@ export default function TermsPage() {
     </SiteShell>
   )
 }
+

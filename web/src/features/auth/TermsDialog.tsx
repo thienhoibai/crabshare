@@ -27,7 +27,7 @@ export default function TermsDialog({ open, onClose, onRead }: { open: boolean; 
           if (el.scrollHeight - el.scrollTop - el.clientHeight < 8) setAtEnd(true)
         }}
       >
-        <TermsBody />
+        {open && <TermsBody />}
       </div>
       <footer className="terms-dialog__foot">
         <button type="button" className="terms-dialog__btn" onClick={onClose}>Đóng</button>
@@ -38,3 +38,4 @@ export default function TermsDialog({ open, onClose, onRead }: { open: boolean; 
     </dialog>
   )
 }
+

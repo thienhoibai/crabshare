@@ -1,6 +1,7 @@
-/* Đăng nhập (/dang-nhap) và chuyển hướng theo vai trò; chặn trang theo vai trò (RequireRole). */
+﻿/* Đăng nhập (/dang-nhap) và chuyển hướng theo vai trò; chặn trang theo vai trò (RequireRole). */
 import { kycUnverified, party } from './support/investor'
 import type { AuthResponse, LoginRequest, PartyDocumentResponse } from '../src/shared/api/api.gen'
+import type { Page } from '@playwright/test'
 import { expect, file, photo, reply, signIn, test, TOKEN, userOf, type Api, type Role } from './support/app'
 
 const session = (role: Role): AuthResponse => ({ accessToken: `token-${role}`, expiresAt: '2099-01-01T00:00:00Z', user: userOf(role) })
@@ -8,6 +9,14 @@ const session = (role: Role): AuthResponse => ({ accessToken: `token-${role}`, e
 /** Trang đích sau đăng nhập gọi nhiều API riêng; ở đây chỉ kiểm tra chuyển hướng và khung cổng nên cho mọi GET trả 404. */
 const noData = (api: Api) => api.get(/^\/api\//, () => reply(404, { status: 404, detail: 'Không có dữ liệu.' }))
 
+
+/** Mở cửa sổ điều khoản, cuộn hết rồi xác nhận đã đọc; ô tick được bật sẵn. */
+async function acceptTerms(page: Page) {
+  await page.getByRole('button', { name: 'điều khoản sử dụng' }).click()
+  await page.locator('.terms-dialog__body').evaluate((el) => { el.scrollTop = el.scrollHeight })
+  await page.getByRole('button', { name: 'Tôi đã đọc xong' }).click()
+  await expect(page.getByRole('checkbox', { name: 'Tôi đồng ý điều khoản sử dụng' })).toBeChecked()
+}
 test('chuyển qua lại giữa đăng ký và đăng nhập trên màn hình nhỏ bằng bàn phím', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 })
   await page.goto('/dang-ky')
@@ -61,7 +70,7 @@ test('đăng ký báo lỗi tại ô nhập, hiện mật khẩu và gửi đún
   await expect(password).toHaveAttribute('type', 'text')
   await page.getByRole('button', { name: 'Ẩn mật khẩu' }).click()
   await expect(password).toHaveAttribute('type', 'password')
-  await page.getByRole('checkbox', { name: 'Tôi đồng ý điều khoản sử dụng' }).check()
+  await acceptTerms(page)
   await submit.click()
 
   await expect(page).toHaveURL(/\/hoan-thien-ho-so$/)
@@ -194,7 +203,7 @@ test('đăng ký với số điện thoại đã dùng báo lỗi ngay tại ô 
   await page.getByLabel(/^Mật khẩu/).fill('mat-khau-thu')
   const phone = page.getByLabel('Số điện thoại (không bắt buộc)', { exact: true })
   await phone.fill('0901234567')
-  await page.getByRole('checkbox', { name: 'Tôi đồng ý điều khoản sử dụng' }).check()
+  await acceptTerms(page)
   await page.getByRole('button', { name: 'Tạo tài khoản' }).click()
   await expect(phone).toHaveAccessibleDescription('Số điện thoại này đã được dùng cho một tài khoản khác.')
   await expect(phone).toBeFocused()
@@ -405,3 +414,4 @@ test('đăng ký bằng Google gửi đúng vai trò Nhà đầu tư đang chọ
     { idToken: 'google-jwt-investor', role: 'Investor' },
   ])
 })
+
