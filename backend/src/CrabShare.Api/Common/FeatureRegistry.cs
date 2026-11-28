@@ -41,6 +41,8 @@ public static class FeatureRegistry
     public static IServiceCollection AddFeatureServices(this IServiceCollection services)
     {
         // Thiện
+        services.AddOptions<GoogleAuthOptions>().BindConfiguration(GoogleAuthOptions.Section);
+        services.AddSingleton<IGoogleTokenVerifier, GoogleTokenVerifier>();
         services.AddScoped<AuthService>();
         services.AddScoped<FundingService>();         // Features/Funding
         services.AddSingleton<RiskDisclosureDocuments>();

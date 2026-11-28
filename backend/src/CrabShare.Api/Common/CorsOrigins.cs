@@ -11,11 +11,15 @@ public static class CorsOrigins
 {
     public static Func<string, bool> Matcher(IEnumerable<string> origins, IEnumerable<string> patterns)
     {
-        var exact = new HashSet<string>(origins.Select(o => o.TrimEnd('/')), StringComparer.OrdinalIgnoreCase);
-        var wildcard = patterns
-            .Select(p => new Regex("^" + Regex.Escape(p.TrimEnd('/')).Replace(@"\*", "[a-z0-9-]+") + "$",
+        var exact = new HashSet<string>(Split(origins), StringComparer.OrdinalIgnoreCase);
+        var wildcard = Split(patterns)
+            .Select(p => new Regex("^" + Regex.Escape(p).Replace(@"\*", "[a-z0-9-]+") + "$",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
             .ToList();
         return origin => exact.Contains(origin) || wildcard.Any(r => r.IsMatch(origin));
     }
+
+    private static IEnumerable<string> Split(IEnumerable<string> items) =>
+        items.SelectMany(i => i.Split(',', ';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(s => s.TrimEnd('/')).Where(s => s.Length > 0);
 }

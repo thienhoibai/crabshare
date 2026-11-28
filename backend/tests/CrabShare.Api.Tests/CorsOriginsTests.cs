@@ -5,11 +5,13 @@ namespace CrabShare.Api.Tests;
 public class CorsOriginsTests
 {
     private static readonly Func<string, bool> Allowed = CorsOrigins.Matcher(
-        ["https://crabshare.vercel.app", "http://localhost:5173/"],
-        ["https://crabshare-*-nguyn1hien.vercel.app"]);
+        ["https://crabshare.vercel.app", "http://localhost:5173/", "https://crabshare.cloud, https://www.crabshare.cloud", ""],
+        ["https://crabshare-*-nguyn1hien.vercel.app", ""]);
 
     [Theory]
     [InlineData("https://crabshare.vercel.app")]
+    [InlineData("https://crabshare.cloud")]
+    [InlineData("https://www.crabshare.cloud")]
     [InlineData("http://localhost:5173")]
     [InlineData("https://crabshare-1xil2zzqp-nguyn1hien.vercel.app")]
     [InlineData("https://crabshare-git-develop-nguyn1hien.vercel.app")]

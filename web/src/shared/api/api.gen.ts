@@ -864,6 +864,7 @@ export interface ExploreBatchResponse {
   fundingDeadline: string | null
   preorderDeadline: string | null
   costByCategory: ExploreCostCategory[] | null
+  publicFarm?: PublicFarmProfile | null
 }
 
 export interface ExploreCostCategory {
@@ -979,6 +980,26 @@ export interface GoodsReceiptResponse {
   acceptedWeightG: number
   qcUserId: number | null
   completedAt: string | null
+}
+
+export interface GoogleLoginRequest {
+  idToken: string
+  role?: SelfRegisterRole
+}
+
+export interface GradeAiLabel {
+  crabCode: string
+  crabNumber: number
+}
+
+export interface GradeAiLabelsRequest {
+  prefix: string
+  labels: GradeAiLabel[]
+}
+
+export interface GradeAiLabelsResponse {
+  prefix: string
+  assigned: number
 }
 
 export interface GradeDecisionResponse {
@@ -1184,6 +1205,23 @@ export interface KycCheckResponse {
   failureReason: string | null
 }
 
+export interface KycHandoffClaimRequest {
+  token: string
+}
+
+export interface KycHandoffCreatedResponse {
+  id: number
+  token: string
+  expiresAt: string
+}
+
+export interface KycHandoffStatusResponse {
+  id: number
+  status: string
+  expiresAt: string
+  claimedAt: string | null
+}
+
 export interface KycStatusResponse {
   verificationStatus: string
   verifiedAt: string | null
@@ -1220,7 +1258,6 @@ export interface MeasurementValuesRequest {
 }
 
 export interface MeResponse {
-  customerProfileRequired?: boolean
   userId: number
   email: string
   fullName: string
@@ -1228,6 +1265,7 @@ export interface MeResponse {
   status: string
   roles: string[]
   operatorId: number | null
+  customerProfileRequired?: boolean
 }
 
 export interface MilestoneRequest {
@@ -1301,22 +1339,12 @@ export interface OpenSessionRequest {
   procedure?: string
 }
 
-export interface GradeAiLabelsRequest {
-  prefix: string
-  labels: { crabCode: string; crabNumber: number }[]
-}
-
-export interface GradeAiLabelsResponse {
-  prefix: string
-  assigned: number
-}
-
 export interface OpenSessionResponse {
   sessionNo: string
   crabTag: string
   openedAt: string
   batchCode: string
-  bindingVersion: number
+  bindingVersion?: number
 }
 
 export interface OperatorDashboardResponse {
@@ -1514,6 +1542,13 @@ export interface PagedResultOfProductionLogResponse {
 
 export interface PagedResultOfReviewEvidenceSummary {
   items: ReviewEvidenceSummary[]
+  page: number
+  pageSize: number
+  total: number
+}
+
+export interface PagedResultOfSessionResponse {
+  items: SessionResponse[]
   page: number
   pageSize: number
   total: number
@@ -1920,6 +1955,26 @@ export interface ProposeSettlementRequest {
   feedbackDays?: number
 }
 
+export interface PublicFarmProfile {
+  id: string
+  name: string
+  commune: string | null
+  district: string | null
+  province: string | null
+  latitude: number | null
+  longitude: number | null
+  photoUrl: string | null
+  rackCount: number | null
+  boxCount: number | null
+  liveCrabCount: number | null
+  completedBatchCount: number | null
+  ratingAverage: number | null
+  ratingCount: number | null
+  ownerName?: string | null
+  deliveredKg?: number | null
+  ownerPhotoUrl?: string | null
+}
+
 export interface QcInspectorResponse {
   userId: number
   fullName: string
@@ -2012,6 +2067,10 @@ export interface RelatedPartyResponse {
   relation: string
   idNumberLast4: string
   linkedPartyCode: string | null
+}
+
+export interface RemeasureSessionRequest {
+  stationCode: string
 }
 
 export interface RemunerationTierRequest {
@@ -2360,6 +2419,64 @@ export interface SplitTranchesRequest {
   tranches: TrancheRequest[]
 }
 
+export interface StationRuntimeResponse {
+  receivedAt: string | null
+  state: StationRuntimeState | null
+  fresh: boolean
+}
+
+export interface StationRuntimeState {
+  hardwareOnline?: boolean
+  connectionType?: string | null
+  networkInterface?: string | null
+  networkIp?: string | null
+  networkSsid?: string | null
+  busy?: boolean
+  doorClosed?: boolean | null
+  buttonPressed?: boolean | null
+  calibrationValid?: boolean
+  crabTag?: string | null
+  sessionNo?: string | null
+  phase: string
+  note?: string | null
+  rgb?: string | null
+  blinking?: boolean
+  whiteOn?: boolean
+  redOn?: boolean
+  weightG?: number | null
+  instantG?: number | null
+  rawSpreadG?: number | null
+  filteredSpreadG?: number | null
+  sampleCount?: number | null
+  outlierCount?: number | null
+  scaleStable?: boolean | null
+  scaleReason?: string | null
+  tofMm?: number | null
+  cameraStatus?: string | null
+  runId?: string | null
+  runStatus?: string | null
+  step?: string | null
+  completed: string[]
+  sensorError?: string | null
+  webStartReady?: boolean
+  startOutcome?: StationStartOutcome | null
+  wifiConfigReady?: boolean
+  wifiOutcome?: WifiOutcome | null
+}
+
+export interface StationStartOutcome {
+  id: number
+  accepted: boolean
+  message: string | null
+}
+
+export interface StationStartStatus {
+  id: number
+  status: string
+  expiresAt: string
+  message: string | null
+}
+
 export interface StatusCount {
   status: string
   count: number
@@ -2521,12 +2638,12 @@ export interface UpdateBoxRequest {
 }
 
 export interface UpdatePartyRequest {
-  completeCustomerProfile?: boolean
   legalName: string
   partyType: string
   registrationNo?: string | null
   representative?: string | null
   phone?: string | null
+  completeCustomerProfile?: boolean
 }
 
 export interface WaterReadingMessage {
@@ -2556,5 +2673,22 @@ export interface WebhookResult {
   paymentRequestId: number | null
   purpose: string | null
   refundInstructionId: number | null
+}
+
+export interface WifiOutcome {
+  id: number
+  connected: boolean
+  message: string | null
+}
+
+export interface WifiRequest {
+  ssid: string
+  password: string
+}
+
+export interface WifiStatus {
+  id: number
+  status: string
+  message: string | null
 }
 

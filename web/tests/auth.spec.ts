@@ -335,3 +335,73 @@ for (const { role, path } of FOREIGN) {
     expect(api.calls).toEqual([])
   })
 }
+
+async function mockGoogleButton(page: import('@playwright/test').Page, credential = 'mock-google-id-token') {
+  await page.addInitScript((token) => {
+    let onCredential: ((res: { credential?: string }) => void) | null = null
+    const w = window as unknown as {
+      __googleClientId?: string
+      google?: {
+        accounts: {
+          id: {
+            initialize: (cfg: { callback: (res: { credential?: string }) => void }) => void
+            renderButton: (parent: HTMLElement, opts: { text?: string }) => void
+          }
+        }
+      }
+    }
+    w.__googleClientId = 'test-client.apps.googleusercontent.com'
+    w.google = {
+      accounts: {
+        id: {
+          initialize: (cfg) => { onCredential = cfg.callback },
+          renderButton: (parent, opts) => {
+            const btn = document.createElement('button')
+            btn.type = 'button'
+            btn.textContent = opts.text === 'signup_with' ? 'Đăng ký bằng Google' : 'Tiếp tục với Google'
+            btn.onclick = () => onCredential?.({ credential: token })
+            parent.appendChild(btn)
+          },
+        },
+      },
+    }
+  }, credential)
+}
+
+test('đăng nhập bằng Google chuyển khách mới về hoàn thiện hồ sơ và báo lỗi khi bị từ chối', async ({ page, api }) => {
+  await mockGoogleButton(page, 'google-jwt-login')
+  api.get('/api/me/party', party)
+  let allow = false
+  api.post('/api/auth/google', () => allow
+    ? ({ ...session('Customer'), user: { ...userOf('Customer'), customerProfileRequired: true } })
+    : reply(401, { status: 401, code: 'auth.invalid_google_token', detail: 'Phiên đăng nhập Google không hợp lệ hoặc đã hết hạn.' }))
+
+  await page.goto('/dang-nhap')
+  await page.getByRole('button', { name: 'Tiếp tục với Google' }).click()
+  await expect(page.getByText('Phiên đăng nhập Google không hợp lệ hoặc đã hết hạn.')).toBeVisible()
+  await expect(page).toHaveURL(/\/dang-nhap$/)
+
+  allow = true
+  await page.getByRole('button', { name: 'Tiếp tục với Google' }).click()
+  await expect(page).toHaveURL(/\/hoan-thien-ho-so$/)
+  expect(api.sent('POST', '/api/auth/google').map((c) => c.body)).toEqual([
+    { idToken: 'google-jwt-login' },
+    { idToken: 'google-jwt-login' },
+  ])
+})
+
+test('đăng ký bằng Google gửi đúng vai trò Nhà đầu tư đang chọn', async ({ page, api }) => {
+  await mockGoogleButton(page, 'google-jwt-investor')
+  api.get('/api/me/kyc', kycUnverified)
+  api.get('/api/me/party', party)
+  api.post('/api/auth/google', session('Investor'))
+
+  await page.goto('/dang-ky')
+  await page.getByText('Nhà đầu tư', { exact: true }).click()
+  await page.getByRole('button', { name: 'Đăng ký bằng Google' }).click()
+
+  await expect(page).toHaveURL(/\/hoan-thien-ho-so$/)
+  expect(api.sent('POST', '/api/auth/google').map((c) => c.body)).toEqual([
+    { idToken: 'google-jwt-investor', role: 'Investor' },
+  ])
+})

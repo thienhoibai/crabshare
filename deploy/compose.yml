@@ -13,6 +13,9 @@ services:
       Jwt__SigningKey: ${CRABSHARE_JWT_KEY:?Provide a private random signing key}
       Payments__WebhookSecret: ${CRABSHARE_WEBHOOK_SECRET:?Provide a private webhook secret}
       Cors__Origins__0: https://${CRABSHARE_WEB_HOST:?Provide the web hostname}
+      Cors__Origins__1: ${CRABSHARE_EXTRA_ORIGINS:-}
+      Cors__OriginPatterns__0: ${CRABSHARE_ORIGIN_PATTERNS:-}
+      GoogleAuth__ClientId: ${CRABSHARE_GOOGLE_CLIENT_ID:-}
       Security__KnownProxies__0: 10.77.0.2
       Storage__Provider: ${CRABSHARE_STORAGE_PROVIDER:-Local}
       Cloudinary__CloudName: ${CRABSHARE_CLOUDINARY_CLOUD_NAME:-}

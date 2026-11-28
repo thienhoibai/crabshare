@@ -25,6 +25,12 @@ public sealed class AuthController(AuthService auth, ICurrentUser me) : Controll
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest req, CancellationToken ct)
         => Ok(await auth.LoginAsync(req, ct));
 
+    [HttpPost("google")]
+    [EnableRateLimiting("auth-attempts")]
+    [EndpointSummary("UC01 — Đăng nhập hoặc đăng ký bằng Google ID Token")]
+    public async Task<ActionResult<AuthResponse>> GoogleLogin(GoogleLoginRequest req, CancellationToken ct)
+        => Ok(await auth.LoginWithGoogleAsync(req, ct));
+
     [Authorize]
     [HttpGet("me")]
     [EndpointSummary("Thông tin người đang đăng nhập")]
